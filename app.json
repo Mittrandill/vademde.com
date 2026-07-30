@@ -44,7 +44,8 @@
         {
           "cameraPermission": "Belgelerinizi doğrudan kamerayla taramak için kameraya erişim gerekir."
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

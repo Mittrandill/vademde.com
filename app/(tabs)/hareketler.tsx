@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { listTransactions, TRANSACTIONS_PAGE_SIZE } from '@/features/transactions/api';
 import { listObligations, OBLIGATIONS_PAGE_SIZE } from '@/features/obligations/api';
@@ -184,34 +184,9 @@ export default function HareketlerScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           style={{ flexGrow: 0 }}
-          contentContainerStyle={{
-            paddingHorizontal: theme.screenEdge.standard,
-            gap: theme.spacing.xs,
-            alignItems: 'center',
-          }}
+          contentContainerStyle={{ paddingHorizontal: theme.screenEdge.standard }}
         >
-          {FILTERS.map((item) => {
-            const selected = item.key === filter;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => setFilter(item.key)}
-                style={{
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: theme.spacing.xs,
-                  borderRadius: 999,
-                  backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                }}
-              >
-                <Text
-                  variant="body"
-                  style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary }}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
         </ScrollView>
 
         {error ? (

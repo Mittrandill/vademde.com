@@ -4,15 +4,16 @@ import { Amount } from './Amount';
 export interface IncomeExpenseAnalysisProps {
   incomeMinor: number;
   expenseMinor: number;
+  title?: string;
 }
 
-export function IncomeExpenseAnalysis({ incomeMinor, expenseMinor }: IncomeExpenseAnalysisProps) {
+export function IncomeExpenseAnalysis({ incomeMinor, expenseMinor, title = 'Bu Ay Gelir-Gider' }: IncomeExpenseAnalysisProps) {
   const netMinor = incomeMinor - expenseMinor;
 
   return (
     <Card>
       <Stack gap="sm">
-        <Text variant="sectionTitle">Bu Ay Gelir-Gider</Text>
+        <Text variant="sectionTitle">{title}</Text>
         <Row>
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="caption" color="textSecondary">

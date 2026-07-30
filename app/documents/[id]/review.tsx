@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -31,11 +31,11 @@ import { syncObligationReminder } from '@/services/notifications';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
-const DIRECTIONS: Array<{ value: Direction; label: string }> = [
-  { value: 'payable', label: 'Ben Ödeyeceğim' },
-  { value: 'receivable', label: 'Ben Tahsil Edeceğim' },
-  { value: 'expense', label: 'Gerçekleşmiş Gider' },
-  { value: 'income', label: 'Gerçekleşmiş Gelir' },
+const DIRECTIONS: { key: Direction; label: string }[] = [
+  { key: 'payable', label: 'Ben Ödeyeceğim' },
+  { key: 'receivable', label: 'Ben Tahsil Edeceğim' },
+  { key: 'expense', label: 'Gerçekleşmiş Gider' },
+  { key: 'income', label: 'Gerçekleşmiş Gelir' },
 ];
 
 const LOW_CONFIDENCE_THRESHOLD = 0.7;
@@ -297,30 +297,7 @@ export default function DocumentReviewScreen() {
                 YÖN
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-                <Row gap="xs">
-                  {DIRECTIONS.map((option) => {
-                    const selected = option.value === direction;
-                    return (
-                      <Pressable
-                        key={option.value}
-                        onPress={() => setDirection(option.value)}
-                        style={{
-                          paddingHorizontal: theme.spacing.md,
-                          paddingVertical: theme.spacing.xs,
-                          borderRadius: 999,
-                          backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                        }}
-                      >
-                        <Text
-                          variant="body"
-                          style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary }}
-                        >
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </Row>
+                <SegmentedControl options={DIRECTIONS} value={direction} onChange={setDirection} />
               </ScrollView>
             </Stack>
 

@@ -23,4 +23,13 @@ export const queryKeys = {
     [workspaceId, 'transactions', 'dashboard-recent'] as const,
   calendarObligations: (workspaceId: string, rangeKey: string) =>
     [workspaceId, 'obligations', 'calendar', rangeKey] as const,
+  reportSummary: (workspaceId: string, period: string) => [workspaceId, 'reports', 'summary', period] as const,
+  reportCategoryBreakdown: (workspaceId: string, direction: string, period: string) =>
+    [workspaceId, 'reports', 'categories', direction, period] as const,
+  reportCounterpartyBreakdown: (workspaceId: string, period: string) =>
+    [workspaceId, 'reports', 'counterparties', period] as const,
+  reportAccountBalances: (workspaceId: string) => [workspaceId, 'reports', 'account-balances'] as const,
+  reportOverdueObligations: (workspaceId: string) => [workspaceId, 'reports', 'overdue'] as const,
+  reportCashFlow: (workspaceId: string) => [workspaceId, 'reports', 'cash-flow'] as const,
+  reportMonthlyComparison: (workspaceId: string) => [workspaceId, 'reports', 'monthly-comparison'] as const,
 };

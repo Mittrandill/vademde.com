@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { Amount } from '@/components/finance/Amount';
 import { CalendarMonthGrid } from '@/components/finance/CalendarMonthGrid';
 import { CalendarAgendaList } from '@/components/finance/CalendarAgendaList';
@@ -108,27 +108,7 @@ export default function TakvimScreen() {
           </Text>
         </Row>
 
-        <Row gap="xs">
-          {VIEW_MODES.map((item) => {
-            const selected = item.key === viewMode;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => setViewMode(item.key)}
-                style={{
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: theme.spacing.xs,
-                  borderRadius: 999,
-                  backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                }}
-              >
-                <Text variant="body" style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary }}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </Row>
+        <SegmentedControl options={VIEW_MODES} value={viewMode} onChange={setViewMode} />
 
         {obligationsQuery.error ? (
           <Text variant="body" color="danger">

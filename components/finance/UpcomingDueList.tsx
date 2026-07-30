@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
 import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
@@ -52,27 +52,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
         </Text>
       </Row>
 
-      <Row gap="xs">
-        {SEGMENTS.map((item) => {
-          const selected = item.key === segment;
-          return (
-            <Pressable
-              key={item.key}
-              onPress={() => setSegment(item.key)}
-              style={{
-                paddingHorizontal: theme.spacing.md,
-                paddingVertical: theme.spacing.xs,
-                borderRadius: 999,
-                backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-              }}
-            >
-              <Text variant="caption" style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary }}>
-                {item.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </Row>
+      <SegmentedControl options={SEGMENTS} value={segment} onChange={setSegment} size="compact" />
 
       {filtered.length === 0 ? (
         <Card>

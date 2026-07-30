@@ -6,3 +6,4 @@ export * from './Pressable';
 export * from './TextField';
 export * from './Button';
 export * from './SearchablePicker';
+export * from './SegmentedControl';
