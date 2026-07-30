@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Vademde",
+    "slug": "vademde",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "vademde",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.akintkaya.vademde"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F6F5F1",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#F6F5F1"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Fatura, çek veya senet gibi belgelerinizi taramak için fotoğraflarınıza erişim gerekir.",
+          "cameraPermission": "Belgelerinizi doğrudan kamerayla taramak için kameraya erişim gerekir."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Belgelerinizi doğrudan kamerayla taramak için kameraya erişim gerekir."
+        }
+      ]
+    ]
+  }
+}

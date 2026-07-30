@@ -1,0 +1,60 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+
+import { useTheme } from '@/theme';
+import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { StatusBadge } from './StatusBadge';
+import { Amount } from './Amount';
+import type { ObligationWithRelations } from '@/features/obligations/api';
+
+export interface CreditCardDueWidgetProps {
+  obligation: ObligationWithRelations | null;
+}
+
+function daysUntil(dueDate: string): number {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const due = new Date(dueDate);
+  const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  return Math.round((dueStart.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export function CreditCardDueWidget({ obligation }: CreditCardDueWidgetProps) {
+  const theme = useTheme();
+
+  if (!obligation) return null;
+
+  const remaining = obligation.due_date ? daysUntil(obligation.due_date) : null;
+
+  return (
+    <Pressable onPress={() => router.push(`/obligations/${obligation.id}`)}>
+      <Card>
+        <Row gap="sm">
+          <Ionicons name="card-outline" size={22} color={theme.colors.accentViolet} />
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="cardTitle">{obligation.title}</Text>
+            <Row gap="xs">
+              <Text variant="caption" color="textSecondary">
+                {remaining !== null
+                  ? remaining > 0
+                    ? `Son ödeme: ${remaining} gün`
+                    : remaining === 0
+                      ? 'Son ödeme: bugün'
+                      : `${Math.abs(remaining)} gün gecikti`
+                  : 'Vade tarihi yok'}
+              </Text>
+              <StatusBadge status={obligation.status} />
+            </Row>
+          </Stack>
+          <Amount
+            amountMinor={obligation.remaining_amount_minor}
+            currencyCode={obligation.currency_code}
+            direction="payable"
+            overdue={obligation.status === 'gecikti'}
+            variant="body"
+          />
+        </Row>
+      </Card>
+    </Pressable>
+  );
+}

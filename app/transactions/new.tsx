@@ -1,0 +1,228 @@
+import { useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useTheme } from '@/theme';
+import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { CategoryPicker } from '@/components/finance/CategoryPicker';
+import { AccountPicker } from '@/components/finance/AccountPicker';
+import { listAccounts } from '@/features/accounts/api';
+import { listCategories } from '@/features/categories/api';
+import { createTransaction, createTransfer } from '@/features/transactions/api';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+import { toMinorUnits } from '@/utils/money';
+import { queryKeys } from '@/services/queryKeys';
+
+type Direction = 'income' | 'expense' | 'transfer';
+
+const DIRECTIONS: Array<{ value: Direction; label: string }> = [
+  { value: 'expense', label: 'Gider' },
+  { value: 'income', label: 'Gelir' },
+  { value: 'transfer', label: 'Transfer' },
+];
+
+export default function NewTransactionScreen() {
+  const theme = useTheme();
+  const queryClient = useQueryClient();
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+
+  const [direction, setDirection] = useState<Direction>('expense');
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [transferToAccountId, setTransferToAccountId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [amount, setAmount] = useState('');
+  const [dateStr, setDateStr] = useState(() => new Date().toISOString().slice(0, 10));
+  const [description, setDescription] = useState('');
+
+  const accountsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
+    queryFn: () => listAccounts(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+  const accounts = accountsQuery.data ?? [];
+
+  const categoriesQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? queryKeys.categories(activeWorkspaceId, direction === 'transfer' ? undefined : direction)
+      : ['categories', 'disabled'],
+    queryFn: () => listCategories(activeWorkspaceId as string, direction === 'transfer' ? undefined : direction),
+    enabled: !!activeWorkspaceId && direction !== 'transfer',
+  });
+  const categories = categoriesQuery.data ?? [];
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspaceId || !accountId || !amount) throw new Error('Eksik alan var');
+      const amountMinor = toMinorUnits(Number(amount.replace(',', '.')));
+      const occurredAt = new Date(dateStr).toISOString();
+
+      if (direction === 'transfer') {
+        if (!transferToAccountId) throw new Error('Hedef hesap seçin');
+        return createTransfer({
+          workspaceId: activeWorkspaceId,
+          fromAccountId: accountId,
+          toAccountId: transferToAccountId,
+          amountMinor,
+          occurredAt,
+          description: description.trim() || undefined,
+        });
+      }
+      return createTransaction({
+        workspace_id: activeWorkspaceId,
+        account_id: accountId,
+        direction,
+        category_id: categoryId,
+        amount_minor: amountMinor,
+        occurred_at: occurredAt,
+        description: description.trim() || null,
+      });
+    },
+    onSuccess: () => {
+      if (activeWorkspaceId) {
+        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+      }
+      router.back();
+    },
+  });
+
+  const canSubmit =
+    !!accountId && !!amount && (direction !== 'transfer' || (!!transferToAccountId && transferToAccountId !== accountId));
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
+          <Stack gap="lg">
+            <Row align="center">
+              <Pressable onPress={() => router.back()} hitSlop={12}>
+                <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+              </Pressable>
+              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
+                Yeni Hareket
+              </Text>
+            </Row>
+
+            <Row gap="xs">
+              {DIRECTIONS.map((option) => {
+                const selected = option.value === direction;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      setDirection(option.value);
+                      setCategoryId(null);
+                      setTransferToAccountId(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      paddingVertical: theme.spacing.sm,
+                      borderRadius: theme.radius.input,
+                      backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
+                    }}
+                  >
+                    <Text
+                      variant="body"
+                      style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textPrimary }}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </Row>
+
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                TUTAR
+              </Text>
+              <TextField
+                placeholder="0,00"
+                keyboardType="decimal-pad"
+                value={amount}
+                onChangeText={setAmount}
+              />
+            </Stack>
+
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                {direction === 'transfer' ? 'KAYNAK HESAP' : 'HESAP'}
+              </Text>
+              {accounts.length === 0 ? (
+                <Text variant="body" color="textSecondary">
+                  Önce Hesaplar'dan bir hesap ekleyin.
+                </Text>
+              ) : (
+                <AccountPicker
+                  accounts={accounts}
+                  selectedId={accountId}
+                  onSelect={setAccountId}
+                  title="Kaynak Hesap Seç"
+                  placeholder="Hesap seçin"
+                />
+              )}
+            </Stack>
+
+            {direction === 'transfer' ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  HEDEF HESAP
+                </Text>
+                <AccountPicker
+                  accounts={accounts.filter((a) => a.id !== accountId)}
+                  selectedId={transferToAccountId}
+                  onSelect={setTransferToAccountId}
+                  title="Hedef Hesap Seç"
+                  placeholder="Hedef hesap seçin"
+                />
+              </Stack>
+            ) : (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  KATEGORİ
+                </Text>
+                {categories.length === 0 ? (
+                  <Text variant="body" color="textSecondary">
+                    Bu türde kategori bulunamadı.
+                  </Text>
+                ) : (
+                  <CategoryPicker categories={categories} selectedId={categoryId} onSelect={setCategoryId} />
+                )}
+              </Stack>
+            )}
+
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                TARİH
+              </Text>
+              <TextField placeholder="YYYY-AA-GG" value={dateStr} onChangeText={setDateStr} />
+            </Stack>
+
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                AÇIKLAMA (İSTEĞE BAĞLI)
+              </Text>
+              <TextField placeholder="Örn. Market alışverişi" value={description} onChangeText={setDescription} />
+            </Stack>
+
+            {createMutation.error ? (
+              <Text variant="caption" color="danger">
+                {createMutation.error instanceof Error ? createMutation.error.message : 'Kayıt oluşturulamadı'}
+              </Text>
+            ) : null}
+
+            <Button
+              label="Kaydet"
+              onPress={() => createMutation.mutate()}
+              loading={createMutation.isPending}
+              disabled={!canSubmit}
+            />
+          </Stack>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}

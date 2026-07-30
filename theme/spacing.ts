@@ -1,0 +1,32 @@
+// docs/08-tasarim-sistemi.md §12.7 — Spacing, grid ve radius.
+export const spacing = {
+  xxs: 4,
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
+  xxxl: 40,
+  huge: 48,
+  massive: 64,
+} as const;
+
+export const screenEdge = {
+  standard: 20,
+  narrow: 16,
+} as const;
+
+export const radius = {
+  widget: 20,
+  heroWidget: 30,
+  input: 15,
+} as const;
+
+export const touchTarget = {
+  minimum: 44,
+} as const;
+
+export const buttonHeight = {
+  primary: 55,
+} as const;

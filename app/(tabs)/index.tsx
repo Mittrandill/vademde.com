@@ -1,0 +1,246 @@
+import { useMemo, useState } from 'react';
+import { ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useTheme } from '@/theme';
+import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { BalanceHero } from '@/components/finance/BalanceHero';
+import { ObligationSummaryCard } from '@/components/finance/ObligationSummaryCard';
+import { IncomeExpenseAnalysis } from '@/components/finance/IncomeExpenseAnalysis';
+import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
+import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
+import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
+import { RecentTransactionsList } from '@/components/finance/RecentTransactionsList';
+import { createWorkspace, listMyWorkspaces } from '@/features/workspaces/api';
+import { listAccounts } from '@/features/accounts/api';
+import { listObligations, ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import { listTransactions } from '@/features/transactions/api';
+import { getAllTimeIncomeExpenseTotals, getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+import { signOut } from '@/features/auth/api';
+import { queryKeys } from '@/services/queryKeys';
+
+export default function HomeScreen() {
+  const theme = useTheme();
+  const queryClient = useQueryClient();
+  const { activeWorkspaceId, setActiveWorkspaceId, balanceHidden, toggleBalanceHidden } = useWorkspaceStore();
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const workspacesQuery = useQuery({
+    queryKey: queryKeys.workspaces(),
+    queryFn: async () => {
+      const data = await listMyWorkspaces();
+      if (!activeWorkspaceId && data.length > 0) {
+        setActiveWorkspaceId(data[0].id);
+      }
+      return data;
+    },
+  });
+
+  const createWorkspaceMutation = useMutation({
+    mutationFn: () => createWorkspace({ name: newWorkspaceName.trim(), type: 'personal' }),
+    onSuccess: (workspace) => {
+      setActiveWorkspaceId(workspace.id);
+      setNewWorkspaceName('');
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
+    },
+  });
+
+  const workspaces = workspacesQuery.data ?? [];
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
+
+  const accountsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
+    queryFn: () => listAccounts(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const allTimeTotalsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.dashboardAllTimeTotals(activeWorkspaceId) : ['all-time', 'disabled'],
+    queryFn: () => getAllTimeIncomeExpenseTotals(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const monthTotalsQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? queryKeys.dashboardMonthTransactions(activeWorkspaceId, monthKey)
+      : ['month-totals', 'disabled'],
+    queryFn: () => getMonthTransactionTotals(activeWorkspaceId as string, now),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const activeObligationsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.dashboardActiveObligations(activeWorkspaceId) : ['obligations', 'disabled'],
+    queryFn: () =>
+      listObligations({ workspaceId: activeWorkspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const pendingDocumentsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.dashboardPendingDocuments(activeWorkspaceId) : ['documents', 'disabled'],
+    queryFn: () => getPendingReviewDocuments(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const recentTransactionsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.recentTransactions(activeWorkspaceId) : ['transactions', 'disabled'],
+    queryFn: () => listTransactions({ workspaceId: activeWorkspaceId as string, pageSize: 5 }),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const totalBalanceMinor = useMemo(() => {
+    const openingSum = (accountsQuery.data ?? []).reduce((sum, a) => sum + a.opening_balance_minor, 0);
+    const totals = allTimeTotalsQuery.data ?? { incomeMinor: 0, expenseMinor: 0 };
+    return openingSum + totals.incomeMinor - totals.expenseMinor;
+  }, [accountsQuery.data, allTimeTotalsQuery.data]);
+
+  const monthNetMinor = useMemo(() => {
+    const totals = monthTotalsQuery.data ?? { incomeMinor: 0, expenseMinor: 0 };
+    return totals.incomeMinor - totals.expenseMinor;
+  }, [monthTotalsQuery.data]);
+
+  const activeObligations = useMemo(() => activeObligationsQuery.data ?? [], [activeObligationsQuery.data]);
+
+  const payableObligations = useMemo(
+    () => activeObligations.filter((o) => o.direction === 'payable'),
+    [activeObligations]
+  );
+  const receivableObligations = useMemo(
+    () => activeObligations.filter((o) => o.direction === 'receivable'),
+    [activeObligations]
+  );
+  const creditCardObligation = useMemo(
+    () => activeObligations.find((o) => o.document_type === 'kredi_karti_ekstresi') ?? null,
+    [activeObligations]
+  );
+
+  const error = workspacesQuery.error || createWorkspaceMutation.error;
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      {!workspacesQuery.isSuccess ? null : workspaces.length === 0 ? (
+        <Stack gap="xl" style={{ flex: 1, padding: theme.screenEdge.standard, justifyContent: 'center' }}>
+          <Stack gap="lg">
+            <Stack gap="xs">
+              <Text variant="pageTitle">İlk çalışma alanınız</Text>
+              <Text variant="body" color="textSecondary">
+                Kişisel veya işletme bütçenizi takip etmek için bir çalışma alanı oluşturun.
+              </Text>
+            </Stack>
+            <TextField
+              placeholder="Örn. Akın'ın Bütçesi"
+              value={newWorkspaceName}
+              onChangeText={setNewWorkspaceName}
+            />
+            {error ? (
+              <Text variant="caption" color="danger">
+                {error instanceof Error ? error.message : 'Bir hata oluştu'}
+              </Text>
+            ) : null}
+            <Button
+              label="Çalışma Alanı Oluştur"
+              onPress={() => createWorkspaceMutation.mutate()}
+              loading={createWorkspaceMutation.isPending}
+              disabled={!newWorkspaceName.trim()}
+            />
+          </Stack>
+        </Stack>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{
+            padding: theme.screenEdge.standard,
+            paddingBottom: theme.spacing.huge,
+            gap: theme.spacing.lg,
+          }}
+        >
+          <Stack gap="xs">
+            <Pressable
+              onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
+              disabled={workspaces.length <= 1}
+            >
+              <Row gap="xs" align="center">
+                <Text variant="caption" color="textSecondary">
+                  ÇALIŞMA ALANI
+                </Text>
+                {workspaces.length > 1 ? (
+                  <Ionicons
+                    name={switcherOpen ? 'chevron-up' : 'chevron-down'}
+                    size={14}
+                    color={theme.colors.textSecondary}
+                  />
+                ) : null}
+              </Row>
+              <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
+            </Pressable>
+            {switcherOpen ? (
+              <Stack
+                gap="xxs"
+                style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.widget, padding: theme.spacing.xs }}
+              >
+                {workspaces.map((w) => (
+                  <Pressable
+                    key={w.id}
+                    onPress={() => {
+                      setActiveWorkspaceId(w.id);
+                      setSwitcherOpen(false);
+                    }}
+                    style={{ padding: theme.spacing.sm }}
+                  >
+                    <Text variant="body" color={w.id === activeWorkspaceId ? 'brandPrimary' : 'textPrimary'}>
+                      {w.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </Stack>
+            ) : null}
+          </Stack>
+
+          <BalanceHero
+            totalBalanceMinor={totalBalanceMinor}
+            monthNetMinor={monthNetMinor}
+            hidden={balanceHidden}
+            onToggleHidden={toggleBalanceHidden}
+          />
+
+          <Row gap="sm">
+            <ObligationSummaryCard
+              direction="payable"
+              totalMinor={payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0)}
+              count={payableObligations.length}
+              nearestDueDate={payableObligations.find((o) => o.due_date)?.due_date ?? null}
+            />
+            <ObligationSummaryCard
+              direction="receivable"
+              totalMinor={receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0)}
+              count={receivableObligations.length}
+              nearestDueDate={receivableObligations.find((o) => o.due_date)?.due_date ?? null}
+            />
+          </Row>
+
+          <IncomeExpenseAnalysis
+            incomeMinor={monthTotalsQuery.data?.incomeMinor ?? 0}
+            expenseMinor={monthTotalsQuery.data?.expenseMinor ?? 0}
+          />
+
+          <UpcomingDueList obligations={activeObligations} />
+
+          <PendingReviewQueue documents={pendingDocumentsQuery.data ?? []} />
+
+          <CreditCardDueWidget obligation={creditCardObligation} />
+
+          <RecentTransactionsList transactions={recentTransactionsQuery.data ?? []} />
+
+          <Button label="Hesaplar" variant="secondary" onPress={() => router.push('/accounts')} />
+          <Button label="Çıkış Yap" variant="secondary" onPress={() => signOut()} />
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
+}

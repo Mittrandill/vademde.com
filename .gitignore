@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+ios/
+android/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Env / secrets
+.env
+.env.local
+.env*.local
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Editor
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo

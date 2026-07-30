@@ -1,0 +1,11 @@
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='2050' height='470' viewBox='0 0 2050 470'><g transform='translate(70 25) scale(0.41015625)'><path fill="#1F2126" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/>
+    <g>
+      <rect fill="#1F2126" x="490.3" y="725.1" width="43.4" height="164" rx="21.7" ry="21.7"/>
+      <rect fill="#1F2126" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7" ry="21.7"/>
+      <rect fill="#1F2126" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7" ry="21.7"/>
+    </g>
+    <g>
+      <rect fill="#1F2126" x="404.7" y="231.9" width="43.4" height="185" rx="21.7" ry="21.7"/>
+      <rect fill="#1F2126" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7" ry="21.7"/>
+      <path fill="#1F2126" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/>
+    </g></g><text x='555' y='320' text-anchor='start' font-family="Sora, 'Inter Display', Arial, sans-serif" font-size='250' font-weight='600' letter-spacing='-6' fill='#1F2126'>Vademde</text></svg>

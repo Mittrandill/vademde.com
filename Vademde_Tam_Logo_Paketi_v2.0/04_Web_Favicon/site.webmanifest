@@ -1,0 +1,20 @@
+{
+  "name": "Vademde",
+  "short_name": "Vademde",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6F5F1",
+  "theme_color": "#1F2126",
+  "icons": [
+    {
+      "src": "/vademde-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/vademde-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

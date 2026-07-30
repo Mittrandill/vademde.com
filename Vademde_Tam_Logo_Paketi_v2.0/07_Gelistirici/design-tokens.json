@@ -1,0 +1,15 @@
+{
+  "brand": {
+    "graphite": "#1F2126",
+    "saffron": "#FFB000",
+    "violet": "#6B4DFF",
+    "soft": "#F6F5F1",
+    "white": "#FFFFFF"
+  },
+  "semantic": {
+    "primary": "#FFB000",
+    "income": "#FFB000",
+    "expense": "#6B4DFF",
+    "text": "#1F2126"
+  }
+}
