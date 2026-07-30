@@ -11,6 +11,7 @@ import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
+import { BankPicker } from '@/components/finance/BankPicker';
 import {
   discardDocument,
   getDocument,
@@ -25,7 +26,7 @@ import { createObligation } from '@/features/obligations/api';
 import { createTransaction, createTransfer } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { toMinorUnits } from '@/utils/money';
-import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
+import { DOCUMENT_TYPE_LABEL, BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 
@@ -51,6 +52,7 @@ export default function DocumentReviewScreen() {
   const [counterpartyResolved, setCounterpartyResolved] = useState(false);
   const [direction, setDirection] = useState<Direction>('payable');
   const [documentType, setDocumentType] = useState<string | null>(null);
+  const [bankCode, setBankCode] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -160,6 +162,7 @@ export default function DocumentReviewScreen() {
           counterparty_id: counterpartyId,
           account_id: accountId,
           category_id: categoryId,
+          bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
           notes: documentNumber.trim() ? `Belge no: ${documentNumber.trim()}` : null,
         });
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
@@ -336,6 +339,15 @@ export default function DocumentReviewScreen() {
                 <DocumentTypePicker selectedId={documentType} onSelect={setDocumentType} />
               </Stack>
             )}
+
+            {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  BANKA (İSTEĞE BAĞLI)
+                </Text>
+                <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+              </Stack>
+            ) : null}
 
             {(direction === 'payable' || direction === 'receivable') && (
               <Stack gap="sm">

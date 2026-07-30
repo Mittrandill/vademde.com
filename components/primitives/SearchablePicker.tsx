@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { FlatList, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,8 @@ export interface SearchablePickerProps<T extends { id: string; name: string }> {
   selectedId: string | null;
   onSelect: (id: string) => void;
   getIcon?: (item: T) => keyof typeof Ionicons.glyphMap;
+  /** Ionicons yerine özel bir görsel (ör. banka logosu) göstermek için kullanılır; verilirse getIcon'a öncelikli. */
+  renderLeading?: (item: T) => ReactNode;
   placeholder?: string;
   title?: string;
   emptyLabel?: string;
@@ -30,6 +32,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
   selectedId,
   onSelect,
   getIcon,
+  renderLeading,
   placeholder = 'Seçin',
   title = 'Seçin',
   emptyLabel = 'Eşleşen sonuç bulunamadı.',
@@ -83,11 +86,15 @@ export function SearchablePicker<T extends { id: string; name: string }>({
           borderColor: theme.colors.border,
         }}
       >
-        <Ionicons
-          name={selected ? iconFor(selected) : FALLBACK_ICON}
-          size={20}
-          color={selected ? theme.colors.accentViolet : theme.colors.textSecondary}
-        />
+        {selected && renderLeading ? (
+          renderLeading(selected)
+        ) : (
+          <Ionicons
+            name={selected ? iconFor(selected) : FALLBACK_ICON}
+            size={20}
+            color={selected ? theme.colors.accentViolet : theme.colors.textSecondary}
+          />
+        )}
         <Text
           variant="body"
           style={{ flex: 1, color: selected ? theme.colors.textPrimary : theme.colors.textSecondary }}
@@ -173,11 +180,15 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                       item.id === selectedId ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
                   }}
                 >
-                  <Ionicons
-                    name={iconFor(item)}
-                    size={20}
-                    color={item.id === selectedId ? theme.colors.brandPrimaryText : theme.colors.accentViolet}
-                  />
+                  {renderLeading ? (
+                    renderLeading(item)
+                  ) : (
+                    <Ionicons
+                      name={iconFor(item)}
+                      size={20}
+                      color={item.id === selectedId ? theme.colors.brandPrimaryText : theme.colors.accentViolet}
+                    />
+                  )}
                   <Text
                     variant="body"
                     style={{

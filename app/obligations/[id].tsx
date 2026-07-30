@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { StatusBadge } from '@/components/finance/StatusBadge';
+import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { getObligation, getObligationWithInstallments, type Installment } from '@/features/obligations/api';
 import { listAccounts, type Account } from '@/features/accounts/api';
@@ -85,11 +86,14 @@ export default function ObligationDetailScreen() {
             </Pressable>
           </Row>
 
-          <Row gap="xs" align="center">
-            <StatusBadge status={obligation.status} />
-            <Text variant="caption" color="textSecondary">
-              {DOCUMENT_TYPE_LABEL[obligation.document_type] ?? obligation.document_type}
-            </Text>
+          <Row gap="sm" align="center">
+            <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={28} />
+            <Row gap="xs" align="center" style={{ flex: 1 }}>
+              <StatusBadge status={obligation.status} />
+              <Text variant="caption" color="textSecondary">
+                {DOCUMENT_TYPE_LABEL[obligation.document_type] ?? obligation.document_type}
+              </Text>
+            </Row>
           </Row>
 
           <Stack

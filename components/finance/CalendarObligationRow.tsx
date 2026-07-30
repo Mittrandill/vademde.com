@@ -7,7 +7,7 @@ import { useTheme } from '@/theme';
 import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
-import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
+import { ObligationIcon } from './ObligationIcon';
 import { getObligation, type ObligationWithRelations } from '@/features/obligations/api';
 import { recordPayment } from '@/features/payments/api';
 import { formatMinorAmount } from '@/utils/money';
@@ -59,11 +59,7 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
       <Row gap="sm">
         <Pressable onPress={() => router.push(`/obligations/${obligation.id}`)} style={{ flex: 1 }}>
           <Row gap="sm">
-            <Ionicons
-              name={DOCUMENT_TYPE_ICON[obligation.document_type] ?? 'document-text-outline'}
-              size={22}
-              color={theme.colors.accentViolet}
-            />
+            <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={28} />
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="cardTitle">{obligation.title}</Text>
               <Row gap="xs">

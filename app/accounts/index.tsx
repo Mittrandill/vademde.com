@@ -6,9 +6,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { Pressable, Row, Stack, Text } from '@/components/primitives';
+import { BankLogo } from '@/components/finance/BankLogo';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
+import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
@@ -88,16 +90,17 @@ export default function AccountsScreen() {
                 }}
                 gap="sm"
               >
-                <Ionicons
-                  name={TYPE_ICON[item.type as Account['type']]}
-                  size={22}
-                  color={theme.colors.accentViolet}
-                />
+                <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={28} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle">{item.name}</Text>
                   <Text variant="caption" color="textSecondary">
                     {TYPE_LABEL[item.type as Account['type']]}
                   </Text>
+                  {item.iban ? (
+                    <Text variant="caption" color="textSecondary" tabular>
+                      {maskIban(item.iban)}
+                    </Text>
+                  ) : null}
                 </Stack>
                 <Text variant="body" tabular>
                   {formatMinorAmount(item.opening_balance_minor, item.currency_code)}

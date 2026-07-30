@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { useTheme } from '@/theme';
 import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
-import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
+import { ObligationIcon } from './ObligationIcon';
 import type { ObligationWithRelations } from '@/features/obligations/api';
 
 export interface UpcomingDueListProps {
@@ -28,7 +26,6 @@ function startOfDay(date: Date): Date {
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
 
 export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
-  const theme = useTheme();
   const [segment, setSegment] = useState<SegmentKey>('week');
 
   const filtered = useMemo(() => {
@@ -66,11 +63,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
             <Pressable key={o.id} onPress={() => router.push(`/obligations/${o.id}`)}>
               <Card>
                 <Row gap="sm">
-                  <Ionicons
-                    name={DOCUMENT_TYPE_ICON[o.document_type] ?? 'document-text-outline'}
-                    size={22}
-                    color={theme.colors.accentViolet}
-                  />
+                  <ObligationIcon documentType={o.document_type} bankCode={o.bank_code} size={28} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">{o.title}</Text>
                     <Row gap="xs">

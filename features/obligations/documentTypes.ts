@@ -32,3 +32,6 @@ export const DOCUMENT_TYPE_LABEL: Record<string, string> = Object.fromEntries(
 export const DOCUMENT_TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = Object.fromEntries(
   DOCUMENT_TYPES.map((t) => [t.id, t.icon])
 );
+
+// Bu belge türleri bir banka tarafından düzenlenir; diğerlerinde (senet, fatura vb.) banka alanı yoktur.
+export const BANK_DOCUMENT_TYPES = new Set(['kredi', 'kredi_karti_ekstresi', 'cek']);

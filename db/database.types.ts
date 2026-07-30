@@ -17,8 +17,10 @@ export type Database = {
     Tables: {
       accounts: {
         Row: {
+          bank_code: string | null
           created_at: string
           currency_code: string
+          iban: string | null
           id: string
           is_archived: boolean
           name: string
@@ -28,8 +30,10 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          bank_code?: string | null
           created_at?: string
           currency_code?: string
+          iban?: string | null
           id?: string
           is_archived?: boolean
           name: string
@@ -39,8 +43,10 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          bank_code?: string | null
           created_at?: string
           currency_code?: string
+          iban?: string | null
           id?: string
           is_archived?: boolean
           name?: string
@@ -533,6 +539,7 @@ export type Database = {
       obligations: {
         Row: {
           account_id: string | null
+          bank_code: string | null
           category_id: string | null
           counterparty_id: string | null
           created_at: string
@@ -551,6 +558,7 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
+          bank_code?: string | null
           category_id?: string | null
           counterparty_id?: string | null
           created_at?: string
@@ -569,6 +577,7 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
+          bank_code?: string | null
           category_id?: string | null
           counterparty_id?: string | null
           created_at?: string

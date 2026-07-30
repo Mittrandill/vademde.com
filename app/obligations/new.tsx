@@ -11,6 +11,8 @@ import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
+import { BankPicker } from '@/components/finance/BankPicker';
+import { BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
 import { listCounterparties } from '@/features/counterparties/api';
@@ -83,6 +85,7 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
 
   const [direction, setDirection] = useState<Direction>((initial?.direction as Direction) ?? 'payable');
   const [documentType, setDocumentType] = useState<string | null>(initial?.document_type ?? null);
+  const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [totalAmount, setTotalAmount] = useState(
     initial ? (initial.total_amount_minor / 100).toFixed(2).replace('.', ',') : ''
@@ -126,6 +129,8 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
         throw new Error('Eksik alan var');
       }
 
+      const bankCodeForType = BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null;
+
       if (isEditing) {
         const obligation = await updateObligation(id, {
           direction,
@@ -135,6 +140,7 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
           counterparty_id: counterpartyId,
           account_id: accountId,
           category_id: categoryId,
+          bank_code: bankCodeForType,
           ...(hasInstallments ? {} : { total_amount_minor: totalAmountMinor }),
         });
         await syncObligationReminder(activeWorkspaceId, obligation);
@@ -151,6 +157,7 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
         counterparty_id: counterpartyId,
         account_id: accountId,
         category_id: categoryId,
+        bank_code: bankCodeForType,
       });
 
       if (installmentCount > 1) {
@@ -300,6 +307,15 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
               </Text>
               <DocumentTypePicker selectedId={documentType} onSelect={setDocumentType} />
             </Stack>
+
+            {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  BANKA (İSTEĞE BAĞLI)
+                </Text>
+                <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+              </Stack>
+            ) : null}
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">

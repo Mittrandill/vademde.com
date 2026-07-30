@@ -7,9 +7,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { BankPicker } from '@/components/finance/BankPicker';
 import { createAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { toMinorUnits } from '@/utils/money';
+import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
 
 const TYPES: Array<{ value: Account['type']; label: string }> = [
@@ -24,7 +26,12 @@ export default function NewAccountScreen() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [name, setName] = useState('');
   const [type, setType] = useState<Account['type']>('cash');
+  const [bankCode, setBankCode] = useState<string | null>(null);
+  const [iban, setIban] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
+
+  const normalizedIban = normalizeIban(iban);
+  const ibanHasError = normalizedIban.length > 0 && !isValidIbanFormat(normalizedIban);
 
   const createAccountMutation = useMutation({
     mutationFn: () =>
@@ -32,6 +39,8 @@ export default function NewAccountScreen() {
         workspace_id: activeWorkspaceId as string,
         name: name.trim(),
         type,
+        bank_code: type === 'bank' ? bankCode : null,
+        iban: type === 'bank' && normalizedIban ? normalizedIban : null,
         opening_balance_minor: openingBalance ? toMinorUnits(Number(openingBalance.replace(',', '.'))) : 0,
       }),
     onSuccess: () => {
@@ -100,6 +109,36 @@ export default function NewAccountScreen() {
               })}
             </Row>
           </Stack>
+
+          {type === 'bank' ? (
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                BANKA (İSTEĞE BAĞLI)
+              </Text>
+              <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+            </Stack>
+          ) : null}
+
+          {type === 'bank' ? (
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                IBAN (İSTEĞE BAĞLI)
+              </Text>
+              <TextField
+                placeholder="TR00 0000 0000 0000 0000 0000 00"
+                value={iban}
+                onChangeText={(value) => setIban(formatIbanInput(value))}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={32}
+              />
+              {ibanHasError ? (
+                <Text variant="caption" color="danger">
+                  IBAN "TR" ile başlamalı ve 26 karakter olmalı.
+                </Text>
+              ) : null}
+            </Stack>
+          ) : null}
 
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">

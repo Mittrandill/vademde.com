@@ -1,10 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { useTheme } from '@/theme';
 import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
+import { ObligationIcon } from './ObligationIcon';
 import type { ObligationWithRelations } from '@/features/obligations/api';
 
 export interface CreditCardDueWidgetProps {
@@ -20,8 +19,6 @@ function daysUntil(dueDate: string): number {
 }
 
 export function CreditCardDueWidget({ obligation }: CreditCardDueWidgetProps) {
-  const theme = useTheme();
-
   if (!obligation) return null;
 
   const remaining = obligation.due_date ? daysUntil(obligation.due_date) : null;
@@ -30,7 +27,7 @@ export function CreditCardDueWidget({ obligation }: CreditCardDueWidgetProps) {
     <Pressable onPress={() => router.push(`/obligations/${obligation.id}`)}>
       <Card>
         <Row gap="sm">
-          <Ionicons name="card-outline" size={22} color={theme.colors.accentViolet} />
+          <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={28} />
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="cardTitle">{obligation.title}</Text>
             <Row gap="xs">
