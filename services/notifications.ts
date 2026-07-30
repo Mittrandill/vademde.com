@@ -83,3 +83,13 @@ export async function syncObligationReminder(workspaceId: string, obligation: Re
     status: 'scheduled',
   });
 }
+
+// obligations tablosunda ON DELETE CASCADE reminders satırını siler; bu fonksiyon
+// yalnızca cihazda zaten planlanmış OS bildirimini iptal etmek için obligation
+// silinmeden önce çağrılır.
+export async function cancelObligationReminder(obligationId: string): Promise<void> {
+  const existing = await getReminderForObligation(obligationId);
+  if (existing?.notification_identifier) {
+    await Notifications.cancelScheduledNotificationAsync(existing.notification_identifier).catch(() => {});
+  }
+}

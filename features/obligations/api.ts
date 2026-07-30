@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import type { Tables, TablesInsert } from '@/db/database.types';
+import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import { installmentTotalMatches } from '@/utils/validation';
 
 export type Obligation = Tables<'obligations'>;
@@ -31,6 +31,7 @@ export interface ListObligationsFilter {
   statuses?: Obligation['status'][];
   dueFrom?: string;
   dueTo?: string;
+  search?: string;
   page?: number;
   pageSize?: number;
 }
@@ -41,6 +42,7 @@ export async function listObligations({
   statuses,
   dueFrom,
   dueTo,
+  search,
   page = 0,
   pageSize = OBLIGATIONS_PAGE_SIZE,
 }: ListObligationsFilter): Promise<ObligationWithRelations[]> {
@@ -52,6 +54,8 @@ export async function listObligations({
   if (statuses?.length) query = query.in('status', statuses);
   if (dueFrom) query = query.gte('due_date', dueFrom);
   if (dueTo) query = query.lte('due_date', dueTo);
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
 
   const { data, error } = await query
     .order('due_date', { ascending: true, nullsFirst: false })
@@ -88,6 +92,20 @@ export async function createObligation(input: TablesInsert<'obligations'>): Prom
   const { data, error } = await supabase.from('obligations').insert(input).select('*').single();
   if (error) throw error;
   return data;
+}
+
+// docs/01-finansal-kayit-modeli.md §8 — total_amount_minor değişirse
+// obligations_recompute_on_amount_change trigger'ı remaining_amount_minor ve status'ü otomatik günceller.
+export async function updateObligation(id: string, input: TablesUpdate<'obligations'>): Promise<Obligation> {
+  const { data, error } = await supabase.from('obligations').update(input).eq('id', id).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+// Taksit ve ödeme geçmişi veritabanında CASCADE ile birlikte silinir (bkz. installments/payments FK'leri).
+export async function deleteObligation(id: string): Promise<void> {
+  const { error } = await supabase.from('obligations').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export interface CreateInstallmentPlanInput {

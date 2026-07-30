@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import type { Tables, TablesInsert } from '@/db/database.types';
+import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 
 export type Transaction = Tables<'transactions'>;
 
@@ -16,6 +16,7 @@ export interface ListTransactionsFilter {
   workspaceId: string;
   accountId?: string;
   direction?: Transaction['direction'];
+  search?: string;
   page?: number;
   pageSize?: number;
 }
@@ -24,6 +25,7 @@ export async function listTransactions({
   workspaceId,
   accountId,
   direction,
+  search,
   page = 0,
   pageSize = TRANSACTIONS_PAGE_SIZE,
 }: ListTransactionsFilter): Promise<TransactionWithRelations[]> {
@@ -38,10 +40,18 @@ export async function listTransactions({
 
   if (accountId) query = query.eq('account_id', accountId);
   if (direction) query = query.eq('direction', direction);
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) query = query.ilike('description', `%${trimmedSearch}%`);
 
   const { data, error } = await query;
   if (error) throw error;
   return data as unknown as TransactionWithRelations[];
+}
+
+export async function getTransaction(id: string): Promise<Transaction> {
+  const { data, error } = await supabase.from('transactions').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data;
 }
 
 export async function createTransaction(
@@ -50,6 +60,20 @@ export async function createTransaction(
   const { data, error } = await supabase.from('transactions').insert(input).select('*').single();
   if (error) throw error;
   return data;
+}
+
+export async function updateTransaction(
+  id: string,
+  input: TablesUpdate<'transactions'>
+): Promise<Transaction> {
+  const { data, error } = await supabase.from('transactions').update(input).eq('id', id).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTransaction(id: string): Promise<void> {
+  const { error } = await supabase.from('transactions').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export interface CreateTransferInput {

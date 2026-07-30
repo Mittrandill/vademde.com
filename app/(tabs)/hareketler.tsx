@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { listTransactions, TRANSACTIONS_PAGE_SIZE } from '@/features/transactions/api';
 import { listObligations, OBLIGATIONS_PAGE_SIZE } from '@/features/obligations/api';
@@ -52,6 +52,13 @@ export default function HareketlerScreen() {
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
 
   const wantsTransactions = filter === 'all' || ['income', 'expense', 'transfer'].includes(filter);
   const wantsObligations = filter === 'all' || ['payable', 'receivable'].includes(filter);
@@ -59,9 +66,14 @@ export default function HareketlerScreen() {
   const obligationDirection = wantsObligations && filter !== 'all' ? (filter as 'payable' | 'receivable') : undefined;
 
   const transactionsQuery = useInfiniteQuery({
-    queryKey: [activeWorkspaceId, 'transactions', 'infinite', transactionDirection ?? 'all'],
+    queryKey: [activeWorkspaceId, 'transactions', 'infinite', transactionDirection ?? 'all', search],
     queryFn: ({ pageParam }) =>
-      listTransactions({ workspaceId: activeWorkspaceId as string, direction: transactionDirection, page: pageParam }),
+      listTransactions({
+        workspaceId: activeWorkspaceId as string,
+        direction: transactionDirection,
+        search: search || undefined,
+        page: pageParam,
+      }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length === TRANSACTIONS_PAGE_SIZE ? allPages.length : undefined,
@@ -69,9 +81,14 @@ export default function HareketlerScreen() {
   });
 
   const obligationsQuery = useInfiniteQuery({
-    queryKey: [activeWorkspaceId, 'obligations', 'infinite', obligationDirection ?? 'all'],
+    queryKey: [activeWorkspaceId, 'obligations', 'infinite', obligationDirection ?? 'all', search],
     queryFn: ({ pageParam }) =>
-      listObligations({ workspaceId: activeWorkspaceId as string, direction: obligationDirection, page: pageParam }),
+      listObligations({
+        workspaceId: activeWorkspaceId as string,
+        direction: obligationDirection,
+        search: search || undefined,
+        page: pageParam,
+      }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length === OBLIGATIONS_PAGE_SIZE ? allPages.length : undefined,
@@ -152,6 +169,17 @@ export default function HareketlerScreen() {
           </Pressable>
         </Row>
 
+        <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
+          <TextField
+            placeholder="Açıklama veya başlıkta ara"
+            value={searchInput}
+            onChangeText={setSearchInput}
+            returnKeyType="search"
+            autoCorrect={false}
+            style={{ flex: 1 }}
+          />
+        </Row>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -197,9 +225,9 @@ export default function HareketlerScreen() {
             gap="xs"
             style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
           >
-            <Text variant="cardTitle">Henüz hareket yok</Text>
+            <Text variant="cardTitle">{search ? 'Sonuç bulunamadı' : 'Henüz hareket yok'}</Text>
             <Text variant="body" color="textSecondary">
-              Sağ üstteki + ile ilk kaydınızı ekleyin.
+              {search ? 'Farklı bir arama terimi deneyin.' : 'Sağ üstteki + ile ilk kaydınızı ekleyin.'}
             </Text>
           </Stack>
         ) : (
@@ -213,7 +241,11 @@ export default function HareketlerScreen() {
             }}
             renderItem={({ item }) => (
               <Pressable
-                onPress={item.kind === 'obligation' ? () => router.push(`/obligations/${item.id}`) : undefined}
+                onPress={() =>
+                  item.kind === 'obligation'
+                    ? router.push(`/obligations/${item.id}`)
+                    : router.push({ pathname: '/transactions/new', params: { id: item.id } })
+                }
               >
                 <Row
                   style={{

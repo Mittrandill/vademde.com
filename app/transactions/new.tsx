@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
@@ -11,7 +11,14 @@ import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
-import { createTransaction, createTransfer } from '@/features/transactions/api';
+import {
+  createTransaction,
+  createTransfer,
+  deleteTransaction,
+  getTransaction,
+  updateTransaction,
+  type Transaction,
+} from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { toMinorUnits } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
@@ -26,16 +33,54 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 
 export default function NewTransactionScreen() {
   const theme = useTheme();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = !!id;
+
+  const existingQuery = useQuery({
+    queryKey: ['transaction', id],
+    queryFn: () => getTransaction(id as string),
+    enabled: isEditing,
+  });
+
+  if (isEditing && !existingQuery.data) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          {existingQuery.error ? (
+            <Text variant="body" color="danger">
+              {existingQuery.error instanceof Error ? existingQuery.error.message : 'Kayıt yüklenemedi'}
+            </Text>
+          ) : null}
+        </Stack>
+      </SafeAreaView>
+    );
+  }
+
+  return <TransactionForm id={isEditing ? (id as string) : null} initial={existingQuery.data ?? null} />;
+}
+
+interface TransactionFormProps {
+  id: string | null;
+  initial: Transaction | null;
+}
+
+function TransactionForm({ id, initial }: TransactionFormProps) {
+  const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const isEditing = !!id;
 
-  const [direction, setDirection] = useState<Direction>('expense');
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [transferToAccountId, setTransferToAccountId] = useState<string | null>(null);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [amount, setAmount] = useState('');
-  const [dateStr, setDateStr] = useState(() => new Date().toISOString().slice(0, 10));
-  const [description, setDescription] = useState('');
+  const [direction, setDirection] = useState<Direction>((initial?.direction as Direction) ?? 'expense');
+  const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? null);
+  const [transferToAccountId, setTransferToAccountId] = useState<string | null>(
+    initial?.transfer_to_account_id ?? null
+  );
+  const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
+  const [amount, setAmount] = useState(initial ? (initial.amount_minor / 100).toFixed(2).replace('.', ',') : '');
+  const [dateStr, setDateStr] = useState(
+    initial ? initial.occurred_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+  );
+  const [description, setDescription] = useState(initial?.description ?? '');
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -53,11 +98,24 @@ export default function NewTransactionScreen() {
   });
   const categories = categoriesQuery.data ?? [];
 
-  const createMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId || !accountId || !amount) throw new Error('Eksik alan var');
       const amountMinor = toMinorUnits(Number(amount.replace(',', '.')));
       const occurredAt = new Date(dateStr).toISOString();
+
+      if (isEditing) {
+        if (direction === 'transfer' && !transferToAccountId) throw new Error('Hedef hesap seçin');
+        return updateTransaction(id, {
+          account_id: accountId,
+          transfer_to_account_id: direction === 'transfer' ? transferToAccountId : null,
+          direction,
+          category_id: direction === 'transfer' ? null : categoryId,
+          amount_minor: amountMinor,
+          occurred_at: occurredAt,
+          description: description.trim() || null,
+        });
+      }
 
       if (direction === 'transfer') {
         if (!transferToAccountId) throw new Error('Hedef hesap seçin');
@@ -88,8 +146,27 @@ export default function NewTransactionScreen() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTransaction(id as string),
+    onSuccess: () => {
+      if (activeWorkspaceId) {
+        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+      }
+      router.back();
+    },
+  });
+
+  function confirmDelete() {
+    Alert.alert('Hareketi Sil', 'Bu hareket kalıcı olarak silinecek. Emin misiniz?', [
+      { text: 'Vazgeç', style: 'cancel' },
+      { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
+    ]);
+  }
+
   const canSubmit =
-    !!accountId && !!amount && (direction !== 'transfer' || (!!transferToAccountId && transferToAccountId !== accountId));
+    !!accountId &&
+    !!amount &&
+    (direction !== 'transfer' || (!!transferToAccountId && transferToAccountId !== accountId));
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -101,7 +178,7 @@ export default function NewTransactionScreen() {
                 <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
               </Pressable>
               <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-                Yeni Hareket
+                {isEditing ? 'Hareketi Düzenle' : 'Yeni Hareket'}
               </Text>
             </Row>
 
@@ -153,7 +230,7 @@ export default function NewTransactionScreen() {
               </Text>
               {accounts.length === 0 ? (
                 <Text variant="body" color="textSecondary">
-                  Önce Hesaplar'dan bir hesap ekleyin.
+                  Önce Hesaplar&apos;dan bir hesap ekleyin.
                 </Text>
               ) : (
                 <AccountPicker
@@ -208,18 +285,28 @@ export default function NewTransactionScreen() {
               <TextField placeholder="Örn. Market alışverişi" value={description} onChangeText={setDescription} />
             </Stack>
 
-            {createMutation.error ? (
+            {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {createMutation.error instanceof Error ? createMutation.error.message : 'Kayıt oluşturulamadı'}
+                {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
               </Text>
             ) : null}
 
             <Button
-              label="Kaydet"
-              onPress={() => createMutation.mutate()}
-              loading={createMutation.isPending}
+              label={isEditing ? 'Güncelle' : 'Kaydet'}
+              onPress={() => saveMutation.mutate()}
+              loading={saveMutation.isPending}
               disabled={!canSubmit}
             />
+
+            {isEditing ? (
+              <Button
+                label="Sil"
+                variant="danger"
+                onPress={confirmDelete}
+                loading={deleteMutation.isPending}
+                disabled={saveMutation.isPending}
+              />
+            ) : null}
           </Stack>
         </ScrollView>
       </KeyboardAvoidingView>

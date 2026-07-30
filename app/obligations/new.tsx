@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
@@ -14,12 +14,19 @@ import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
 import { listCounterparties } from '@/features/counterparties/api';
-import { createObligation, createInstallmentPlan } from '@/features/obligations/api';
+import {
+  createObligation,
+  createInstallmentPlan,
+  deleteObligation,
+  getObligationWithInstallments,
+  updateObligation,
+  type Obligation,
+} from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { toMinorUnits, formatMinorAmount } from '@/utils/money';
 import { buildEqualInstallments } from '@/utils/installmentPlan';
 import { queryKeys } from '@/services/queryKeys';
-import { syncObligationReminder } from '@/services/notifications';
+import { cancelObligationReminder, syncObligationReminder } from '@/services/notifications';
 
 type Direction = 'payable' | 'receivable';
 
@@ -30,17 +37,60 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 
 export default function NewObligationScreen() {
   const theme = useTheme();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = !!id;
+
+  const existingQuery = useQuery({
+    queryKey: ['obligation', id, 'edit'],
+    queryFn: () => getObligationWithInstallments(id as string),
+    enabled: isEditing,
+  });
+
+  if (isEditing && !existingQuery.data) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          {existingQuery.error ? (
+            <Text variant="body" color="danger">
+              {existingQuery.error instanceof Error ? existingQuery.error.message : 'Kayıt yüklenemedi'}
+            </Text>
+          ) : null}
+        </Stack>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <ObligationForm
+      id={isEditing ? (id as string) : null}
+      initial={existingQuery.data?.obligation ?? null}
+      hasInstallments={(existingQuery.data?.installments.length ?? 0) > 0}
+    />
+  );
+}
+
+interface ObligationFormProps {
+  id: string | null;
+  initial: Obligation | null;
+  hasInstallments: boolean;
+}
+
+function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
+  const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const isEditing = !!id;
 
-  const [direction, setDirection] = useState<Direction>('payable');
-  const [documentType, setDocumentType] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
-  const [totalAmount, setTotalAmount] = useState('');
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [counterpartyId, setCounterpartyId] = useState<string | null>(null);
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [direction, setDirection] = useState<Direction>((initial?.direction as Direction) ?? 'payable');
+  const [documentType, setDocumentType] = useState<string | null>(initial?.document_type ?? null);
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [totalAmount, setTotalAmount] = useState(
+    initial ? (initial.total_amount_minor / 100).toFixed(2).replace('.', ',') : ''
+  );
+  const [dueDate, setDueDate] = useState(initial?.due_date ?? new Date().toISOString().slice(0, 10));
+  const [counterpartyId, setCounterpartyId] = useState<string | null>(initial?.counterparty_id ?? null);
+  const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? null);
+  const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
@@ -66,14 +116,29 @@ export default function NewObligationScreen() {
   const totalAmountMinor = totalAmount ? toMinorUnits(Number(totalAmount.replace(',', '.'))) : 0;
   const installmentCount = Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1));
   const installmentPreview =
-    installmentCount > 1 && totalAmountMinor > 0
+    !isEditing && installmentCount > 1 && totalAmountMinor > 0
       ? buildEqualInstallments(totalAmountMinor, installmentCount, dueDate)
       : [];
 
-  const createMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId || !title.trim() || !totalAmountMinor || !documentType) {
         throw new Error('Eksik alan var');
+      }
+
+      if (isEditing) {
+        const obligation = await updateObligation(id, {
+          direction,
+          document_type: documentType,
+          title: title.trim(),
+          due_date: dueDate,
+          counterparty_id: counterpartyId,
+          account_id: accountId,
+          category_id: categoryId,
+          ...(hasInstallments ? {} : { total_amount_minor: totalAmountMinor }),
+        });
+        await syncObligationReminder(activeWorkspaceId, obligation);
+        return obligation;
       }
 
       const obligation = await createObligation({
@@ -109,6 +174,32 @@ export default function NewObligationScreen() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await cancelObligationReminder(id as string);
+      await deleteObligation(id as string);
+    },
+    onSuccess: () => {
+      if (activeWorkspaceId) {
+        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+      }
+      router.back();
+    },
+  });
+
+  function confirmDelete() {
+    Alert.alert(
+      'Kaydı Sil',
+      hasInstallments
+        ? 'Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?'
+        : 'Bu kayıt ve varsa ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
+      ]
+    );
+  }
+
   const canSubmit = !!title.trim() && totalAmountMinor > 0 && !!documentType;
 
   return (
@@ -121,7 +212,7 @@ export default function NewObligationScreen() {
                 <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
               </Pressable>
               <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-                Yeni Borç / Alacak
+                {isEditing ? 'Borç / Alacağı Düzenle' : 'Yeni Borç / Alacak'}
               </Text>
             </Row>
 
@@ -165,17 +256,23 @@ export default function NewObligationScreen() {
               <Text variant="caption" color="textSecondary">
                 TUTAR
               </Text>
-              <TextField
-                placeholder="0,00"
-                keyboardType="decimal-pad"
-                value={totalAmount}
-                onChangeText={setTotalAmount}
-              />
+              {isEditing && hasInstallments ? (
+                <Text variant="body" color="textSecondary">
+                  {formatMinorAmount(totalAmountMinor)} — taksit planı olan kayıtlarda tutar düzenlenemez.
+                </Text>
+              ) : (
+                <TextField
+                  placeholder="0,00"
+                  keyboardType="decimal-pad"
+                  value={totalAmount}
+                  onChangeText={setTotalAmount}
+                />
+              )}
             </Stack>
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                {installmentCount > 1 ? 'İLK VADE' : 'VADE'}
+                {!isEditing && installmentCount > 1 ? 'İLK VADE' : 'VADE'}
               </Text>
               <TextField placeholder="YYYY-AA-GG" value={dueDate} onChangeText={setDueDate} />
             </Stack>
@@ -227,24 +324,26 @@ export default function NewObligationScreen() {
               </Text>
               {(accountsQuery.data ?? []).length === 0 ? (
                 <Text variant="body" color="textSecondary">
-                  Önce Hesaplar'dan bir hesap ekleyin.
+                  Önce Hesaplar&apos;dan bir hesap ekleyin.
                 </Text>
               ) : (
                 <AccountPicker accounts={accountsQuery.data ?? []} selectedId={accountId} onSelect={setAccountId} />
               )}
             </Stack>
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                TAKSİT SAYISI
-              </Text>
-              <TextField
-                placeholder="1"
-                keyboardType="number-pad"
-                value={installmentCountStr}
-                onChangeText={setInstallmentCountStr}
-              />
-            </Stack>
+            {isEditing ? null : (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  TAKSİT SAYISI
+                </Text>
+                <TextField
+                  placeholder="1"
+                  keyboardType="number-pad"
+                  value={installmentCountStr}
+                  onChangeText={setInstallmentCountStr}
+                />
+              </Stack>
+            )}
 
             {installmentPreview.length > 0 ? (
               <Stack gap="xs">
@@ -266,18 +365,28 @@ export default function NewObligationScreen() {
               </Stack>
             ) : null}
 
-            {createMutation.error ? (
+            {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {createMutation.error instanceof Error ? createMutation.error.message : 'Kayıt oluşturulamadı'}
+                {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
               </Text>
             ) : null}
 
             <Button
-              label="Kaydet"
-              onPress={() => createMutation.mutate()}
-              loading={createMutation.isPending}
+              label={isEditing ? 'Güncelle' : 'Kaydet'}
+              onPress={() => saveMutation.mutate()}
+              loading={saveMutation.isPending}
               disabled={!canSubmit}
             />
+
+            {isEditing ? (
+              <Button
+                label="Sil"
+                variant="danger"
+                onPress={confirmDelete}
+                loading={deleteMutation.isPending}
+                disabled={saveMutation.isPending}
+              />
+            ) : null}
           </Stack>
         </ScrollView>
       </KeyboardAvoidingView>

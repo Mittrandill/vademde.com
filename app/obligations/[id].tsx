@@ -80,6 +80,9 @@ export default function ObligationDetailScreen() {
             <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
               {obligation.title}
             </Text>
+            <Pressable onPress={() => router.push({ pathname: '/obligations/new', params: { id: obligation.id } })} hitSlop={12}>
+              <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
+            </Pressable>
           </Row>
 
           <Row gap="xs" align="center">
