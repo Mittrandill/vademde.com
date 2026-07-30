@@ -79,11 +79,31 @@ export async function uploadAndCreateDocument({
   return data;
 }
 
+// process-document 402 + { quotaExceeded: true } döndürdüğünde ayırt edilebilir olması için
+// (docs/10-abonelik-gelir-modeli.md — kota dolduğunda kullanıcıya manuel giriş/plan yükseltme sunulur).
+export class QuotaExceededError extends Error {
+  readonly quotaExceeded = true;
+}
+
 export async function startProcessing(documentId: string): Promise<void> {
   const { error } = await supabase.functions.invoke('process-document', {
     body: { documentId },
   });
-  if (error) throw error;
+  if (!error) return;
+
+  const context = (error as { context?: Response }).context;
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json();
+      if (body?.quotaExceeded) {
+        throw new QuotaExceededError(body.error ?? 'Aylık OCR kotanız doldu');
+      }
+    } catch (parseError) {
+      if (parseError instanceof QuotaExceededError) throw parseError;
+      // Gövde JSON değilse orijinal hatayı fırlat.
+    }
+  }
+  throw error;
 }
 
 export async function getDocument(documentId: string): Promise<FinancialDocument> {

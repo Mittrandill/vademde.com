@@ -11,7 +11,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { Button, Pressable, Row, Stack, Text } from '@/components/primitives';
-import { findDuplicateDocument, getDocument, startProcessing, uploadAndCreateDocument } from '@/features/documents/api';
+import {
+  QuotaExceededError,
+  findDuplicateDocument,
+  getDocument,
+  startProcessing,
+  uploadAndCreateDocument,
+} from '@/features/documents/api';
+import { currentPeriodMonth, getCurrentOcrUsage } from '@/features/subscriptions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { hashArrayBuffer } from '@/utils/hash';
@@ -83,6 +90,12 @@ export default function TaraScreen() {
     return () => loop.stop();
   }, [localUri, scanAnim]);
 
+  const ocrUsageQuery = useQuery({
+    queryKey: queryKeys.ocrUsage(currentPeriodMonth()),
+    queryFn: getCurrentOcrUsage,
+  });
+  const quotaRemaining = ocrUsageQuery.data?.remaining;
+
   const documentQuery = useQuery({
     queryKey:
       activeWorkspaceId && documentId ? queryKeys.document(activeWorkspaceId, documentId) : ['document', 'disabled'],
@@ -131,6 +144,11 @@ export default function TaraScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.document(activeWorkspaceId, document.id) });
       await startProcessing(document.id);
     } catch (err) {
+      if (err instanceof QuotaExceededError) {
+        reset();
+        showQuotaExceededAlert();
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Belge işlenemedi');
     }
   }
@@ -171,7 +189,21 @@ export default function TaraScreen() {
     await uploadAsset(uri, fileName, mimeType, contentHash);
   }
 
+  // docs/10-abonelik-gelir-modeli.md §14.1 — kota bittiğinde manuel giriş açık kalır;
+  // kullanıcı planını yükseltebilir.
+  function showQuotaExceededAlert() {
+    Alert.alert('Aylık OCR kotanız doldu', 'Belgeyi manuel olarak girebilir veya planınızı yükseltebilirsiniz.', [
+      { text: 'Manuel Giriş', onPress: () => router.push('/transactions/new') },
+      { text: 'Planı Yükselt', onPress: () => router.push('/paywall') },
+      { text: 'Vazgeç', style: 'cancel' },
+    ]);
+  }
+
   async function requestScan(uri: string, fileName: string, mimeType: string) {
+    if (quotaRemaining !== undefined && quotaRemaining <= 0) {
+      showQuotaExceededAlert();
+      return;
+    }
     if (consentGranted) {
       await processAsset(uri, fileName, mimeType);
       return;
@@ -339,6 +371,11 @@ export default function TaraScreen() {
             <Text variant="body" color="textSecondary">
               Çek, senet veya fatura ekleyin; Vademde belgeyi okuyup vadeli kaydı sizin onayınızla oluşturur.
             </Text>
+            {ocrUsageQuery.data ? (
+              <Text variant="caption" color="textSecondary">
+                Kalan OCR kotanız: {ocrUsageQuery.data.remaining}/{ocrUsageQuery.data.quota}
+              </Text>
+            ) : null}
           </Stack>
           <Button label="Kameradan Tara" onPress={() => setMode('camera')} />
           <Button label="Galeriden Seç" variant="secondary" onPress={handlePickLibrary} />

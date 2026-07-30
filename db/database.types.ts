@@ -628,6 +628,27 @@ export type Database = {
           },
         ]
       }
+      ocr_usage: {
+        Row: {
+          owner_id: string
+          period_month: string
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          owner_id: string
+          period_month: string
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          owner_id?: string
+          period_month?: string
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           account_id: string | null
@@ -702,6 +723,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      plan_limits: {
+        Row: {
+          advanced_reports: boolean
+          audit_log: boolean
+          document_archive: boolean
+          face_id: boolean
+          max_personal_workspaces: number
+          max_team_members: number | null
+          monthly_ocr_quota: number
+          plan: string
+          recurring_transactions: boolean
+          unlimited_export: boolean
+          updated_at: string
+        }
+        Insert: {
+          advanced_reports?: boolean
+          audit_log?: boolean
+          document_archive?: boolean
+          face_id?: boolean
+          max_personal_workspaces: number
+          max_team_members?: number | null
+          monthly_ocr_quota: number
+          plan: string
+          recurring_transactions?: boolean
+          unlimited_export?: boolean
+          updated_at?: string
+        }
+        Update: {
+          advanced_reports?: boolean
+          audit_log?: boolean
+          document_archive?: boolean
+          face_id?: boolean
+          max_personal_workspaces?: number
+          max_team_members?: number | null
+          monthly_ocr_quota?: number
+          plan?: string
+          recurring_transactions?: boolean
+          unlimited_export?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -780,6 +843,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subscriptions: {
+        Row: {
+          billing_period: string | null
+          created_at: string
+          current_period_end: string | null
+          id: string
+          owner_id: string
+          plan: string
+          revenuecat_app_user_id: string | null
+          status: string
+          store: string | null
+          updated_at: string
+          will_renew: boolean
+        }
+        Insert: {
+          billing_period?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          owner_id: string
+          plan?: string
+          revenuecat_app_user_id?: string | null
+          status?: string
+          store?: string | null
+          updated_at?: string
+          will_renew?: boolean
+        }
+        Update: {
+          billing_period?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          owner_id?: string
+          plan?: string
+          revenuecat_app_user_id?: string | null
+          status?: string
+          store?: string | null
+          updated_at?: string
+          will_renew?: boolean
+        }
+        Relationships: []
       }
       transactions: {
         Row: {
@@ -932,6 +1037,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      increment_ocr_usage: {
+        Args: { target_owner: string; target_period: string }
+        Returns: undefined
+      }
       is_workspace_member: {
         Args: { target_workspace_id: string }
         Returns: boolean
@@ -960,7 +1069,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals["public"]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends

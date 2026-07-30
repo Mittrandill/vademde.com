@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, ScrollView } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -10,7 +10,15 @@ import { Button, Card, Pressable, Row, Stack, Text } from '@/components/primitiv
 import { deleteAccount, signOut } from '@/features/auth/api';
 import { useSession } from '@/features/auth/useSession';
 import { listMyWorkspaces } from '@/features/workspaces/api';
+import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
 import { queryKeys } from '@/services/queryKeys';
+
+// docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad.
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Ücretsiz',
+  plus: 'Vademde Plus',
+  isletme: 'Vademde İşletme',
+};
 
 // docs/07-guvenlik-gizlilik.md — "Hesabı uygulama içinden silme" P0 gereksinimi.
 export default function SettingsScreen() {
@@ -22,6 +30,19 @@ export default function SettingsScreen() {
     queryKey: queryKeys.workspaces(),
     queryFn: listMyWorkspaces,
   });
+
+  const subscriptionQuery = useQuery({
+    queryKey: queryKeys.subscription(),
+    queryFn: getMySubscription,
+  });
+
+  const ocrUsageQuery = useQuery({
+    queryKey: queryKeys.ocrUsage(currentPeriodMonth()),
+    queryFn: getCurrentOcrUsage,
+  });
+
+  const planCode = subscriptionQuery.data?.plan ?? 'free';
+  const planLabel = PLAN_LABELS[planCode] ?? planCode;
 
   function confirmDeleteAccount() {
     Alert.alert(
@@ -89,6 +110,48 @@ export default function SettingsScreen() {
               HESAP
             </Text>
             <Text variant="body">{session?.user?.email ?? '—'}</Text>
+          </Stack>
+        </Card>
+
+        <Card>
+          <Stack gap="sm">
+            <Text variant="caption" color="textSecondary">
+              ABONELİK
+            </Text>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <Text variant="body">{planLabel}</Text>
+              <View
+                style={{
+                  alignSelf: 'flex-start',
+                  paddingHorizontal: theme.spacing.xs,
+                  paddingVertical: 3,
+                  borderRadius: 999,
+                  backgroundColor:
+                    (planCode === 'free' ? theme.colors.textSecondary : theme.colors.brandPrimary) + '26',
+                }}
+              >
+                <Text
+                  variant="caption"
+                  style={{
+                    color: planCode === 'free' ? theme.colors.textSecondary : theme.colors.brandPrimary,
+                    fontWeight: '600',
+                  }}
+                >
+                  {planCode === 'free' ? 'Aktif' : 'Aktif Üyelik'}
+                </Text>
+              </View>
+            </Row>
+            {ocrUsageQuery.data ? (
+              <Text variant="caption" color="textSecondary">
+                Bu ay OCR kullanımı: {ocrUsageQuery.data.usedCount}/{ocrUsageQuery.data.quota}
+              </Text>
+            ) : null}
+            <Pressable onPress={() => router.push('/paywall')}>
+              <Row style={{ justifyContent: 'space-between', paddingVertical: theme.spacing.sm }}>
+                <Text variant="body">Planı Yönet</Text>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+              </Row>
+            </Pressable>
           </Stack>
         </Card>
 

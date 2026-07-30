@@ -223,6 +223,55 @@ Deno.serve(async (req: Request) => {
   // Depolama ve yazma işlemleri için service role (RLS'yi atlar, yalnızca sunucu tarafında).
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  // docs/10-abonelik-gelir-modeli.md §14.1 — aylık OCR kotası owner (workspace sahibi)
+  // bazında tutulur; kota dolduğunda Gemini hiç çağrılmaz.
+  const { data: workspace, error: workspaceError } = await adminClient
+    .from('workspaces')
+    .select('owner_id')
+    .eq('id', document.workspace_id)
+    .single();
+  if (workspaceError || !workspace) {
+    return new Response(JSON.stringify({ error: 'Çalışma alanı bulunamadı' }), { status: 404 });
+  }
+  const ownerId = workspace.owner_id;
+  const periodMonth = new Date();
+  const periodMonthIso = new Date(
+    Date.UTC(periodMonth.getUTCFullYear(), periodMonth.getUTCMonth(), 1)
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  const { data: subscription } = await adminClient
+    .from('subscriptions')
+    .select('plan')
+    .eq('owner_id', ownerId)
+    .maybeSingle();
+  const plan = subscription?.plan ?? 'free';
+
+  const { data: planLimits, error: planLimitsError } = await adminClient
+    .from('plan_limits')
+    .select('monthly_ocr_quota')
+    .eq('plan', plan)
+    .single();
+  if (planLimitsError || !planLimits) {
+    return new Response(JSON.stringify({ error: 'Plan limitleri okunamadı' }), { status: 500 });
+  }
+
+  const { data: usage } = await adminClient
+    .from('ocr_usage')
+    .select('used_count')
+    .eq('owner_id', ownerId)
+    .eq('period_month', periodMonthIso)
+    .maybeSingle();
+  const usedCount = usage?.used_count ?? 0;
+
+  if (usedCount >= planLimits.monthly_ocr_quota) {
+    return new Response(
+      JSON.stringify({ error: 'Aylık OCR kotanız doldu', quotaExceeded: true }),
+      { status: 402, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
   await adminClient
     .from('document_processing_jobs')
     .insert({
@@ -395,6 +444,13 @@ Deno.serve(async (req: Request) => {
         extracted_summary: Object.keys(extractedSummary).length > 0 ? extractedSummary : null,
       })
       .eq('id', documentId);
+
+    // Yalnızca başarılı taramada kota düşürülür (docs/10-abonelik-gelir-modeli.md §14.1) —
+    // yukarıdaki her throw bu satıra ulaşmadan catch'e düşer, ocr_usage değişmez.
+    await adminClient.rpc('increment_ocr_usage', {
+      target_owner: ownerId,
+      target_period: periodMonthIso,
+    });
 
     await adminClient
       .from('document_processing_jobs')

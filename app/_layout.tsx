@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from '@/theme';
 import { useSession } from '@/features/auth/useSession';
 import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
+import { configurePurchases, logOutPurchases } from '@/services/purchases';
 import { useWorkspaceRealtime } from '@/services/realtime';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -16,6 +17,15 @@ function RootNavigator() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
 
   useWorkspaceRealtime(session ? activeWorkspaceId : null);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (userId) {
+      configurePurchases(userId);
+    } else {
+      logOutPurchases();
+    }
+  }, [session?.user?.id]);
 
   if (isLoading) return null;
 
@@ -38,6 +48,7 @@ function RootNavigator() {
         <Stack.Screen name="obligations/[id]" />
         <Stack.Screen name="documents/[id]/review" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="paywall/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="categories/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="categories/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="counterparties/index" options={{ presentation: 'modal' }} />
