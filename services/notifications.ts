@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 
 import { getReminderForObligation, upsertReminder } from '@/features/reminders/api';
-import type { Obligation } from '@/features/obligations/api';
+import { getNextPendingInstallmentDueDate, type Obligation } from '@/features/obligations/api';
 import { formatMinorAmount } from '@/utils/money';
 
 Notifications.setNotificationHandler({
@@ -43,7 +43,12 @@ export type ReminderObligation = Pick<
 export async function syncObligationReminder(workspaceId: string, obligation: ReminderObligation): Promise<void> {
   const existing = await getReminderForObligation(obligation.id);
   const isTerminal = TERMINAL_STATUSES.has(obligation.status) || obligation.remaining_amount_minor <= 0;
-  const remindAt = !isTerminal && obligation.due_date ? buildRemindAt(obligation.due_date) : null;
+
+  // Taksitli borçlarda vade, sabit obligation.due_date değil bir sonraki bekleyen
+  // taksitin tarihidir; taksitsiz kayıtlarda (çek/senet/fatura) null döner ve obligation.due_date kullanılır.
+  const nextInstallmentDueDate = isTerminal ? null : await getNextPendingInstallmentDueDate(obligation.id);
+  const effectiveDueDate = nextInstallmentDueDate ?? obligation.due_date;
+  const remindAt = !isTerminal && effectiveDueDate ? buildRemindAt(effectiveDueDate) : null;
 
   if (existing?.notification_identifier) {
     await Notifications.cancelScheduledNotificationAsync(existing.notification_identifier).catch(() => {});

@@ -20,7 +20,6 @@ import { listObligations, ACTIVE_OBLIGATION_STATUSES } from '@/features/obligati
 import { listTransactions } from '@/features/transactions/api';
 import { getAllTimeIncomeExpenseTotals, getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { signOut } from '@/features/auth/api';
 import { queryKeys } from '@/services/queryKeys';
 
 export default function HomeScreen() {
@@ -161,24 +160,29 @@ export default function HomeScreen() {
           }}
         >
           <Stack gap="xs">
-            <Pressable
-              onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
-              disabled={workspaces.length <= 1}
-            >
-              <Row gap="xs" align="center">
-                <Text variant="caption" color="textSecondary">
-                  ÇALIŞMA ALANI
-                </Text>
-                {workspaces.length > 1 ? (
-                  <Ionicons
-                    name={switcherOpen ? 'chevron-up' : 'chevron-down'}
-                    size={14}
-                    color={theme.colors.textSecondary}
-                  />
-                ) : null}
-              </Row>
-              <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
-            </Pressable>
+            <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Pressable
+                onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
+                disabled={workspaces.length <= 1}
+              >
+                <Row gap="xs" align="center">
+                  <Text variant="caption" color="textSecondary">
+                    ÇALIŞMA ALANI
+                  </Text>
+                  {workspaces.length > 1 ? (
+                    <Ionicons
+                      name={switcherOpen ? 'chevron-up' : 'chevron-down'}
+                      size={14}
+                      color={theme.colors.textSecondary}
+                    />
+                  ) : null}
+                </Row>
+                <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push('/settings')} hitSlop={12} style={{ padding: theme.spacing.xs }}>
+                <Ionicons name="settings-outline" size={22} color={theme.colors.textSecondary} />
+              </Pressable>
+            </Row>
             {switcherOpen ? (
               <Stack
                 gap="xxs"
@@ -238,7 +242,6 @@ export default function HomeScreen() {
           <RecentTransactionsList transactions={recentTransactionsQuery.data ?? []} />
 
           <Button label="Hesaplar" variant="secondary" onPress={() => router.push('/accounts')} />
-          <Button label="Çıkış Yap" variant="secondary" onPress={() => signOut()} />
         </ScrollView>
       )}
     </SafeAreaView>

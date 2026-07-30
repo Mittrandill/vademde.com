@@ -16,16 +16,17 @@ import {
   discardDocument,
   getDocument,
   getDocumentFields,
+  getDocumentLineItems,
   getSignedUrl,
   markDocumentConfirmed,
 } from '@/features/documents/api';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
-import { createObligation } from '@/features/obligations/api';
+import { createObligation, createInstallmentPlan } from '@/features/obligations/api';
 import { createTransaction, createTransfer } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { toMinorUnits } from '@/utils/money';
+import { formatMinorAmount, toMinorUnits } from '@/utils/money';
 import { DOCUMENT_TYPE_LABEL, BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
@@ -72,6 +73,13 @@ export default function DocumentReviewScreen() {
     queryFn: () => getDocumentFields(id as string),
     enabled: !!id,
   });
+
+  const lineItemsQuery = useQuery({
+    queryKey: ['document', id, 'line-items'],
+    queryFn: () => getDocumentLineItems(id as string),
+    enabled: !!id,
+  });
+  const installmentItems = (lineItemsQuery.data ?? []).filter((item) => item.kind === 'installment');
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -165,6 +173,26 @@ export default function DocumentReviewScreen() {
           bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
           notes: documentNumber.trim() ? `Belge no: ${documentNumber.trim()}` : null,
         });
+        // docs/12-mvp-kabul-kriterleri.md — "Kredi ödeme planından taksitler ayrı satırlar olarak oluşturulur."
+        // Tutarlar (yuvarlama vb. nedenlerle) tam uyuşmazsa taksit planı atlanır; borç tek kalem
+        // olarak kalır ve kullanıcı sonradan manuel taksitlendirebilir — asla tutarsız veri yazılmaz.
+        if (documentType === 'kredi' && installmentItems.length > 0) {
+          try {
+            await createInstallmentPlan({
+              workspaceId: activeWorkspaceId,
+              obligationId: obligation.id,
+              totalAmountMinor: amountMinor,
+              installments: installmentItems.map((item, index) => ({
+                installmentNumber: item.sort_order || index + 1,
+                dueDate: item.occurred_at ?? (dueDate || new Date().toISOString().slice(0, 10)),
+                amountMinor: item.amount_minor,
+              })),
+            });
+          } catch {
+            // sessizce atla — obligation tek kalem borç olarak kalır.
+          }
+        }
+
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
         await syncObligationReminder(activeWorkspaceId, obligation);
         return;
@@ -339,6 +367,31 @@ export default function DocumentReviewScreen() {
                 <DocumentTypePicker selectedId={documentType} onSelect={setDocumentType} />
               </Stack>
             )}
+
+            {documentType === 'kredi' && installmentItems.length > 0 ? (
+              <Stack
+                gap="xs"
+                style={{
+                  backgroundColor: theme.colors.surfacePrimary,
+                  borderRadius: theme.radius.widget,
+                  padding: theme.spacing.md,
+                }}
+              >
+                <Text variant="caption" color="textSecondary">
+                  {installmentItems.length} TAKSİT OTOMATİK OLUŞTURULACAK
+                </Text>
+                {installmentItems.map((item) => (
+                  <Row key={item.id} style={{ justifyContent: 'space-between' }}>
+                    <Text variant="body" color="textSecondary">
+                      {item.description ?? `${item.sort_order}. Taksit`} — {item.occurred_at ?? '—'}
+                    </Text>
+                    <Text variant="body" tabular>
+                      {formatMinorAmount(item.amount_minor, document.currency_code ?? 'TRY')}
+                    </Text>
+                  </Row>
+                ))}
+              </Stack>
+            ) : null}
 
             {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
               <Stack gap="sm">

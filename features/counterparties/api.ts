@@ -34,3 +34,16 @@ export async function updateCounterparty(
   if (error) throw error;
   return data;
 }
+
+export async function getCounterparty(id: string): Promise<Counterparty> {
+  const { data, error } = await supabase.from('counterparties').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data;
+}
+
+// Kişi/firma işlem/borç kayıtlarında kullanılıyorsa FK NO ACTION nedeniyle silme başarısız olur;
+// çağıran taraf bu durumu kullanıcıya "kullanımda" mesajıyla iletir.
+export async function deleteCounterparty(id: string): Promise<void> {
+  const { error } = await supabase.from('counterparties').delete().eq('id', id);
+  if (error) throw error;
+}

@@ -1,9 +1,11 @@
 import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
 import { generateUuid } from '@/utils/uuid';
+import { hashArrayBuffer } from '@/utils/hash';
 
 export type FinancialDocument = Tables<'financial_documents'>;
 export type DocumentField = Tables<'document_fields'>;
+export type DocumentLineItem = Tables<'document_line_items'>;
 
 const BUCKET = 'financial-documents';
 
@@ -12,6 +14,27 @@ export interface UploadDocumentInput {
   uri: string;
   fileName: string;
   mimeType: string;
+  contentHash?: string;
+}
+
+// docs/12-mvp-kabul-kriterleri.md — "Aynı belge tekrar yüklendiğinde mükerrer uyarısı gösterilir."
+// Discarded (kullanıcının reddettiği) belgeler mükerrer sayılmaz.
+export async function findDuplicateDocument(
+  workspaceId: string,
+  contentHash: string
+): Promise<FinancialDocument | null> {
+  const { data, error } = await supabase
+    .from('financial_documents')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .eq('content_hash', contentHash)
+    .neq('status', 'discarded')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
 }
 
 // docs/06-teknik-mimari.md §10.3 — belge güvenli storage alanına yüklenir,
@@ -21,6 +44,7 @@ export async function uploadAndCreateDocument({
   uri,
   fileName,
   mimeType,
+  contentHash,
 }: UploadDocumentInput): Promise<FinancialDocument> {
   const documentId = generateUuid();
   const storagePath = `${workspaceId}/${documentId}/${fileName}`;
@@ -45,6 +69,7 @@ export async function uploadAndCreateDocument({
       file_name: fileName,
       mime_type: mimeType,
       file_size_bytes: arrayBuffer.byteLength,
+      content_hash: contentHash ?? hashArrayBuffer(arrayBuffer),
       status: 'uploaded',
     })
     .select('*')
@@ -63,6 +88,16 @@ export async function startProcessing(documentId: string): Promise<void> {
 
 export async function getDocument(documentId: string): Promise<FinancialDocument> {
   const { data, error } = await supabase.from('financial_documents').select('*').eq('id', documentId).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getDocumentLineItems(documentId: string): Promise<DocumentLineItem[]> {
+  const { data, error } = await supabase
+    .from('document_line_items')
+    .select('*')
+    .eq('document_id', documentId)
+    .order('sort_order', { ascending: true });
   if (error) throw error;
   return data;
 }

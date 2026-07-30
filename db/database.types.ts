@@ -377,6 +377,7 @@ export type Database = {
       }
       financial_documents: {
         Row: {
+          content_hash: string | null
           counterparty_name: string | null
           created_at: string
           currency_code: string | null
@@ -402,6 +403,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          content_hash?: string | null
           counterparty_name?: string | null
           created_at?: string
           currency_code?: string | null
@@ -427,6 +429,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          content_hash?: string | null
           counterparty_name?: string | null
           created_at?: string
           currency_code?: string | null
@@ -1071,9 +1074,3 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-
-export const Constants = {
-  public: {
-    Enums: {},
-  },
-} as const

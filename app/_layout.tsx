@@ -37,6 +37,11 @@ function RootNavigator() {
         <Stack.Screen name="obligations/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="obligations/[id]" />
         <Stack.Screen name="documents/[id]/review" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="categories/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="categories/new" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="counterparties/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="counterparties/new" options={{ presentation: 'modal' }} />
       </Stack.Protected>
     </Stack>
   );

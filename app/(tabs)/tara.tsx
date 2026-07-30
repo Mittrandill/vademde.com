@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Image, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -11,9 +11,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { Button, Pressable, Row, Stack, Text } from '@/components/primitives';
-import { getDocument, startProcessing, uploadAndCreateDocument } from '@/features/documents/api';
+import { findDuplicateDocument, getDocument, startProcessing, uploadAndCreateDocument } from '@/features/documents/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
+import { hashArrayBuffer } from '@/utils/hash';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — belge görüntüsü buluta gönderilmeden önce
 // kullanıcıdan açık onay alınır (App Store gizlilik gereksinimi).
@@ -111,19 +112,63 @@ export default function TaraScreen() {
     setMode('select');
   }
 
-  async function processAsset(uri: string, fileName: string, mimeType: string) {
+  async function uploadAsset(
+    uri: string,
+    fileName: string,
+    mimeType: string,
+    contentHash?: string
+  ) {
     if (!activeWorkspaceId) return;
-    setLocalUri(uri);
-    setIsPdf(mimeType === 'application/pdf');
-    setError(null);
     try {
-      const document = await uploadAndCreateDocument({ workspaceId: activeWorkspaceId, uri, fileName, mimeType });
+      const document = await uploadAndCreateDocument({
+        workspaceId: activeWorkspaceId,
+        uri,
+        fileName,
+        mimeType,
+        contentHash,
+      });
       setDocumentId(document.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.document(activeWorkspaceId, document.id) });
       await startProcessing(document.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Belge işlenemedi');
     }
+  }
+
+  // docs/12-mvp-kabul-kriterleri.md — aynı belge tekrar yüklenirse kullanıcı uyarılır,
+  // ama engellenmez; kullanıcı yine de devam edebilir.
+  async function processAsset(uri: string, fileName: string, mimeType: string) {
+    if (!activeWorkspaceId) return;
+    setLocalUri(uri);
+    setIsPdf(mimeType === 'application/pdf');
+    setError(null);
+
+    let contentHash: string | undefined;
+    try {
+      const response = await fetch(uri);
+      const arrayBuffer = await response.arrayBuffer();
+      contentHash = hashArrayBuffer(arrayBuffer);
+      const duplicate = await findDuplicateDocument(activeWorkspaceId, contentHash);
+      if (duplicate) {
+        Alert.alert(
+          'Mükerrer belge',
+          `"${duplicate.file_name}" adlı belge daha önce yüklenmiş görünüyor. Yine de devam etmek istiyor musunuz?`,
+          [
+            { text: 'Vazgeç', style: 'cancel', onPress: reset },
+            {
+              text: 'Yine de Yükle',
+              onPress: () => uploadAsset(uri, fileName, mimeType, contentHash),
+            },
+          ]
+        );
+        return;
+      }
+    } catch {
+      // Mükerrer kontrolü başarısız olsa bile taramayı engelleme; contentHash olmadan devam eder.
+      contentHash = undefined;
+    }
+
+    await uploadAsset(uri, fileName, mimeType, contentHash);
   }
 
   async function requestScan(uri: string, fileName: string, mimeType: string) {

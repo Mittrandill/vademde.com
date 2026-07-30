@@ -88,6 +88,22 @@ export async function getObligationWithInstallments(
   return { obligation, installments };
 }
 
+// docs/12-mvp-kabul-kriterleri.md — taksitli borçlarda bildirim, ödenmiş taksitlerin
+// sabit vade tarihine değil bir sonraki bekleyen taksitin vadesine göre planlanmalıdır.
+export async function getNextPendingInstallmentDueDate(obligationId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('installments')
+    .select('due_date')
+    .eq('obligation_id', obligationId)
+    .gt('remaining_amount_minor', 0)
+    .neq('status', 'iptal_edildi')
+    .order('due_date', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.due_date ?? null;
+}
+
 export async function createObligation(input: TablesInsert<'obligations'>): Promise<Obligation> {
   const { data, error } = await supabase.from('obligations').insert(input).select('*').single();
   if (error) throw error;
