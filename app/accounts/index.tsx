@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,7 +6,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
@@ -13,6 +14,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
+import { matchesSearch, normalizeForSearch } from '@/utils/search';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
@@ -26,9 +28,20 @@ const TYPE_LABEL: Record<Account['type'], string> = {
   wallet: 'Cüzdan',
 };
 
+type TypeFilterKey = 'all' | Account['type'];
+
+const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
+  { key: 'all', label: 'Tümü' },
+  { key: 'cash', label: 'Kasa' },
+  { key: 'bank', label: 'Banka' },
+  { key: 'wallet', label: 'Cüzdan' },
+];
+
 export default function AccountsScreen() {
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<TypeFilterKey>('all');
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -36,7 +49,15 @@ export default function AccountsScreen() {
     enabled: !!activeWorkspaceId,
   });
 
-  const accounts = accountsQuery.data ?? [];
+  const allAccounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+
+  const accounts = useMemo(() => {
+    const query = normalizeForSearch(search);
+    return allAccounts.filter((a) => {
+      if (typeFilter !== 'all' && a.type !== typeFilter) return false;
+      return matchesSearch(a.name, query) || matchesSearch(a.iban, query);
+    });
+  }, [allAccounts, search, typeFilter]);
 
   const balancesQuery = useQuery({
     queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
@@ -60,6 +81,23 @@ export default function AccountsScreen() {
           </Pressable>
         </Row>
 
+        <Stack gap="sm" style={{ paddingHorizontal: theme.screenEdge.standard }}>
+          <TextField
+            placeholder="Hesap adı veya IBAN'da ara"
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            autoCorrect={false}
+          />
+          <SegmentedControl
+            options={TYPE_FILTERS}
+            value={typeFilter}
+            onChange={setTypeFilter}
+            size="compact"
+            stretch
+          />
+        </Stack>
+
         {accountsQuery.error ? (
           <Text
             variant="body"
@@ -75,9 +113,11 @@ export default function AccountsScreen() {
             gap="xs"
             style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
           >
-            <Text variant="cardTitle">Henüz hesap yok</Text>
+            <Text variant="cardTitle">{allAccounts.length === 0 ? 'Henüz hesap yok' : 'Sonuç bulunamadı'}</Text>
             <Text variant="body" color="textSecondary">
-              Kasa, banka veya cüzdan hesabı ekleyerek başlayın.
+              {allAccounts.length === 0
+                ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.'
+                : 'Arama terimini veya filtreyi değiştirin.'}
             </Text>
           </Stack>
         ) : (

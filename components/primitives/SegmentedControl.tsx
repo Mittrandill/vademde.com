@@ -21,6 +21,8 @@ export interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
   size?: 'default' | 'compact';
   trackColor?: keyof ThemeColors;
+  /** Satırın tamamını kaplar ve segmentleri eşit böler (iOS segmented control gibi). */
+  stretch?: boolean;
 }
 
 // docs/08-tasarim-sistemi.md §12.3/§12.17 — iki-üç seçenekli münhasır anahtarlar tek bir
@@ -33,6 +35,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   size = 'default',
   trackColor = 'surfacePrimary',
+  stretch = false,
 }: SegmentedControlProps<T>) {
   const theme = useTheme();
   const compact = size === 'compact';
@@ -47,10 +50,15 @@ export function SegmentedControl<T extends string>({
     <Row
       gap="xxs"
       style={{
-        alignSelf: 'flex-start',
+        alignSelf: stretch ? 'stretch' : 'flex-start',
         backgroundColor: theme.colors[trackColor],
         borderRadius: 999,
         padding: 4,
+        // Yükseklik her ekranda aynı olsun diye dikey padding'e değil sabit token'a bağlı
+        // (docs/08-tasarim-sistemi.md §12.7). `size` yalnızca yatay ölçüyü ve tipografiyi
+        // değiştirir, satır yüksekliğini değil.
+        height: theme.controlHeight.segmented,
+        alignItems: 'center',
       }}
     >
       {options.map((option) => {
@@ -60,15 +68,20 @@ export function SegmentedControl<T extends string>({
             key={option.key}
             onPress={() => handleSelect(option.key)}
             style={{
-              paddingHorizontal: compact ? theme.spacing.sm : theme.spacing.lg,
-              paddingVertical: compact ? 4 : theme.spacing.xs,
+              flex: stretch ? 1 : undefined,
+              // stretch modunda genişliği flex belirler; yatay padding minimum kalır ki
+              // uzun etiketler (ör. "Gecikmiş") dar telefonda kırpılmasın.
+              paddingHorizontal: stretch ? theme.spacing.xs : compact ? theme.spacing.sm : theme.spacing.lg,
+              height: theme.controlHeight.segmented - 8,
               borderRadius: 999,
               alignItems: 'center',
+              justifyContent: 'center',
               backgroundColor: selected ? theme.colors.brandPrimary : 'transparent',
             }}
           >
             <Text
               variant={compact ? 'caption' : 'body'}
+              numberOfLines={1}
               style={{
                 color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary,
                 fontWeight: selected ? '600' : '400',

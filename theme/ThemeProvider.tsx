@@ -4,7 +4,7 @@ import { useColorScheme } from 'react-native';
 import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 import { colorsByScheme, type ColorScheme, type ThemeColors } from './colors';
 import { motion } from './motion';
-import { buttonHeight, radius, screenEdge, spacing, touchTarget } from './spacing';
+import { buttonHeight, controlHeight, radius, screenEdge, spacing, touchTarget } from './spacing';
 import { tabularNums, typography } from './typography';
 
 export interface Theme {
@@ -17,6 +17,7 @@ export interface Theme {
   radius: typeof radius;
   touchTarget: typeof touchTarget;
   buttonHeight: typeof buttonHeight;
+  controlHeight: typeof controlHeight;
   motion: typeof motion;
 }
 
@@ -39,6 +40,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       radius,
       touchTarget,
       buttonHeight,
+      controlHeight,
       motion,
     }),
     [scheme]

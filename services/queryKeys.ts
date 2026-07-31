@@ -5,10 +5,22 @@ export const queryKeys = {
   categories: (workspaceId: string, kind?: 'income' | 'expense') =>
     [workspaceId, 'categories', kind ?? 'all'] as const,
   counterparties: (workspaceId: string) => [workspaceId, 'counterparties'] as const,
+  counterpartyLedger: (workspaceId: string, counterpartyId: string) =>
+    [workspaceId, 'counterparties', counterpartyId, 'ledger'] as const,
+  counterpartyObligations: (workspaceId: string, counterpartyId: string) =>
+    [workspaceId, 'counterparties', counterpartyId, 'obligations'] as const,
+  counterpartyTransactions: (workspaceId: string, counterpartyId: string) =>
+    [workspaceId, 'counterparties', counterpartyId, 'transactions'] as const,
   transactions: (workspaceId: string, direction?: string) =>
     [workspaceId, 'transactions', direction ?? 'all'] as const,
   obligations: (workspaceId: string, direction?: string) =>
     [workspaceId, 'obligations', direction ?? 'all'] as const,
+  obligationsByTypeList: (workspaceId: string, filterKey: string) =>
+    [workspaceId, 'obligations', 'by-type-list', filterKey] as const,
+  obligationsByTypeSummary: (workspaceId: string, filterKey: string) =>
+    [workspaceId, 'obligations', 'by-type-summary', filterKey] as const,
+  obligationTotalsByType: (workspaceId: string) =>
+    [workspaceId, 'obligations', 'type-totals'] as const,
   document: (workspaceId: string, documentId: string) =>
     [workspaceId, 'financial_documents', documentId] as const,
   dashboardActiveObligations: (workspaceId: string) =>

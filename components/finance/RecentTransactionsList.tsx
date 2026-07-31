@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 
-import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Card, EmptyState, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { Amount } from './Amount';
 import type { TransactionWithRelations } from '@/features/transactions/api';
 
@@ -13,23 +13,14 @@ const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 
 export function RecentTransactionsList({ transactions }: RecentTransactionsListProps) {
   return (
     <Stack gap="sm">
-      <Row align="center">
-        <Text variant="sectionTitle" style={{ flex: 1 }}>
-          Son Hareketler
-        </Text>
-        <Pressable onPress={() => router.push('/(tabs)/hareketler')} hitSlop={12}>
-          <Text variant="caption" color="textSecondary">
-            Tümünü Gör
-          </Text>
-        </Pressable>
-      </Row>
+      <SectionHeader
+        title="Son Hareketler"
+        actionLabel="Tümünü Gör"
+        onActionPress={() => router.push('/(tabs)/hareketler')}
+      />
 
       {transactions.length === 0 ? (
-        <Card>
-          <Text variant="body" color="textSecondary">
-            Henüz hareket yok.
-          </Text>
-        </Card>
+        <EmptyState icon="receipt-outline" message="Henüz hareket yok." />
       ) : (
         <Stack gap="xs">
           {transactions.map((t) => (

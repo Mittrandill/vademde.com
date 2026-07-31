@@ -13,6 +13,7 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   tara: 'scan',
   takvim: 'calendar',
   raporlar: 'bar-chart',
+  'daha-fazla': 'grid',
 };
 
 const LABELS: Record<string, string> = {
@@ -21,6 +22,7 @@ const LABELS: Record<string, string> = {
   tara: 'Tara',
   takvim: 'Takvim',
   raporlar: 'Raporlar',
+  'daha-fazla': 'Daha Fazla',
 };
 
 // docs/08-tasarim-sistemi.md §12.10 — ekran kenarlarından içeride, yüksek radiuslu grafit yüzey.
@@ -104,7 +106,10 @@ function TabItem({ focused, icon, label, onPress }: TabItemProps) {
         alignItems: 'center',
         gap: theme.spacing.xxs,
         paddingVertical: theme.spacing.xs,
-        paddingHorizontal: focused ? theme.spacing.md : theme.spacing.sm,
+        // 6 sekme dar telefonlara sığsın diye yatay padding kısıldı; aktif sekme
+        // etiketiyle birlikte en dar cihazda (375pt) bile taşmıyor.
+        paddingHorizontal: focused ? theme.spacing.sm : theme.spacing.xs,
+        flexShrink: focused ? 1 : 0,
         borderRadius: 999,
         backgroundColor: focused ? theme.colors.brandPrimary : 'transparent',
       }}

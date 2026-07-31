@@ -142,6 +142,16 @@ export default function HomeScreen() {
     [activeObligations]
   );
 
+  const payableTotalMinor = useMemo(
+    () => payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
+    [payableObligations]
+  );
+  const receivableTotalMinor = useMemo(
+    () => receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
+    [receivableObligations]
+  );
+  const directionalTotalMinor = payableTotalMinor + receivableTotalMinor;
+
   const error = workspacesQuery.error || createWorkspaceMutation.error;
 
   return (
@@ -201,7 +211,20 @@ export default function HomeScreen() {
                 </Row>
                 <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
               </Pressable>
-              <Pressable onPress={() => router.push('/settings')} hitSlop={12} style={{ padding: theme.spacing.xs }}>
+              <Pressable
+                onPress={() => router.push('/settings')}
+                hitSlop={12}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: theme.radius.input,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                }}
+              >
                 <Ionicons name="settings-outline" size={22} color={theme.colors.textSecondary} />
               </Pressable>
             </Row>
@@ -231,22 +254,26 @@ export default function HomeScreen() {
           <BalanceHero
             totalBalanceMinor={totalBalanceMinor}
             monthNetMinor={monthNetMinor}
+            receivableMinor={receivableTotalMinor}
+            payableMinor={payableTotalMinor}
             hidden={balanceHidden}
             onToggleHidden={toggleBalanceHidden}
           />
 
-          <Row gap="sm">
+          <Row gap="sm" align="stretch">
             <ObligationSummaryCard
               direction="payable"
-              totalMinor={payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0)}
+              totalMinor={payableTotalMinor}
               count={payableObligations.length}
               nearestDueDate={payableObligations.find((o) => o.due_date)?.due_date ?? null}
+              share={directionalTotalMinor > 0 ? payableTotalMinor / directionalTotalMinor : 0}
             />
             <ObligationSummaryCard
               direction="receivable"
-              totalMinor={receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0)}
+              totalMinor={receivableTotalMinor}
               count={receivableObligations.length}
               nearestDueDate={receivableObligations.find((o) => o.due_date)?.due_date ?? null}
+              share={directionalTotalMinor > 0 ? receivableTotalMinor / directionalTotalMinor : 0}
             />
           </Row>
 
@@ -261,9 +288,8 @@ export default function HomeScreen() {
 
           <CreditCardDueWidget obligation={creditCardObligation} />
 
+          {/* Hesaplar/Kişiler/Kategoriler artık "Daha Fazla" sekmesinden erişiliyor. */}
           <RecentTransactionsList transactions={recentTransactionsQuery.data ?? []} />
-
-          <Button label="Hesaplar" variant="secondary" onPress={() => router.push('/accounts')} />
         </ScrollView>
       )}
     </SafeAreaView>

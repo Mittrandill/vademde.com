@@ -34,9 +34,15 @@ export const ACTIVE_OBLIGATION_STATUSES: Obligation['status'][] = [
   'kismen_tahsil_edildi',
 ];
 
+// docs/01-finansal-kayit-modeli.md §3.4 — terminal (kapanmış) durumlar.
+export const CLOSED_OBLIGATION_STATUSES: Obligation['status'][] = ['odendi', 'tahsil_edildi', 'iptal_edildi'];
+
 export interface ListObligationsFilter {
   workspaceId: string;
   direction?: 'payable' | 'receivable';
+  /** docs/01-finansal-kayit-modeli.md §3.2 belge türü ('cek', 'senet', 'kredi'...). */
+  documentType?: string;
+  counterpartyId?: string;
   statuses?: Obligation['status'][];
   dueFrom?: string;
   dueTo?: string;
@@ -48,6 +54,8 @@ export interface ListObligationsFilter {
 export async function listObligations({
   workspaceId,
   direction,
+  documentType,
+  counterpartyId,
   statuses,
   dueFrom,
   dueTo,
@@ -60,6 +68,8 @@ export async function listObligations({
     .select('*, category:categories(name), counterparty:counterparties(name), account:accounts(name)')
     .eq('workspace_id', workspaceId);
   if (direction) query = query.eq('direction', direction);
+  if (documentType) query = query.eq('document_type', documentType);
+  if (counterpartyId) query = query.eq('counterparty_id', counterpartyId);
   if (statuses?.length) query = query.in('status', statuses);
   if (dueFrom) query = query.gte('due_date', dueFrom);
   if (dueTo) query = query.lte('due_date', dueTo);
@@ -71,6 +81,83 @@ export async function listObligations({
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
   return data as unknown as ObligationWithRelations[];
+}
+
+export interface ObligationSummary {
+  count: number;
+  payableMinor: number;
+  receivableMinor: number;
+  overdueCount: number;
+}
+
+// Liste sayfalandırıldığı için özet yüklenen sayfalardan hesaplanamaz (yalnızca ilk 30
+// kaydı toplar, yanlış rakam gösterir). Bu yüzden aynı filtrelerle, sadece toplanacak
+// kolonları çeken ayrı bir sorgu kullanılır.
+export async function getObligationSummary({
+  workspaceId,
+  direction,
+  documentType,
+  statuses,
+  search,
+}: Omit<ListObligationsFilter, 'page' | 'pageSize' | 'dueFrom' | 'dueTo'>): Promise<ObligationSummary> {
+  let query = supabase
+    .from('obligations')
+    .select('direction, remaining_amount_minor, status')
+    .eq('workspace_id', workspaceId);
+  if (direction) query = query.eq('direction', direction);
+  if (documentType) query = query.eq('document_type', documentType);
+  if (statuses?.length) query = query.in('status', statuses);
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = data ?? [];
+  return {
+    count: rows.length,
+    payableMinor: rows
+      .filter((r) => r.direction === 'payable')
+      .reduce((sum, r) => sum + r.remaining_amount_minor, 0),
+    receivableMinor: rows
+      .filter((r) => r.direction === 'receivable')
+      .reduce((sum, r) => sum + r.remaining_amount_minor, 0),
+    overdueCount: rows.filter((r) => r.status === 'gecikti').length,
+  };
+}
+
+export interface ObligationTypeTotal {
+  count: number;
+  totalMinor: number;
+}
+
+// "Daha Fazla" hub'ındaki kutu sayaçları. Sayfalı listeden türetilirse sayfa boyutuyla
+// sınırlı kalacağı için tür bazlı toplamlar ayrı ve dar bir sorgudan gelir.
+//
+// Dönüş tipi Map değil düz nesnedir: react-query cache'i AsyncStorage'a JSON olarak
+// yazılıyor (services/queryClient.ts) ve Map, JSON.stringify'da "{}" olur — uygulama
+// yeniden açıldığında .get() patlardı.
+export async function getObligationTotalsByType(
+  workspaceId: string,
+  statuses: Obligation['status'][] = ACTIVE_OBLIGATION_STATUSES
+): Promise<Record<string, ObligationTypeTotal>> {
+  const { data, error } = await supabase
+    .from('obligations')
+    .select('document_type, remaining_amount_minor')
+    .eq('workspace_id', workspaceId)
+    .in('status', statuses);
+  if (error) throw error;
+
+  const totals: Record<string, ObligationTypeTotal> = {};
+  for (const row of data ?? []) {
+    if (!row.document_type) continue;
+    const current = totals[row.document_type] ?? { count: 0, totalMinor: 0 };
+    totals[row.document_type] = {
+      count: current.count + 1,
+      totalMinor: current.totalMinor + row.remaining_amount_minor,
+    };
+  }
+  return totals;
 }
 
 export interface ListInstallmentsDueFilter {

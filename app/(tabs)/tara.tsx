@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -10,7 +10,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
+import { Button, Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import {
   QuotaExceededError,
   findDuplicateDocument,
@@ -53,6 +54,16 @@ const FRAME_WIDTH = 280;
 const FRAME_HEIGHT = 340;
 const CORNER = 28;
 
+// Hero'daki kamera düğmesinin eşmerkezli halkaları (dıştan içe).
+const HERO_GLOW_OUTER = 224;
+const HERO_GLOW_INNER = 176;
+const HERO_BUTTON = 128;
+
+const SCAN_INFO_TEXT =
+  'Belgeyi kamerayla çekin, galeriden ya da dosyalardan seçin. Vademde belgedeki tutar, vade ve taraf bilgilerini okur; ' +
+  'sonuç her zaman onay ekranında karşınıza gelir ve siz onaylamadan finansal kayda dönüşmez. ' +
+  'Okuma başarısız olursa belge kaybolmaz, manuel girişe geçebilirsiniz.';
+
 export default function TaraScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -76,6 +87,21 @@ export default function TaraScreen() {
   }, []);
 
   const scanAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  // Seçim ekranındaki kamera halkalarının yavaş nefes alma hareketi (docs §12.20 —
+  // hareket bilgilendirici ve düşük tempolu olmalı).
+  useEffect(() => {
+    if (mode !== 'select' || localUri) return undefined;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1800, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [mode, localUri, pulseAnim]);
 
   useEffect(() => {
     if (!localUri) return undefined;
@@ -363,24 +389,136 @@ export default function TaraScreen() {
   }
 
   if (mode === 'select') {
+    const usage = ocrUsageQuery.data;
+    const quotaEmpty = usage ? usage.remaining <= 0 : false;
+    const quotaAccent = quotaEmpty ? theme.colors.danger : theme.colors.brandPrimary;
+
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack gap="xl" style={{ flex: 1, padding: theme.screenEdge.standard, justifyContent: 'center' }}>
-          <Stack gap="xs">
-            <Text variant="pageTitle">Belge Tara</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }} edges={['top', 'left', 'right']}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            padding: theme.screenEdge.standard,
+            // Yüzen tab bar (64pt) içeriği kapatmasın.
+            paddingBottom: theme.spacing.massive + theme.spacing.xl,
+            gap: theme.spacing.lg,
+          }}
+        >
+          <Stack gap="sm">
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text variant="pageTitle">Belge Tara</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Tarama hakkında bilgi"
+                onPress={() => Alert.alert('Belge tarama nasıl çalışır?', SCAN_INFO_TEXT)}
+                style={[styles.infoButton, { borderColor: theme.colors.border }]}
+              >
+                <Ionicons name="information" size={16} color={theme.colors.textSecondary} />
+              </Pressable>
+            </Row>
             <Text variant="body" color="textSecondary">
               Çek, senet veya fatura ekleyin; Vademde belgeyi okuyup vadeli kaydı sizin onayınızla oluşturur.
             </Text>
-            {ocrUsageQuery.data ? (
-              <Text variant="caption" color="textSecondary">
-                Kalan OCR kotanız: {ocrUsageQuery.data.remaining}/{ocrUsageQuery.data.quota}
-              </Text>
+            {usage ? (
+              <Row
+                gap="xs"
+                style={[
+                  styles.quotaPill,
+                  {
+                    borderColor: quotaEmpty ? withAlpha(theme.colors.danger, 0.4) : theme.colors.border,
+                    backgroundColor: theme.colors.surfacePrimary,
+                  },
+                ]}
+              >
+                <Ionicons name="document-text-outline" size={15} color={theme.colors.textSecondary} />
+                <Text variant="caption" color="textSecondary">
+                  Kalan OCR kotanız:{' '}
+                  <Text variant="caption" tabular style={{ color: quotaAccent, fontWeight: '700' }}>
+                    {usage.remaining}
+                  </Text>
+                  <Text variant="caption" color="textSecondary" tabular>
+                    {' '}
+                    / {usage.quota}
+                  </Text>
+                </Text>
+              </Row>
             ) : null}
           </Stack>
-          <Button label="Kameradan Tara" onPress={() => setMode('camera')} />
-          <Button label="Galeriden Seç" variant="secondary" onPress={handlePickLibrary} />
-          <Button label="Dosyalardan Seç" variant="secondary" onPress={handlePickDocument} />
-        </Stack>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Kameradan tara"
+            onPress={() => setMode('camera')}
+          >
+            <Card elevated style={{ paddingVertical: theme.spacing.xl, alignItems: 'center' }}>
+              <Stack gap="md" align="center">
+                <View style={styles.heroGlowWrap}>
+                  <Animated.View
+                    style={[
+                      styles.heroGlowOuter,
+                      {
+                        backgroundColor: withAlpha(theme.colors.brandPrimary, 0.1),
+                        transform: [
+                          { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
+                        ],
+                      },
+                    ]}
+                  />
+                  <Animated.View
+                    style={[
+                      styles.heroGlowInner,
+                      {
+                        backgroundColor: withAlpha(theme.colors.brandPrimary, 0.18),
+                        transform: [
+                          { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) },
+                        ],
+                      },
+                    ]}
+                  />
+                  <View style={[styles.heroButton, { backgroundColor: theme.colors.brandPrimary }]}>
+                    <Ionicons name="camera-outline" size={52} color={theme.colors.brandPrimaryText} />
+                  </View>
+                </View>
+
+                <Stack gap="xxs" align="center">
+                  <Text variant="sectionTitle">Kameradan Tara</Text>
+                  <Text variant="caption" color="textSecondary">
+                    Belgeyi kamerayla çekerek tara
+                  </Text>
+                </Stack>
+
+                <View
+                  style={[
+                    styles.heroArrow,
+                    { backgroundColor: theme.colors.backgroundPrimary, borderColor: theme.colors.border },
+                  ]}
+                >
+                  <Ionicons name="arrow-forward" size={22} color={theme.colors.brandPrimary} />
+                </View>
+              </Stack>
+            </Card>
+          </Pressable>
+
+          <Stack gap="sm">
+            <SourceRow
+              icon="images-outline"
+              title="Galeriden Seç"
+              subtitle="Fotoğraf galerisinden bir belge seçin"
+              onPress={handlePickLibrary}
+            />
+            <SourceRow
+              icon="folder-open-outline"
+              title="Dosyalardan Seç"
+              subtitle="Cihazınızdaki dosyalardan belge seçin"
+              onPress={handlePickDocument}
+            />
+          </Stack>
+
+          {/* docs/10-abonelik-gelir-modeli.md §14.1 — kota bitse bile manuel giriş açık kalır. */}
+          {quotaEmpty ? (
+            <Button label="Manuel Giriş" variant="secondary" onPress={() => router.push('/transactions/new')} />
+          ) : null}
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -479,6 +617,43 @@ export default function TaraScreen() {
   );
 }
 
+interface SourceRowProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+}
+
+function SourceRow({ icon, title, subtitle, onPress }: SourceRowProps) {
+  const theme = useTheme();
+
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress}>
+      <Card>
+        <Row gap="sm">
+          <View
+            style={[
+              styles.sourceIcon,
+              { borderRadius: theme.radius.input, backgroundColor: theme.colors.backgroundPrimary },
+            ]}
+          >
+            <Ionicons name={icon} size={24} color={theme.colors.textSecondary} />
+          </View>
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="cardTitle">{title}</Text>
+            <Text variant="caption" color="textSecondary">
+              {subtitle}
+            </Text>
+          </Stack>
+          <View style={[styles.sourceChevron, { backgroundColor: theme.colors.backgroundPrimary }]}>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+          </View>
+        </Row>
+      </Card>
+    </Pressable>
+  );
+}
+
 function CornerBrackets({ color }: { color: string }) {
   const base = { position: 'absolute' as const, width: CORNER, height: CORNER, borderColor: color };
   return (
@@ -528,6 +703,67 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
+  },
+  infoButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quotaPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  heroGlowWrap: {
+    width: HERO_GLOW_OUTER,
+    height: HERO_GLOW_OUTER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroGlowOuter: {
+    position: 'absolute',
+    width: HERO_GLOW_OUTER,
+    height: HERO_GLOW_OUTER,
+    borderRadius: HERO_GLOW_OUTER / 2,
+  },
+  heroGlowInner: {
+    position: 'absolute',
+    width: HERO_GLOW_INNER,
+    height: HERO_GLOW_INNER,
+    borderRadius: HERO_GLOW_INNER / 2,
+  },
+  heroButton: {
+    width: HERO_BUTTON,
+    height: HERO_BUTTON,
+    borderRadius: HERO_BUTTON / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroArrow: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceIcon: {
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceChevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shutterOuter: {
     width: 72,

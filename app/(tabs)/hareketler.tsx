@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList } from 'react-native';
+import { ActivityIndicator, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { ActionSheet, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -19,7 +19,7 @@ type FilterKey = 'all' | 'income' | 'expense' | 'payable' | 'receivable' | 'tran
 
 // "Transfer" için ayrı bir hızlı-filtre sekmesi yok — transfer işlemleri "Tümü" altında
 // görünmeye devam eder; bu, filtre satırının tek satırda (kaydırma/sarma olmadan) sığması içindir.
-const FILTERS: Array<{ key: FilterKey; label: string }> = [
+const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'Tümü' },
   { key: 'income', label: 'Gelir' },
   { key: 'expense', label: 'Gider' },
@@ -66,6 +66,7 @@ export default function HareketlerScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
 
   useEffect(() => {
     const timeout = setTimeout(() => setSearch(searchInput.trim()), 300);
@@ -210,16 +211,7 @@ export default function HareketlerScreen() {
           <Text variant="pageTitle" style={{ flex: 1 }}>
             Hareketler
           </Text>
-          <Pressable
-            onPress={() =>
-              Alert.alert('Yeni Kayıt', 'Ne eklemek istersiniz?', [
-                { text: 'İşlem (Gelir/Gider/Transfer)', onPress: () => router.push('/transactions/new') },
-                { text: 'Borç / Alacak', onPress: () => router.push('/obligations/new') },
-                { text: 'Vazgeç', style: 'cancel' },
-              ])
-            }
-            hitSlop={12}
-          >
+          <Pressable onPress={() => setAddSheetOpen(true)} hitSlop={12}>
             <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
           </Pressable>
         </Row>
@@ -235,41 +227,11 @@ export default function HareketlerScreen() {
           />
         </Row>
 
-        <Row
-          style={{
-            marginHorizontal: theme.screenEdge.standard,
-            justifyContent: 'space-between',
-            backgroundColor: theme.colors.surfacePrimary,
-            borderRadius: theme.radius.widget,
-            padding: 4,
-          }}
-        >
-          {FILTERS.map((option) => {
-            const selected = option.key === filter;
-            return (
-              <Pressable
-                key={option.key}
-                onPress={() => setFilter(option.key)}
-                style={{
-                  paddingHorizontal: theme.spacing.sm,
-                  paddingVertical: theme.spacing.xs,
-                  borderRadius: 999,
-                  backgroundColor: selected ? theme.colors.brandPrimary : 'transparent',
-                }}
-              >
-                <Text
-                  variant="caption"
-                  style={{
-                    color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary,
-                    fontWeight: selected ? '600' : '400',
-                  }}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </Row>
+        {/* Elle yazılmış kapsül satırı yerine ortak bileşen: yükseklik uygulama genelinde
+            tek token'dan gelsin (theme.controlHeight.segmented). */}
+        <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
+          <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} size="compact" stretch />
+        </Stack>
 
         {error ? (
           <Text variant="body" color="danger" style={{ paddingHorizontal: theme.screenEdge.standard }}>
@@ -374,6 +336,28 @@ export default function HareketlerScreen() {
           />
         )}
       </Stack>
+
+      <ActionSheet
+        visible={addSheetOpen}
+        title="Yeni Kayıt"
+        onClose={() => setAddSheetOpen(false)}
+        options={[
+          {
+            key: 'transaction',
+            label: 'İşlem',
+            description: 'Gerçekleşmiş gelir, gider veya transfer',
+            icon: 'swap-horizontal-outline',
+            onPress: () => router.push('/transactions/new'),
+          },
+          {
+            key: 'obligation',
+            label: 'Borç / Alacak',
+            description: 'Vadeli kayıt: çek, senet, kredi, fatura',
+            icon: 'calendar-outline',
+            onPress: () => router.push('/obligations/new'),
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 }

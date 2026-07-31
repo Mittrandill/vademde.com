@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
 
-import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Card, EmptyState, Pressable, Row, SectionHeader, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
@@ -54,20 +54,12 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
 
   return (
     <Stack gap="sm">
-      <Row align="center">
-        <Text variant="sectionTitle" style={{ flex: 1 }}>
-          Yaklaşan Vadeler
-        </Text>
-      </Row>
+      <SectionHeader title="Yaklaşan Vadeler" />
 
-      <SegmentedControl options={SEGMENTS} value={segment} onChange={setSegment} size="compact" />
+      <SegmentedControl options={SEGMENTS} value={segment} onChange={setSegment} size="compact" stretch />
 
       {filtered.length === 0 ? (
-        <Card>
-          <Text variant="body" color="textSecondary">
-            Bu aralıkta vadesi gelen kayıt yok.
-          </Text>
-        </Card>
+        <EmptyState icon="calendar-outline" message="Bu aralıkta vadesi gelen kayıt yok." />
       ) : (
         <Stack gap="xs">
           {filtered.map((o) => (

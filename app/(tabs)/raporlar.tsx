@@ -143,6 +143,15 @@ export default function RaporlarScreen() {
     () => activeObligations.filter((o) => o.direction === 'receivable'),
     [activeObligations]
   );
+  const payableTotalMinor = useMemo(
+    () => payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
+    [payableObligations]
+  );
+  const receivableTotalMinor = useMemo(
+    () => receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
+    [receivableObligations]
+  );
+  const obligationTotalMinor = payableTotalMinor + receivableTotalMinor;
 
   async function handleExportCsv() {
     if (!activeWorkspaceId || isExporting) return;
@@ -250,18 +259,20 @@ export default function RaporlarScreen() {
 
         <Stack gap="sm">
           <Text variant="sectionTitle">Borç / Alacak Özeti</Text>
-          <Row gap="sm">
+          <Row gap="sm" align="stretch">
             <ObligationSummaryCard
               direction="payable"
-              totalMinor={payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0)}
+              totalMinor={payableTotalMinor}
               count={payableObligations.length}
               nearestDueDate={payableObligations.find((o) => o.due_date)?.due_date ?? null}
+              share={obligationTotalMinor > 0 ? payableTotalMinor / obligationTotalMinor : 0}
             />
             <ObligationSummaryCard
               direction="receivable"
-              totalMinor={receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0)}
+              totalMinor={receivableTotalMinor}
               count={receivableObligations.length}
               nearestDueDate={receivableObligations.find((o) => o.due_date)?.due_date ?? null}
+              share={obligationTotalMinor > 0 ? receivableTotalMinor / obligationTotalMinor : 0}
             />
           </Row>
         </Stack>

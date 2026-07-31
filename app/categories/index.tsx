@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { SectionList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,16 +6,27 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { listCategories, type Category } from '@/features/categories/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
+import { matchesSearch, normalizeForSearch } from '@/utils/search';
 
 const FALLBACK_ICON: keyof typeof Ionicons.glyphMap = 'pricetag-outline';
+
+type KindFilterKey = 'all' | 'expense' | 'income';
+
+const KIND_FILTERS: { key: KindFilterKey; label: string }[] = [
+  { key: 'all', label: 'Tümü' },
+  { key: 'expense', label: 'Gider' },
+  { key: 'income', label: 'Gelir' },
+];
 
 export default function CategoriesScreen() {
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const [search, setSearch] = useState('');
+  const [kindFilter, setKindFilter] = useState<KindFilterKey>('all');
 
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.categories(activeWorkspaceId) : ['categories', 'disabled'],
@@ -22,11 +34,20 @@ export default function CategoriesScreen() {
     enabled: !!activeWorkspaceId,
   });
 
-  const categories = categoriesQuery.data ?? [];
-  const sections = [
-    { title: 'GİDER KATEGORİLERİ', data: categories.filter((c) => c.kind === 'expense') },
-    { title: 'GELİR KATEGORİLERİ', data: categories.filter((c) => c.kind === 'income') },
-  ].filter((section) => section.data.length > 0);
+  const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+
+  const sections = useMemo(() => {
+    const query = normalizeForSearch(search);
+    const visible = categories.filter(
+      (c) => (kindFilter === 'all' || c.kind === kindFilter) && matchesSearch(c.name, query)
+    );
+    return [
+      { title: 'GİDER KATEGORİLERİ', data: visible.filter((c) => c.kind === 'expense') },
+      { title: 'GELİR KATEGORİLERİ', data: visible.filter((c) => c.kind === 'income') },
+    ].filter((section) => section.data.length > 0);
+  }, [categories, search, kindFilter]);
+
+  const isFiltered = search.trim().length > 0 || kindFilter !== 'all';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -42,6 +63,23 @@ export default function CategoriesScreen() {
             <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
           </Pressable>
         </Row>
+
+        <Stack gap="sm" style={{ paddingHorizontal: theme.screenEdge.standard }}>
+          <TextField
+            placeholder="Kategori adında ara"
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            autoCorrect={false}
+          />
+          <SegmentedControl
+            options={KIND_FILTERS}
+            value={kindFilter}
+            onChange={setKindFilter}
+            size="compact"
+            stretch
+          />
+        </Stack>
 
         <SectionList
           sections={sections}
@@ -89,9 +127,18 @@ export default function CategoriesScreen() {
           )}
           ListEmptyComponent={
             categoriesQuery.isSuccess ? (
-              <Text variant="body" color="textSecondary">
-                Henüz kategori yok.
-              </Text>
+              <Stack gap="xs" style={{ paddingTop: theme.spacing.lg }}>
+                <Text variant="cardTitle">
+                  {categories.length === 0 ? 'Henüz kategori yok' : 'Sonuç bulunamadı'}
+                </Text>
+                <Text variant="body" color="textSecondary">
+                  {categories.length === 0
+                    ? 'Sağ üstteki + ile ilk kategorinizi ekleyin.'
+                    : isFiltered
+                      ? 'Arama terimini veya filtreyi değiştirin.'
+                      : ''}
+                </Text>
+              </Stack>
             ) : null
           }
         />

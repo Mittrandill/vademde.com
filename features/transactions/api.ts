@@ -15,6 +15,7 @@ export const TRANSACTIONS_PAGE_SIZE = 30;
 export interface ListTransactionsFilter {
   workspaceId: string;
   accountId?: string;
+  counterpartyId?: string;
   direction?: Transaction['direction'];
   search?: string;
   page?: number;
@@ -24,6 +25,7 @@ export interface ListTransactionsFilter {
 export async function listTransactions({
   workspaceId,
   accountId,
+  counterpartyId,
   direction,
   search,
   page = 0,
@@ -39,6 +41,7 @@ export async function listTransactions({
     .range(page * pageSize, page * pageSize + pageSize - 1);
 
   if (accountId) query = query.eq('account_id', accountId);
+  if (counterpartyId) query = query.eq('counterparty_id', counterpartyId);
   if (direction) query = query.eq('direction', direction);
   const trimmedSearch = search?.trim();
   if (trimmedSearch) query = query.ilike('description', `%${trimmedSearch}%`);

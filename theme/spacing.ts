@@ -30,3 +30,9 @@ export const touchTarget = {
 export const buttonHeight = {
   primary: 55,
 } as const;
+
+// Filtre/segment satırları uygulama genelinde aynı yükseklikte olmalı; aksi halde her
+// ekranda farklı boyda kapsüller görünür. 46 = Takvim/Raporlar'daki mevcut ölçü.
+export const controlHeight = {
+  segmented: 46,
+} as const;

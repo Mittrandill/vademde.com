@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Card, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { DOCUMENT_TYPE_ICON, DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import type { PendingReviewDocument } from '@/features/dashboard/api';
 
@@ -17,7 +17,7 @@ export function PendingReviewQueue({ documents }: PendingReviewQueueProps) {
 
   return (
     <Stack gap="sm">
-      <Text variant="sectionTitle">İnceleme Bekleyen Belgeler</Text>
+      <SectionHeader title="İnceleme Bekleyen Belgeler" />
       <Stack gap="xs">
         {documents.map((doc) => (
           <Pressable key={doc.id} onPress={() => router.push(`/documents/${doc.id}/review`)}>

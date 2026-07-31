@@ -10,6 +10,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="tara" options={{ title: 'Tara' }} />
       <Tabs.Screen name="takvim" options={{ title: 'Takvim' }} />
       <Tabs.Screen name="raporlar" options={{ title: 'Raporlar' }} />
+      <Tabs.Screen name="daha-fazla" options={{ title: 'Daha Fazla' }} />
     </Tabs>
   );
 }
