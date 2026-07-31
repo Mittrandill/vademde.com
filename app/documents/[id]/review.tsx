@@ -28,6 +28,7 @@ import { createTransaction, createTransfer } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, toMinorUnits } from '@/utils/money';
 import { DOCUMENT_TYPE_LABEL, BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
+import { matchBankByName } from '@/features/banks/banks';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 
@@ -110,6 +111,18 @@ export default function DocumentReviewScreen() {
     setAmount(document.total_amount_minor ? (document.total_amount_minor / 100).toFixed(2).replace('.', ',') : '');
     setDueDate(document.due_date ?? document.issue_date ?? '');
     setDocumentNumber(document.document_number ?? '');
+
+    // Kredi/kredi kartı ekstresi için Gemini'nin çıkardığı banka adını statik banka
+    // listesiyle eşleştirip BankPicker'ı önceden doldur (kullanıcı yine değiştirebilir).
+    if (document.document_type === 'kredi' || document.document_type === 'kredi_karti_ekstresi') {
+      const summary = document.extracted_summary as {
+        loan?: { bankName?: string | null };
+        card?: { bankName?: string | null };
+      } | null;
+      const extractedBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? null;
+      const matchedBankCode = matchBankByName(extractedBankName);
+      if (matchedBankCode) setBankCode(matchedBankCode);
+    }
     setTitle(
       document.counterparty_name
         ? `${DOCUMENT_TYPE_LABEL[document.document_type ?? ''] ?? 'Belge'} — ${document.counterparty_name}`
@@ -123,10 +136,17 @@ export default function DocumentReviewScreen() {
   }, [documentQuery.data, initialized]);
 
   // docs/04-ocr-belge-isleme.md §6.6 — isim benzerliğiyle kişi/firma eşleştirme;
-  // eşleşme yoksa yeni kişi/firma otomatik oluşturulur.
+  // eşleşme yoksa yeni kişi/firma otomatik oluşturulur. Banka belgelerinde (kredi, kredi
+  // kartı ekstresi, çek) OCR'ın "kişi/firma" olarak okuduğu isim aslında bankadır — bu
+  // belgelerde banka kimliği zaten bank_code/logo üzerinden temsil edildiğinden burada
+  // ayrıca bir "kişi/firma" kaydı açılmaz.
   useEffect(() => {
     const document = documentQuery.data;
     if (!document?.counterparty_name || !activeWorkspaceId || !counterpartiesQuery.isSuccess || counterpartyResolved) {
+      return;
+    }
+    if (document.document_type && BANK_DOCUMENT_TYPES.has(document.document_type)) {
+      setCounterpartyResolved(true);
       return;
     }
     setCounterpartyResolved(true);
@@ -160,42 +180,73 @@ export default function DocumentReviewScreen() {
 
       if (direction === 'payable' || direction === 'receivable') {
         if (!documentType) throw new Error('Belge türü seçin');
+
+        const hasInstallmentPlan = documentType === 'kredi' && installmentItems.length > 0;
+        // Taksit satırlarının tutarı (installmentAmountMinor) anapara + faiz + vergi
+        // içerir; kredi anaparasıyla (TUTAR alanı) aynı şey değildir. Obligation'ın
+        // toplamı taksitlerin toplamıyla birebir eşleşmeli — aksi halde kalan borç/
+        // ilerleme hesapları (bkz. obligations/[id].tsx) taksitler tamamen ödendiğinde
+        // bile "kalan borç" negatife düşer ya da sıfırlanmaz.
+        const installmentsSumMinor = hasInstallmentPlan
+          ? installmentItems.reduce((sum, item) => sum + item.amount_minor, 0)
+          : null;
+        // Kredi belgelerinde tekil bir "vade" alanı yerine her taksitin kendi vadesi
+        // vardır; obligation'ın vadesi en yakın (ilk) taksitin tarihi olarak ayarlanır —
+        // aksi halde due_date null kalıp aşağıdaki gibi ekranlarda kayıt tarihine
+        // ("bugüne") düşer: app/(tabs)/hareketler.tsx `o.due_date ?? o.created_at`.
+        const earliestInstallmentDueDate = hasInstallmentPlan
+          ? installmentItems.reduce<string | null>((earliest, item) => {
+              if (!item.occurred_at) return earliest;
+              return !earliest || item.occurred_at < earliest ? item.occurred_at : earliest;
+            }, null)
+          : null;
+
         const obligation = await createObligation({
           workspace_id: activeWorkspaceId,
           direction,
           document_type: documentType,
           title: title.trim() || 'Belge',
-          total_amount_minor: amountMinor,
-          due_date: dueDate || null,
+          total_amount_minor: installmentsSumMinor ?? amountMinor,
+          due_date: earliestInstallmentDueDate ?? dueDate ?? null,
           counterparty_id: counterpartyId,
           account_id: accountId,
           category_id: categoryId,
           bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
           notes: documentNumber.trim() ? `Belge no: ${documentNumber.trim()}` : null,
         });
+
         // docs/12-mvp-kabul-kriterleri.md — "Kredi ödeme planından taksitler ayrı satırlar olarak oluşturulur."
-        // Tutarlar (yuvarlama vb. nedenlerle) tam uyuşmazsa taksit planı atlanır; borç tek kalem
-        // olarak kalır ve kullanıcı sonradan manuel taksitlendirebilir — asla tutarsız veri yazılmaz.
-        if (documentType === 'kredi' && installmentItems.length > 0) {
+        let installmentPlanFailed = false;
+        if (hasInstallmentPlan && installmentsSumMinor !== null) {
           try {
             await createInstallmentPlan({
               workspaceId: activeWorkspaceId,
               obligationId: obligation.id,
-              totalAmountMinor: amountMinor,
+              totalAmountMinor: installmentsSumMinor,
+              // document_line_items.tax_minor, edge function'da Gemini'nin ayrı ayrı
+              // döndürdüğü faiz+vergiyi birleştirerek yazıyor (bkz. process-document
+              // §installmentPlan); anapara bu yüzden amount_minor - tax_minor olarak
+              // türetilir. Bu ayrım yalnızca detay ekranında gösterilir.
               installments: installmentItems.map((item, index) => ({
                 installmentNumber: item.sort_order || index + 1,
                 dueDate: item.occurred_at ?? (dueDate || new Date().toISOString().slice(0, 10)),
                 amountMinor: item.amount_minor,
+                principalMinor: item.amount_minor - (item.tax_minor ?? 0),
+                interestMinor: item.tax_minor ?? 0,
               })),
             });
           } catch {
-            // sessizce atla — obligation tek kalem borç olarak kalır.
+            // Tutarlar (yuvarlama vb. nedenlerle) tam uyuşmazsa taksit planı atlanır; borç
+            // tek kalem olarak kalır ve kullanıcı sonradan manuel taksitlendirebilir — asla
+            // tutarsız veri yazılmaz. Ama artık kullanıcıya bildirilir (docs/01 §8.1 —
+            // "son taksit düzeltmesi veya kullanıcı onayı gerekir").
+            installmentPlanFailed = true;
           }
         }
 
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
         await syncObligationReminder(activeWorkspaceId, obligation);
-        return;
+        return { installmentPlanFailed };
       }
 
       if (!accountId) throw new Error('Hesap seçin');
@@ -216,11 +267,17 @@ export default function DocumentReviewScreen() {
         await markDocumentConfirmed(id as string, { transactionId: transaction.id });
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       if (activeWorkspaceId) {
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
+      }
+      if (result?.installmentPlanFailed) {
+        Alert.alert(
+          'Taksitler oluşturulamadı',
+          'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.'
+        );
       }
       router.replace('/(tabs)/hareketler');
     },

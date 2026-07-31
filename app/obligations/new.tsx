@@ -95,6 +95,7 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
+  const [interestAmountStr, setInterestAmountStr] = useState('');
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
 
@@ -118,9 +119,14 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
 
   const totalAmountMinor = totalAmount ? toMinorUnits(Number(totalAmount.replace(',', '.'))) : 0;
   const installmentCount = Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1));
+  // Faiz yalnızca kredi eklerken ve birden fazla taksitte istenir; TUTAR alanı bu
+  // durumda anaparayı temsil eder, obligation'ın toplamı anapara+faiz olur.
+  const showInterestField = !isEditing && documentType === 'kredi' && installmentCount > 1;
+  const interestAmountMinor =
+    showInterestField && interestAmountStr ? toMinorUnits(Number(interestAmountStr.replace(',', '.'))) : 0;
   const installmentPreview =
     !isEditing && installmentCount > 1 && totalAmountMinor > 0
-      ? buildEqualInstallments(totalAmountMinor, installmentCount, dueDate)
+      ? buildEqualInstallments(totalAmountMinor, installmentCount, dueDate, interestAmountMinor)
       : [];
 
   const saveMutation = useMutation({
@@ -147,12 +153,16 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
         return obligation;
       }
 
+      // Faiz girildiyse obligation'ın toplamı anapara+faiz olmalı ki taksitlerin
+      // toplamıyla eşleşsin ve kalan borç/ilerleme hesapları doğru kalsın.
+      const obligationTotalMinor = totalAmountMinor + interestAmountMinor;
+
       const obligation = await createObligation({
         workspace_id: activeWorkspaceId,
         direction,
         document_type: documentType,
         title: title.trim(),
-        total_amount_minor: totalAmountMinor,
+        total_amount_minor: obligationTotalMinor,
         due_date: dueDate,
         counterparty_id: counterpartyId,
         account_id: accountId,
@@ -164,8 +174,8 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
         await createInstallmentPlan({
           workspaceId: activeWorkspaceId,
           obligationId: obligation.id,
-          totalAmountMinor,
-          installments: buildEqualInstallments(totalAmountMinor, installmentCount, dueDate),
+          totalAmountMinor: obligationTotalMinor,
+          installments: buildEqualInstallments(totalAmountMinor, installmentCount, dueDate, interestAmountMinor),
         });
       }
 
@@ -360,6 +370,23 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
                 />
               </Stack>
             )}
+
+            {showInterestField ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  TOPLAM FAİZ (İSTEĞE BAĞLI)
+                </Text>
+                <TextField
+                  placeholder="0,00"
+                  keyboardType="decimal-pad"
+                  value={interestAmountStr}
+                  onChangeText={setInterestAmountStr}
+                />
+                <Text variant="caption" color="textSecondary">
+                  TUTAR alanı anaparadır; buraya girilen faiz taksitlere eşit dağıtılır ve toplam borca eklenir.
+                </Text>
+              </Stack>
+            ) : null}
 
             {installmentPreview.length > 0 ? (
               <Stack gap="xs">

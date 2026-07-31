@@ -128,7 +128,13 @@ export interface CreateInstallmentPlanInput {
   workspaceId: string;
   obligationId: string;
   totalAmountMinor: number;
-  installments: Array<{ installmentNumber: number; dueDate: string; amountMinor: number }>;
+  installments: Array<{
+    installmentNumber: number;
+    dueDate: string;
+    amountMinor: number;
+    principalMinor?: number | null;
+    interestMinor?: number | null;
+  }>;
 }
 
 export async function createInstallmentPlan({
@@ -147,6 +153,8 @@ export async function createInstallmentPlan({
     installment_number: installment.installmentNumber,
     due_date: installment.dueDate,
     amount_minor: installment.amountMinor,
+    principal_minor: installment.principalMinor ?? null,
+    interest_minor: installment.interestMinor ?? null,
   }));
 
   const { data, error } = await supabase.from('installments').insert(rows).select('*');

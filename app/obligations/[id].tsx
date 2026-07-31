@@ -153,6 +153,12 @@ export default function ObligationDetailScreen() {
                     <Text variant="cardTitle">
                       {installment.installment_number}. Taksit — {installment.due_date}
                     </Text>
+                    {installment.principal_minor !== null && installment.interest_minor !== null ? (
+                      <Text variant="caption" color="textSecondary">
+                        Anapara {formatMinorAmount(installment.principal_minor, obligation.currency_code)} • Faiz{' '}
+                        {formatMinorAmount(installment.interest_minor, obligation.currency_code)}
+                      </Text>
+                    ) : null}
                     <StatusBadge status={installment.status} />
                   </Stack>
                   <Stack gap="xxs" align="flex-end">

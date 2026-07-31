@@ -1,17 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Button, Card, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { deleteAccount, signOut } from '@/features/auth/api';
 import { useSession } from '@/features/auth/useSession';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
+import { getMyProfile, updateMyProfile } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
+
+const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
+  grace_period: 'Ödeme sorunu — ödeme yönteminizi güncelleyin',
+  expired: 'Süresi doldu',
+};
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('tr-TR');
+}
 
 // docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad.
 const PLAN_LABELS: Record<string, string> = {
@@ -23,8 +33,11 @@ const PLAN_LABELS: Record<string, string> = {
 // docs/07-guvenlik-gizlilik.md — "Hesabı uygulama içinden silme" P0 gereksinimi.
 export default function SettingsScreen() {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const { session } = useSession();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
 
   const workspacesQuery = useQuery({
     queryKey: queryKeys.workspaces(),
@@ -41,8 +54,40 @@ export default function SettingsScreen() {
     queryFn: getCurrentOcrUsage,
   });
 
+  const profileQuery = useQuery({
+    queryKey: queryKeys.profile(),
+    queryFn: getMyProfile,
+  });
+
+  useEffect(() => {
+    if (profileQuery.data && !isEditingName) {
+      setFullName(profileQuery.data.full_name ?? '');
+    }
+  }, [profileQuery.data, isEditingName]);
+
+  const updateNameMutation = useMutation({
+    mutationFn: () => {
+      if (!session?.user?.id) throw new Error('Oturum bulunamadı');
+      return updateMyProfile(session.user.id, fullName);
+    },
+    onSuccess: () => {
+      setIsEditingName(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
+    },
+  });
+
   const planCode = subscriptionQuery.data?.plan ?? 'free';
   const planLabel = PLAN_LABELS[planCode] ?? planCode;
+  const subscription = subscriptionQuery.data;
+  const renewalLine =
+    subscription && planCode !== 'free'
+      ? SUBSCRIPTION_STATUS_LABEL[subscription.status] ??
+        (subscription.current_period_end
+          ? `${subscription.will_renew ? 'Sonraki yenileme' : 'Yenilenmeyecek — sona erme'}: ${formatDate(subscription.current_period_end)}${
+              subscription.billing_period ? ` (${subscription.billing_period === 'yearly' ? 'yıllık' : 'aylık'})` : ''
+            }`
+          : null)
+      : null;
 
   function confirmDeleteAccount() {
     Alert.alert(
@@ -105,11 +150,51 @@ export default function SettingsScreen() {
         }}
       >
         <Card>
-          <Stack gap="xxs">
+          <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
-              HESAP
+              PROFİL
             </Text>
-            <Text variant="body">{session?.user?.email ?? '—'}</Text>
+            {isEditingName ? (
+              <Stack gap="sm">
+                <TextField placeholder="Ad Soyad" value={fullName} onChangeText={setFullName} />
+                {updateNameMutation.error ? (
+                  <Text variant="caption" color="danger">
+                    {updateNameMutation.error instanceof Error
+                      ? updateNameMutation.error.message
+                      : 'Kaydedilemedi'}
+                  </Text>
+                ) : null}
+                <Row gap="sm">
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Kaydet"
+                      onPress={() => updateNameMutation.mutate()}
+                      loading={updateNameMutation.isPending}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Vazgeç"
+                      variant="secondary"
+                      onPress={() => {
+                        setFullName(profileQuery.data?.full_name ?? '');
+                        setIsEditingName(false);
+                      }}
+                    />
+                  </View>
+                </Row>
+              </Stack>
+            ) : (
+              <Pressable onPress={() => setIsEditingName(true)}>
+                <Row style={{ justifyContent: 'space-between' }}>
+                  <Text variant="body">{profileQuery.data?.full_name || 'Ad Soyad ekle'}</Text>
+                  <Ionicons name="pencil" size={16} color={theme.colors.textSecondary} />
+                </Row>
+              </Pressable>
+            )}
+            <Text variant="body" color="textSecondary">
+              {session?.user?.email ?? '—'}
+            </Text>
           </Stack>
         </Card>
 
@@ -141,6 +226,11 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </Row>
+            {renewalLine ? (
+              <Text variant="caption" color="textSecondary">
+                {renewalLine}
+              </Text>
+            ) : null}
             {ocrUsageQuery.data ? (
               <Text variant="caption" color="textSecondary">
                 Bu ay OCR kullanımı: {ocrUsageQuery.data.usedCount}/{ocrUsageQuery.data.quota}

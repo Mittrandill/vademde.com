@@ -492,7 +492,9 @@ export type Database = {
           due_date: string
           id: string
           installment_number: number
+          interest_minor: number | null
           obligation_id: string
+          principal_minor: number | null
           remaining_amount_minor: number
           status: string
           updated_at: string
@@ -504,7 +506,9 @@ export type Database = {
           due_date: string
           id?: string
           installment_number: number
+          interest_minor?: number | null
           obligation_id: string
+          principal_minor?: number | null
           remaining_amount_minor?: number
           status?: string
           updated_at?: string
@@ -516,7 +520,9 @@ export type Database = {
           due_date?: string
           id?: string
           installment_number?: number
+          interest_minor?: number | null
           obligation_id?: string
+          principal_minor?: number | null
           remaining_amount_minor?: number
           status?: string
           updated_at?: string
@@ -1183,3 +1189,9 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

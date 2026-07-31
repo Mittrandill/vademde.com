@@ -70,6 +70,29 @@ export const BANKS: Bank[] = [
 
 export const BANK_NAME: Record<string, string> = Object.fromEntries(BANKS.map((b) => [b.code, b.name]));
 
+function normalizeBankName(name: string): string {
+  return name
+    .toLocaleUpperCase('tr-TR')
+    .replace(/A\.?\s?Ş\.?/g, '')
+    .replace(/T\.?\s?A\.?\s?O\.?/g, '')
+    .replace(/[^A-ZÇĞİÖŞÜ0-9]+/g, ' ')
+    .trim();
+}
+
+// OCR'ın serbest metin olarak çıkardığı banka adını (örn. "TÜRKİYE İŞ BANKASI A.Ş.")
+// sabit BANKS listesindeki koda eşler; belge türlerinde banka artık kişi/firma olarak
+// değil doğrudan bu kod üzerinden (logosuyla) temsil edilir.
+export function matchBankByName(rawName: string | null | undefined): string | null {
+  if (!rawName) return null;
+  const normalized = normalizeBankName(rawName);
+  if (!normalized) return null;
+  const match = BANKS.find((bank) => {
+    const bankNormalized = normalizeBankName(bank.name);
+    return normalized.includes(bankNormalized) || bankNormalized.includes(normalized);
+  });
+  return match?.code ?? null;
+}
+
 // Metro statik analizle bulabilsin diye her require() ayrı, literal bir satırda olmalı.
 export const BANK_LOGOS: Record<string, ImageSourcePropType> = {
   adabank: require('../../assets/bank-icons/adabank.png'),
