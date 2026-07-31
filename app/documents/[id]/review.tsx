@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Image, InteractionManager, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, Image, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -22,13 +22,14 @@ import {
   markDocumentConfirmed,
 } from '@/features/documents/api';
 import { listAccounts } from '@/features/accounts/api';
-import { listCategories } from '@/features/categories/api';
+import { listCategories, createCategory } from '@/features/categories/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
-import { createObligation, createInstallmentPlan } from '@/features/obligations/api';
+import { createObligation, createInstallmentPlan, type Installment } from '@/features/obligations/api';
+import { recordPayment } from '@/features/payments/api';
 import { createTransaction, createTransfer } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, toMinorUnits } from '@/utils/money';
-import { DOCUMENT_TYPE_LABEL, BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
+import { DOCUMENT_TYPE_LABEL, DOCUMENT_TYPE_ICON, BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
 import { matchBankByName } from '@/features/banks/banks';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
@@ -64,6 +65,17 @@ export default function DocumentReviewScreen() {
   const [counterpartyId, setCounterpartyId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryAutoSet, setCategoryAutoSet] = useState(false);
+  // Kredi belgelerine özel: OCR'ın çıkardığı faiz oranı ve toplam geri ödeme (bilgi amaçlı,
+  // taksit tablosu asıl kaynaktır) — bkz. supabase/functions/process-document installmentPlan şeması.
+  const [interestRatePercent, setInterestRatePercent] = useState('');
+  const [ocrTotalRepaymentMinor, setOcrTotalRepaymentMinor] = useState<number | null>(null);
+  // Taksit tablosu satırları (vade + tutar + ödendi durumu) kullanıcı tarafından tek tek
+  // düzenlenebilir; OCR'ın döndürdüğü document_line_items'tan bir kez taslak olarak kopyalanır.
+  const [installmentDrafts, setInstallmentDrafts] = useState<
+    { id: string; sortOrder: number; dueDate: string; amount: string; paid: boolean }[]
+  >([]);
+  const [installmentsInitialized, setInstallmentsInitialized] = useState(false);
 
   const documentQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.document(activeWorkspaceId, id as string) : ['document', 'disabled'],
@@ -119,13 +131,24 @@ export default function DocumentReviewScreen() {
     // Eşleşme bulunamazsa ham ad, banka logosu yerine baş harfli avatar göstermek için saklanır.
     if (document.document_type === 'kredi' || document.document_type === 'kredi_karti_ekstresi') {
       const summary = document.extracted_summary as {
-        loan?: { bankName?: string | null };
+        loan?: {
+          bankName?: string | null;
+          totalRepaymentMinor?: number | null;
+          interestRatePercent?: number | null;
+        };
         card?: { bankName?: string | null };
       } | null;
       const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? null;
       setExtractedBankName(ocrBankName);
       const matchedBankCode = matchBankByName(ocrBankName);
       if (matchedBankCode) setBankCode(matchedBankCode);
+
+      if (document.document_type === 'kredi') {
+        if (summary?.loan?.interestRatePercent != null) {
+          setInterestRatePercent(String(summary.loan.interestRatePercent).replace('.', ','));
+        }
+        setOcrTotalRepaymentMinor(summary?.loan?.totalRepaymentMinor ?? null);
+      }
     }
     setTitle(
       document.counterparty_name
@@ -177,6 +200,57 @@ export default function DocumentReviewScreen() {
       .catch(() => {});
   }, [documentQuery.data, counterpartiesQuery.isSuccess, counterpartiesQuery.data, activeWorkspaceId, counterpartyResolved, queryClient]);
 
+  // Kredi taksit tablosunu (vade + tutar) düzenlenebilir taslağa bir kez kopyalar;
+  // sonraki her düzenleme yalnızca yerel taslağı günceller, OCR verisini değil. Vadesi
+  // bugünden önce olan taksitler gerçekte zaten ödenmiş olacağından "ödendi" ile başlar
+  // (kullanıcı switch'le değiştirebilir) — bkz. confirmMutation, bu taksitler bir hesaba
+  // bağlanmadan (bakiyeyi etkilemeden) ödenmiş olarak kaydedilir.
+  useEffect(() => {
+    if (installmentsInitialized || documentType !== 'kredi' || !lineItemsQuery.data) return;
+    const items = lineItemsQuery.data.filter((item) => item.kind === 'installment');
+    if (items.length === 0) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    setInstallmentDrafts(
+      items.map((item, index) => ({
+        id: item.id,
+        sortOrder: item.sort_order || index + 1,
+        dueDate: item.occurred_at ?? '',
+        amount: (item.amount_minor / 100).toFixed(2).replace('.', ','),
+        paid: !!item.occurred_at && item.occurred_at < todayStr,
+      }))
+    );
+    setInstallmentsInitialized(true);
+  }, [installmentsInitialized, documentType, lineItemsQuery.data]);
+
+  // docs/01-finansal-kayit-modeli.md — "Kredi... bir kategori değildir" kuralı document_type
+  // için geçerlidir; category_id ayrı, raporlama amaçlı bir alandır. Kredi belgelerinde
+  // kullanıcı adına manuel seçim gerekmesin diye "Kredi" kategorisi otomatik atanır
+  // (yoksa bu workspace için bir kez oluşturulur), kullanıcı yine de değiştirebilir.
+  useEffect(() => {
+    if (categoryAutoSet || documentType !== 'kredi' || !activeWorkspaceId || !categoriesQuery.isSuccess) return;
+    setCategoryAutoSet(true);
+
+    const existing = categoriesQuery.data.find(
+      (c) => c.name.trim().toLocaleLowerCase('tr-TR') === 'kredi'
+    );
+    if (existing) {
+      setCategoryId(existing.id);
+      return;
+    }
+
+    createCategory({
+      workspace_id: activeWorkspaceId,
+      name: 'Kredi',
+      kind: categoryKind,
+      icon: DOCUMENT_TYPE_ICON.kredi,
+    })
+      .then((created) => {
+        setCategoryId(created.id);
+        queryClient.invalidateQueries({ queryKey: queryKeys.categories(activeWorkspaceId, categoryKind) });
+      })
+      .catch(() => {});
+  }, [categoryAutoSet, documentType, activeWorkspaceId, categoriesQuery.isSuccess, categoriesQuery.data, categoryKind, queryClient]);
+
   const confirmMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId) throw new Error('Çalışma alanı bulunamadı');
@@ -185,24 +259,46 @@ export default function DocumentReviewScreen() {
       if (direction === 'payable' || direction === 'receivable') {
         if (!documentType) throw new Error('Belge türü seçin');
 
-        const hasInstallmentPlan = documentType === 'kredi' && installmentItems.length > 0;
+        const hasInstallmentPlan = documentType === 'kredi' && installmentDrafts.length > 0;
+        // Kullanıcının düzenlediği taksit taslakları (vade/tutar), OCR'ın orijinal
+        // faiz/vergi kırılımıyla (tax_minor) birleştirilir — kullanıcı yalnızca tarih ve
+        // toplam taksit tutarını değiştirir, anapara/faiz oranı bu farktan yeniden türetilir.
+        const draftById = new Map(installmentDrafts.map((draft) => [draft.id, draft]));
+        const mergedInstallments = hasInstallmentPlan
+          ? installmentItems.map((item, index) => {
+              const draft = draftById.get(item.id);
+              const installmentAmountMinor = draft
+                ? toMinorUnits(Number(draft.amount.replace(',', '.')) || 0)
+                : item.amount_minor;
+              const installmentDueDate =
+                draft?.dueDate.trim() || item.occurred_at || dueDate || new Date().toISOString().slice(0, 10);
+              return {
+                installmentNumber: item.sort_order || index + 1,
+                dueDate: installmentDueDate,
+                amountMinor: installmentAmountMinor,
+                principalMinor: installmentAmountMinor - (item.tax_minor ?? 0),
+                interestMinor: item.tax_minor ?? 0,
+                paid: draft?.paid ?? false,
+              };
+            })
+          : [];
         // Taksit satırlarının tutarı (installmentAmountMinor) anapara + faiz + vergi
         // içerir; kredi anaparasıyla (TUTAR alanı) aynı şey değildir. Obligation'ın
         // toplamı taksitlerin toplamıyla birebir eşleşmeli — aksi halde kalan borç/
         // ilerleme hesapları (bkz. obligations/[id].tsx) taksitler tamamen ödendiğinde
         // bile "kalan borç" negatife düşer ya da sıfırlanmaz.
         const installmentsSumMinor = hasInstallmentPlan
-          ? installmentItems.reduce((sum, item) => sum + item.amount_minor, 0)
+          ? mergedInstallments.reduce((sum, item) => sum + item.amountMinor, 0)
           : null;
         // Kredi belgelerinde tekil bir "vade" alanı yerine her taksitin kendi vadesi
         // vardır; obligation'ın vadesi en yakın (ilk) taksitin tarihi olarak ayarlanır —
         // aksi halde due_date null kalıp aşağıdaki gibi ekranlarda kayıt tarihine
         // ("bugüne") düşer: app/(tabs)/hareketler.tsx `o.due_date ?? o.created_at`.
         const earliestInstallmentDueDate = hasInstallmentPlan
-          ? installmentItems.reduce<string | null>((earliest, item) => {
-              if (!item.occurred_at) return earliest;
-              return !earliest || item.occurred_at < earliest ? item.occurred_at : earliest;
-            }, null)
+          ? mergedInstallments.reduce<string | null>(
+              (earliest, item) => (!earliest || item.dueDate < earliest ? item.dueDate : earliest),
+              null
+            )
           : null;
 
         const obligation = await createObligation({
@@ -221,23 +317,14 @@ export default function DocumentReviewScreen() {
 
         // docs/12-mvp-kabul-kriterleri.md — "Kredi ödeme planından taksitler ayrı satırlar olarak oluşturulur."
         let installmentPlanFailed = false;
+        let createdInstallments: Installment[] = [];
         if (hasInstallmentPlan && installmentsSumMinor !== null) {
           try {
-            await createInstallmentPlan({
+            createdInstallments = await createInstallmentPlan({
               workspaceId: activeWorkspaceId,
               obligationId: obligation.id,
               totalAmountMinor: installmentsSumMinor,
-              // document_line_items.tax_minor, edge function'da Gemini'nin ayrı ayrı
-              // döndürdüğü faiz+vergiyi birleştirerek yazıyor (bkz. process-document
-              // §installmentPlan); anapara bu yüzden amount_minor - tax_minor olarak
-              // türetilir. Bu ayrım yalnızca detay ekranında gösterilir.
-              installments: installmentItems.map((item, index) => ({
-                installmentNumber: item.sort_order || index + 1,
-                dueDate: item.occurred_at ?? (dueDate || new Date().toISOString().slice(0, 10)),
-                amountMinor: item.amount_minor,
-                principalMinor: item.amount_minor - (item.tax_minor ?? 0),
-                interestMinor: item.tax_minor ?? 0,
-              })),
+              installments: mergedInstallments,
             });
           } catch {
             // Tutarlar (yuvarlama vb. nedenlerle) tam uyuşmazsa taksit planı atlanır; borç
@@ -245,6 +332,39 @@ export default function DocumentReviewScreen() {
             // tutarsız veri yazılmaz. Ama artık kullanıcıya bildirilir (docs/01 §8.1 —
             // "son taksit düzeltmesi veya kullanıcı onayı gerekir").
             installmentPlanFailed = true;
+          }
+        }
+
+        // Vadesi geçmiş taksitler switch ile "ödendi" işaretlenmişse, hiçbir hesaba
+        // bağlanmadan (account_id: null → recordPayment transaction oluşturmaz, bkz.
+        // features/payments/api.ts) geçmiş tarihiyle ödenmiş kaydedilir — mevcut hesap
+        // bakiyelerini etkilemez, sadece taksit/borç durumu "ödendi" olur.
+        if (!installmentPlanFailed && createdInstallments.length > 0) {
+          const paidInstallmentNumbers = new Set(
+            mergedInstallments.filter((item) => item.paid).map((item) => item.installmentNumber)
+          );
+          for (const installment of createdInstallments) {
+            if (!paidInstallmentNumbers.has(installment.installment_number)) continue;
+            try {
+              await recordPayment({
+                workspace_id: activeWorkspaceId,
+                obligation_id: obligation.id,
+                installment_id: installment.id,
+                account_id: null,
+                amount_minor: installment.amount_minor,
+                paid_at: new Date(installment.due_date).toISOString(),
+                notes: 'Otomatik: vadesi geçmiş taksit',
+                obligationDirection: direction as 'payable' | 'receivable',
+                obligationTitle: title.trim() || 'Belge',
+                obligationCategoryId: categoryId,
+                obligationCounterpartyId: counterpartyId,
+                obligationCurrencyCode: documentQuery.data?.currency_code ?? 'TRY',
+              });
+            } catch {
+              // Bir taksidin geçmiş ödeme kaydı başarısız olsa bile borç/taksit planı
+              // oluşturulmuş kalır; kullanıcı taksidi obligation detayından manuel
+              // "ödendi" işaretleyebilir.
+            }
           }
         }
 
@@ -346,6 +466,14 @@ export default function DocumentReviewScreen() {
     !!amount &&
     ((direction === 'payable' || direction === 'receivable') ? !!documentType : !!accountId);
 
+  const isLoanDocument = documentType === 'kredi';
+  const principalMinor = amount ? toMinorUnits(Number(amount.replace(',', '.')) || 0) : 0;
+  const totalRepaymentMinor =
+    installmentDrafts.length > 0
+      ? installmentDrafts.reduce((sum, item) => sum + toMinorUnits(Number(item.amount.replace(',', '.')) || 0), 0)
+      : ocrTotalRepaymentMinor;
+  const totalInterestMinor = totalRepaymentMinor !== null ? totalRepaymentMinor - principalMinor : null;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -409,22 +537,60 @@ export default function DocumentReviewScreen() {
             <Stack gap="sm">
               <Row align="center">
                 <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                  TUTAR
+                  {isLoanDocument ? 'KREDİ TUTARI (ANA PARA)' : 'TUTAR'}
                 </Text>
                 <LowConfidenceHint fieldName="totalAmount" />
               </Row>
               <TextField keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
             </Stack>
 
-            <Stack gap="sm">
-              <Row align="center">
-                <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                  VADE
+            {isLoanDocument ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  FAİZ ORANI % (İSTEĞE BAĞLI)
                 </Text>
-                <LowConfidenceHint fieldName="dueDate" />
+                <TextField
+                  keyboardType="decimal-pad"
+                  placeholder="Örn. 2,5"
+                  value={interestRatePercent}
+                  onChangeText={setInterestRatePercent}
+                />
+              </Stack>
+            ) : null}
+
+            {isLoanDocument && totalInterestMinor !== null ? (
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text variant="caption" color="textSecondary">
+                  FAİZ (TOPLAM)
+                </Text>
+                <Text variant="body" tabular>
+                  {formatMinorAmount(totalInterestMinor, document.currency_code ?? 'TRY')}
+                </Text>
               </Row>
-              <TextField placeholder="YYYY-AA-GG" value={dueDate} onChangeText={setDueDate} />
-            </Stack>
+            ) : null}
+
+            {isLoanDocument && totalRepaymentMinor !== null ? (
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text variant="caption" color="textSecondary">
+                  TOPLAM GERİ ÖDEME
+                </Text>
+                <Text variant="body" tabular>
+                  {formatMinorAmount(totalRepaymentMinor, document.currency_code ?? 'TRY')}
+                </Text>
+              </Row>
+            ) : null}
+
+            {!isLoanDocument ? (
+              <Stack gap="sm">
+                <Row align="center">
+                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
+                    VADE
+                  </Text>
+                  <LowConfidenceHint fieldName="dueDate" />
+                </Row>
+                <TextField placeholder="YYYY-AA-GG" value={dueDate} onChangeText={setDueDate} />
+              </Stack>
+            ) : null}
 
             {(direction === 'payable' || direction === 'receivable') && (
               <Stack gap="sm">
@@ -435,9 +601,9 @@ export default function DocumentReviewScreen() {
               </Stack>
             )}
 
-            {documentType === 'kredi' && installmentItems.length > 0 ? (
+            {isLoanDocument && installmentDrafts.length > 0 ? (
               <Stack
-                gap="xs"
+                gap="sm"
                 style={{
                   backgroundColor: theme.colors.surfacePrimary,
                   borderRadius: theme.radius.widget,
@@ -445,17 +611,53 @@ export default function DocumentReviewScreen() {
                 }}
               >
                 <Text variant="caption" color="textSecondary">
-                  {installmentItems.length} TAKSİT OTOMATİK OLUŞTURULACAK
+                  {installmentDrafts.length} TAKSİT OTOMATİK OLUŞTURULACAK — VADE, TUTAR VE ÖDENDİ DURUMU DÜZENLENEBİLİR
                 </Text>
-                {installmentItems.map((item) => (
-                  <Row key={item.id} style={{ justifyContent: 'space-between' }}>
-                    <Text variant="body" color="textSecondary">
-                      {item.description ?? `${item.sort_order}. Taksit`} — {item.occurred_at ?? '—'}
-                    </Text>
-                    <Text variant="body" tabular>
-                      {formatMinorAmount(item.amount_minor, document.currency_code ?? 'TRY')}
-                    </Text>
-                  </Row>
+                <Text variant="caption" color="textSecondary">
+                  Vadesi geçmiş taksitler otomatik &ldquo;ödendi&rdquo; işaretlenir ve hiçbir hesabın bakiyesini etkilemez.
+                </Text>
+                {installmentDrafts.map((draft, index) => (
+                  <Stack key={draft.id} gap="xxs">
+                    <Row gap="xs" align="center">
+                      <Text variant="caption" color="textSecondary" style={{ width: 28 }}>
+                        {draft.sortOrder}.
+                      </Text>
+                      <TextField
+                        placeholder="YYYY-AA-GG"
+                        value={draft.dueDate}
+                        onChangeText={(value) =>
+                          setInstallmentDrafts((prev) =>
+                            prev.map((d, i) => (i === index ? { ...d, dueDate: value } : d))
+                          )
+                        }
+                        style={{ flex: 1 }}
+                      />
+                      <TextField
+                        keyboardType="decimal-pad"
+                        value={draft.amount}
+                        onChangeText={(value) =>
+                          setInstallmentDrafts((prev) =>
+                            prev.map((d, i) => (i === index ? { ...d, amount: value } : d))
+                          )
+                        }
+                        style={{ flex: 1 }}
+                      />
+                    </Row>
+                    <Row gap="xs" align="center" style={{ justifyContent: 'flex-end' }}>
+                      <Text variant="caption" color="textSecondary">
+                        Ödendi
+                      </Text>
+                      <Switch
+                        value={draft.paid}
+                        onValueChange={(value) =>
+                          setInstallmentDrafts((prev) =>
+                            prev.map((d, i) => (i === index ? { ...d, paid: value } : d))
+                          )
+                        }
+                        trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
+                      />
+                    </Row>
+                  </Stack>
                 ))}
               </Stack>
             ) : null}
@@ -491,22 +693,24 @@ export default function DocumentReviewScreen() {
               </Stack>
             )}
 
-            <Stack gap="sm">
-              <Row align="center">
-                <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                  KİŞİ / FİRMA
-                </Text>
-                <LowConfidenceHint fieldName="counterpartyName" />
-              </Row>
-              {activeWorkspaceId ? (
-                <CounterpartyPicker
-                  workspaceId={activeWorkspaceId}
-                  counterparties={counterpartiesQuery.data ?? []}
-                  selectedId={counterpartyId}
-                  onSelect={setCounterpartyId}
-                />
-              ) : null}
-            </Stack>
+            {!(documentType && BANK_DOCUMENT_TYPES.has(documentType)) ? (
+              <Stack gap="sm">
+                <Row align="center">
+                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
+                    KİŞİ / FİRMA
+                  </Text>
+                  <LowConfidenceHint fieldName="counterpartyName" />
+                </Row>
+                {activeWorkspaceId ? (
+                  <CounterpartyPicker
+                    workspaceId={activeWorkspaceId}
+                    counterparties={counterpartiesQuery.data ?? []}
+                    selectedId={counterpartyId}
+                    onSelect={setCounterpartyId}
+                  />
+                ) : null}
+              </Stack>
+            ) : null}
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">

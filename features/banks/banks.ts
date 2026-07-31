@@ -62,7 +62,7 @@ export const BANKS: Bank[] = [
   { code: 'turkiye-kalkinma-ve-yatirim-bankasi', name: 'Türkiye Kalkınma ve Yatırım Bankası' },
   { code: 'turkiye-sinai-kalkinma-bankasi', name: 'Türkiye Sınai Kalkınma Bankası (TSKB)' },
   { code: 'vakif-katilim-bankasi', name: 'Vakıf Katılım Bankası' },
-  { code: 'vakifbank', name: 'VakıfBank' },
+  { code: 'vakifbank', name: 'Türkiye Vakıflar Bankası (VakıfBank)' },
   { code: 'yapi-kredi-bankasi', name: 'Yapı Kredi Bankası' },
   { code: 'ziraat-bankasi', name: 'Ziraat Bankası' },
   { code: 'ziraat-katilim-bankasi', name: 'Ziraat Katılım Bankası' },

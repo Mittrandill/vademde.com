@@ -21,6 +21,9 @@ export interface RecordPaymentInput {
   account_id?: string | null;
   amount_minor: number;
   notes?: string | null;
+  // Geçmiş tarihli taksitleri OCR sırasında otomatik "ödendi" işaretlerken (bkz.
+  // review.tsx) gerçek vade tarihiyle kaydetmek için; verilmezse DB varsayılanı (şimdi) kullanılır.
+  paid_at?: string;
   // Hesap seçildiyse hesabın bakiyesine yansısın diye ilişkili bir transaction
   // oluşturmak için gereken bağlam (bkz. accounts bakiyesi transactions'tan hesaplanır).
   obligationDirection: 'payable' | 'receivable';
