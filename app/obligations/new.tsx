@@ -39,7 +39,7 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 
 export default function NewObligationScreen() {
   const theme = useTheme();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, type } = useLocalSearchParams<{ id?: string; type?: string }>();
   const isEditing = !!id;
 
   const existingQuery = useQuery({
@@ -67,6 +67,7 @@ export default function NewObligationScreen() {
       id={isEditing ? (id as string) : null}
       initial={existingQuery.data?.obligation ?? null}
       hasInstallments={(existingQuery.data?.installments.length ?? 0) > 0}
+      initialDocumentType={typeof type === 'string' ? type : undefined}
     />
   );
 }
@@ -75,16 +76,19 @@ interface ObligationFormProps {
   id: string | null;
   initial: Obligation | null;
   hasInstallments: boolean;
+  initialDocumentType?: string;
 }
 
-function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
+function ObligationForm({ id, initial, hasInstallments, initialDocumentType }: ObligationFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const isEditing = !!id;
 
   const [direction, setDirection] = useState<Direction>((initial?.direction as Direction) ?? 'payable');
-  const [documentType, setDocumentType] = useState<string | null>(initial?.document_type ?? null);
+  const [documentType, setDocumentType] = useState<string | null>(
+    initial?.document_type ?? initialDocumentType ?? null
+  );
   const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [totalAmount, setTotalAmount] = useState(

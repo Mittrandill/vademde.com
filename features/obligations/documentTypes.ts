@@ -29,6 +29,25 @@ export const DOCUMENT_TYPE_LABEL: Record<string, string> = Object.fromEntries(
   DOCUMENT_TYPES.map((t) => [t.id, t.name])
 );
 
+// Türkçe çoğul/iyelik eki programatik türetilemez (bkz. app/paywall/index.tsx
+// PLAN_CTA_LABELS yorumu) — liste ekranı başlığı için elle yazılmış eşleme.
+export const DOCUMENT_TYPE_LABEL_PLURAL: Record<string, string> = {
+  kredi: 'Kredilerim',
+  kredi_karti_ekstresi: 'Kredi Kartı Ekstrelerim',
+  cek: 'Çeklerim',
+  senet: 'Senetlerim',
+  fatura: 'Faturalarım',
+  abonelik: 'Aboneliklerim',
+  kira: 'Kira Ödemelerim',
+  vergi_sgk: 'Vergi / SGK Kayıtlarım',
+  tedarikci_borcu: 'Tedarikçi Borçlarım',
+  musteri_alacagi: 'Müşteri Alacaklarım',
+  banka_dekontu: 'Banka Dekontlarım',
+  makbuz_fis: 'Makbuz / Fişlerim',
+  sozlesme_odeme_plani: 'Sözleşme / Ödeme Planlarım',
+  diger: 'Diğer Kayıtlarım',
+};
+
 export const DOCUMENT_TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = Object.fromEntries(
   DOCUMENT_TYPES.map((t) => [t.id, t.icon])
 );

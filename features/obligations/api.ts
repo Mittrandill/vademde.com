@@ -49,6 +49,8 @@ export interface ListObligationsFilter {
   search?: string;
   page?: number;
   pageSize?: number;
+  /** Vade tarihine göre sıralama yönü; varsayılan artan (en yakın vade önce). */
+  ascending?: boolean;
 }
 
 export async function listObligations({
@@ -62,6 +64,7 @@ export async function listObligations({
   search,
   page = 0,
   pageSize = OBLIGATIONS_PAGE_SIZE,
+  ascending = true,
 }: ListObligationsFilter): Promise<ObligationWithRelations[]> {
   let query = supabase
     .from('obligations')
@@ -77,7 +80,7 @@ export async function listObligations({
   if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
 
   const { data, error } = await query
-    .order('due_date', { ascending: true, nullsFirst: false })
+    .order('due_date', { ascending, nullsFirst: false })
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
   return data as unknown as ObligationWithRelations[];
@@ -258,6 +261,70 @@ export async function getNextPendingInstallment(obligationId: string): Promise<N
     .maybeSingle();
   if (error) throw error;
   return data ? { dueDate: data.due_date, remainingAmountMinor: data.remaining_amount_minor } : null;
+}
+
+export interface ObligationInstallmentSummary {
+  totalCount: number;
+  remainingCount: number;
+  nextDueDate: string | null;
+  nextAmountMinor: number | null;
+  principalSumMinor: number;
+  interestSumMinor: number;
+  /** En az bir taksitte hem anapara hem faiz kırılımı doluysa true. */
+  hasRateData: boolean;
+}
+
+// Kredilerim listesindeki kartlar için toplu taksit özeti (bkz. app/obligations/index.tsx).
+// getNextPendingInstallment'ın tekil mantığının, bir sayfa kayıt için N+1 sorgu atmadan
+// toplu hâli. Dönüş tipi Map değil Record'dur (bkz. getObligationTotalsByType'taki aynı
+// gerekçe — react-query cache'i AsyncStorage'a JSON olarak yazılır, Map "{}" olur).
+export async function getObligationInstallmentSummaries(
+  workspaceId: string,
+  obligationIds: string[]
+): Promise<Record<string, ObligationInstallmentSummary>> {
+  if (obligationIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('installments')
+    .select('obligation_id, due_date, remaining_amount_minor, principal_minor, interest_minor')
+    .eq('workspace_id', workspaceId)
+    .in('obligation_id', obligationIds)
+    .neq('status', 'iptal_edildi')
+    .order('due_date', { ascending: true });
+  if (error) throw error;
+
+  const summaries: Record<string, ObligationInstallmentSummary> = {};
+  for (const row of data ?? []) {
+    const current = summaries[row.obligation_id] ?? {
+      totalCount: 0,
+      remainingCount: 0,
+      nextDueDate: null,
+      nextAmountMinor: null,
+      principalSumMinor: 0,
+      interestSumMinor: 0,
+      hasRateData: false,
+    };
+
+    current.totalCount += 1;
+    const isRemaining = row.remaining_amount_minor > 0;
+    if (isRemaining) {
+      current.remainingCount += 1;
+      // Satırlar due_date artan geldiği için bir obligation_id için ilk kalan taksit
+      // doğal olarak "sıradaki" olur.
+      if (current.nextDueDate === null) {
+        current.nextDueDate = row.due_date;
+        current.nextAmountMinor = row.remaining_amount_minor;
+      }
+    }
+    if (row.principal_minor !== null && row.interest_minor !== null) {
+      current.principalSumMinor += row.principal_minor;
+      current.interestSumMinor += row.interest_minor;
+      current.hasRateData = true;
+    }
+
+    summaries[row.obligation_id] = current;
+  }
+  return summaries;
 }
 
 export async function createObligation(input: TablesInsert<'obligations'>): Promise<Obligation> {
