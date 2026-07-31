@@ -6,13 +6,20 @@ import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Card, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Card, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { deleteAccount, signOut } from '@/features/auth/api';
 import { useSession } from '@/features/auth/useSession';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
 import { getMyProfile, updateMyProfile } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
+import { useThemePreferenceStore } from '@/store/themePreferenceStore';
+
+const THEME_OPTIONS = [
+  { key: 'system' as const, label: 'Sistem' },
+  { key: 'light' as const, label: 'Açık' },
+  { key: 'dark' as const, label: 'Koyu' },
+];
 
 const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   grace_period: 'Ödeme sorunu — ödeme yönteminizi güncelleyin',
@@ -35,6 +42,8 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { session } = useSession();
+  const themePreference = useThemePreferenceStore((s) => s.themePreference);
+  const setThemePreference = useThemePreferenceStore((s) => s.setThemePreference);
   const [isDeleting, setIsDeleting] = useState(false);
   const [fullName, setFullName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -195,6 +204,15 @@ export default function SettingsScreen() {
             <Text variant="body" color="textSecondary">
               {session?.user?.email ?? '—'}
             </Text>
+          </Stack>
+        </Card>
+
+        <Card>
+          <Stack gap="sm">
+            <Text variant="caption" color="textSecondary">
+              GÖRÜNÜM
+            </Text>
+            <SegmentedControl options={THEME_OPTIONS} value={themePreference} onChange={setThemePreference} />
           </Stack>
         </Card>
 

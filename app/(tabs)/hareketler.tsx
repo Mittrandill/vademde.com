@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -17,13 +17,14 @@ import { formatMinorAmount } from '@/utils/money';
 
 type FilterKey = 'all' | 'income' | 'expense' | 'payable' | 'receivable' | 'transfer';
 
+// "Transfer" için ayrı bir hızlı-filtre sekmesi yok — transfer işlemleri "Tümü" altında
+// görünmeye devam eder; bu, filtre satırının tek satırda (kaydırma/sarma olmadan) sığması içindir.
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'Tümü' },
   { key: 'income', label: 'Gelir' },
   { key: 'expense', label: 'Gider' },
   { key: 'payable', label: 'Borç' },
   { key: 'receivable', label: 'Alacak' },
-  { key: 'transfer', label: 'Transfer' },
 ];
 
 interface HareketRow {
@@ -234,14 +235,41 @@ export default function HareketlerScreen() {
           />
         </Row>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ paddingHorizontal: theme.screenEdge.standard }}
+        <Row
+          style={{
+            marginHorizontal: theme.screenEdge.standard,
+            justifyContent: 'space-between',
+            backgroundColor: theme.colors.surfacePrimary,
+            borderRadius: theme.radius.widget,
+            padding: 4,
+          }}
         >
-          <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
-        </ScrollView>
+          {FILTERS.map((option) => {
+            const selected = option.key === filter;
+            return (
+              <Pressable
+                key={option.key}
+                onPress={() => setFilter(option.key)}
+                style={{
+                  paddingHorizontal: theme.spacing.sm,
+                  paddingVertical: theme.spacing.xs,
+                  borderRadius: 999,
+                  backgroundColor: selected ? theme.colors.brandPrimary : 'transparent',
+                }}
+              >
+                <Text
+                  variant="caption"
+                  style={{
+                    color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary,
+                    fontWeight: selected ? '600' : '400',
+                  }}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </Row>
 
         {error ? (
           <Text variant="body" color="danger" style={{ paddingHorizontal: theme.screenEdge.standard }}>
@@ -268,6 +296,10 @@ export default function HareketlerScreen() {
               gap: theme.spacing.sm,
               paddingBottom: 120,
             }}
+            onEndReached={() => {
+              if (hasNextPage && !isFetchingNextPage) loadMore();
+            }}
+            onEndReachedThreshold={0.4}
             renderItem={({ item }) => (
               <Pressable
                 onPress={() =>
@@ -286,9 +318,9 @@ export default function HareketlerScreen() {
                   }}
                 >
                 {item.kind === 'obligation' ? (
-                  <ObligationIcon documentType={item.documentType ?? 'diger'} bankCode={item.bankCode} size={28} />
+                  <ObligationIcon documentType={item.documentType ?? 'diger'} bankCode={item.bankCode} size={40} />
                 ) : (
-                  <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={28} />
+                  <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={40} />
                 )}
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle">{item.title}</Text>
@@ -316,13 +348,27 @@ export default function HareketlerScreen() {
               </Pressable>
             )}
             ListFooterComponent={
-              hasNextPage ? (
-                <Button
-                  label="Daha Fazla Yükle"
-                  variant="secondary"
+              isFetchingNextPage ? (
+                <Row style={{ justifyContent: 'center', paddingVertical: theme.spacing.md }}>
+                  <ActivityIndicator color={theme.colors.textSecondary} />
+                </Row>
+              ) : hasNextPage ? (
+                <Pressable
                   onPress={loadMore}
-                  loading={isFetchingNextPage}
-                />
+                  style={{
+                    alignSelf: 'center',
+                    marginTop: theme.spacing.xs,
+                    paddingHorizontal: theme.spacing.lg,
+                    paddingVertical: theme.spacing.sm,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Text variant="body" style={{ color: theme.colors.textSecondary }}>
+                    Daha Fazla Yükle
+                  </Text>
+                </Pressable>
               ) : null
             }
           />

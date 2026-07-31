@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, type PropsWithChildren } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 import { colorsByScheme, type ColorScheme, type ThemeColors } from './colors';
 import { motion } from './motion';
 import { buttonHeight, radius, screenEdge, spacing, touchTarget } from './spacing';
@@ -22,7 +23,10 @@ export interface Theme {
 const ThemeContext = createContext<Theme | null>(null);
 
 export function ThemeProvider({ children }: PropsWithChildren) {
-  const scheme: ColorScheme = useColorScheme() === 'light' ? 'light' : 'dark';
+  const systemScheme = useColorScheme();
+  const themePreference = useThemePreferenceStore((s) => s.themePreference);
+  const scheme: ColorScheme =
+    themePreference === 'system' ? (systemScheme === 'light' ? 'light' : 'dark') : themePreference;
 
   const theme = useMemo<Theme>(
     () => ({

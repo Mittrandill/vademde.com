@@ -27,7 +27,7 @@ export function BankLogo({ bankCode, fallbackName, size = 32, fallbackIcon = 'bu
         width: size,
         height: size,
         borderRadius: size * 0.28,
-        backgroundColor: showInitials ? getBankAvatarColor(fallbackName!.trim()) : theme.colors.surfaceElevated,
+        backgroundColor: showInitials ? getBankAvatarColor(fallbackName!.trim()) : theme.colors.accentViolet,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
@@ -40,7 +40,7 @@ export function BankLogo({ bankCode, fallbackName, size = 32, fallbackIcon = 'bu
           {getBankInitials(fallbackName!.trim())}
         </Text>
       ) : (
-        <Ionicons name={fallbackIcon} size={size * 0.6} color={theme.colors.accentViolet} />
+        <Ionicons name={fallbackIcon} size={size * 0.6} color="#FFFFFF" />
       )}
     </View>
   );

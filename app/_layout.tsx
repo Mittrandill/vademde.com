@@ -11,6 +11,11 @@ import { configurePurchases, logOutPurchases } from '@/services/purchases';
 import { useWorkspaceRealtime } from '@/services/realtime';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
+function AppStatusBar() {
+  const theme = useTheme();
+  return <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />;
+}
+
 function RootNavigator() {
   const { session, isLoading } = useSession();
   const theme = useTheme();
@@ -76,7 +81,7 @@ export default function RootLayout() {
           queryClient.resumePausedMutations();
         }}
       >
-        <StatusBar style="auto" />
+        <AppStatusBar />
         <RootNavigator />
       </PersistQueryClientProvider>
     </ThemeProvider>
