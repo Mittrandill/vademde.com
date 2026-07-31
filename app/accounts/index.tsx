@@ -8,6 +8,7 @@ import { useTheme } from '@/theme';
 import { Pressable, Row, Stack, Text } from '@/components/primitives';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { listAccounts, type Account } from '@/features/accounts/api';
+import { getAccountBalances } from '@/features/reports/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { maskIban } from '@/utils/iban';
@@ -36,6 +37,13 @@ export default function AccountsScreen() {
   });
 
   const accounts = accountsQuery.data ?? [];
+
+  const balancesQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
+    queryFn: () => getAccountBalances(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+  const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -82,30 +90,34 @@ export default function AccountsScreen() {
               paddingBottom: theme.spacing.xxl,
             }}
             renderItem={({ item }) => (
-              <Row
-                style={{
-                  backgroundColor: theme.colors.surfacePrimary,
-                  borderRadius: theme.radius.widget,
-                  padding: theme.spacing.md,
-                }}
-                gap="sm"
-              >
-                <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={28} />
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle">{item.name}</Text>
-                  <Text variant="caption" color="textSecondary">
-                    {TYPE_LABEL[item.type as Account['type']]}
-                  </Text>
-                  {item.iban ? (
-                    <Text variant="caption" color="textSecondary" tabular>
-                      {maskIban(item.iban)}
+              <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
+                <Row
+                  style={{
+                    backgroundColor: theme.colors.surfacePrimary,
+                    borderRadius: theme.radius.widget,
+                    padding: theme.spacing.md,
+                  }}
+                  gap="sm"
+                  align="center"
+                >
+                  <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={28} />
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="cardTitle">{item.name}</Text>
+                    <Text variant="caption" color="textSecondary">
+                      {TYPE_LABEL[item.type as Account['type']]}
                     </Text>
-                  ) : null}
-                </Stack>
-                <Text variant="body" tabular>
-                  {formatMinorAmount(item.opening_balance_minor, item.currency_code)}
-                </Text>
-              </Row>
+                    {item.iban ? (
+                      <Text variant="caption" color="textSecondary" tabular>
+                        {maskIban(item.iban)}
+                      </Text>
+                    ) : null}
+                  </Stack>
+                  <Text variant="body" tabular>
+                    {formatMinorAmount(balanceByAccountId.get(item.id) ?? item.opening_balance_minor, item.currency_code)}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                </Row>
+              </Pressable>
             )}
           />
         )}

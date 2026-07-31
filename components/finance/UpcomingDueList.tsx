@@ -5,18 +5,19 @@ import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/component
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
-import type { ObligationWithRelations } from '@/features/obligations/api';
+import type { ObligationDueItem } from '@/features/obligations/api';
 
 export interface UpcomingDueListProps {
-  obligations: ObligationWithRelations[];
+  obligations: ObligationDueItem[];
 }
 
-type SegmentKey = 'today' | 'week' | 'month';
+type SegmentKey = 'today' | 'week' | 'month' | 'overdue';
 
 const SEGMENTS: { key: SegmentKey; label: string; days: number }[] = [
   { key: 'today', label: 'Bugün', days: 0 },
   { key: 'week', label: '7 Gün', days: 7 },
   { key: 'month', label: '30 Gün', days: 30 },
+  { key: 'overdue', label: 'Gecikmiş', days: 0 },
 ];
 
 function startOfDay(date: Date): Date {
@@ -30,6 +31,16 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
 
   const filtered = useMemo(() => {
     const today = startOfDay(new Date());
+
+    // "Gecikmiş" ayrı bir sekme: vadesi bugünden önce olan kayıtlar artık Bugün/7
+    // Gün/30 Gün sekmelerine karışmıyor, sadece bu sekmede görünüyor.
+    if (segment === 'overdue') {
+      return obligations.filter((o) => {
+        if (!o.due_date) return false;
+        return startOfDay(new Date(o.due_date)) < today;
+      });
+    }
+
     const days = SEGMENTS.find((s) => s.key === segment)?.days ?? 7;
     const limit = new Date(today);
     limit.setDate(limit.getDate() + days);
@@ -37,7 +48,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
     return obligations.filter((o) => {
       if (!o.due_date) return false;
       const due = startOfDay(new Date(o.due_date));
-      return due <= limit;
+      return due >= today && due <= limit;
     });
   }, [obligations, segment]);
 
@@ -60,7 +71,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
       ) : (
         <Stack gap="xs">
           {filtered.map((o) => (
-            <Pressable key={o.id} onPress={() => router.push(`/obligations/${o.id}`)}>
+            <Pressable key={o.installment_id ?? o.id} onPress={() => router.push(`/obligations/${o.id}`)}>
               <Card>
                 <Row gap="sm">
                   <ObligationIcon documentType={o.document_type} bankCode={o.bank_code} size={28} />

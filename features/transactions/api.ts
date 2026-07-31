@@ -6,7 +6,7 @@ export type Transaction = Tables<'transactions'>;
 export type TransactionWithRelations = Transaction & {
   category: { name: string } | null;
   counterparty: { name: string } | null;
-  account: { name: string } | null;
+  account: { name: string; bank_code: string | null } | null;
 };
 
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
@@ -32,7 +32,7 @@ export async function listTransactions({
   let query = supabase
     .from('transactions')
     .select(
-      '*, category:categories(name), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name)'
+      '*, category:categories(name), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code)'
     )
     .eq('workspace_id', workspaceId)
     .order('occurred_at', { ascending: false })

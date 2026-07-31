@@ -2,7 +2,8 @@ import { supabase } from '@/services/supabase';
 import {
   ACTIVE_OBLIGATION_STATUSES,
   listObligations,
-  type ObligationWithRelations,
+  listInstallmentsDue,
+  type ObligationDueItem,
 } from '@/features/obligations/api';
 
 export interface DateRange {
@@ -231,15 +232,29 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
 }
 
 // docs/01-finansal-kayit-modeli.md §3.4 — Gecikme: vade geçmiş ve kalan tutar > 0.
-export async function getOverdueObligations(workspaceId: string): Promise<ObligationWithRelations[]> {
+// Taksitli bir kredinin toplam bakiyesi yerine gecikmiş taksidin kendi tutarı
+// gösterilsin diye (bkz. app/(tabs)/takvim.tsx, app/(tabs)/index.tsx aynı desen) —
+// kredinin toplam borcu yalnızca /obligations/[id] detay sayfasında gösterilir.
+export async function getOverdueObligations(workspaceId: string): Promise<ObligationDueItem[]> {
   const todayStr = new Date().toISOString().slice(0, 10);
-  const obligations = await listObligations({
-    workspaceId,
-    statuses: ACTIVE_OBLIGATION_STATUSES,
-    dueTo: todayStr,
-    pageSize: 200,
-  });
-  return obligations.filter((o) => !!o.due_date && o.due_date < todayStr && o.remaining_amount_minor > 0);
+  const [obligations, installmentItems] = await Promise.all([
+    listObligations({ workspaceId, statuses: ACTIVE_OBLIGATION_STATUSES, dueTo: todayStr, pageSize: 200 }),
+    listInstallmentsDue({ workspaceId, statuses: ACTIVE_OBLIGATION_STATUSES, dueTo: todayStr, pageSize: 200 }),
+  ]);
+
+  const overdueInstallments = installmentItems.filter(
+    (i) => !!i.due_date && i.due_date < todayStr && i.remaining_amount_minor > 0
+  );
+  const obligationIdsWithInstallments = new Set(overdueInstallments.map((i) => i.id));
+  const overdueObligations = obligations.filter(
+    (o) =>
+      !obligationIdsWithInstallments.has(o.id) &&
+      !!o.due_date &&
+      o.due_date < todayStr &&
+      o.remaining_amount_minor > 0
+  );
+
+  return [...overdueObligations, ...overdueInstallments];
 }
 
 export interface ReportTransactionRow {

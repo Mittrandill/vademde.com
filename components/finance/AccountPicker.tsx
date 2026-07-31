@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 
 import { SearchablePicker } from '@/components/primitives';
+import { BankLogo } from './BankLogo';
 import type { Account } from '@/features/accounts/api';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
@@ -23,7 +24,9 @@ export function AccountPicker({ accounts, selectedId, onSelect, placeholder, tit
       items={accounts}
       selectedId={selectedId}
       onSelect={onSelect}
-      getIcon={(item) => TYPE_ICON[item.type as Account['type']]}
+      renderLeading={(item) => (
+        <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={24} />
+      )}
       placeholder={placeholder ?? 'Hesap seçin'}
       title={title ?? 'Hesap Seç'}
       emptyLabel="Eşleşen hesap bulunamadı."

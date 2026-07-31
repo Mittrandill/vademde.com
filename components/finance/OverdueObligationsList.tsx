@@ -3,10 +3,10 @@ import { router } from 'expo-router';
 import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
-import type { ObligationWithRelations } from '@/features/obligations/api';
+import type { ObligationDueItem } from '@/features/obligations/api';
 
 export interface OverdueObligationsListProps {
-  obligations: ObligationWithRelations[];
+  obligations: ObligationDueItem[];
 }
 
 function daysOverdue(dueDate: string): number {
@@ -33,7 +33,7 @@ export function OverdueObligationsList({ obligations }: OverdueObligationsListPr
       ) : (
         <Stack gap="xs">
           {obligations.map((o) => (
-            <Pressable key={o.id} onPress={() => router.push(`/obligations/${o.id}`)}>
+            <Pressable key={o.installment_id ?? o.id} onPress={() => router.push(`/obligations/${o.id}`)}>
               <Card>
                 <Row gap="sm">
                   <ObligationIcon documentType={o.document_type} bankCode={o.bank_code} size={28} />

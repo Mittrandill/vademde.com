@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, ScrollView } from 'react-native';
+import { InteractionManager, Modal, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -10,7 +10,7 @@ import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/pri
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { AccountPicker } from '@/components/finance/AccountPicker';
-import { getObligation, getObligationWithInstallments, type Installment } from '@/features/obligations/api';
+import { getObligation, getObligationWithInstallments, type Installment, type Obligation } from '@/features/obligations/api';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { listPaymentsForObligation, recordPayment } from '@/features/payments/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -209,7 +209,7 @@ export default function ObligationDetailScreen() {
         {payingInstallment ? (
           <PaymentForm
             workspaceId={activeWorkspaceId}
-            obligationId={obligation.id}
+            obligation={obligation}
             installment={payingInstallment === 'obligation' ? null : payingInstallment}
             defaultAmountMinor={
               payingInstallment === 'obligation'
@@ -218,14 +218,21 @@ export default function ObligationDetailScreen() {
             }
             accounts={accountsQuery.data ?? []}
             onClose={() => setPayingInstallment(null)}
-            onSuccess={async () => {
-              invalidateAll();
-              queryClient.invalidateQueries({ queryKey: ['obligation', id, 'payments'] });
+            onSuccess={() => {
+              // Modal'ı hemen kapat (native dismiss transition'ı temiz başlasın), önbellek
+              // geçersizleştirme/yeniden render gibi ağır işi bir sonraki etkileşim turuna
+              // ertele — aksi halde Fabric, modal dismiss animasyonuyla aynı anda arkadaki
+              // listeyi (taksitler vb.) yeniden mount etmeye çalışıp çöküyor (bkz.
+              // review.tsx'teki InteractionManager.runAfterInteractions ile aynı düzeltme).
               setPayingInstallment(null);
-              if (activeWorkspaceId) {
-                const fresh = await getObligation(id as string);
-                await syncObligationReminder(activeWorkspaceId, fresh);
-              }
+              InteractionManager.runAfterInteractions(async () => {
+                invalidateAll();
+                queryClient.invalidateQueries({ queryKey: ['obligation', id, 'payments'] });
+                if (activeWorkspaceId) {
+                  const fresh = await getObligation(id as string);
+                  await syncObligationReminder(activeWorkspaceId, fresh);
+                }
+              });
             }}
           />
         ) : null}
@@ -236,7 +243,7 @@ export default function ObligationDetailScreen() {
 
 interface PaymentFormProps {
   workspaceId: string | null;
-  obligationId: string;
+  obligation: Obligation;
   installment: Installment | null;
   defaultAmountMinor: number;
   accounts: Account[];
@@ -246,7 +253,7 @@ interface PaymentFormProps {
 
 function PaymentForm({
   workspaceId,
-  obligationId,
+  obligation,
   installment,
   defaultAmountMinor,
   accounts,
@@ -262,10 +269,15 @@ function PaymentForm({
       if (!workspaceId || !amount) throw new Error('Eksik alan var');
       return recordPayment({
         workspace_id: workspaceId,
-        obligation_id: obligationId,
+        obligation_id: obligation.id,
         installment_id: installment?.id ?? null,
         account_id: accountId,
         amount_minor: toMinorUnits(Number(amount.replace(',', '.'))),
+        obligationDirection: obligation.direction as 'payable' | 'receivable',
+        obligationTitle: obligation.title,
+        obligationCategoryId: obligation.category_id,
+        obligationCounterpartyId: obligation.counterparty_id,
+        obligationCurrencyCode: obligation.currency_code,
       });
     },
     onSuccess,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -26,7 +26,7 @@ import {
 } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { toMinorUnits, formatMinorAmount } from '@/utils/money';
-import { buildEqualInstallments } from '@/utils/installmentPlan';
+import { buildAmortizedInstallments } from '@/utils/installmentPlan';
 import { queryKeys } from '@/services/queryKeys';
 import { cancelObligationReminder, syncObligationReminder } from '@/services/notifications';
 
@@ -95,7 +95,7 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
-  const [interestAmountStr, setInterestAmountStr] = useState('');
+  const [interestRateStr, setInterestRateStr] = useState('');
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
 
@@ -119,14 +119,15 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
 
   const totalAmountMinor = totalAmount ? toMinorUnits(Number(totalAmount.replace(',', '.'))) : 0;
   const installmentCount = Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1));
-  // Faiz yalnızca kredi eklerken ve birden fazla taksitte istenir; TUTAR alanı bu
-  // durumda anaparayı temsil eder, obligation'ın toplamı anapara+faiz olur.
+  // Faiz oranı yalnızca kredi eklerken ve birden fazla taksitte istenir; TUTAR alanı bu
+  // durumda anaparayı temsil eder, taksitler azalan bakiye üzerinden hesaplanır ve
+  // obligation'ın toplamı anapara+toplam faiz olur.
   const showInterestField = !isEditing && documentType === 'kredi' && installmentCount > 1;
-  const interestAmountMinor =
-    showInterestField && interestAmountStr ? toMinorUnits(Number(interestAmountStr.replace(',', '.'))) : 0;
+  const interestRatePercent =
+    showInterestField && interestRateStr ? Number(interestRateStr.replace(',', '.')) || 0 : 0;
   const installmentPreview =
     !isEditing && installmentCount > 1 && totalAmountMinor > 0
-      ? buildEqualInstallments(totalAmountMinor, installmentCount, dueDate, interestAmountMinor)
+      ? buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent)
       : [];
 
   const saveMutation = useMutation({
@@ -153,9 +154,15 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
         return obligation;
       }
 
-      // Faiz girildiyse obligation'ın toplamı anapara+faiz olmalı ki taksitlerin
-      // toplamıyla eşleşsin ve kalan borç/ilerleme hesapları doğru kalsın.
-      const obligationTotalMinor = totalAmountMinor + interestAmountMinor;
+      // Faiz oranı girildiyse taksitler azalan bakiye üzerinden hesaplanır; obligation'ın
+      // toplamı taksitlerin gerçek toplamı (anapara+faiz) olmalı ki kalan borç/ilerleme
+      // hesapları doğru kalsın.
+      const installments =
+        installmentCount > 1
+          ? buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent)
+          : [];
+      const obligationTotalMinor =
+        installments.length > 0 ? installments.reduce((sum, item) => sum + item.amountMinor, 0) : totalAmountMinor;
 
       const obligation = await createObligation({
         workspace_id: activeWorkspaceId,
@@ -170,12 +177,12 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
         bank_code: bankCodeForType,
       });
 
-      if (installmentCount > 1) {
+      if (installments.length > 0) {
         await createInstallmentPlan({
           workspaceId: activeWorkspaceId,
           obligationId: obligation.id,
           totalAmountMinor: obligationTotalMinor,
-          installments: buildEqualInstallments(totalAmountMinor, installmentCount, dueDate, interestAmountMinor),
+          installments,
         });
       }
 
@@ -184,10 +191,14 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
       return obligation;
     },
     onSuccess: () => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
-      }
+      // Aynı Fabric çakışmasını önlemek için önce geri dönülür, önbellek
+      // geçersizleştirme bir sonraki etkileşim turuna ertelenir.
       router.back();
+      InteractionManager.runAfterInteractions(() => {
+        if (activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+        }
+      });
     },
   });
 
@@ -197,10 +208,21 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
       await deleteObligation(id as string);
     },
     onSuccess: () => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
-      }
-      router.back();
+      // Bu ekrana genelde /obligations/[id] detay sayfasından gelinir; oraya
+      // router.back() ile dönmek, ['obligation', id] önbelleği tazelenene kadar
+      // (veya hiç) az önce silinen kaydı göstermeye devam ediyordu. Silinen bir
+      // kaydın detayına dönmek yerine doğrudan listeye çıkılır.
+      // Navigasyon önce, önbellek geçersizleştirme sonra (bir sonraki etkileşim
+      // turunda) yapılır — aksi halde bu, silme onayı Alert'inin native dismiss
+      // animasyonuyla aynı anda çalışıp Fabric'i çökertiyor (bkz. obligations/[id].tsx
+      // PaymentForm onSuccess'teki aynı düzeltme).
+      router.replace('/(tabs)/hareketler');
+      InteractionManager.runAfterInteractions(() => {
+        if (activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+        }
+        queryClient.removeQueries({ queryKey: ['obligation', id] });
+      });
     },
   });
 
@@ -374,16 +396,16 @@ function ObligationForm({ id, initial, hasInstallments }: ObligationFormProps) {
             {showInterestField ? (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
-                  TOPLAM FAİZ (İSTEĞE BAĞLI)
+                  AYLIK FAİZ ORANI % (İSTEĞE BAĞLI)
                 </Text>
                 <TextField
-                  placeholder="0,00"
+                  placeholder="2,5"
                   keyboardType="decimal-pad"
-                  value={interestAmountStr}
-                  onChangeText={setInterestAmountStr}
+                  value={interestRateStr}
+                  onChangeText={setInterestRateStr}
                 />
                 <Text variant="caption" color="textSecondary">
-                  TUTAR alanı anaparadır; buraya girilen faiz taksitlere eşit dağıtılır ve toplam borca eklenir.
+                  TUTAR alanı anaparadır; taksitler azalan bakiye üzerinden hesaplanır (banka kredisi gibi).
                 </Text>
               </Stack>
             ) : null}

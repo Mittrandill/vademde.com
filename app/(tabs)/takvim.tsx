@@ -9,7 +9,12 @@ import { Amount } from '@/components/finance/Amount';
 import { CalendarMonthGrid } from '@/components/finance/CalendarMonthGrid';
 import { CalendarAgendaList } from '@/components/finance/CalendarAgendaList';
 import { CalendarObligationRow } from '@/components/finance/CalendarObligationRow';
-import { listObligations, ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import {
+  listObligations,
+  listInstallmentsDue,
+  ACTIVE_OBLIGATION_STATUSES,
+  type ObligationDueItem,
+} from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { addMonths, getMonthGridWeeks, isSameMonth, toDateKey } from '@/utils/calendar';
@@ -51,7 +56,28 @@ export default function TakvimScreen() {
     enabled: !!activeWorkspaceId,
   });
 
-  const obligations = useMemo(() => obligationsQuery.data ?? [], [obligationsQuery.data]);
+  // Taksitli kredi/borçlarda her taksit kendi vadesinde ayrı gösterilir (bkz.
+  // listInstallmentsDue) — bu obligation'ların tekil listObligations satırı (ilk
+  // taksidin vadesi) aşağıda dışlanır, aksi halde ilk taksit iki kez görünür.
+  const installmentsQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'calendar-installments', rangeKey] : ['calendar-installments', 'disabled'],
+    queryFn: () =>
+      listInstallmentsDue({
+        workspaceId: activeWorkspaceId as string,
+        statuses: ACTIVE_OBLIGATION_STATUSES,
+        dueFrom: toDateKey(gridStart),
+        dueTo: toDateKey(gridEnd),
+        pageSize: 500,
+      }),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const obligations = useMemo<ObligationDueItem[]>(() => {
+    const installmentItems = installmentsQuery.data ?? [];
+    const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
+    const plainObligations = (obligationsQuery.data ?? []).filter((o) => !obligationIdsWithInstallments.has(o.id));
+    return [...plainObligations, ...installmentItems];
+  }, [obligationsQuery.data, installmentsQuery.data]);
 
   const obligationsByDay = useMemo(() => {
     const map = new Map<string, typeof obligations>();
@@ -110,9 +136,11 @@ export default function TakvimScreen() {
 
         <SegmentedControl options={VIEW_MODES} value={viewMode} onChange={setViewMode} />
 
-        {obligationsQuery.error ? (
+        {obligationsQuery.error || installmentsQuery.error ? (
           <Text variant="body" color="danger">
-            {obligationsQuery.error instanceof Error ? obligationsQuery.error.message : 'Takvim yüklenemedi'}
+            {(obligationsQuery.error ?? installmentsQuery.error) instanceof Error
+              ? ((obligationsQuery.error ?? installmentsQuery.error) as Error).message
+              : 'Takvim yüklenemedi'}
           </Text>
         ) : null}
 

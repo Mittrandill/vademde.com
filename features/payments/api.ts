@@ -14,10 +14,63 @@ export async function listPaymentsForObligation(obligationId: string): Promise<P
   return data;
 }
 
+export interface RecordPaymentInput {
+  workspace_id: string;
+  obligation_id: string;
+  installment_id?: string | null;
+  account_id?: string | null;
+  amount_minor: number;
+  notes?: string | null;
+  // Hesap seçildiyse hesabın bakiyesine yansısın diye ilişkili bir transaction
+  // oluşturmak için gereken bağlam (bkz. accounts bakiyesi transactions'tan hesaplanır).
+  obligationDirection: 'payable' | 'receivable';
+  obligationTitle: string;
+  obligationCategoryId?: string | null;
+  obligationCounterpartyId?: string | null;
+  obligationCurrencyCode: string;
+}
+
 // docs/01-finansal-kayit-modeli.md §8 — kalan tutar ve durum, veritabanı trigger'larıyla
 // (recompute_obligation_progress / recompute_installment_progress) otomatik güncellenir.
-export async function recordPayment(input: TablesInsert<'payments'>): Promise<Payment> {
-  const { data, error } = await supabase.from('payments').insert(input).select('*').single();
+// Hesap bakiyeleri ise (bkz. features/reports/api.ts getAccountBalances, app/(tabs)/index.tsx)
+// transactions tablosundan hesaplanır; bu yüzden bir hesap seçildiğinde ödemeyle birlikte
+// payments.transaction_id üzerinden ilişkili bir transaction da oluşturulur — aksi halde
+// taksit "ödendi" görünür ama seçilen hesabın bakiyesi hiç değişmez.
+export async function recordPayment({
+  obligationDirection,
+  obligationTitle,
+  obligationCategoryId,
+  obligationCounterpartyId,
+  obligationCurrencyCode,
+  ...input
+}: RecordPaymentInput): Promise<Payment> {
+  let transactionId: string | null = null;
+
+  if (input.account_id) {
+    const transactionInput: TablesInsert<'transactions'> = {
+      workspace_id: input.workspace_id,
+      account_id: input.account_id,
+      direction: obligationDirection === 'payable' ? 'expense' : 'income',
+      category_id: obligationCategoryId ?? null,
+      counterparty_id: obligationCounterpartyId ?? null,
+      amount_minor: input.amount_minor,
+      currency_code: obligationCurrencyCode,
+      description: obligationTitle,
+    };
+    const { data: transaction, error: transactionError } = await supabase
+      .from('transactions')
+      .insert(transactionInput)
+      .select('id')
+      .single();
+    if (transactionError) throw transactionError;
+    transactionId = transaction.id;
+  }
+
+  const { data, error } = await supabase
+    .from('payments')
+    .insert({ ...input, transaction_id: transactionId })
+    .select('*')
+    .single();
   if (error) throw error;
   return data;
 }

@@ -16,7 +16,12 @@ import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
 import { RecentTransactionsList } from '@/components/finance/RecentTransactionsList';
 import { createWorkspace, listMyWorkspaces } from '@/features/workspaces/api';
 import { listAccounts } from '@/features/accounts/api';
-import { listObligations, ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import {
+  listObligations,
+  listInstallmentsDue,
+  ACTIVE_OBLIGATION_STATUSES,
+  type ObligationDueItem,
+} from '@/features/obligations/api';
 import { listTransactions } from '@/features/transactions/api';
 import { getAllTimeIncomeExpenseTotals, getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -82,6 +87,16 @@ export default function HomeScreen() {
     enabled: !!activeWorkspaceId,
   });
 
+  // Taksitli bir kredinin toplam bakiyesi yerine yaklaşan taksidin kendi tutarı
+  // gösterilsin diye (bkz. app/(tabs)/takvim.tsx aynı desen) — kredinin toplam
+  // borcu yalnızca /obligations/[id] detay sayfasında gösterilir.
+  const dueInstallmentsQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'dashboard-installments'] : ['dashboard-installments', 'disabled'],
+    queryFn: () =>
+      listInstallmentsDue({ workspaceId: activeWorkspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
+    enabled: !!activeWorkspaceId,
+  });
+
   const pendingDocumentsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.dashboardPendingDocuments(activeWorkspaceId) : ['documents', 'disabled'],
     queryFn: () => getPendingReviewDocuments(activeWorkspaceId as string),
@@ -105,7 +120,14 @@ export default function HomeScreen() {
     return totals.incomeMinor - totals.expenseMinor;
   }, [monthTotalsQuery.data]);
 
-  const activeObligations = useMemo(() => activeObligationsQuery.data ?? [], [activeObligationsQuery.data]);
+  const activeObligations = useMemo<ObligationDueItem[]>(() => {
+    const installmentItems = dueInstallmentsQuery.data ?? [];
+    const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
+    const plainObligations = (activeObligationsQuery.data ?? []).filter(
+      (o) => !obligationIdsWithInstallments.has(o.id)
+    );
+    return [...plainObligations, ...installmentItems];
+  }, [activeObligationsQuery.data, dueInstallmentsQuery.data]);
 
   const payableObligations = useMemo(
     () => activeObligations.filter((o) => o.direction === 'payable'),

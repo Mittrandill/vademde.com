@@ -11,6 +11,15 @@ export type ObligationWithRelations = Obligation & {
   account: { name: string } | null;
 };
 
+// Taksitli bir obligation'ın tek bir taksitini takvim/liste ekranlarında ObligationWithRelations
+// gibi göstermek için kullanılır: due_date/total_amount_minor/remaining_amount_minor o taksite
+// aittir, id ise gerçek obligation'ı gösterir (detay sayfasına gidiş için); installment_id/number
+// hangi taksit olduğunu taşır (ödeme kaydında kullanılır).
+export type ObligationDueItem = ObligationWithRelations & {
+  installment_id?: string | null;
+  installment_number?: number | null;
+};
+
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
 export const OBLIGATIONS_PAGE_SIZE = 30;
 
@@ -64,6 +73,58 @@ export async function listObligations({
   return data as unknown as ObligationWithRelations[];
 }
 
+export interface ListInstallmentsDueFilter {
+  workspaceId: string;
+  direction?: 'payable' | 'receivable';
+  statuses?: Obligation['status'][];
+  dueFrom?: string;
+  dueTo?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+// Taksitli bir kredi/borcun HER taksiti kendi vadesinde ayrı bir kayıt olarak görünsün
+// diye (bkz. takvim ve Hareketler ekranları) — listObligations tek satır (obligation'ın
+// kendi due_date'i = ilk taksit) döndürdüğünden, 2. ve sonraki taksitler bu fonksiyon
+// olmadan hiçbir yerde listelenmezdi.
+export async function listInstallmentsDue({
+  workspaceId,
+  direction,
+  statuses,
+  dueFrom,
+  dueTo,
+  page = 0,
+  pageSize = OBLIGATIONS_PAGE_SIZE,
+}: ListInstallmentsDueFilter): Promise<ObligationDueItem[]> {
+  let query = supabase
+    .from('installments')
+    .select(
+      'id, installment_number, due_date, amount_minor, remaining_amount_minor, status, obligation:obligations!inner(*, category:categories(name), counterparty:counterparties(name), account:accounts(name))'
+    )
+    .eq('workspace_id', workspaceId)
+    .neq('status', 'iptal_edildi');
+
+  if (direction) query = query.eq('obligation.direction', direction);
+  if (statuses?.length) query = query.in('obligation.status', statuses);
+  if (dueFrom) query = query.gte('due_date', dueFrom);
+  if (dueTo) query = query.lte('due_date', dueTo);
+
+  const { data, error } = await query
+    .order('due_date', { ascending: true })
+    .range(page * pageSize, page * pageSize + pageSize - 1);
+  if (error) throw error;
+
+  return (data as unknown as (Installment & { obligation: ObligationWithRelations })[]).map((row) => ({
+    ...row.obligation,
+    due_date: row.due_date,
+    total_amount_minor: row.amount_minor,
+    remaining_amount_minor: row.remaining_amount_minor,
+    status: row.status,
+    installment_id: row.id,
+    installment_number: row.installment_number,
+  }));
+}
+
 export async function getObligation(id: string): Promise<Obligation> {
   const { data, error } = await supabase.from('obligations').select('*').eq('id', id).single();
   if (error) throw error;
@@ -90,10 +151,18 @@ export async function getObligationWithInstallments(
 
 // docs/12-mvp-kabul-kriterleri.md — taksitli borçlarda bildirim, ödenmiş taksitlerin
 // sabit vade tarihine değil bir sonraki bekleyen taksitin vadesine göre planlanmalıdır.
-export async function getNextPendingInstallmentDueDate(obligationId: string): Promise<string | null> {
+export interface NextPendingInstallment {
+  dueDate: string;
+  remainingAmountMinor: number;
+}
+
+// Hatırlatma bildiriminde kredinin toplam bakiyesi değil, bu bekleyen taksitin
+// kendi tutarı gösterilsin diye (bkz. services/notifications.ts) — kredinin
+// toplam borcu yalnızca /obligations/[id] detay sayfasında gösterilir.
+export async function getNextPendingInstallment(obligationId: string): Promise<NextPendingInstallment | null> {
   const { data, error } = await supabase
     .from('installments')
-    .select('due_date')
+    .select('due_date, remaining_amount_minor')
     .eq('obligation_id', obligationId)
     .gt('remaining_amount_minor', 0)
     .neq('status', 'iptal_edildi')
@@ -101,7 +170,7 @@ export async function getNextPendingInstallmentDueDate(obligationId: string): Pr
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data?.due_date ?? null;
+  return data ? { dueDate: data.due_date, remainingAmountMinor: data.remaining_amount_minor } : null;
 }
 
 export async function createObligation(input: TablesInsert<'obligations'>): Promise<Obligation> {
@@ -128,13 +197,13 @@ export interface CreateInstallmentPlanInput {
   workspaceId: string;
   obligationId: string;
   totalAmountMinor: number;
-  installments: Array<{
+  installments: {
     installmentNumber: number;
     dueDate: string;
     amountMinor: number;
     principalMinor?: number | null;
     interestMinor?: number | null;
-  }>;
+  }[];
 }
 
 export async function createInstallmentPlan({

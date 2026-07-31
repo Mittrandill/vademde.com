@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, Image, InteractionManager, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,7 @@ import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { BankPicker } from '@/components/finance/BankPicker';
+import { BankLogo } from '@/components/finance/BankLogo';
 import {
   discardDocument,
   getDocument,
@@ -55,6 +56,7 @@ export default function DocumentReviewScreen() {
   const [direction, setDirection] = useState<Direction>('payable');
   const [documentType, setDocumentType] = useState<string | null>(null);
   const [bankCode, setBankCode] = useState<string | null>(null);
+  const [extractedBankName, setExtractedBankName] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -114,13 +116,15 @@ export default function DocumentReviewScreen() {
 
     // Kredi/kredi kartı ekstresi için Gemini'nin çıkardığı banka adını statik banka
     // listesiyle eşleştirip BankPicker'ı önceden doldur (kullanıcı yine değiştirebilir).
+    // Eşleşme bulunamazsa ham ad, banka logosu yerine baş harfli avatar göstermek için saklanır.
     if (document.document_type === 'kredi' || document.document_type === 'kredi_karti_ekstresi') {
       const summary = document.extracted_summary as {
         loan?: { bankName?: string | null };
         card?: { bankName?: string | null };
       } | null;
-      const extractedBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? null;
-      const matchedBankCode = matchBankByName(extractedBankName);
+      const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? null;
+      setExtractedBankName(ocrBankName);
+      const matchedBankCode = matchBankByName(ocrBankName);
       if (matchedBankCode) setBankCode(matchedBankCode);
     }
     setTitle(
@@ -273,13 +277,19 @@ export default function DocumentReviewScreen() {
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
       }
-      if (result?.installmentPlanFailed) {
-        Alert.alert(
-          'Taksitler oluşturulamadı',
-          'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.'
-        );
-      }
-      router.replace('/(tabs)/hareketler');
+      // Kredi taksit önizlemesi gibi çok satırlı bir listenin hemen ardından ekranı
+      // değiştirmek, Fabric henüz mount transaction'ını bitirmeden view'ları söküp
+      // "componentViewDescriptorWithTag" assertion'ıyla native çökmeye yol açabiliyor;
+      // navigasyon bir sonraki etkileşim turuna ertelenir.
+      InteractionManager.runAfterInteractions(() => {
+        if (result?.installmentPlanFailed) {
+          Alert.alert(
+            'Taksitler oluşturulamadı',
+            'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.'
+          );
+        }
+        router.replace('/(tabs)/hareketler');
+      });
     },
   });
 
@@ -455,7 +465,17 @@ export default function DocumentReviewScreen() {
                 <Text variant="caption" color="textSecondary">
                   BANKA (İSTEĞE BAĞLI)
                 </Text>
-                <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+                <Row gap="sm" align="center">
+                  <BankLogo bankCode={bankCode} fallbackName={!bankCode ? extractedBankName : null} size={32} />
+                  <Stack style={{ flex: 1 }}>
+                    <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+                  </Stack>
+                </Row>
+                {!bankCode && extractedBankName ? (
+                  <Text variant="caption" color="textSecondary">
+                    OCR &ldquo;{extractedBankName}&rdquo; okudu ama listede eşleşen banka bulunamadı — yukarıdan manuel seç.
+                  </Text>
+                ) : null}
               </Stack>
             ) : null}
 

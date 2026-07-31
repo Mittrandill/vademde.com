@@ -4,11 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { getMonthGridWeeks, isSameDay, isSameMonth, toDateKey } from '@/utils/calendar';
-import type { ObligationWithRelations } from '@/features/obligations/api';
+import type { ObligationDueItem } from '@/features/obligations/api';
 
 export interface CalendarMonthGridProps {
   monthDate: Date;
-  obligationsByDay: Map<string, ObligationWithRelations[]>;
+  obligationsByDay: Map<string, ObligationDueItem[]>;
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
   onPrevMonth: () => void;

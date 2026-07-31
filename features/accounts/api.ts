@@ -15,6 +15,12 @@ export async function listAccounts(workspaceId: string): Promise<Account[]> {
   return data;
 }
 
+export async function getAccount(id: string): Promise<Account> {
+  const { data, error } = await supabase.from('accounts').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data;
+}
+
 export async function createAccount(input: TablesInsert<'accounts'>): Promise<Account> {
   const { data, error } = await supabase.from('accounts').insert(input).select('*').single();
   if (error) throw error;

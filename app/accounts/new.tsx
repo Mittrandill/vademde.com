@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { BankPicker } from '@/components/finance/BankPicker';
-import { createAccount, type Account } from '@/features/accounts/api';
+import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { toMinorUnits } from '@/utils/money';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
@@ -23,37 +23,65 @@ const TYPES: Array<{ value: Account['type']; label: string }> = [
 export default function NewAccountScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = !!id;
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [name, setName] = useState('');
   const [type, setType] = useState<Account['type']>('cash');
   const [bankCode, setBankCode] = useState<string | null>(null);
   const [iban, setIban] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
+  const [initialized, setInitialized] = useState(false);
+
+  const accountQuery = useQuery({
+    queryKey: ['account', id, 'edit'],
+    queryFn: () => getAccount(id as string),
+    enabled: isEditing,
+  });
+
+  useEffect(() => {
+    const account = accountQuery.data;
+    if (!account || initialized) return;
+    setName(account.name);
+    setType(account.type as Account['type']);
+    setBankCode(account.bank_code);
+    setIban(account.iban ?? '');
+    setOpeningBalance((account.opening_balance_minor / 100).toFixed(2).replace('.', ','));
+    setInitialized(true);
+  }, [accountQuery.data, initialized]);
 
   const normalizedIban = normalizeIban(iban);
   const ibanHasError = normalizedIban.length > 0 && !isValidIbanFormat(normalizedIban);
 
-  const createAccountMutation = useMutation({
-    mutationFn: () =>
-      createAccount({
-        workspace_id: activeWorkspaceId as string,
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const payload = {
         name: name.trim(),
         type,
         bank_code: type === 'bank' ? bankCode : null,
         iban: type === 'bank' && normalizedIban ? normalizedIban : null,
         opening_balance_minor: openingBalance ? toMinorUnits(Number(openingBalance.replace(',', '.'))) : 0,
-      }),
+      };
+      return isEditing
+        ? updateAccount(id as string, payload)
+        : createAccount({ workspace_id: activeWorkspaceId as string, ...payload });
+    },
     onSuccess: () => {
       if (activeWorkspaceId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
+        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
+      }
+      if (isEditing) {
+        queryClient.invalidateQueries({ queryKey: ['account', id] });
       }
       router.back();
     },
   });
 
   function handleSubmit() {
-    if (!activeWorkspaceId || !name.trim()) return;
-    createAccountMutation.mutate();
+    if (!name.trim()) return;
+    if (!isEditing && !activeWorkspaceId) return;
+    saveMutation.mutate();
   }
 
   return (
@@ -68,7 +96,7 @@ export default function NewAccountScreen() {
               <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
             </Pressable>
             <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-              Yeni Hesap
+              {isEditing ? 'Hesabı Düzenle' : 'Yeni Hesap'}
             </Text>
           </Row>
 
@@ -152,18 +180,16 @@ export default function NewAccountScreen() {
             />
           </Stack>
 
-          {createAccountMutation.error ? (
+          {saveMutation.error ? (
             <Text variant="caption" color="danger">
-              {createAccountMutation.error instanceof Error
-                ? createAccountMutation.error.message
-                : 'Hesap oluşturulamadı'}
+              {saveMutation.error instanceof Error ? saveMutation.error.message : 'Hesap kaydedilemedi'}
             </Text>
           ) : null}
 
           <Button
-            label="Hesabı Kaydet"
+            label={isEditing ? 'Güncelle' : 'Hesabı Kaydet'}
             onPress={handleSubmit}
-            loading={createAccountMutation.isPending}
+            loading={saveMutation.isPending}
             disabled={!name.trim()}
           />
         </Stack>

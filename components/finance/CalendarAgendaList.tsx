@@ -3,11 +3,11 @@ import { Fragment, useMemo } from 'react';
 import { Card, Stack, Text } from '@/components/primitives';
 import { CalendarObligationRow } from './CalendarObligationRow';
 import { toDateKey } from '@/utils/calendar';
-import type { ObligationWithRelations } from '@/features/obligations/api';
+import type { ObligationDueItem } from '@/features/obligations/api';
 
 export interface CalendarAgendaListProps {
   workspaceId: string;
-  obligations: ObligationWithRelations[];
+  obligations: ObligationDueItem[];
   emptyLabel?: string;
 }
 
@@ -25,7 +25,7 @@ export function CalendarAgendaList({
 }: CalendarAgendaListProps) {
   const groups = useMemo(() => {
     const withDueDate = obligations.filter((o) => o.due_date);
-    const ordered: { dateKey: string; date: Date; items: ObligationWithRelations[] }[] = [];
+    const ordered: { dateKey: string; date: Date; items: ObligationDueItem[] }[] = [];
     const indexByKey = new Map<string, number>();
 
     for (const obligation of withDueDate) {
@@ -61,7 +61,11 @@ export function CalendarAgendaList({
           </Text>
           <Stack gap="xs">
             {group.items.map((obligation) => (
-              <CalendarObligationRow key={obligation.id} workspaceId={workspaceId} obligation={obligation} />
+              <CalendarObligationRow
+                key={obligation.installment_id ?? obligation.id}
+                workspaceId={workspaceId}
+                obligation={obligation}
+              />
             ))}
           </Stack>
         </Fragment>

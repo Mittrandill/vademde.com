@@ -8,14 +8,14 @@ import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
-import { getObligation, type ObligationWithRelations } from '@/features/obligations/api';
+import { getObligation, type ObligationDueItem } from '@/features/obligations/api';
 import { recordPayment } from '@/features/payments/api';
 import { formatMinorAmount } from '@/utils/money';
 import { syncObligationReminder } from '@/services/notifications';
 
 export interface CalendarObligationRowProps {
   workspaceId: string;
-  obligation: ObligationWithRelations;
+  obligation: ObligationDueItem;
 }
 
 export function CalendarObligationRow({ workspaceId, obligation }: CalendarObligationRowProps) {
@@ -23,15 +23,21 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
   const queryClient = useQueryClient();
   const isPayable = obligation.direction === 'payable';
   const isTerminal = obligation.status === 'odendi' || obligation.status === 'tahsil_edildi' || obligation.status === 'iptal_edildi';
+  const isInstallment = !!obligation.installment_id;
 
   const markPaidMutation = useMutation({
     mutationFn: () =>
       recordPayment({
         workspace_id: workspaceId,
         obligation_id: obligation.id,
-        installment_id: null,
+        installment_id: obligation.installment_id ?? null,
         account_id: obligation.account_id,
         amount_minor: obligation.remaining_amount_minor,
+        obligationDirection: obligation.direction as 'payable' | 'receivable',
+        obligationTitle: obligation.title,
+        obligationCategoryId: obligation.category_id,
+        obligationCounterpartyId: obligation.counterparty_id,
+        obligationCurrencyCode: obligation.currency_code,
       }),
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: [workspaceId, 'obligations'] });
@@ -46,7 +52,7 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
   function handleMarkPaid() {
     Alert.alert(
       isPayable ? 'Ödendi Olarak İşaretle' : 'Tahsil Edildi Olarak İşaretle',
-      `${obligation.title} için ${formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)} tutarında ${isPayable ? 'ödeme' : 'tahsilat'} kaydı oluşturulacak. Emin misiniz?`,
+      `${obligation.title}${isInstallment ? ` — ${obligation.installment_number}. taksit` : ''} için ${formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)} tutarında ${isPayable ? 'ödeme' : 'tahsilat'} kaydı oluşturulacak. Emin misiniz?`,
       [
         { text: 'Vazgeç', style: 'cancel' },
         { text: 'Onayla', onPress: () => markPaidMutation.mutate() },
@@ -61,7 +67,10 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
           <Row gap="sm">
             <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={28} />
             <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="cardTitle">{obligation.title}</Text>
+              <Text variant="cardTitle">
+                {obligation.title}
+                {isInstallment ? ` — ${obligation.installment_number}. Taksit` : ''}
+              </Text>
               <Row gap="xs">
                 {obligation.counterparty?.name ? (
                   <Text variant="caption" color="textSecondary">

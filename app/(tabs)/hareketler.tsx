@@ -8,8 +8,10 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { StatusBadge } from '@/components/finance/StatusBadge';
+import { ObligationIcon } from '@/components/finance/ObligationIcon';
+import { BankLogo } from '@/components/finance/BankLogo';
 import { listTransactions, TRANSACTIONS_PAGE_SIZE } from '@/features/transactions/api';
-import { listObligations, OBLIGATIONS_PAGE_SIZE } from '@/features/obligations/api';
+import { listObligations, listInstallmentsDue, OBLIGATIONS_PAGE_SIZE } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 
@@ -34,6 +36,9 @@ interface HareketRow {
   currencyCode: string;
   direction: string;
   status?: string;
+  documentType?: string;
+  bankCode?: string | null;
+  installmentId?: string | null;
 }
 
 const DIRECTION_PREFIX: Record<string, string> = {
@@ -46,6 +51,12 @@ const DIRECTION_COLOR: Record<string, 'success' | 'textPrimary' | 'textSecondary
   income: 'success',
   expense: 'textPrimary',
   transfer: 'textSecondary',
+};
+
+const TRANSACTION_DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  income: 'arrow-down-circle-outline',
+  expense: 'arrow-up-circle-outline',
+  transfer: 'swap-horizontal-outline',
 };
 
 export default function HareketlerScreen() {
@@ -95,6 +106,23 @@ export default function HareketlerScreen() {
     enabled: !!activeWorkspaceId && wantsObligations,
   });
 
+  // Taksitli kredi/borçlarda her taksit ayrı satır olarak görünür (bkz. listInstallmentsDue);
+  // bu obligation'ların tekil listObligations satırı aşağıda dışlanır. Arama, sadece taksitsiz
+  // kayıtlarda ve işlemlerde uygulanır — taksitlere metin araması eklenmemiştir.
+  const installmentsQuery = useInfiniteQuery({
+    queryKey: [activeWorkspaceId, 'obligations', 'installments-infinite', obligationDirection ?? 'all'],
+    queryFn: ({ pageParam }) =>
+      listInstallmentsDue({
+        workspaceId: activeWorkspaceId as string,
+        direction: obligationDirection,
+        page: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === OBLIGATIONS_PAGE_SIZE ? allPages.length : undefined,
+    enabled: !!activeWorkspaceId && wantsObligations && !search,
+  });
+
   const rows = useMemo<HareketRow[]>(() => {
     const transactionRows: HareketRow[] = wantsTransactions
       ? (transactionsQuery.data?.pages.flat() ?? []).map((t) => ({
@@ -109,39 +137,65 @@ export default function HareketlerScreen() {
           amountMinor: t.amount_minor,
           currencyCode: t.currency_code,
           direction: t.direction,
+          bankCode: t.account?.bank_code ?? null,
         }))
       : [];
+
+    const installmentItems = wantsObligations ? (installmentsQuery.data?.pages.flat() ?? []) : [];
+    const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
 
     const obligationRows: HareketRow[] = wantsObligations
-      ? (obligationsQuery.data?.pages.flat() ?? []).map((o) => ({
-          id: o.id,
-          kind: 'obligation',
-          title: o.title,
-          subtitle: o.counterparty?.name || o.category?.name || '',
-          date: o.due_date ?? o.created_at,
-          amountMinor: o.total_amount_minor,
-          currencyCode: o.currency_code,
-          direction: o.direction,
-          status: o.status,
-        }))
+      ? (obligationsQuery.data?.pages.flat() ?? [])
+          .filter((o) => !obligationIdsWithInstallments.has(o.id))
+          .map((o) => ({
+            id: o.id,
+            kind: 'obligation',
+            title: o.title,
+            subtitle: o.counterparty?.name || o.category?.name || '',
+            date: o.due_date ?? o.created_at,
+            amountMinor: o.total_amount_minor,
+            currencyCode: o.currency_code,
+            direction: o.direction,
+            status: o.status,
+            documentType: o.document_type,
+            bankCode: o.bank_code,
+          }))
       : [];
 
-    return [...transactionRows, ...obligationRows].sort(
+    const installmentRows: HareketRow[] = installmentItems.map((o) => ({
+      id: o.id,
+      kind: 'obligation',
+      title: `${o.title} — ${o.installment_number}. Taksit`,
+      subtitle: o.counterparty?.name || o.category?.name || '',
+      date: o.due_date ?? o.created_at,
+      amountMinor: o.total_amount_minor,
+      currencyCode: o.currency_code,
+      direction: o.direction,
+      status: o.status,
+      documentType: o.document_type,
+      bankCode: o.bank_code,
+      installmentId: o.installment_id,
+    }));
+
+    return [...transactionRows, ...obligationRows, ...installmentRows].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [transactionsQuery.data, obligationsQuery.data, wantsTransactions, wantsObligations]);
+  }, [transactionsQuery.data, obligationsQuery.data, installmentsQuery.data, wantsTransactions, wantsObligations]);
 
   const hasNextPage =
-    (wantsTransactions && transactionsQuery.hasNextPage) || (wantsObligations && obligationsQuery.hasNextPage);
-  const isFetchingNextPage = transactionsQuery.isFetchingNextPage || obligationsQuery.isFetchingNextPage;
+    (wantsTransactions && transactionsQuery.hasNextPage) ||
+    (wantsObligations && (obligationsQuery.hasNextPage || installmentsQuery.hasNextPage));
+  const isFetchingNextPage =
+    transactionsQuery.isFetchingNextPage || obligationsQuery.isFetchingNextPage || installmentsQuery.isFetchingNextPage;
 
   function loadMore() {
     if (wantsTransactions && transactionsQuery.hasNextPage) transactionsQuery.fetchNextPage();
     if (wantsObligations && obligationsQuery.hasNextPage) obligationsQuery.fetchNextPage();
+    if (wantsObligations && installmentsQuery.hasNextPage) installmentsQuery.fetchNextPage();
   }
 
-  const error = transactionsQuery.error || obligationsQuery.error;
-  const isLoading = transactionsQuery.isLoading || obligationsQuery.isLoading;
+  const error = transactionsQuery.error || obligationsQuery.error || installmentsQuery.error;
+  const isLoading = transactionsQuery.isLoading || obligationsQuery.isLoading || (wantsObligations && !search && installmentsQuery.isLoading);
 
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' }),
@@ -208,7 +262,7 @@ export default function HareketlerScreen() {
         ) : (
           <FlatList
             data={rows}
-            keyExtractor={(item) => `${item.kind}-${item.id}`}
+            keyExtractor={(item) => `${item.kind}-${item.id}${item.installmentId ? `-${item.installmentId}` : ''}`}
             contentContainerStyle={{
               paddingHorizontal: theme.screenEdge.standard,
               gap: theme.spacing.sm,
@@ -223,12 +277,19 @@ export default function HareketlerScreen() {
                 }
               >
                 <Row
+                  gap="sm"
+                  align="center"
                   style={{
                     backgroundColor: theme.colors.surfacePrimary,
                     borderRadius: theme.radius.widget,
                     padding: theme.spacing.md,
                   }}
                 >
+                {item.kind === 'obligation' ? (
+                  <ObligationIcon documentType={item.documentType ?? 'diger'} bankCode={item.bankCode} size={28} />
+                ) : (
+                  <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={28} />
+                )}
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle">{item.title}</Text>
                   <Row gap="xs">

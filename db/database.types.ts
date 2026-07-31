@@ -809,6 +809,7 @@ export type Database = {
           notification_identifier: string | null
           obligation_id: string
           remind_at: string
+          stage: string
           status: string
           updated_at: string
           workspace_id: string
@@ -819,6 +820,7 @@ export type Database = {
           notification_identifier?: string | null
           obligation_id: string
           remind_at: string
+          stage?: string
           status?: string
           updated_at?: string
           workspace_id: string
@@ -829,6 +831,7 @@ export type Database = {
           notification_identifier?: string | null
           obligation_id?: string
           remind_at?: string
+          stage?: string
           status?: string
           updated_at?: string
           workspace_id?: string
@@ -837,7 +840,7 @@ export type Database = {
           {
             foreignKeyName: "reminders_obligation_id_fkey"
             columns: ["obligation_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "obligations"
             referencedColumns: ["id"]
           },
