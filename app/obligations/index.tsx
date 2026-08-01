@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, FlatList, InteractionManager, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
@@ -18,7 +18,6 @@ import {
   deleteObligation,
   ACTIVE_OBLIGATION_STATUSES,
   CLOSED_OBLIGATION_STATUSES,
-  OBLIGATIONS_PAGE_SIZE,
   type Obligation,
   type ObligationInstallmentSummary,
   type ObligationWithRelations,
@@ -31,14 +30,14 @@ import { cancelObligationReminder } from '@/services/notifications';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 
-type DirectionKey = 'all' | 'payable' | 'receivable';
+// Bu ekranda tek filtre boyutu var: durum. Borç/alacak yön filtresi kaldırıldı — iki ayrı
+// filtre satırı kullanıcı için gereksiz karmaşıklık yaratıyordu (bkz. tasarım geri bildirimi).
 type StatusKey = 'active' | 'overdue' | 'closed' | 'all';
 
-const DIRECTION_OPTIONS: { key: DirectionKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'payable', label: 'Borç' },
-  { key: 'receivable', label: 'Alacak' },
-];
+// Liste sayfa başına 10 kayıt gösterir ve gerçek (numaralı) sayfalandırma kullanır —
+// sonsuz kaydırma / "Daha Fazla Yükle" yerine, listenin ekranın altında sabit kalan
+// bir sayfalama çubuğuyla öngörülebilir şekilde gezilmesi için.
+const LIST_PAGE_SIZE = 10;
 
 const STATUS_OPTIONS: { key: StatusKey; label: string }[] = [
   { key: 'all', label: 'Tümü' },
@@ -72,9 +71,9 @@ export default function ObligationsByTypeScreen() {
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [directionKey, setDirectionKey] = useState<DirectionKey>('all');
   const [statusKey, setStatusKey] = useState<StatusKey>('active');
   const [sortAscending, setSortAscending] = useState(true);
+  const [page, setPage] = useState(0);
 
   // hareketler.tsx ile aynı desen: her tuşta sorgu atmamak için 300ms debounce.
   useEffect(() => {
@@ -82,34 +81,23 @@ export default function ObligationsByTypeScreen() {
     return () => clearTimeout(timeout);
   }, [searchInput]);
 
-  const direction = directionKey === 'all' ? undefined : directionKey;
   const statuses = STATUSES_BY_KEY[statusKey];
   const enabled = !!activeWorkspaceId && !!documentType;
 
-  // Özet sorgusu sıralamadan etkilenmez; sıralama yalnızca sayfalı liste anahtarına eklenir
-  // ki "Tarih" düğmesine dokunmak gereksiz yere özeti yeniden çekmesin.
-  const filterKey = `${documentType ?? 'all'}|${directionKey}|${statusKey}|${search}`;
-  const listFilterKey = `${filterKey}|${sortAscending ? 'asc' : 'desc'}`;
+  // Özet sorgusu sıralama veya sayfadan etkilenmez; ikisi de yalnızca sayfalı liste
+  // anahtarına eklenir ki "Tarih" düğmesine dokunmak veya sayfa değiştirmek özeti
+  // gereksiz yere yeniden çekmesin.
+  const filterKey = `${documentType ?? 'all'}|${statusKey}|${search}`;
+  const resetKey = `${filterKey}|${sortAscending ? 'asc' : 'desc'}`;
 
-  const obligationsQuery = useInfiniteQuery({
-    queryKey: activeWorkspaceId
-      ? queryKeys.obligationsByTypeList(activeWorkspaceId, listFilterKey)
-      : ['obligations-by-type', 'disabled'],
-    queryFn: ({ pageParam }) =>
-      listObligations({
-        workspaceId: activeWorkspaceId as string,
-        documentType,
-        direction,
-        statuses,
-        search: search || undefined,
-        page: pageParam,
-        ascending: sortAscending,
-      }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length === OBLIGATIONS_PAGE_SIZE ? allPages.length : undefined,
-    enabled,
-  });
+  // Filtre, arama veya sıralama değiştiğinde geçerli sayfa artık anlamsızlaşır — her
+  // zaman 1. sayfaya dönülür. Render sırasında (efekt içinde değil) yapılır ki React'in
+  // "prop değişince state sıfırla" deseni izlensin ve ekstra bir render turu tetiklenmesin.
+  const [lastResetKey, setLastResetKey] = useState(resetKey);
+  if (resetKey !== lastResetKey) {
+    setLastResetKey(resetKey);
+    setPage(0);
+  }
 
   const summaryQuery = useQuery({
     queryKey: activeWorkspaceId
@@ -119,16 +107,42 @@ export default function ObligationsByTypeScreen() {
       getObligationSummary({
         workspaceId: activeWorkspaceId as string,
         documentType,
-        direction,
         statuses,
         search: search || undefined,
       }),
     enabled,
+    placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(() => obligationsQuery.data?.pages.flat() ?? [], [obligationsQuery.data]);
   const summary = summaryQuery.data;
-  const isFiltered = search.length > 0 || directionKey !== 'all' || statusKey !== 'active';
+  const totalCount = summary?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / LIST_PAGE_SIZE));
+  // Bir sayfadaki son kayıt silindiğinde ya da filtre daralıp toplam sayfa sayısı
+  // düştüğünde geçerli sayfa artık aralık dışına düşebilir — state'i etkilemeden,
+  // sorguya ve gösterime giden sayfa değerini burada sınırlarız.
+  const effectivePage = Math.min(page, totalPages - 1);
+  const listFilterKey = `${resetKey}|page:${effectivePage}`;
+
+  const obligationsQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? queryKeys.obligationsByTypeList(activeWorkspaceId, listFilterKey)
+      : ['obligations-by-type', 'disabled'],
+    queryFn: () =>
+      listObligations({
+        workspaceId: activeWorkspaceId as string,
+        documentType,
+        statuses,
+        search: search || undefined,
+        page: effectivePage,
+        pageSize: LIST_PAGE_SIZE,
+        ascending: sortAscending,
+      }),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+
+  const rows = useMemo(() => obligationsQuery.data ?? [], [obligationsQuery.data]);
+  const isFiltered = search.length > 0 || statusKey !== 'active';
 
   const idsKey = rows.map((r) => r.id).join(',');
   const installmentSummariesQuery = useQuery({
@@ -191,11 +205,13 @@ export default function ObligationsByTypeScreen() {
               sorgu yok, hepsi zaten hesaplanan `summary` alanlarından). */}
           <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
             <Stack gap="md">
+              {/* Sayfa adı zaten üstteki gezinme çubuğunda gösteriliyor; burada tekrar
+                  edilmez — hero yalnızca tür kimliğini (ikon) ve kısa bir açıklamayı taşır. */}
               <Row gap="sm" align="center">
                 <View
                   style={{
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     borderRadius: theme.radius.input,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -204,26 +220,21 @@ export default function ObligationsByTypeScreen() {
                 >
                   <Ionicons
                     name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
-                    size={22}
+                    size={24}
                     color={theme.colors.brandPrimary}
                   />
                 </View>
-                <Text variant="pageTitle" style={{ flex: 1 }} numberOfLines={1}>
-                  {title}
+                <Text variant="body" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
+                  Vade ve ödeme durumunu tek ekrandan takip edin.
                 </Text>
               </Row>
 
-              <Text variant="body" color="textSecondary">
-                {title} vade ve ödeme durumunu tek ekrandan takip edin, detaylarını görüntüleyip düzenleyin.
-              </Text>
-
+              {/* Üç hücre de salt bilgi amaçlıdır — durum filtresi hemen altındaki
+                  segmented control'de zaten var; burada aynı seçimi ikinci kez
+                  vurgulamak (dokunulabilir/seçili gibi göstermek) gereksiz tekrardır. */}
               {summary ? (
                 <Row gap="xxs">
-                  <SummaryCell
-                    label="TOPLAM BORÇ"
-                    selected={directionKey === 'payable'}
-                    onPress={() => setDirectionKey(directionKey === 'payable' ? 'all' : 'payable')}
-                  >
+                  <SummaryCell label="TOPLAM BORÇ">
                     <Amount
                       amountMinor={summary.payableMinor}
                       direction="payable"
@@ -233,20 +244,12 @@ export default function ObligationsByTypeScreen() {
                       minimumFontScale={0.6}
                     />
                   </SummaryCell>
-                  <SummaryCell
-                    label="AKTİF"
-                    selected={statusKey === 'active'}
-                    onPress={() => setStatusKey(statusKey === 'active' ? 'all' : 'active')}
-                  >
+                  <SummaryCell label="AKTİF">
                     <Text variant="cardTitle" tabular>
                       {summary.count}
                     </Text>
                   </SummaryCell>
-                  <SummaryCell
-                    label="GECİKEN"
-                    selected={statusKey === 'overdue'}
-                    onPress={() => setStatusKey(statusKey === 'overdue' ? 'active' : 'overdue')}
-                  >
+                  <SummaryCell label="GECİKEN">
                     <Text variant="cardTitle" color={summary.overdueCount > 0 ? 'danger' : 'textPrimary'} tabular>
                       {summary.overdueCount}
                     </Text>
@@ -262,13 +265,6 @@ export default function ObligationsByTypeScreen() {
               />
             </Stack>
           </Card>
-        </Stack>
-
-        {/* Yön filtresi: hero artık yalnızca Toplam Borç gösteriyor, ama bu ekran çek/senet
-            gibi hem borç hem alacak yönünde olabilen türlerde de kullanılıyor — bu küçük
-            kontrol olmadan alacak yönü bu ekrandan erişilemez hale gelirdi. */}
-        <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <SegmentedControl options={DIRECTION_OPTIONS} value={directionKey} onChange={setDirectionKey} size="compact" />
         </Stack>
 
         <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
@@ -324,13 +320,14 @@ export default function ObligationsByTypeScreen() {
           </Text>
         ) : null}
 
-        {summary ? (
-          <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-            {summary.count} kayıt
-          </Text>
-        ) : null}
-
-        {!obligationsQuery.isLoading && rows.length === 0 ? (
+        {/* Liste, üstteki başlık/filtre bloklarının altına sıkışmadan kalan tüm dikey alanı
+            kaplasın diye `flex: 1` alır — aksi halde FlatList içeriği kadar yer kaplayıp
+            kendi içinde kaydırılamayan, "ayrı bir kutu" gibi görünen bir alana dönüşürdü. */}
+        {obligationsQuery.isLoading && rows.length === 0 ? (
+          <Row style={{ flex: 1, justifyContent: 'center' }}>
+            <ActivityIndicator color={theme.colors.textSecondary} />
+          </Row>
+        ) : rows.length === 0 ? (
           <Stack gap="xs" style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}>
             <Text variant="cardTitle">{isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}</Text>
             <Text variant="body" color="textSecondary">
@@ -340,89 +337,138 @@ export default function ObligationsByTypeScreen() {
             </Text>
           </Stack>
         ) : (
-          <FlatList
-            data={rows}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{
-              paddingHorizontal: theme.screenEdge.standard,
-              gap: theme.spacing.sm,
-              paddingBottom: theme.spacing.huge,
-            }}
-            onEndReached={() => {
-              if (obligationsQuery.hasNextPage && !obligationsQuery.isFetchingNextPage) {
-                obligationsQuery.fetchNextPage();
-              }
-            }}
-            onEndReachedThreshold={0.4}
-            renderItem={({ item }) => (
-              <ObligationRowCard
-                item={item}
-                installmentSummary={installmentSummaries[item.id]}
-                onDelete={confirmDelete}
-                deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
-              />
-            )}
-            ListFooterComponent={
-              obligationsQuery.isFetchingNextPage ? (
-                <Row style={{ justifyContent: 'center', paddingVertical: theme.spacing.md }}>
-                  <ActivityIndicator color={theme.colors.textSecondary} />
-                </Row>
-              ) : obligationsQuery.hasNextPage ? (
-                <Pressable
-                  onPress={() => obligationsQuery.fetchNextPage()}
-                  style={{
-                    alignSelf: 'center',
-                    marginTop: theme.spacing.xs,
-                    paddingHorizontal: theme.spacing.lg,
-                    paddingVertical: theme.spacing.sm,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                  }}
-                >
-                  <Text variant="body" color="textSecondary">
-                    Daha Fazla Yükle
-                  </Text>
-                </Pressable>
-              ) : null
-            }
-          />
+          <>
+            <FlatList
+              data={rows}
+              keyExtractor={(item) => item.id}
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                paddingHorizontal: theme.screenEdge.standard,
+                gap: theme.spacing.sm,
+                paddingBottom: theme.spacing.lg,
+              }}
+              renderItem={({ item }) => (
+                <ObligationRowCard
+                  item={item}
+                  installmentSummary={installmentSummaries[item.id]}
+                  onDelete={confirmDelete}
+                  deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
+                />
+              )}
+            />
+            <PaginationBar
+              page={effectivePage}
+              totalPages={totalPages}
+              loading={obligationsQuery.isFetching}
+              onPrev={() => setPage((p) => Math.max(0, p - 1))}
+              onNext={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            />
+          </>
         )}
       </Stack>
     </SafeAreaView>
   );
 }
 
-interface SummaryCellProps {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-  children: React.ReactNode;
+interface PaginationBarProps {
+  page: number;
+  totalPages: number;
+  loading: boolean;
+  onPrev: () => void;
+  onNext: () => void;
 }
 
-// Özet hücresi aynı zamanda filtre düğmesi: gösterdiği rakama dokunmak o kesite filtreler.
-function SummaryCell({ label, selected, onPress, children }: SummaryCellProps) {
+// Sonsuz kaydırma yerine gerçek (numaralı) sayfalandırma: ekranın altında sabit kalan,
+// öngörülebilir bir çubuk — her sayfada 10 kayıt (bkz. LIST_PAGE_SIZE).
+function PaginationBar({ page, totalPages, loading, onPrev, onNext }: PaginationBarProps) {
+  const theme = useTheme();
+  if (totalPages <= 1) return null;
+
+  return (
+    <Row
+      gap="sm"
+      align="center"
+      style={{
+        paddingHorizontal: theme.screenEdge.standard,
+        paddingTop: theme.spacing.sm,
+        paddingBottom: theme.spacing.xs,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+      }}
+    >
+      <PageStepButton
+        icon="chevron-back"
+        label="Önceki sayfa"
+        disabled={page === 0}
+        onPress={onPrev}
+      />
+      <Row style={{ flex: 1, justifyContent: 'center' }} gap="xs" align="center">
+        {loading ? <ActivityIndicator color={theme.colors.textSecondary} /> : null}
+        <Text variant="body" tabular>
+          Sayfa {page + 1} / {totalPages}
+        </Text>
+      </Row>
+      <PageStepButton
+        icon="chevron-forward"
+        label="Sonraki sayfa"
+        disabled={page >= totalPages - 1}
+        onPress={onNext}
+      />
+    </Row>
+  );
+}
+
+interface PageStepButtonProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  disabled: boolean;
+  onPress: () => void;
+}
+
+function PageStepButton({ icon, label, disabled, onPress }: PageStepButtonProps) {
   const theme = useTheme();
 
   return (
     <Pressable
-      onPress={onPress}
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
       style={{
-        flex: 1,
-        padding: theme.spacing.sm,
+        width: 44,
+        height: 44,
         borderRadius: theme.radius.input,
-        backgroundColor: selected ? withAlpha(theme.colors.brandPrimary, 0.16) : 'transparent',
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: disabled ? 0.4 : 1,
       }}
     >
+      <Ionicons name={icon} size={18} color={theme.colors.textPrimary} />
+    </Pressable>
+  );
+}
+
+interface SummaryCellProps {
+  label: string;
+  children: React.ReactNode;
+}
+
+// Salt bilgi amaçlı özet hücresi — durum filtresi hemen altındaki segmented control'de
+// zaten var, bu yüzden burası dokunulabilir/seçili değildir.
+function SummaryCell({ label, children }: SummaryCellProps) {
+  const theme = useTheme();
+
+  return (
+    <View style={{ flex: 1, padding: theme.spacing.sm }}>
       <Stack gap="xxs">
-        <Text variant="caption" color={selected ? 'brandPrimary' : 'textSecondary'} numberOfLines={1}>
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
           {label}
         </Text>
         {children}
       </Stack>
-    </Pressable>
+    </View>
   );
 }
 
