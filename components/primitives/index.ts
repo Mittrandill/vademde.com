@@ -9,5 +9,6 @@ export * from './SearchablePicker';
 export * from './SegmentedControl';
 export * from './ProgressRing';
 export * from './SectionHeader';
+export * from './Pagination';
 export * from './EmptyState';
 export * from './ActionSheet';

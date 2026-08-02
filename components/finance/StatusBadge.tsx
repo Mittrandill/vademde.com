@@ -5,7 +5,7 @@ import { Text } from '@/components/primitives';
 import type { ThemeColors } from '@/theme/colors';
 
 // docs/01-finansal-kayit-modeli.md §3.4 — kayıt durumları.
-type ObligationStatus =
+export type ObligationStatus =
   | 'taslak'
   | 'inceleme_gerekli'
   | 'bekliyor'
@@ -16,7 +16,7 @@ type ObligationStatus =
   | 'gecikti'
   | 'iptal_edildi';
 
-const LABELS: Record<ObligationStatus, string> = {
+export const OBLIGATION_STATUS_LABEL: Record<ObligationStatus, string> = {
   taslak: 'Taslak',
   inceleme_gerekli: 'İnceleme Gerekli',
   bekliyor: 'Bekliyor',
@@ -42,7 +42,7 @@ const COLORS: Record<ObligationStatus, keyof ThemeColors> = {
 
 export function StatusBadge({ status }: { status: string }) {
   const theme = useTheme();
-  const key = (status in LABELS ? status : 'bekliyor') as ObligationStatus;
+  const key = (status in OBLIGATION_STATUS_LABEL ? status : 'bekliyor') as ObligationStatus;
   const color = theme.colors[COLORS[key]];
 
   return (
@@ -56,7 +56,7 @@ export function StatusBadge({ status }: { status: string }) {
       }}
     >
       <Text variant="caption" style={{ color, fontWeight: '600' }}>
-        {LABELS[key]}
+        {OBLIGATION_STATUS_LABEL[key]}
       </Text>
     </View>
   );

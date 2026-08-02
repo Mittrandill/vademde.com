@@ -7,8 +7,22 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import {
+  ActionSheet,
+  Button,
+  Card,
+  Divider,
+  Pagination,
+  Pressable,
+  ProgressRing,
+  Row,
+  SegmentedControl,
+  Stack,
+  Text,
+  TextField,
+} from '@/components/primitives';
 import { Amount } from '@/components/finance/Amount';
+import { DocumentCalendarIllustration } from '@/components/finance/DocumentCalendarIllustration';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import {
@@ -185,79 +199,159 @@ export default function ObligationsByTypeScreen() {
     );
   }
 
+  const overdueRatio = summary && summary.count > 0 ? summary.overdueCount / summary.count : 0;
+  const ringColor = summary && summary.overdueCount > 0 ? theme.colors.danger : theme.colors.success;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Stack gap="md" style={{ flex: 1, paddingTop: theme.spacing.md }}>
         <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-          <Pressable accessibilityLabel="Kapat" onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+          <Pressable
+            accessibilityLabel="Kapat"
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: theme.radius.input,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.colors.surfaceElevated,
+            }}
+          >
+            <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
           </Pressable>
           <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
             {title}
           </Text>
-          <Pressable accessibilityLabel="Yeni kayıt" onPress={() => router.push('/obligations/new')} hitSlop={12}>
-            <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+          <Pressable
+            accessibilityLabel="Yeni kayıt"
+            onPress={() => router.push('/obligations/new')}
+            hitSlop={8}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: theme.radius.input,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.colors.brandPrimary,
+            }}
+          >
+            <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
           </Pressable>
         </Row>
 
         <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          {/* Hero: sayfanın kimliği — tür ikonu, açıklama, ve üç gerçek istatistik (yeni
-              sorgu yok, hepsi zaten hesaplanan `summary` alanlarından). */}
-          <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
-            <Stack gap="md">
-              {/* Sayfa adı zaten üstteki gezinme çubuğunda gösteriliyor; burada tekrar
-                  edilmez — hero yalnızca tür kimliğini (ikon) ve kısa bir açıklamayı taşır. */}
-              <Row gap="sm" align="center">
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: theme.radius.input,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-                  }}
-                >
-                  <Ionicons
-                    name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
-                    size={24}
-                    color={theme.colors.brandPrimary}
-                  />
-                </View>
-                <Text variant="body" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
+          {/* Tanıtım şeridi: sayfanın kimliği ve kısa açıklaması, istatistiklerden ayrı
+              sakin bir yüzeyde — tutarlar aşağıdaki karta ait, burada dikkat dağıtmaz. */}
+          <Card
+            style={{
+              borderRadius: theme.radius.heroWidget,
+              padding: theme.spacing.lg,
+              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.08),
+            }}
+          >
+            <Row gap="sm" align="center">
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: theme.radius.input,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.18),
+                }}
+              >
+                <Ionicons
+                  name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
+                  size={22}
+                  color={theme.colors.brandPrimary}
+                />
+              </View>
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="cardTitle" numberOfLines={1}>
+                  Tek ekrandan kontrol sizde
+                </Text>
+                <Text variant="caption" color="textSecondary" numberOfLines={2}>
                   Vade ve ödeme durumunu tek ekrandan takip edin.
                 </Text>
-              </Row>
+              </Stack>
+              <DocumentCalendarIllustration size={72} />
+            </Row>
+          </Card>
+        </Stack>
 
-              {/* Üç hücre de salt bilgi amaçlıdır — durum filtresi hemen altındaki
-                  segmented control'de zaten var; burada aynı seçimi ikinci kez
-                  vurgulamak (dokunulabilir/seçili gibi göstermek) gereksiz tekrardır. */}
+        <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
+          {/* İstatistik kartı: sol halka aktif kayıtların gecikme oranını (içinde kayıt
+              sayısı + tür etiketi), sağ taraf gerçek borç/alacak kırılımını gösterir —
+              ikisi de zaten hesaplanan `summary` alanlarından türer, ek sorgu yok. */}
+          <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+            <Stack gap="lg">
               {summary ? (
-                <Row gap="xxs">
-                  <SummaryCell label="TOPLAM BORÇ">
-                    <Amount
-                      amountMinor={summary.payableMinor}
-                      direction="payable"
-                      variant="cardTitle"
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.6}
-                    />
-                  </SummaryCell>
-                  <SummaryCell label="AKTİF">
-                    <Text variant="cardTitle" tabular>
-                      {summary.count}
-                    </Text>
-                  </SummaryCell>
-                  <SummaryCell label="GECİKEN">
-                    <Text variant="cardTitle" color={summary.overdueCount > 0 ? 'danger' : 'textPrimary'} tabular>
-                      {summary.overdueCount}
-                    </Text>
-                  </SummaryCell>
-                </Row>
+                <>
+                  <Row gap="md" align="center">
+                    <ProgressRing
+                      size={84}
+                      strokeWidth={9}
+                      progress={overdueRatio}
+                      color={ringColor}
+                      trackColor={withAlpha(ringColor, 0.16)}
+                      cap
+                    >
+                      <Stack gap="xxs" align="center">
+                        <Text variant="cardTitle" tabular numberOfLines={1}>
+                          {summary.count}
+                        </Text>
+                        <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ letterSpacing: 0.3 }}>
+                          {(documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? documentType) : 'Kayıt').toLocaleUpperCase(
+                            'tr-TR'
+                          )}
+                        </Text>
+                      </Stack>
+                    </ProgressRing>
+
+                    <Row gap="sm" style={{ flex: 1 }}>
+                      {summary.payableMinor > 0 || summary.receivableMinor === 0 ? (
+                        <Stack gap="xxs" style={{ flex: 1 }}>
+                          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                            TOPLAM BORÇ
+                          </Text>
+                          <Amount
+                            amountMinor={summary.payableMinor}
+                            direction="payable"
+                            variant="cardTitle"
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.6}
+                          />
+                        </Stack>
+                      ) : null}
+                      {summary.receivableMinor > 0 ? (
+                        <Stack gap="xxs" style={{ flex: 1 }}>
+                          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                            TOPLAM ALACAK
+                          </Text>
+                          <Amount
+                            amountMinor={summary.receivableMinor}
+                            direction="receivable"
+                            variant="cardTitle"
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.6}
+                          />
+                        </Stack>
+                      ) : null}
+                    </Row>
+                  </Row>
+                  <Text variant="caption" color="textSecondary">
+                    {summary.count} kayıt
+                    {summary.overdueCount > 0 ? ` · ${summary.overdueCount} gecikmiş` : ''}
+                  </Text>
+                </>
               ) : null}
 
               <Button
+                icon="add"
                 label={`Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`}
                 onPress={() =>
                   router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
@@ -328,13 +422,56 @@ export default function ObligationsByTypeScreen() {
             <ActivityIndicator color={theme.colors.textSecondary} />
           </Row>
         ) : rows.length === 0 ? (
-          <Stack gap="xs" style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}>
-            <Text variant="cardTitle">{isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}</Text>
-            <Text variant="body" color="textSecondary">
-              {isFiltered
-                ? 'Arama terimini veya filtreleri değiştirin.'
-                : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'}
-            </Text>
+          <Stack
+            gap="md"
+            align="center"
+            style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
+          >
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
+              }}
+            >
+              <Ionicons
+                name={isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
+                size={28}
+                color={theme.colors.brandPrimary}
+              />
+            </View>
+            <Stack gap="xxs" align="center">
+              <Text variant="cardTitle" style={{ textAlign: 'center' }}>
+                {isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}
+              </Text>
+              <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
+                {isFiltered
+                  ? 'Arama terimini veya filtreleri değiştirin.'
+                  : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'}
+              </Text>
+            </Stack>
+            {!isFiltered ? (
+              <Pressable
+                onPress={() =>
+                  router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
+                }
+                style={{
+                  paddingHorizontal: theme.spacing.lg,
+                  height: theme.controlHeight.segmented,
+                  borderRadius: 999,
+                  backgroundColor: theme.colors.brandPrimary,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text variant="body" style={{ color: theme.colors.brandPrimaryText, fontWeight: '600' }}>
+                  {`Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`}
+                </Text>
+              </Pressable>
+            ) : null}
           </Stack>
         ) : (
           <>
@@ -356,119 +493,28 @@ export default function ObligationsByTypeScreen() {
                 />
               )}
             />
-            <PaginationBar
-              page={effectivePage}
-              totalPages={totalPages}
-              loading={obligationsQuery.isFetching}
-              onPrev={() => setPage((p) => Math.max(0, p - 1))}
-              onNext={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            />
+            {totalPages > 1 ? (
+              <View
+                style={{
+                  paddingHorizontal: theme.screenEdge.standard,
+                  paddingTop: theme.spacing.sm,
+                  paddingBottom: theme.spacing.xs,
+                  borderTopWidth: 1,
+                  borderTopColor: theme.colors.border,
+                }}
+              >
+                <Pagination
+                  page={effectivePage}
+                  totalPages={totalPages}
+                  loading={obligationsQuery.isFetching}
+                  onChange={setPage}
+                />
+              </View>
+            ) : null}
           </>
         )}
       </Stack>
     </SafeAreaView>
-  );
-}
-
-interface PaginationBarProps {
-  page: number;
-  totalPages: number;
-  loading: boolean;
-  onPrev: () => void;
-  onNext: () => void;
-}
-
-// Sonsuz kaydırma yerine gerçek (numaralı) sayfalandırma: ekranın altında sabit kalan,
-// öngörülebilir bir çubuk — her sayfada 10 kayıt (bkz. LIST_PAGE_SIZE).
-function PaginationBar({ page, totalPages, loading, onPrev, onNext }: PaginationBarProps) {
-  const theme = useTheme();
-  if (totalPages <= 1) return null;
-
-  return (
-    <Row
-      gap="sm"
-      align="center"
-      style={{
-        paddingHorizontal: theme.screenEdge.standard,
-        paddingTop: theme.spacing.sm,
-        paddingBottom: theme.spacing.xs,
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.border,
-      }}
-    >
-      <PageStepButton
-        icon="chevron-back"
-        label="Önceki sayfa"
-        disabled={page === 0}
-        onPress={onPrev}
-      />
-      <Row style={{ flex: 1, justifyContent: 'center' }} gap="xs" align="center">
-        {loading ? <ActivityIndicator color={theme.colors.textSecondary} /> : null}
-        <Text variant="body" tabular>
-          Sayfa {page + 1} / {totalPages}
-        </Text>
-      </Row>
-      <PageStepButton
-        icon="chevron-forward"
-        label="Sonraki sayfa"
-        disabled={page >= totalPages - 1}
-        onPress={onNext}
-      />
-    </Row>
-  );
-}
-
-interface PageStepButtonProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  disabled: boolean;
-  onPress: () => void;
-}
-
-function PageStepButton({ icon, label, disabled, onPress }: PageStepButtonProps) {
-  const theme = useTheme();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      onPress={onPress}
-      style={{
-        width: 44,
-        height: 44,
-        borderRadius: theme.radius.input,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: disabled ? 0.4 : 1,
-      }}
-    >
-      <Ionicons name={icon} size={18} color={theme.colors.textPrimary} />
-    </Pressable>
-  );
-}
-
-interface SummaryCellProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-// Salt bilgi amaçlı özet hücresi — durum filtresi hemen altındaki segmented control'de
-// zaten var, bu yüzden burası dokunulabilir/seçili değildir.
-function SummaryCell({ label, children }: SummaryCellProps) {
-  const theme = useTheme();
-
-  return (
-    <View style={{ flex: 1, padding: theme.spacing.sm }}>
-      <Stack gap="xxs">
-        <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {label}
-        </Text>
-        {children}
-      </Stack>
-    </View>
   );
 }
 
@@ -484,11 +530,13 @@ interface ObligationRowCardProps {
 // fatura...) bu blok tamamen atlanır — belge türüne göre değil, gerçek veriye göre dallanır.
 function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: ObligationRowCardProps) {
   const theme = useTheme();
+  const [sheetOpen, setSheetOpen] = useState(false);
   const hasInstallments = (installmentSummary?.totalCount ?? 0) > 0;
   const isPayable = item.direction === 'payable';
   const bankName = item.bank_code ? (BANK_NAME[item.bank_code] ?? null) : null;
   const progress =
     item.total_amount_minor > 0 ? 1 - item.remaining_amount_minor / item.total_amount_minor : 0;
+  const clampedProgress = Math.max(0, Math.min(1, progress));
   const isClosed = item.status === 'odendi' || item.status === 'tahsil_edildi';
   const effectiveRatio =
     installmentSummary?.hasRateData && installmentSummary.principalSumMinor > 0
@@ -496,185 +544,177 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
       : null;
 
   return (
-    <Pressable onPress={() => router.push(`/obligations/${item.id}`)}>
-      <Card>
-        <Stack gap="sm">
-          <Row gap="sm" align="center">
-            <ObligationIcon documentType={item.document_type} bankCode={item.bank_code} size={36} />
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="cardTitle" numberOfLines={1}>
-                {bankName ?? item.title}
-              </Text>
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                {DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type}
-                {bankName ? ` · ${item.title}` : ''}
-              </Text>
-            </Stack>
-            <StatusBadge status={item.status} />
-          </Row>
+    <>
+      <Pressable onPress={() => router.push(`/obligations/${item.id}`)} disabled={deleting}>
+        <Card style={{ opacity: deleting ? 0.5 : 1 }}>
+          <Stack gap="sm">
+            <Row gap="sm" align="center">
+              <ObligationIcon documentType={item.document_type} bankCode={item.bank_code} size={36} />
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="cardTitle" numberOfLines={1}>
+                  {bankName ?? item.title}
+                </Text>
+                <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                  {DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type}
+                  {bankName ? ` · ${item.title}` : ''}
+                </Text>
+              </Stack>
+              <StatusBadge status={item.status} />
+              {deleting ? (
+                <ActivityIndicator color={theme.colors.textSecondary} />
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Diğer işlemler"
+                  onPress={() => setSheetOpen(true)}
+                  hitSlop={10}
+                >
+                  <Ionicons name="ellipsis-vertical" size={18} color={theme.colors.textSecondary} />
+                </Pressable>
+              )}
+            </Row>
 
-          <Row>
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="caption" color="textSecondary">
-                {isPayable ? 'KALAN BORÇ' : 'KALAN ALACAK'}
-              </Text>
-              <Amount
-                amountMinor={item.remaining_amount_minor}
-                currencyCode={item.currency_code}
-                direction={item.direction as 'payable' | 'receivable'}
-                overdue={item.status === 'gecikti'}
-                variant="cardTitle"
-                numberOfLines={1}
-              />
-            </Stack>
-            <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-            <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-              <Text variant="caption" color="textSecondary">
-                {hasInstallments ? 'SONRAKİ ÖDEME' : 'VADE'}
-              </Text>
-              {hasInstallments ? (
+            <Row>
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="caption" color="textSecondary">
+                  {isPayable ? 'KALAN BORÇ' : 'KALAN ALACAK'}
+                </Text>
                 <Amount
-                  amountMinor={installmentSummary?.nextAmountMinor ?? 0}
+                  amountMinor={item.remaining_amount_minor}
                   currencyCode={item.currency_code}
+                  direction={item.direction as 'payable' | 'receivable'}
+                  overdue={item.status === 'gecikti'}
                   variant="cardTitle"
                   numberOfLines={1}
                 />
-              ) : (
-                <Text variant="cardTitle" tabular numberOfLines={1}>
-                  {item.due_date ? dateFormatter.format(new Date(item.due_date)) : 'Vade yok'}
+              </Stack>
+              <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
+              <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
+                <Text variant="caption" color="textSecondary">
+                  {hasInstallments ? 'SONRAKİ ÖDEME' : 'VADE'}
                 </Text>
-              )}
-            </Stack>
-          </Row>
+                {hasInstallments ? (
+                  <>
+                    <Amount
+                      amountMinor={installmentSummary?.nextAmountMinor ?? 0}
+                      currencyCode={item.currency_code}
+                      variant="cardTitle"
+                      numberOfLines={1}
+                    />
+                    {installmentSummary?.nextDueDate ? (
+                      <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
+                        {dateFormatter.format(new Date(installmentSummary.nextDueDate))}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <Text variant="cardTitle" tabular numberOfLines={1}>
+                    {item.due_date ? dateFormatter.format(new Date(item.due_date)) : 'Vade yok'}
+                  </Text>
+                )}
+              </Stack>
+            </Row>
 
-          {hasInstallments ? (
-            <>
-              <Divider />
-              <Stack gap="xxs">
-                <Row>
-                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
+            {hasInstallments ? (
+              <>
+                <Divider />
+                <Stack gap="sm">
+                  <Text variant="caption" color="textSecondary">
                     ÖDEME İLERLEMESİ
                   </Text>
-                  <Text variant="caption" color="textSecondary" tabular>
-                    %{(Math.max(0, Math.min(1, progress)) * 100).toLocaleString('tr-TR', {
-                      minimumFractionDigits: 1,
-                      maximumFractionDigits: 1,
-                    })}
-                  </Text>
-                </Row>
-                <View
-                  style={{
-                    height: 8,
-                    borderRadius: 999,
-                    backgroundColor: theme.colors.backgroundPrimary,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <View
+                  <Row gap="sm" align="center">
+                    <ProgressRing
+                      size={56}
+                      strokeWidth={6}
+                      progress={clampedProgress}
+                      color={isClosed ? theme.colors.success : theme.colors.brandPrimary}
+                      trackColor={withAlpha(isClosed ? theme.colors.success : theme.colors.brandPrimary, 0.18)}
+                      cap
+                    >
+                      <Text variant="caption" tabular style={{ fontWeight: '700' }}>
+                        %{Math.round(clampedProgress * 100)}
+                      </Text>
+                    </ProgressRing>
+                    <Row gap="sm" style={{ flex: 1 }}>
+                      <Stack gap="xxs" style={{ flex: 1 }}>
+                        <Text variant="caption" color="textSecondary">
+                          FAİZ ORANI
+                        </Text>
+                        {effectiveRatio !== null ? (
+                          <Text variant="cardTitle" tabular style={{ color: theme.colors.brandPrimary }}>
+                            %{effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}
+                          </Text>
+                        ) : (
+                          <Text variant="cardTitle" color="textSecondary">
+                            —
+                          </Text>
+                        )}
+                      </Stack>
+                      <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
+                      <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
+                        <Text variant="caption" color="textSecondary">
+                          KALAN TAKSİT
+                        </Text>
+                        <Text variant="cardTitle" tabular>
+                          {installmentSummary!.remainingCount}
+                        </Text>
+                        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                          {installmentSummary!.totalCount} taksitten
+                        </Text>
+                      </Stack>
+                    </Row>
+                  </Row>
+                </Stack>
+
+                {item.due_date ? (
+                  <Row
+                    gap="xs"
+                    align="center"
                     style={{
-                      height: '100%',
-                      width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
-                      borderRadius: 999,
-                      backgroundColor: isClosed ? theme.colors.success : theme.colors.brandPrimary,
+                      backgroundColor: theme.colors.backgroundPrimary,
+                      borderRadius: theme.radius.input,
+                      paddingHorizontal: theme.spacing.sm,
+                      paddingVertical: theme.spacing.xs,
                     }}
-                  />
-                </View>
-              </Stack>
-
-              <Divider />
-
-              <Row>
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary">
-                    FAİZ ORANI
-                  </Text>
-                  {effectiveRatio !== null ? (
-                    <>
-                      <Text variant="cardTitle" tabular style={{ color: theme.colors.brandPrimary }}>
-                        %{effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}
-                      </Text>
-                      <Text variant="caption" color="textSecondary">
-                        Taksitlere göre hesaplanan
-                      </Text>
-                    </>
-                  ) : (
-                    <Text variant="cardTitle" color="textSecondary">
-                      —
+                  >
+                    <Ionicons name="calendar-outline" size={14} color={theme.colors.textSecondary} />
+                    <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                      Son ödeme tarihi: {dateFormatter.format(new Date(item.due_date))}
                     </Text>
-                  )}
-                </Stack>
-                <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-                  <Text variant="caption" color="textSecondary">
-                    KALAN TAKSİT
-                  </Text>
-                  <Text variant="cardTitle" tabular>
-                    {installmentSummary!.remainingCount}
-                  </Text>
-                  <Text variant="caption" color="textSecondary">
-                    {installmentSummary!.totalCount} taksitten kalan
-                  </Text>
-                </Stack>
-              </Row>
-            </>
-          ) : null}
+                  </Row>
+                ) : null}
+              </>
+            ) : null}
+          </Stack>
+        </Card>
+      </Pressable>
 
-          <Row gap="xs">
-            <ActionPill icon="eye-outline" label="Detay" onPress={() => router.push(`/obligations/${item.id}`)} />
-            <ActionPill
-              icon="pencil-outline"
-              label="Düzenle"
-              onPress={() => router.push({ pathname: '/obligations/new', params: { id: item.id } })}
-            />
-            <ActionPill
-              icon="trash-outline"
-              label="Sil"
-              danger
-              disabled={deleting}
-              onPress={() => onDelete(item, hasInstallments)}
-            />
-          </Row>
-        </Stack>
-      </Card>
-    </Pressable>
-  );
-}
-
-interface ActionPillProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  danger?: boolean;
-  disabled?: boolean;
-}
-
-function ActionPill({ icon, label, onPress, danger, disabled }: ActionPillProps) {
-  const theme = useTheme();
-  const color = danger ? theme.colors.danger : theme.colors.textSecondary;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      disabled={disabled}
-      style={{
-        flex: 1,
-        height: 36,
-        borderRadius: theme.radius.input,
-        borderWidth: 1,
-        borderColor: color,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      <Row gap="xxs" align="center">
-        <Ionicons name={icon} size={14} color={color} />
-        <Text variant="caption" style={{ color }}>
-          {label}
-        </Text>
-      </Row>
-    </Pressable>
+      <ActionSheet
+        visible={sheetOpen}
+        title={bankName ?? item.title}
+        onClose={() => setSheetOpen(false)}
+        options={[
+          {
+            key: 'detail',
+            label: 'Detay',
+            icon: 'eye-outline',
+            onPress: () => router.push(`/obligations/${item.id}`),
+          },
+          {
+            key: 'edit',
+            label: 'Düzenle',
+            icon: 'pencil-outline',
+            onPress: () => router.push({ pathname: '/obligations/new', params: { id: item.id } }),
+          },
+          {
+            key: 'delete',
+            label: 'Sil',
+            icon: 'trash-outline',
+            danger: true,
+            onPress: () => onDelete(item, hasInstallments),
+          },
+        ]}
+      />
+    </>
   );
 }

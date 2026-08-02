@@ -1,4 +1,5 @@
-import { FlatList } from 'react-native';
+import { useState } from 'react';
+import { SectionList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -6,9 +7,21 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import { Card, Divider, EmptyState, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
+import {
+  Card,
+  Divider,
+  EmptyState,
+  Pagination,
+  Pressable,
+  ProgressRing,
+  Row,
+  SectionHeader,
+  Stack,
+  Text,
+} from '@/components/primitives';
 import { Amount } from '@/components/finance/Amount';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
+import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { getCounterparty, getCounterpartyLedger } from '@/features/counterparties/api';
 import { listObligations, ACTIVE_OBLIGATION_STATUSES, type ObligationWithRelations } from '@/features/obligations/api';
@@ -16,15 +29,20 @@ import { listTransactions } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
+import { groupByDay } from '@/utils/groupByDay';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
+
+const PAGE_SIZE = 10;
 
 export default function CounterpartyDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const enabled = !!activeWorkspaceId && !!id;
+  const [obligationsPage, setObligationsPage] = useState(0);
+  const [transactionsPage, setTransactionsPage] = useState(0);
 
   const counterpartyQuery = useQuery({
     queryKey: ['counterparty', id],
@@ -65,7 +83,23 @@ export default function CounterpartyDetailScreen() {
 
   const counterparty = counterpartyQuery.data;
   const ledger = ledgerQuery.data;
-  const openObligations = openObligationsQuery.data ?? [];
+
+  const allOpenObligations = openObligationsQuery.data ?? [];
+  const obligationsTotalPages = Math.max(1, Math.ceil(allOpenObligations.length / PAGE_SIZE));
+  const effectiveObligationsPage = Math.min(obligationsPage, obligationsTotalPages - 1);
+  const openObligations = allOpenObligations.slice(
+    effectiveObligationsPage * PAGE_SIZE,
+    effectiveObligationsPage * PAGE_SIZE + PAGE_SIZE
+  );
+
+  const allTransactions = transactionsQuery.data ?? [];
+  const transactionsTotalPages = Math.max(1, Math.ceil(allTransactions.length / PAGE_SIZE));
+  const effectiveTransactionsPage = Math.min(transactionsPage, transactionsTotalPages - 1);
+  const pagedTransactions = allTransactions.slice(
+    effectiveTransactionsPage * PAGE_SIZE,
+    effectiveTransactionsPage * PAGE_SIZE + PAGE_SIZE
+  );
+  const sections = groupByDay(pagedTransactions, (item) => item.occurred_at);
 
   if (!counterparty) {
     return (
@@ -88,15 +122,21 @@ export default function CounterpartyDetailScreen() {
   const netColor = settled ? theme.colors.textSecondary : owesUs ? theme.colors.success : theme.colors.textPrimary;
   const netLabel = settled ? 'Bakiye kapalı' : owesUs ? `${counterparty.name} size borçlu` : `Siz borçlusunuz`;
 
+  // BalanceHero'daki aynı formül: halka, net bakiyenin değil alacak/borç dengesinin
+  // görselidir. "Geciken" bu toplamın bir alt kümesi olduğundan pay formülüne dahil edilmez.
+  const directionalTotal = (ledger?.receivableMinor ?? 0) + (ledger?.payableMinor ?? 0);
+  const receivableShare = directionalTotal > 0 ? (ledger?.receivableMinor ?? 0) / directionalTotal : 0;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <FlatList
-        data={transactionsQuery.data ?? []}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled={false}
         contentContainerStyle={{
           padding: theme.screenEdge.standard,
           paddingBottom: theme.spacing.huge,
-          gap: theme.spacing.sm,
+          gap: theme.spacing.xs,
         }}
         ListHeaderComponent={
           <Stack gap="lg" style={{ marginBottom: theme.spacing.lg }}>
@@ -104,7 +144,8 @@ export default function CounterpartyDetailScreen() {
               <Pressable onPress={() => router.back()} hitSlop={12}>
                 <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
               </Pressable>
-              <Stack gap="xxs" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
+              <PersonAvatar name={counterparty.name} size={44} />
+              <Stack gap="xxs" style={{ flex: 1 }}>
                 <Text variant="pageTitle" numberOfLines={1}>
                   {counterparty.name}
                 </Text>
@@ -127,24 +168,38 @@ export default function CounterpartyDetailScreen() {
                 sorusunun tek cevabı. Alacak/borç kırılımı altında ikincil kalır. */}
             <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
               <Stack gap="md">
-                <Stack gap="xxs">
-                  <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    CARİ BAKİYE
-                  </Text>
-                  <Text
-                    variant="displayAmount"
-                    tabular
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.6}
-                    style={{ color: netColor }}
-                  >
-                    {formatMinorAmount(Math.abs(netMinor))}
-                  </Text>
-                  <Text variant="caption" color="textSecondary">
-                    {netLabel}
-                  </Text>
-                </Stack>
+                <Row gap="md" align="center">
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                      CARİ BAKİYE
+                    </Text>
+                    <Text
+                      variant="displayAmount"
+                      tabular
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.6}
+                      style={{ color: netColor }}
+                    >
+                      {formatMinorAmount(Math.abs(netMinor))}
+                    </Text>
+                    <Text variant="caption" color="textSecondary">
+                      {netLabel}
+                    </Text>
+                  </Stack>
+                  {directionalTotal > 0 ? (
+                    <ProgressRing
+                      size={88}
+                      strokeWidth={10}
+                      progress={receivableShare}
+                      color={theme.colors.success}
+                      trackColor={withAlpha(theme.colors.success, 0.18)}
+                      cap
+                    >
+                      <Ionicons name="people-outline" size={22} color={theme.colors.success} />
+                    </ProgressRing>
+                  ) : null}
+                </Row>
 
                 <Divider />
 
@@ -191,7 +246,7 @@ export default function CounterpartyDetailScreen() {
             </Card>
 
             <Stack gap="sm">
-              <SectionHeader title={`Açık Kayıtlar (${openObligations.length})`} />
+              <SectionHeader title={`Açık Kayıtlar (${allOpenObligations.length})`} />
               {openObligations.length === 0 ? (
                 <EmptyState icon="checkmark-circle-outline" message="Açık borç veya alacak yok." />
               ) : (
@@ -201,21 +256,28 @@ export default function CounterpartyDetailScreen() {
                   ))}
                 </Stack>
               )}
+              {obligationsTotalPages > 1 ? (
+                <Pagination page={effectiveObligationsPage} totalPages={obligationsTotalPages} onChange={setObligationsPage} />
+              ) : null}
             </Stack>
 
             <SectionHeader title="Son Hareketler" />
           </Stack>
         }
+        renderSectionHeader={({ section }) => (
+          <View style={{ paddingTop: theme.spacing.sm }}>
+            <SectionHeader title={section.title} />
+          </View>
+        )}
         renderItem={({ item }) => (
           <Card>
-            <Row gap="sm">
+            <Row gap="sm" align="center">
               <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="cardTitle" numberOfLines={1}>
+                <Text variant="body" numberOfLines={1}>
                   {item.description?.trim() || item.category?.name || 'Hareket'}
                 </Text>
                 <Text variant="caption" color="textSecondary">
-                  {shortDateFormatter.format(new Date(item.occurred_at))}
-                  {item.account?.name ? ` · ${item.account.name}` : ''}
+                  {item.account?.name ?? 'Hareket'}
                 </Text>
               </Stack>
               <Amount
@@ -228,6 +290,13 @@ export default function CounterpartyDetailScreen() {
           </Card>
         )}
         ListEmptyComponent={<EmptyState icon="receipt-outline" message="Bu cariyle henüz hareket yok." />}
+        ListFooterComponent={
+          transactionsTotalPages > 1 ? (
+            <View style={{ paddingTop: theme.spacing.sm }}>
+              <Pagination page={effectiveTransactionsPage} totalPages={transactionsTotalPages} onChange={setTransactionsPage} />
+            </View>
+          ) : null
+        }
       />
     </SafeAreaView>
   );

@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
-import { FlatList } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
+import { Card, Pagination, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount } from '@/utils/money';
 import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
@@ -28,6 +29,8 @@ const TYPE_LABEL: Record<Account['type'], string> = {
   wallet: 'Cüzdan',
 };
 
+const PAGE_SIZE = 10;
+
 type TypeFilterKey = 'all' | Account['type'];
 
 const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
@@ -42,6 +45,7 @@ export default function AccountsScreen() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilterKey>('all');
+  const [page, setPage] = useState(0);
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -59,12 +63,33 @@ export default function AccountsScreen() {
     });
   }, [allAccounts, search, typeFilter]);
 
+  // Arama veya filtre değiştiğinde geçerli sayfa anlamsızlaşır — her zaman 1. sayfaya
+  // dönülür (obligations/index.tsx'teki aynı render-sırasında-sıfırlama deseni).
+  const resetKey = `${search}|${typeFilter}`;
+  const [lastResetKey, setLastResetKey] = useState(resetKey);
+  if (resetKey !== lastResetKey) {
+    setLastResetKey(resetKey);
+    setPage(0);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(accounts.length / PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages - 1);
+  const pagedAccounts = accounts.slice(effectivePage * PAGE_SIZE, effectivePage * PAGE_SIZE + PAGE_SIZE);
+
   const balancesQuery = useQuery({
     queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
     queryFn: () => getAccountBalances(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
   const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
+
+  // Toplam bakiye tüm hesapların (filtreden bağımsız) kuruş cinsinden toplamıdır —
+  // dashboard'daki BalanceHero ile aynı kural: farklı para birimleri karışsa da tek bir
+  // varsayılan para biriminde (TRY) özetlenir.
+  const totalBalanceMinor = allAccounts.reduce(
+    (sum, a) => sum + (balanceByAccountId.get(a.id) ?? a.opening_balance_minor),
+    0
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -80,6 +105,28 @@ export default function AccountsScreen() {
             <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
           </Pressable>
         </Row>
+
+        {allAccounts.length > 0 ? (
+          <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
+            <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+              <Stack gap="xs">
+                <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                  TOPLAM BAKİYE
+                </Text>
+                <Amount
+                  amountMinor={totalBalanceMinor}
+                  variant="displayAmount"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                />
+                <Text variant="caption" color="textSecondary">
+                  {allAccounts.length} hesap
+                </Text>
+              </Stack>
+            </Card>
+          </Stack>
+        ) : null}
 
         <Stack gap="sm" style={{ paddingHorizontal: theme.screenEdge.standard }}>
           <TextField
@@ -121,45 +168,76 @@ export default function AccountsScreen() {
             </Text>
           </Stack>
         ) : (
+          <>
           <FlatList
-            data={accounts}
+            data={pagedAccounts}
             keyExtractor={(item) => item.id}
+            style={{ flex: 1 }}
             contentContainerStyle={{
               paddingHorizontal: theme.screenEdge.standard,
               gap: theme.spacing.sm,
               paddingBottom: theme.spacing.xxl,
             }}
-            renderItem={({ item }) => (
-              <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
-                <Row
-                  style={{
-                    backgroundColor: theme.colors.surfacePrimary,
-                    borderRadius: theme.radius.widget,
-                    padding: theme.spacing.md,
-                  }}
-                  gap="sm"
-                  align="center"
-                >
-                  <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={28} />
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle">{item.name}</Text>
-                    <Text variant="caption" color="textSecondary">
-                      {TYPE_LABEL[item.type as Account['type']]}
-                    </Text>
-                    {item.iban ? (
-                      <Text variant="caption" color="textSecondary" tabular>
-                        {maskIban(item.iban)}
-                      </Text>
-                    ) : null}
-                  </Stack>
-                  <Text variant="body" tabular>
-                    {formatMinorAmount(balanceByAccountId.get(item.id) ?? item.opening_balance_minor, item.currency_code)}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-                </Row>
-              </Pressable>
-            )}
+            renderItem={({ item }) => {
+              const balanceMinor = balanceByAccountId.get(item.id) ?? item.opening_balance_minor;
+              const type = item.type as Account['type'];
+
+              return (
+                <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
+                  <Card>
+                    <Row gap="sm" align="center">
+                      <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={40} />
+                      <Stack gap="xxs" style={{ flex: 1 }}>
+                        <Text variant="cardTitle" numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <Row gap="xs" align="center">
+                          <View
+                            style={{
+                              paddingHorizontal: theme.spacing.xs,
+                              paddingVertical: 2,
+                              borderRadius: 999,
+                              backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
+                            }}
+                          >
+                            <Text variant="caption" color="textSecondary">
+                              {TYPE_LABEL[type]}
+                            </Text>
+                          </View>
+                          {item.iban ? (
+                            <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
+                              {maskIban(item.iban)}
+                            </Text>
+                          ) : null}
+                        </Row>
+                      </Stack>
+                      <Amount
+                        amountMinor={balanceMinor}
+                        currencyCode={item.currency_code}
+                        variant="cardTitle"
+                        numberOfLines={1}
+                        style={{ color: balanceMinor < 0 ? theme.colors.danger : undefined }}
+                      />
+                    </Row>
+                  </Card>
+                </Pressable>
+              );
+            }}
           />
+          {totalPages > 1 ? (
+            <View
+              style={{
+                paddingHorizontal: theme.screenEdge.standard,
+                paddingTop: theme.spacing.sm,
+                paddingBottom: theme.spacing.xs,
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.border,
+              }}
+            >
+              <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} />
+            </View>
+          ) : null}
+          </>
         )}
       </Stack>
     </SafeAreaView>

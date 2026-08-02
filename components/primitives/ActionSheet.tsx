@@ -13,6 +13,8 @@ export interface ActionSheetOption {
   description?: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
+  /** Silme gibi geri alınamaz aksiyonlar için — ikon ve etiket danger renginde çizilir. */
+  danger?: boolean;
 }
 
 export interface ActionSheetProps {
@@ -52,33 +54,38 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
           </Text>
 
           <Stack gap="xs">
-            {options.map((option) => (
-              <Pressable
-                key={option.key}
-                onPress={() => {
-                  onClose();
-                  option.onPress();
-                }}
-                style={{
-                  backgroundColor: theme.colors.surfacePrimary,
-                  borderRadius: theme.radius.widget,
-                  padding: theme.spacing.md,
-                }}
-              >
-                <Row gap="sm">
-                  <Ionicons name={option.icon} size={22} color={theme.colors.brandPrimary} />
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle">{option.label}</Text>
-                    {option.description ? (
-                      <Text variant="caption" color="textSecondary">
-                        {option.description}
+            {options.map((option) => {
+              const tint = option.danger ? theme.colors.danger : theme.colors.brandPrimary;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => {
+                    onClose();
+                    option.onPress();
+                  }}
+                  style={{
+                    backgroundColor: theme.colors.surfacePrimary,
+                    borderRadius: theme.radius.widget,
+                    padding: theme.spacing.md,
+                  }}
+                >
+                  <Row gap="sm">
+                    <Ionicons name={option.icon} size={22} color={tint} />
+                    <Stack gap="xxs" style={{ flex: 1 }}>
+                      <Text variant="cardTitle" style={option.danger ? { color: theme.colors.danger } : undefined}>
+                        {option.label}
                       </Text>
-                    ) : null}
-                  </Stack>
-                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-                </Row>
-              </Pressable>
-            ))}
+                      {option.description ? (
+                        <Text variant="caption" color="textSecondary">
+                          {option.description}
+                        </Text>
+                      ) : null}
+                    </Stack>
+                    <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                  </Row>
+                </Pressable>
+              );
+            })}
           </Stack>
 
           <Pressable
