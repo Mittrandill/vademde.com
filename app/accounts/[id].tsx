@@ -12,6 +12,7 @@ import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { archiveAccount, getAccount, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
+import { listObligations } from '@/features/obligations/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
@@ -22,15 +23,19 @@ const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
   bank: 'business-outline',
   wallet: 'wallet-outline',
+  credit_card: 'card-outline',
 };
 
 const TYPE_LABEL: Record<Account['type'], string> = {
   cash: 'Kasa',
   bank: 'Banka',
   wallet: 'Cüzdan',
+  credit_card: 'Kredi Kartı',
 };
 
 const PAGE_SIZE = 10;
+
+const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
 
 export default function AccountDetailScreen() {
   const theme = useTheme();
@@ -62,6 +67,22 @@ export default function AccountDetailScreen() {
   const effectivePage = Math.min(page, totalPages - 1);
   const pagedTransactions = allTransactions.slice(effectivePage * PAGE_SIZE, effectivePage * PAGE_SIZE + PAGE_SIZE);
   const sections = groupByDay(pagedTransactions, (item) => item.occurred_at);
+
+  // Kredi kartı hesabında "ay ay ekstre yüklendi mi" özeti — hesap kesiminden sonra
+  // oluşturulan her kredi_karti_ekstresi obligation'ı ilgili aya (due_date) eşler.
+  const isCreditCardAccount = accountQuery.data?.type === 'credit_card';
+  const statementsQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'obligations', 'account-statements', id] : ['account-statements', 'disabled'],
+    queryFn: () =>
+      listObligations({
+        workspaceId: activeWorkspaceId as string,
+        accountId: id as string,
+        documentType: 'kredi_karti_ekstresi',
+        pageSize: 24,
+        ascending: false,
+      }),
+    enabled: !!activeWorkspaceId && !!id && isCreditCardAccount,
+  });
 
   const archiveMutation = useMutation({
     mutationFn: () => archiveAccount(id as string),
@@ -100,6 +121,23 @@ export default function AccountDetailScreen() {
   const type = account.type as Account['type'];
   const balanceMinor =
     balancesQuery.data?.find((b) => b.accountId === account.id)?.balanceMinor ?? account.opening_balance_minor;
+
+  // Son 6 ay (bu ay dahil): her biri için aynı ay içinde vadesi olan bir ekstre
+  // (obligation) var mı diye bakılır — varsa "Yüklendi", yoksa "Yüklenmedi" rozeti.
+  const statementMonths = isCreditCardAccount
+    ? Array.from({ length: 6 }, (_, i) => {
+        const now = new Date();
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const periodKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+        const fulfilled = (statementsQuery.data ?? []).some((o) => {
+          if (!o.due_date) return false;
+          const d = new Date(o.due_date);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === periodKey;
+        });
+        return { periodKey, monthDate, fulfilled };
+      })
+    : [];
+  const mostRecentUnfulfilled = statementMonths.find((m) => !m.fulfilled);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -176,6 +214,78 @@ export default function AccountDetailScreen() {
                 </Stack>
               </Stack>
             </Card>
+
+            {isCreditCardAccount ? (
+              <Stack gap="sm">
+                <SectionHeader title="Ekstre Geçmişi" />
+                <Card>
+                  <Stack gap="sm">
+                    {statementMonths.map((m, index) => (
+                      <View key={m.periodKey}>
+                        <Row align="center">
+                          <Text variant="body" style={{ flex: 1, textTransform: 'capitalize' }}>
+                            {monthFormatter.format(m.monthDate)}
+                          </Text>
+                          <Row
+                            gap="xxs"
+                            align="center"
+                            style={{
+                              paddingHorizontal: theme.spacing.xs,
+                              paddingVertical: 2,
+                              borderRadius: 999,
+                              backgroundColor: withAlpha(
+                                m.fulfilled ? theme.colors.success : theme.colors.textSecondary,
+                                0.14
+                              ),
+                            }}
+                          >
+                            <Ionicons
+                              name={m.fulfilled ? 'checkmark-circle' : 'alert-circle-outline'}
+                              size={13}
+                              color={m.fulfilled ? theme.colors.success : theme.colors.textSecondary}
+                            />
+                            <Text
+                              variant="caption"
+                              style={{ color: m.fulfilled ? theme.colors.success : theme.colors.textSecondary }}
+                            >
+                              {m.fulfilled ? 'Yüklendi' : 'Yüklenmedi'}
+                            </Text>
+                          </Row>
+                        </Row>
+                        {index < statementMonths.length - 1 ? (
+                          <Divider style={{ marginTop: theme.spacing.sm }} />
+                        ) : null}
+                      </View>
+                    ))}
+                  </Stack>
+                </Card>
+                {mostRecentUnfulfilled ? (
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: '/obligations/new',
+                        params: { type: 'kredi_karti_ekstresi', accountId: account.id },
+                      })
+                    }
+                    style={{
+                      height: theme.controlHeight.segmented,
+                      borderRadius: theme.radius.widget,
+                      borderWidth: 1,
+                      borderColor: theme.colors.brandPrimary,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: theme.spacing.xxs,
+                    }}
+                  >
+                    <Ionicons name="add-circle-outline" size={16} color={theme.colors.brandPrimary} />
+                    <Text variant="body" color="brandPrimary">
+                      {monthFormatter.format(mostRecentUnfulfilled.monthDate)} Ekstresi Ekle
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </Stack>
+            ) : null}
 
             <Text variant="sectionTitle">Hareketler</Text>
           </Stack>

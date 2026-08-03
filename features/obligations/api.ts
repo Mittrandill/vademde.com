@@ -43,6 +43,7 @@ export interface ListObligationsFilter {
   /** docs/01-finansal-kayit-modeli.md §3.2 belge türü ('cek', 'senet', 'kredi'...). */
   documentType?: string;
   counterpartyId?: string;
+  accountId?: string;
   statuses?: Obligation['status'][];
   dueFrom?: string;
   dueTo?: string;
@@ -58,6 +59,7 @@ export async function listObligations({
   direction,
   documentType,
   counterpartyId,
+  accountId,
   statuses,
   dueFrom,
   dueTo,
@@ -73,6 +75,7 @@ export async function listObligations({
   if (direction) query = query.eq('direction', direction);
   if (documentType) query = query.eq('document_type', documentType);
   if (counterpartyId) query = query.eq('counterparty_id', counterpartyId);
+  if (accountId) query = query.eq('account_id', accountId);
   if (statuses?.length) query = query.in('status', statuses);
   if (dueFrom) query = query.gte('due_date', dueFrom);
   if (dueTo) query = query.lte('due_date', dueTo);

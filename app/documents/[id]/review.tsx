@@ -70,6 +70,15 @@ export default function DocumentReviewScreen() {
   // taksit tablosu asıl kaynaktır) — bkz. supabase/functions/process-document installmentPlan şeması.
   const [interestRatePercent, setInterestRatePercent] = useState('');
   const [ocrTotalRepaymentMinor, setOcrTotalRepaymentMinor] = useState<number | null>(null);
+  // Kredi kartı ekstresi için: OCR'ın okuduğu son 4 hane ile mevcut kredi kartı hesapları
+  // arasında otomatik eşleştirme (docs/04-ocr-belge-isleme.md §7.4). Eşleşme bulunamazsa
+  // kullanıcı AccountPicker'dan elle seçer — form akışı bozulmaz.
+  const [cardLastFourFromOcr, setCardLastFourFromOcr] = useState<string | null>(null);
+  const [cardAccountMatchAttempted, setCardAccountMatchAttempted] = useState(false);
+  // "Sadece toplam borç" ile "harcamaları kategorilere ayır" arasındaki seçim — ikincisinde
+  // her ekstre satırı için ayrı bir gider işlemi ve kategori seçimi gerekir.
+  const [categorizeCardSpending, setCategorizeCardSpending] = useState(false);
+  const [cardTransactionCategoryById, setCardTransactionCategoryById] = useState<Record<string, string | null>>({});
   // Taksit tablosu satırları (vade + tutar + ödendi durumu) kullanıcı tarafından tek tek
   // düzenlenebilir; OCR'ın döndürdüğü document_line_items'tan bir kez taslak olarak kopyalanır.
   const [installmentDrafts, setInstallmentDrafts] = useState<
@@ -95,6 +104,7 @@ export default function DocumentReviewScreen() {
     enabled: !!id,
   });
   const installmentItems = (lineItemsQuery.data ?? []).filter((item) => item.kind === 'installment');
+  const cardTransactionItems = (lineItemsQuery.data ?? []).filter((item) => item.kind === 'card_transaction');
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -136,12 +146,13 @@ export default function DocumentReviewScreen() {
           totalRepaymentMinor?: number | null;
           interestRatePercent?: number | null;
         };
-        card?: { bankName?: string | null };
+        card?: { bankName?: string | null; cardLastFourDigits?: string | null };
       } | null;
       const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? null;
       setExtractedBankName(ocrBankName);
       const matchedBankCode = matchBankByName(ocrBankName);
       if (matchedBankCode) setBankCode(matchedBankCode);
+      if (summary?.card?.cardLastFourDigits) setCardLastFourFromOcr(summary.card.cardLastFourDigits);
 
       if (document.document_type === 'kredi') {
         if (summary?.loan?.interestRatePercent != null) {
@@ -199,6 +210,18 @@ export default function DocumentReviewScreen() {
       })
       .catch(() => {});
   }, [documentQuery.data, counterpartiesQuery.isSuccess, counterpartiesQuery.data, activeWorkspaceId, counterpartyResolved, queryClient]);
+
+  // Kredi kartı ekstresi son 4 hane ↔ mevcut kredi kartı hesabı eşleştirmesi (bkz. yukarıdaki
+  // banka adı eşleştirmesiyle aynı desen). accountsQuery, documentQuery'den sonra da
+  // dolabileceğinden ayrı bir efekt olarak, ikisi de hazır olduğunda bir kez çalışır.
+  useEffect(() => {
+    if (cardAccountMatchAttempted || !cardLastFourFromOcr || !accountsQuery.isSuccess || accountId) return;
+    setCardAccountMatchAttempted(true);
+    const match = accountsQuery.data.find(
+      (a) => a.type === 'credit_card' && a.card_last_four === cardLastFourFromOcr
+    );
+    if (match) setAccountId(match.id);
+  }, [cardAccountMatchAttempted, cardLastFourFromOcr, accountsQuery.isSuccess, accountsQuery.data, accountId]);
 
   // Kredi taksit tablosunu (vade + tutar) düzenlenebilir taslağa bir kez kopyalar;
   // sonraki her düzenleme yalnızca yerel taslağı günceller, OCR verisini değil. Vadesi
@@ -368,6 +391,30 @@ export default function DocumentReviewScreen() {
           }
         }
 
+        // docs/04-ocr-belge-isleme.md §7.4 — kullanıcı yalnızca toplam kart borcunu veya
+        // harcamaları da kategorilere ayırmayı seçebilir. Toplam borç zaten obligation
+        // olarak oluşturuldu; "kategorilere ayır" seçiliyse her ekstre satırı ayrıca gider
+        // işlemi olarak kaydedilir (kategori kırılımı raporları bu şekilde beslenir).
+        // İkisi bilinçli olarak birbirinden bağımsızdır — bkz. plan kararı #3.
+        if (documentType === 'kredi_karti_ekstresi' && categorizeCardSpending && accountId) {
+          for (const item of cardTransactionItems) {
+            try {
+              await createTransaction({
+                workspace_id: activeWorkspaceId,
+                account_id: accountId,
+                direction: 'expense',
+                category_id: cardTransactionCategoryById[item.id] ?? null,
+                amount_minor: item.amount_minor,
+                occurred_at: item.occurred_at ? new Date(item.occurred_at).toISOString() : new Date().toISOString(),
+                description: item.description,
+              });
+            } catch {
+              // Bir satır başarısız olsa bile diğerleri ve ana obligation kaydı kalır;
+              // kullanıcı Hareketler'den eksik kalanı manuel ekleyebilir.
+            }
+          }
+        }
+
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
         await syncObligationReminder(activeWorkspaceId, obligation);
         return { installmentPlanFailed };
@@ -464,7 +511,8 @@ export default function DocumentReviewScreen() {
   const document = documentQuery.data;
   const canSubmit =
     !!amount &&
-    ((direction === 'payable' || direction === 'receivable') ? !!documentType : !!accountId);
+    ((direction === 'payable' || direction === 'receivable') ? !!documentType : !!accountId) &&
+    (documentType !== 'kredi_karti_ekstresi' || !categorizeCardSpending || !!accountId);
 
   const isLoanDocument = documentType === 'kredi';
   const principalMinor = amount ? toMinorUnits(Number(amount.replace(',', '.')) || 0) : 0;
@@ -677,6 +725,57 @@ export default function DocumentReviewScreen() {
                   <Text variant="caption" color="textSecondary">
                     OCR &ldquo;{extractedBankName}&rdquo; okudu ama listede eşleşen banka bulunamadı — yukarıdan manuel seç.
                   </Text>
+                ) : null}
+              </Stack>
+            ) : null}
+
+            {documentType === 'kredi_karti_ekstresi' && cardTransactionItems.length > 0 ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  EKSTRE HARCAMALARI ({cardTransactionItems.length} işlem)
+                </Text>
+                <SegmentedControl
+                  options={[
+                    { key: 'total', label: 'Sadece Toplam Borç' },
+                    { key: 'categorize', label: 'Kategorilere Ayır' },
+                  ]}
+                  value={categorizeCardSpending ? 'categorize' : 'total'}
+                  onChange={(key) => setCategorizeCardSpending(key === 'categorize')}
+                />
+                {categorizeCardSpending ? (
+                  <Stack
+                    gap="sm"
+                    style={{
+                      backgroundColor: theme.colors.surfacePrimary,
+                      borderRadius: theme.radius.widget,
+                      padding: theme.spacing.md,
+                    }}
+                  >
+                    <Text variant="caption" color="textSecondary">
+                      Her işlem, seçtiğiniz hesaba ayrı bir gider olarak kaydedilir.
+                    </Text>
+                    {cardTransactionItems.map((item) => (
+                      <Stack key={item.id} gap="xxs">
+                        <Row align="center">
+                          <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
+                            {item.description || 'İşlem'}
+                          </Text>
+                          <Text variant="body" tabular>
+                            {formatMinorAmount(item.amount_minor, document.currency_code ?? 'TRY')}
+                          </Text>
+                        </Row>
+                        {(categoriesQuery.data ?? []).length > 0 ? (
+                          <CategoryPicker
+                            categories={categoriesQuery.data ?? []}
+                            selectedId={cardTransactionCategoryById[item.id] ?? null}
+                            onSelect={(catId) =>
+                              setCardTransactionCategoryById((prev) => ({ ...prev, [item.id]: catId }))
+                            }
+                          />
+                        ) : null}
+                      </Stack>
+                    ))}
+                  </Stack>
                 ) : null}
               </Stack>
             ) : null}

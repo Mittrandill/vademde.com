@@ -39,7 +39,7 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 
 export default function NewObligationScreen() {
   const theme = useTheme();
-  const { id, type } = useLocalSearchParams<{ id?: string; type?: string }>();
+  const { id, type, accountId } = useLocalSearchParams<{ id?: string; type?: string; accountId?: string }>();
   const isEditing = !!id;
 
   const existingQuery = useQuery({
@@ -68,6 +68,7 @@ export default function NewObligationScreen() {
       initial={existingQuery.data?.obligation ?? null}
       hasInstallments={(existingQuery.data?.installments.length ?? 0) > 0}
       initialDocumentType={typeof type === 'string' ? type : undefined}
+      initialAccountId={typeof accountId === 'string' ? accountId : undefined}
     />
   );
 }
@@ -77,9 +78,11 @@ interface ObligationFormProps {
   initial: Obligation | null;
   hasInstallments: boolean;
   initialDocumentType?: string;
+  /** Hesap detayından "Ekstre Ekle" gibi kısayollarla gelindiğinde hesabı önceden doldurur. */
+  initialAccountId?: string;
 }
 
-function ObligationForm({ id, initial, hasInstallments, initialDocumentType }: ObligationFormProps) {
+function ObligationForm({ id, initial, hasInstallments, initialDocumentType, initialAccountId }: ObligationFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -96,7 +99,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType }: O
   );
   const [dueDate, setDueDate] = useState(initial?.due_date ?? new Date().toISOString().slice(0, 10));
   const [counterpartyId, setCounterpartyId] = useState<string | null>(initial?.counterparty_id ?? null);
-  const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? null);
+  const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
   const [interestRateStr, setInterestRateStr] = useState('');

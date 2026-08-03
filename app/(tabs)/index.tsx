@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +26,7 @@ import { listTransactions } from '@/features/transactions/api';
 import { getAllTimeIncomeExpenseTotals, getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
+import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 
 export default function HomeScreen() {
   const theme = useTheme();
@@ -65,6 +66,18 @@ export default function HomeScreen() {
     queryFn: () => listAccounts(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
+
+  // Uygulama her açıldığında (Ana Sayfa mount/hesaplar yenilendiğinde) kredi kartı
+  // hesaplarının "ekstre yükle" hatırlatmaları güncel döneme göre yeniden senkronize
+  // edilir — böylece aylar geçse bile bildirimler geride kalmaz (bkz. syncObligationReminder
+  // ile aynı "her açılışta yeniden planla" deseni).
+  useEffect(() => {
+    if (!activeWorkspaceId || !accountsQuery.data) return;
+    for (const account of accountsQuery.data) {
+      if (account.type !== 'credit_card') continue;
+      syncCreditCardStatementReminder(activeWorkspaceId, account).catch(() => {});
+    }
+  }, [activeWorkspaceId, accountsQuery.data]);
 
   const allTimeTotalsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.dashboardAllTimeTotals(activeWorkspaceId) : ['all-time', 'disabled'],

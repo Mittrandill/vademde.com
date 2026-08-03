@@ -18,39 +18,51 @@ export type Database = {
       accounts: {
         Row: {
           bank_code: string | null
+          card_last_four: string | null
           created_at: string
+          credit_limit_minor: number | null
           currency_code: string
           iban: string | null
           id: string
           is_archived: boolean
           name: string
           opening_balance_minor: number
+          payment_due_day: number | null
+          statement_day: number | null
           type: string
           updated_at: string
           workspace_id: string
         }
         Insert: {
           bank_code?: string | null
+          card_last_four?: string | null
           created_at?: string
+          credit_limit_minor?: number | null
           currency_code?: string
           iban?: string | null
           id?: string
           is_archived?: boolean
           name: string
           opening_balance_minor?: number
+          payment_due_day?: number | null
+          statement_day?: number | null
           type: string
           updated_at?: string
           workspace_id: string
         }
         Update: {
           bank_code?: string | null
+          card_last_four?: string | null
           created_at?: string
+          credit_limit_minor?: number | null
           currency_code?: string
           iban?: string | null
           id?: string
           is_archived?: boolean
           name?: string
           opening_balance_minor?: number
+          payment_due_day?: number | null
+          statement_day?: number | null
           type?: string
           updated_at?: string
           workspace_id?: string
@@ -804,10 +816,13 @@ export type Database = {
       }
       reminders: {
         Row: {
+          account_id: string | null
           created_at: string
           id: string
+          kind: string
           notification_identifier: string | null
-          obligation_id: string
+          obligation_id: string | null
+          period_key: string | null
           remind_at: string
           stage: string
           status: string
@@ -815,10 +830,13 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          account_id?: string | null
           created_at?: string
           id?: string
+          kind?: string
           notification_identifier?: string | null
-          obligation_id: string
+          obligation_id?: string | null
+          period_key?: string | null
           remind_at: string
           stage?: string
           status?: string
@@ -826,10 +844,13 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          account_id?: string | null
           created_at?: string
           id?: string
+          kind?: string
           notification_identifier?: string | null
-          obligation_id?: string
+          obligation_id?: string | null
+          period_key?: string | null
           remind_at?: string
           stage?: string
           status?: string
@@ -837,6 +858,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "reminders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "reminders_obligation_id_fkey"
             columns: ["obligation_id"]
@@ -1078,7 +1106,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals["public"]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
@@ -1192,9 +1220,3 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-
-export const Constants = {
-  public: {
-    Enums: {},
-  },
-} as const

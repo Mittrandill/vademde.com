@@ -21,12 +21,14 @@ const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
   bank: 'business-outline',
   wallet: 'wallet-outline',
+  credit_card: 'card-outline',
 };
 
 const TYPE_LABEL: Record<Account['type'], string> = {
   cash: 'Kasa',
   bank: 'Banka',
   wallet: 'Cüzdan',
+  credit_card: 'Kredi Kartı',
 };
 
 const PAGE_SIZE = 10;
@@ -38,6 +40,7 @@ const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
   { key: 'cash', label: 'Kasa' },
   { key: 'bank', label: 'Banka' },
   { key: 'wallet', label: 'Cüzdan' },
+  { key: 'credit_card', label: 'Kredi Kartı' },
 ];
 
 export default function AccountsScreen() {
@@ -85,11 +88,12 @@ export default function AccountsScreen() {
 
   // Toplam bakiye tüm hesapların (filtreden bağımsız) kuruş cinsinden toplamıdır —
   // dashboard'daki BalanceHero ile aynı kural: farklı para birimleri karışsa da tek bir
-  // varsayılan para biriminde (TRY) özetlenir.
-  const totalBalanceMinor = allAccounts.reduce(
-    (sum, a) => sum + (balanceByAccountId.get(a.id) ?? a.opening_balance_minor),
-    0
-  );
+  // varsayılan para biriminde (TRY) özetlenir. Kredi kartı hariç: kart borcu zaten
+  // Kredilerim'de obligation olarak ayrıca takip ediliyor, buraya karışırsa nakit/banka
+  // bakiyeleriyle karışıp yanlış bir toplam çıkar.
+  const totalBalanceMinor = allAccounts
+    .filter((a) => a.type !== 'credit_card')
+    .reduce((sum, a) => sum + (balanceByAccountId.get(a.id) ?? a.opening_balance_minor), 0);
 
   // Tek dikey scroll sahibi: başlık, hero bakiye kartı, arama ve filtre FlatList'in
   // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde

@@ -8,6 +8,7 @@ const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
   bank: 'business-outline',
   wallet: 'wallet-outline',
+  credit_card: 'card-outline',
 };
 
 export interface AccountPickerProps {
