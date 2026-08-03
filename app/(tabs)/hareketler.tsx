@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList } from 'react-native';
+import { ActivityIndicator, FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { ActionSheet, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { ActionSheet, Pagination, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
-import { listTransactions, TRANSACTIONS_PAGE_SIZE } from '@/features/transactions/api';
-import { listObligations, listInstallmentsDue, OBLIGATIONS_PAGE_SIZE } from '@/features/obligations/api';
+import { listTransactions } from '@/features/transactions/api';
+import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 
@@ -60,6 +60,13 @@ const TRANSACTION_DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap>
   transfer: 'swap-horizontal-outline',
 };
 
+// Krediler listesindeki gerçek (numaralı) sayfalandırmayla aynı desen: kredi detayındaki
+// Ödeme Planı/Geçmişi sekmeleri gibi, kaynaklar sınırlı ama cömert bir üst sınırla (500)
+// tek seferde çekilir, tarihe göre sıralanır ve ekranda 10'luk sayfalar halinde dilimlenir —
+// sonsuz kaydırma yerine sayfa numaralarıyla öngörülebilir gezinme.
+const FETCH_SIZE = 500;
+const LIST_PAGE_SIZE = 10;
+
 export default function HareketlerScreen() {
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -67,6 +74,9 @@ export default function HareketlerScreen() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  // Krediler sayfasındaki Tarih düğmesiyle aynı: varsayılan en yeni önce (azalan).
+  const [sortAscending, setSortAscending] = useState(false);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const timeout = setTimeout(() => setSearch(searchInput.trim()), 300);
@@ -78,56 +88,56 @@ export default function HareketlerScreen() {
   const transactionDirection = wantsTransactions && filter !== 'all' ? (filter as 'income' | 'expense' | 'transfer') : undefined;
   const obligationDirection = wantsObligations && filter !== 'all' ? (filter as 'payable' | 'receivable') : undefined;
 
-  const transactionsQuery = useInfiniteQuery({
-    queryKey: [activeWorkspaceId, 'transactions', 'infinite', transactionDirection ?? 'all', search],
-    queryFn: ({ pageParam }) =>
+  // Filtre, arama veya sıralama değiştiğinde geçerli sayfa anlamsızlaşır — render sırasında
+  // (obligations/index.tsx'teki aynı desen) 1. sayfaya dönülür, ekstra render turu olmadan.
+  const resetKey = `${filter}|${search}|${sortAscending ? 'asc' : 'desc'}`;
+  const [lastResetKey, setLastResetKey] = useState(resetKey);
+  if (resetKey !== lastResetKey) {
+    setLastResetKey(resetKey);
+    setPage(0);
+  }
+
+  const transactionsQuery = useQuery({
+    queryKey: [activeWorkspaceId, 'transactions', 'hareketler', transactionDirection ?? 'all', search],
+    queryFn: () =>
       listTransactions({
         workspaceId: activeWorkspaceId as string,
         direction: transactionDirection,
         search: search || undefined,
-        page: pageParam,
+        pageSize: FETCH_SIZE,
       }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length === TRANSACTIONS_PAGE_SIZE ? allPages.length : undefined,
     enabled: !!activeWorkspaceId && wantsTransactions,
   });
 
-  const obligationsQuery = useInfiniteQuery({
-    queryKey: [activeWorkspaceId, 'obligations', 'infinite', obligationDirection ?? 'all', search],
-    queryFn: ({ pageParam }) =>
+  const obligationsQuery = useQuery({
+    queryKey: [activeWorkspaceId, 'obligations', 'hareketler', obligationDirection ?? 'all', search],
+    queryFn: () =>
       listObligations({
         workspaceId: activeWorkspaceId as string,
         direction: obligationDirection,
         search: search || undefined,
-        page: pageParam,
+        pageSize: FETCH_SIZE,
       }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length === OBLIGATIONS_PAGE_SIZE ? allPages.length : undefined,
     enabled: !!activeWorkspaceId && wantsObligations,
   });
 
   // Taksitli kredi/borçlarda her taksit ayrı satır olarak görünür (bkz. listInstallmentsDue);
   // bu obligation'ların tekil listObligations satırı aşağıda dışlanır. Arama, sadece taksitsiz
   // kayıtlarda ve işlemlerde uygulanır — taksitlere metin araması eklenmemiştir.
-  const installmentsQuery = useInfiniteQuery({
-    queryKey: [activeWorkspaceId, 'obligations', 'installments-infinite', obligationDirection ?? 'all'],
-    queryFn: ({ pageParam }) =>
+  const installmentsQuery = useQuery({
+    queryKey: [activeWorkspaceId, 'obligations', 'installments-hareketler', obligationDirection ?? 'all'],
+    queryFn: () =>
       listInstallmentsDue({
         workspaceId: activeWorkspaceId as string,
         direction: obligationDirection,
-        page: pageParam,
+        pageSize: FETCH_SIZE,
       }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length === OBLIGATIONS_PAGE_SIZE ? allPages.length : undefined,
     enabled: !!activeWorkspaceId && wantsObligations && !search,
   });
 
   const rows = useMemo<HareketRow[]>(() => {
     const transactionRows: HareketRow[] = wantsTransactions
-      ? (transactionsQuery.data?.pages.flat() ?? []).map((t) => ({
+      ? (transactionsQuery.data ?? []).map((t) => ({
           id: t.id,
           kind: 'transaction',
           title:
@@ -143,11 +153,11 @@ export default function HareketlerScreen() {
         }))
       : [];
 
-    const installmentItems = wantsObligations ? (installmentsQuery.data?.pages.flat() ?? []) : [];
+    const installmentItems = wantsObligations ? (installmentsQuery.data ?? []) : [];
     const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
 
     const obligationRows: HareketRow[] = wantsObligations
-      ? (obligationsQuery.data?.pages.flat() ?? [])
+      ? (obligationsQuery.data ?? [])
           .filter((o) => !obligationIdsWithInstallments.has(o.id))
           .map((o) => ({
             id: o.id,
@@ -164,7 +174,14 @@ export default function HareketlerScreen() {
           }))
       : [];
 
-    const installmentRows: HareketRow[] = installmentItems.map((o) => ({
+    // Hareketler yalnızca gerçekleşmiş hareketleri gösterir: henüz ödenmemiş (bekleyen)
+    // taksitler burada listelenmez — onlar Takvim/Kredi detayında "yaklaşan ödeme" olarak
+    // zaten görünür. `obligationIdsWithInstallments` seti yine TÜM taksitlerden türetilir
+    // (yukarıda) ki taksitli bir kredinin üst-seviye özet satırı hiç ödeme yapılmamış olsa
+    // bile burada ayrıca görünmesin.
+    const paidInstallmentItems = installmentItems.filter((o) => o.remaining_amount_minor <= 0);
+
+    const installmentRows: HareketRow[] = paidInstallmentItems.map((o) => ({
       id: o.id,
       kind: 'obligation',
       title: `${o.title} — ${o.installment_number}. Taksit`,
@@ -179,22 +196,23 @@ export default function HareketlerScreen() {
       installmentId: o.installment_id,
     }));
 
-    return [...transactionRows, ...obligationRows, ...installmentRows].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    return [...transactionRows, ...obligationRows, ...installmentRows].sort((a, b) =>
+      sortAscending
+        ? new Date(a.date).getTime() - new Date(b.date).getTime()
+        : new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [transactionsQuery.data, obligationsQuery.data, installmentsQuery.data, wantsTransactions, wantsObligations]);
+  }, [
+    transactionsQuery.data,
+    obligationsQuery.data,
+    installmentsQuery.data,
+    wantsTransactions,
+    wantsObligations,
+    sortAscending,
+  ]);
 
-  const hasNextPage =
-    (wantsTransactions && transactionsQuery.hasNextPage) ||
-    (wantsObligations && (obligationsQuery.hasNextPage || installmentsQuery.hasNextPage));
-  const isFetchingNextPage =
-    transactionsQuery.isFetchingNextPage || obligationsQuery.isFetchingNextPage || installmentsQuery.isFetchingNextPage;
-
-  function loadMore() {
-    if (wantsTransactions && transactionsQuery.hasNextPage) transactionsQuery.fetchNextPage();
-    if (wantsObligations && obligationsQuery.hasNextPage) obligationsQuery.fetchNextPage();
-    if (wantsObligations && installmentsQuery.hasNextPage) installmentsQuery.fetchNextPage();
-  }
+  const totalPages = Math.max(1, Math.ceil(rows.length / LIST_PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages - 1);
+  const visibleRows = rows.slice(effectivePage * LIST_PAGE_SIZE, effectivePage * LIST_PAGE_SIZE + LIST_PAGE_SIZE);
 
   const error = transactionsQuery.error || obligationsQuery.error || installmentsQuery.error;
   const isLoading = transactionsQuery.isLoading || obligationsQuery.isLoading || (wantsObligations && !search && installmentsQuery.isLoading);
@@ -204,138 +222,161 @@ export default function HareketlerScreen() {
     []
   );
 
+  // Tek dikey scroll sahibi: başlık, arama/sıralama ve segment filtresi FlatList'in
+  // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde
+  // birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
+  const isInitialLoading = isLoading && rows.length === 0;
+
+  const listHeader = (
+    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
+      <Row align="center">
+        <Text variant="pageTitle" style={{ flex: 1 }}>
+          Hareketler
+        </Text>
+        <Pressable onPress={() => setAddSheetOpen(true)} hitSlop={12}>
+          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        </Pressable>
+      </Row>
+
+      <Row gap="xs" align="center">
+        <TextField
+          placeholder="Açıklama veya başlıkta ara"
+          value={searchInput}
+          onChangeText={setSearchInput}
+          returnKeyType="search"
+          autoCorrect={false}
+          style={{ flex: 1 }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Tarihe göre sırala"
+          onPress={() => setSortAscending((v) => !v)}
+          style={{
+            height: theme.buttonHeight.primary,
+            paddingHorizontal: theme.spacing.sm,
+            borderRadius: theme.radius.input,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.xxs,
+          }}
+        >
+          <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
+          <Text variant="body" color="textSecondary">
+            Tarih
+          </Text>
+        </Pressable>
+      </Row>
+
+      {/* Elle yazılmış kapsül satırı yerine ortak bileşen: yükseklik uygulama genelinde
+          tek token'dan gelsin (theme.controlHeight.segmented). */}
+      <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} size="compact" stretch />
+
+      {error ? (
+        <Text variant="body" color="danger">
+          {error instanceof Error ? error.message : 'Hareketler yüklenemedi'}
+        </Text>
+      ) : null}
+    </Stack>
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="md" style={{ flex: 1, paddingTop: theme.spacing.md }}>
-        <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-          <Text variant="pageTitle" style={{ flex: 1 }}>
-            Hareketler
-          </Text>
-          <Pressable onPress={() => setAddSheetOpen(true)} hitSlop={12}>
-            <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
-          </Pressable>
-        </Row>
-
-        <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-          <TextField
-            placeholder="Açıklama veya başlıkta ara"
-            value={searchInput}
-            onChangeText={setSearchInput}
-            returnKeyType="search"
-            autoCorrect={false}
-            style={{ flex: 1 }}
-          />
-        </Row>
-
-        {/* Elle yazılmış kapsül satırı yerine ortak bileşen: yükseklik uygulama genelinde
-            tek token'dan gelsin (theme.controlHeight.segmented). */}
-        <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} size="compact" stretch />
-        </Stack>
-
-        {error ? (
-          <Text variant="body" color="danger" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-            {error instanceof Error ? error.message : 'Hareketler yüklenemedi'}
-          </Text>
-        ) : null}
-
-        {!isLoading && rows.length === 0 ? (
-          <Stack
-            gap="xs"
-            style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
-          >
-            <Text variant="cardTitle">{search ? 'Sonuç bulunamadı' : 'Henüz hareket yok'}</Text>
-            <Text variant="body" color="textSecondary">
-              {search ? 'Farklı bir arama terimi deneyin.' : 'Sağ üstteki + ile ilk kaydınızı ekleyin.'}
-            </Text>
-          </Stack>
-        ) : (
-          <FlatList
-            data={rows}
-            keyExtractor={(item) => `${item.kind}-${item.id}${item.installmentId ? `-${item.installmentId}` : ''}`}
-            contentContainerStyle={{
-              paddingHorizontal: theme.screenEdge.standard,
-              gap: theme.spacing.sm,
-              paddingBottom: 120,
-            }}
-            onEndReached={() => {
-              if (hasNextPage && !isFetchingNextPage) loadMore();
-            }}
-            onEndReachedThreshold={0.4}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() =>
-                  item.kind === 'obligation'
-                    ? router.push(`/obligations/${item.id}`)
-                    : router.push({ pathname: '/transactions/new', params: { id: item.id } })
-                }
-              >
-                <Row
-                  gap="sm"
-                  align="center"
-                  style={{
-                    backgroundColor: theme.colors.surfacePrimary,
-                    borderRadius: theme.radius.widget,
-                    padding: theme.spacing.md,
-                  }}
-                >
-                {item.kind === 'obligation' ? (
-                  <ObligationIcon documentType={item.documentType ?? 'diger'} bankCode={item.bankCode} size={40} />
-                ) : (
-                  <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={40} />
-                )}
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle">{item.title}</Text>
-                  <Row gap="xs">
-                    {item.subtitle ? (
-                      <Text variant="caption" color="textSecondary">
-                        {item.subtitle}
-                      </Text>
-                    ) : null}
-                    <Text variant="caption" color="textSecondary">
-                      {dateFormatter.format(new Date(item.date))}
-                    </Text>
-                  </Row>
-                  {item.status ? <StatusBadge status={item.status} /> : null}
-                </Stack>
-                <Text
-                  variant="body"
-                  tabular
-                  color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
-                >
-                  {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
-                  {formatMinorAmount(item.amountMinor, item.currencyCode)}
-                </Text>
-                </Row>
-              </Pressable>
-            )}
-            ListFooterComponent={
-              isFetchingNextPage ? (
-                <Row style={{ justifyContent: 'center', paddingVertical: theme.spacing.md }}>
-                  <ActivityIndicator color={theme.colors.textSecondary} />
-                </Row>
-              ) : hasNextPage ? (
-                <Pressable
-                  onPress={loadMore}
-                  style={{
-                    alignSelf: 'center',
-                    marginTop: theme.spacing.xs,
-                    paddingHorizontal: theme.spacing.lg,
-                    paddingVertical: theme.spacing.sm,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                  }}
-                >
-                  <Text variant="body" style={{ color: theme.colors.textSecondary }}>
-                    Daha Fazla Yükle
-                  </Text>
-                </Pressable>
-              ) : null
+      <FlatList
+        data={visibleRows}
+        keyExtractor={(item) => `${item.kind}-${item.id}${item.installmentId ? `-${item.installmentId}` : ''}`}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: theme.screenEdge.standard,
+          gap: theme.spacing.sm,
+          // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
+          // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
+          paddingBottom: 100,
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeader}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() =>
+              item.kind === 'obligation'
+                ? router.push(`/obligations/${item.id}`)
+                : router.push({ pathname: '/transactions/new', params: { id: item.id } })
             }
-          />
+          >
+            <Row
+              gap="sm"
+              align="center"
+              style={{
+                backgroundColor: theme.colors.surfacePrimary,
+                borderRadius: theme.radius.widget,
+                padding: theme.spacing.md,
+              }}
+            >
+              {item.kind === 'obligation' ? (
+                <ObligationIcon documentType={item.documentType ?? 'diger'} bankCode={item.bankCode} size={40} />
+              ) : (
+                <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={40} />
+              )}
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="cardTitle">{item.title}</Text>
+                <Row gap="xs">
+                  {item.subtitle ? (
+                    <Text variant="caption" color="textSecondary">
+                      {item.subtitle}
+                    </Text>
+                  ) : null}
+                  <Text variant="caption" color="textSecondary">
+                    {dateFormatter.format(new Date(item.date))}
+                  </Text>
+                </Row>
+                {item.status ? <StatusBadge status={item.status} /> : null}
+              </Stack>
+              <Text
+                variant="body"
+                tabular
+                color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
+              >
+                {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
+                {formatMinorAmount(item.amountMinor, item.currencyCode)}
+              </Text>
+            </Row>
+          </Pressable>
         )}
-      </Stack>
+        ListEmptyComponent={
+          isInitialLoading ? (
+            <Row style={{ flex: 1, justifyContent: 'center' }}>
+              <ActivityIndicator color={theme.colors.textSecondary} />
+            </Row>
+          ) : (
+            <Stack gap="xs" style={{ flex: 1, justifyContent: 'center' }}>
+              <Text variant="cardTitle">{search ? 'Sonuç bulunamadı' : 'Henüz hareket yok'}</Text>
+              <Text variant="body" color="textSecondary">
+                {search ? 'Farklı bir arama terimi deneyin.' : 'Sağ üstteki + ile ilk kaydınızı ekleyin.'}
+              </Text>
+            </Stack>
+          )
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
+            <View
+              style={{
+                paddingTop: theme.spacing.sm,
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.border,
+              }}
+            >
+              <Pagination
+                page={effectivePage}
+                totalPages={totalPages}
+                loading={transactionsQuery.isFetching || obligationsQuery.isFetching || installmentsQuery.isFetching}
+                onChange={setPage}
+              />
+            </View>
+          ) : null
+        }
+      />
 
       <ActionSheet
         visible={addSheetOpen}

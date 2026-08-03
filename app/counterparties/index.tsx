@@ -103,154 +103,156 @@ export default function CounterpartiesScreen() {
   const directionalTotal = totals.receivableMinor + totals.payableMinor;
   const receivableShare = directionalTotal > 0 ? totals.receivableMinor / directionalTotal : 0;
 
+  // Tek dikey scroll sahibi: başlık, hero alacak/borç kartı, arama ve filtre FlatList'in
+  // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde
+  // birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
+  const listHeader = (
+    <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
+      <Row align="center">
+        <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+        </Pressable>
+        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
+          Kişi / Firmalar
+        </Text>
+        <Pressable onPress={() => router.push('/counterparties/new')} hitSlop={12}>
+          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        </Pressable>
+      </Row>
+
+      {(counterpartiesQuery.data ?? []).length > 0 ? (
+        <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+          <Row gap="md" align="center">
+            <ProgressRing
+              size={60}
+              strokeWidth={7}
+              progress={receivableShare}
+              color={theme.colors.success}
+              trackColor={withAlpha(theme.colors.success, 0.18)}
+              cap
+            >
+              <Ionicons name="people-outline" size={18} color={theme.colors.success} />
+            </ProgressRing>
+            <Row gap="sm" style={{ flex: 1 }}>
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                  ALACAK
+                </Text>
+                <Amount
+                  amountMinor={totals.receivableMinor}
+                  direction="receivable"
+                  variant="cardTitle"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                />
+              </Stack>
+              <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                  BORÇ
+                </Text>
+                <Amount
+                  amountMinor={totals.payableMinor}
+                  direction="payable"
+                  variant="cardTitle"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                />
+              </Stack>
+            </Row>
+          </Row>
+        </Card>
+      ) : null}
+
+      <Stack gap="sm">
+        <TextField
+          placeholder="İsim, telefon veya e-postada ara"
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+        <SegmentedControl
+          options={BALANCE_FILTERS}
+          value={balanceFilter}
+          onChange={setBalanceFilter}
+          size="compact"
+          stretch
+        />
+      </Stack>
+    </Stack>
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="lg" style={{ flex: 1, paddingTop: theme.spacing.md }}>
-        <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-            Kişi / Firmalar
-          </Text>
-          <Pressable onPress={() => router.push('/counterparties/new')} hitSlop={12}>
-            <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
-          </Pressable>
-        </Row>
-
-        {(counterpartiesQuery.data ?? []).length > 0 ? (
-          <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-            <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
-              <Row gap="md" align="center">
-                <ProgressRing
-                  size={60}
-                  strokeWidth={7}
-                  progress={receivableShare}
-                  color={theme.colors.success}
-                  trackColor={withAlpha(theme.colors.success, 0.18)}
-                  cap
-                >
-                  <Ionicons name="people-outline" size={18} color={theme.colors.success} />
-                </ProgressRing>
-                <Row gap="sm" style={{ flex: 1 }}>
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                      ALACAK
+      <FlatList
+        data={pagedCounterparties}
+        keyExtractor={(item) => item.id}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: theme.screenEdge.standard,
+          gap: theme.spacing.sm,
+          paddingBottom: theme.spacing.xxl,
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeader}
+        // Satıra dokunmak cari detayına gider; düzenleme oradaki kalem ikonundan.
+        renderItem={({ item }) => (
+          <Pressable onPress={() => router.push(`/counterparties/${item.id}`)}>
+            <Card>
+              <Row gap="sm" align="center">
+                <PersonAvatar name={item.name} size={40} />
+                <Stack gap="xxs" style={{ flex: 1 }}>
+                  <Row gap="xxs" align="center">
+                    <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
+                      {item.name}
                     </Text>
-                    <Amount
-                      amountMinor={totals.receivableMinor}
-                      direction="receivable"
-                      variant="cardTitle"
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.7}
-                    />
-                  </Stack>
-                  <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                      BORÇ
+                    {item.type === 'company' ? (
+                      <Ionicons name="business" size={13} color={theme.colors.textSecondary} />
+                    ) : null}
+                  </Row>
+                  {item.phone || item.email ? (
+                    <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                      {[item.phone, item.email].filter(Boolean).join(' · ')}
                     </Text>
-                    <Amount
-                      amountMinor={totals.payableMinor}
-                      direction="payable"
-                      variant="cardTitle"
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.7}
-                    />
-                  </Stack>
-                </Row>
+                  ) : null}
+                </Stack>
+                <CounterpartyBalance netMinor={balances?.[item.id] ?? 0} />
               </Row>
             </Card>
-          </Stack>
-        ) : null}
-
-        <Stack gap="sm" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <TextField
-            placeholder="İsim, telefon veya e-postada ara"
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          <SegmentedControl
-            options={BALANCE_FILTERS}
-            value={balanceFilter}
-            onChange={setBalanceFilter}
-            size="compact"
-            stretch
-          />
-        </Stack>
-
-        {counterpartiesQuery.isSuccess && filtered.length === 0 ? (
-          <Stack
-            gap="xs"
-            style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
-          >
-            <Text variant="cardTitle">
-              {(counterpartiesQuery.data ?? []).length === 0 ? 'Henüz kişi/firma yok' : 'Sonuç bulunamadı'}
-            </Text>
-            <Text variant="body" color="textSecondary">
-              {(counterpartiesQuery.data ?? []).length === 0
-                ? 'Sağ üstteki + ile ilk kişi veya firmanızı ekleyin.'
-                : 'Arama terimini veya filtreyi değiştirin.'}
-            </Text>
-          </Stack>
-        ) : (
-          <>
-          <FlatList
-            data={pagedCounterparties}
-            keyExtractor={(item) => item.id}
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: theme.screenEdge.standard,
-              gap: theme.spacing.sm,
-              paddingBottom: theme.spacing.xxl,
-            }}
-            // Satıra dokunmak cari detayına gider; düzenleme oradaki kalem ikonundan.
-            renderItem={({ item }) => (
-              <Pressable onPress={() => router.push(`/counterparties/${item.id}`)}>
-                <Card>
-                  <Row gap="sm" align="center">
-                    <PersonAvatar name={item.name} size={40} />
-                    <Stack gap="xxs" style={{ flex: 1 }}>
-                      <Row gap="xxs" align="center">
-                        <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
-                          {item.name}
-                        </Text>
-                        {item.type === 'company' ? (
-                          <Ionicons name="business" size={13} color={theme.colors.textSecondary} />
-                        ) : null}
-                      </Row>
-                      {item.phone || item.email ? (
-                        <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                          {[item.phone, item.email].filter(Boolean).join(' · ')}
-                        </Text>
-                      ) : null}
-                    </Stack>
-                    <CounterpartyBalance netMinor={balances?.[item.id] ?? 0} />
-                  </Row>
-                </Card>
-              </Pressable>
-            )}
-          />
-          {totalPages > 1 ? (
+          </Pressable>
+        )}
+        ListEmptyComponent={
+          counterpartiesQuery.isSuccess ? (
+            <Stack gap="xs" style={{ flex: 1, justifyContent: 'center' }}>
+              <Text variant="cardTitle">
+                {(counterpartiesQuery.data ?? []).length === 0 ? 'Henüz kişi/firma yok' : 'Sonuç bulunamadı'}
+              </Text>
+              <Text variant="body" color="textSecondary">
+                {(counterpartiesQuery.data ?? []).length === 0
+                  ? 'Sağ üstteki + ile ilk kişi veya firmanızı ekleyin.'
+                  : 'Arama terimini veya filtreyi değiştirin.'}
+              </Text>
+            </Stack>
+          ) : null
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
             <View
               style={{
-                paddingHorizontal: theme.screenEdge.standard,
                 paddingTop: theme.spacing.sm,
-                paddingBottom: theme.spacing.xs,
                 borderTopWidth: 1,
                 borderTopColor: theme.colors.border,
               }}
             >
               <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} />
             </View>
-          ) : null}
-          </>
-        )}
-      </Stack>
+          ) : null
+        }
+      />
     </SafeAreaView>
   );
 }

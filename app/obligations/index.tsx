@@ -128,6 +128,27 @@ export default function ObligationsByTypeScreen() {
     placeholderData: keepPreviousData,
   });
 
+  // Hero, aşağıdaki sekme/arama filtrelerinden bağımsız sabit bir genel bakış gösterir
+  // (ör. "Kapalı" sekmesine geçmek hero'daki aktif/toplam sayıları değiştirmemeli) —
+  // bu yüzden statusKey/search'e değil yalnızca documentType'a bağlı ayrı bir sorgu kullanır.
+  const overviewQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? queryKeys.obligationsByTypeOverview(activeWorkspaceId, documentType ?? 'all')
+      : ['obligations-by-type-overview', 'disabled'],
+    queryFn: async () => {
+      const [active, total] = await Promise.all([
+        getObligationSummary({
+          workspaceId: activeWorkspaceId as string,
+          documentType,
+          statuses: ACTIVE_OBLIGATION_STATUSES,
+        }),
+        getObligationSummary({ workspaceId: activeWorkspaceId as string, documentType }),
+      ]);
+      return { active, total };
+    },
+    enabled,
+  });
+
   const summary = summaryQuery.data;
   const totalCount = summary?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / LIST_PAGE_SIZE));
@@ -199,321 +220,370 @@ export default function ObligationsByTypeScreen() {
     );
   }
 
-  const overdueRatio = summary && summary.count > 0 ? summary.overdueCount / summary.count : 0;
-  const ringColor = summary && summary.overdueCount > 0 ? theme.colors.danger : theme.colors.success;
+  const overview = overviewQuery.data;
+  const activeCount = overview?.active.count ?? 0;
+  const totalTypeCount = overview?.total.count ?? 0;
+  const overdueCount = overview?.active.overdueCount ?? 0;
+  const heroPayableMinor = overview?.active.payableMinor ?? 0;
+  const heroReceivableMinor = overview?.active.receivableMinor ?? 0;
+  const showsPayable = heroPayableMinor > 0 || heroReceivableMinor === 0;
+  // İlerleme oranı: gösterilen yöndeki (borç/alacak) orijinal toplam tutarın ne kadarı
+  // zaten ödendi — kalan tutar arttıkça değil azaldıkça dolan bir çubuk.
+  const heroOriginalMinor = showsPayable
+    ? (overview?.active.payableTotalMinor ?? 0)
+    : (overview?.active.receivableTotalMinor ?? 0);
+  const heroRemainingMinor = showsPayable ? heroPayableMinor : heroReceivableMinor;
+  const progressRatio = heroOriginalMinor > 0 ? 1 - heroRemainingMinor / heroOriginalMinor : 0;
+  const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? documentType) : 'Kayıt';
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="md" style={{ flex: 1, paddingTop: theme.spacing.md }}>
-        <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-          <Pressable
-            accessibilityLabel="Kapat"
-            onPress={() => router.back()}
-            hitSlop={8}
+  // Tek dikey scroll sahibi: başlık, tanıtım şeridi, hero kartı, filtreler ve arama
+  // FlatList'in ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça
+  // halinde birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
+  const isInitialLoading = obligationsQuery.isLoading && rows.length === 0;
+
+  const listHeader = (
+    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
+      <Row align="center">
+        <Pressable
+          accessibilityLabel="Kapat"
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.surfaceElevated,
+          }}
+        >
+          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
+        </Pressable>
+        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
+          {title}
+        </Text>
+        <Pressable
+          accessibilityLabel="Yeni kayıt"
+          onPress={() => router.push('/obligations/new')}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.brandPrimary,
+          }}
+        >
+          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
+        </Pressable>
+      </Row>
+
+      {/* Tanıtım şeridi: sayfanın kimliği ve kısa açıklaması, istatistiklerden ayrı
+          sakin bir yüzeyde — tutarlar aşağıdaki karta ait, burada dikkat dağıtmaz. */}
+      <Card
+        style={{
+          borderRadius: theme.radius.heroWidget,
+          padding: theme.spacing.lg,
+          backgroundColor: withAlpha(theme.colors.brandPrimary, 0.08),
+        }}
+      >
+        <Row gap="sm" align="center">
+          <View
             style={{
               width: 44,
               height: 44,
               borderRadius: theme.radius.input,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: theme.colors.surfaceElevated,
+              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.18),
             }}
           >
-            <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-            {title}
-          </Text>
-          <Pressable
-            accessibilityLabel="Yeni kayıt"
-            onPress={() => router.push('/obligations/new')}
-            hitSlop={8}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: theme.radius.input,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: theme.colors.brandPrimary,
-            }}
-          >
-            <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
-          </Pressable>
-        </Row>
-
-        <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          {/* Tanıtım şeridi: sayfanın kimliği ve kısa açıklaması, istatistiklerden ayrı
-              sakin bir yüzeyde — tutarlar aşağıdaki karta ait, burada dikkat dağıtmaz. */}
-          <Card
-            style={{
-              borderRadius: theme.radius.heroWidget,
-              padding: theme.spacing.lg,
-              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.08),
-            }}
-          >
-            <Row gap="sm" align="center">
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: theme.radius.input,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.18),
-                }}
-              >
-                <Ionicons
-                  name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
-                  size={22}
-                  color={theme.colors.brandPrimary}
-                />
-              </View>
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="cardTitle" numberOfLines={1}>
-                  Tek ekrandan kontrol sizde
-                </Text>
-                <Text variant="caption" color="textSecondary" numberOfLines={2}>
-                  Vade ve ödeme durumunu tek ekrandan takip edin.
-                </Text>
-              </Stack>
-              <DocumentCalendarIllustration size={72} />
-            </Row>
-          </Card>
-        </Stack>
-
-        <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          {/* İstatistik kartı: sol halka aktif kayıtların gecikme oranını (içinde kayıt
-              sayısı + tür etiketi), sağ taraf gerçek borç/alacak kırılımını gösterir —
-              ikisi de zaten hesaplanan `summary` alanlarından türer, ek sorgu yok. */}
-          <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
-            <Stack gap="lg">
-              {summary ? (
-                <>
-                  <Row gap="md" align="center">
-                    <ProgressRing
-                      size={84}
-                      strokeWidth={9}
-                      progress={overdueRatio}
-                      color={ringColor}
-                      trackColor={withAlpha(ringColor, 0.16)}
-                      cap
-                    >
-                      <Stack gap="xxs" align="center">
-                        <Text variant="cardTitle" tabular numberOfLines={1}>
-                          {summary.count}
-                        </Text>
-                        <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ letterSpacing: 0.3 }}>
-                          {(documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? documentType) : 'Kayıt').toLocaleUpperCase(
-                            'tr-TR'
-                          )}
-                        </Text>
-                      </Stack>
-                    </ProgressRing>
-
-                    <Row gap="sm" style={{ flex: 1 }}>
-                      {summary.payableMinor > 0 || summary.receivableMinor === 0 ? (
-                        <Stack gap="xxs" style={{ flex: 1 }}>
-                          <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                            TOPLAM BORÇ
-                          </Text>
-                          <Amount
-                            amountMinor={summary.payableMinor}
-                            direction="payable"
-                            variant="cardTitle"
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                            minimumFontScale={0.6}
-                          />
-                        </Stack>
-                      ) : null}
-                      {summary.receivableMinor > 0 ? (
-                        <Stack gap="xxs" style={{ flex: 1 }}>
-                          <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                            TOPLAM ALACAK
-                          </Text>
-                          <Amount
-                            amountMinor={summary.receivableMinor}
-                            direction="receivable"
-                            variant="cardTitle"
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                            minimumFontScale={0.6}
-                          />
-                        </Stack>
-                      ) : null}
-                    </Row>
-                  </Row>
-                  <Text variant="caption" color="textSecondary">
-                    {summary.count} kayıt
-                    {summary.overdueCount > 0 ? ` · ${summary.overdueCount} gecikmiş` : ''}
-                  </Text>
-                </>
-              ) : null}
-
-              <Button
-                icon="add"
-                label={`Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`}
-                onPress={() =>
-                  router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
-                }
-              />
-            </Stack>
-          </Card>
-        </Stack>
-
-        <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <SegmentedControl options={STATUS_OPTIONS} value={statusKey} onChange={setStatusKey} size="compact" stretch />
-        </Stack>
-
-        <Row gap="xs" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <View style={{ flex: 1, position: 'relative', justifyContent: 'center' }}>
             <Ionicons
-              name="search"
-              size={18}
-              color={theme.colors.textSecondary}
-              style={{ position: 'absolute', left: theme.spacing.sm, zIndex: 1 }}
-            />
-            <TextField
-              placeholder={`${title} ara...`}
-              value={searchInput}
-              onChangeText={setSearchInput}
-              returnKeyType="search"
-              autoCorrect={false}
-              style={{ paddingLeft: theme.spacing.xxl }}
+              name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
+              size={22}
+              color={theme.colors.brandPrimary}
             />
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Tarihe göre sırala"
-            onPress={() => setSortAscending((v) => !v)}
-            style={{
-              height: theme.buttonHeight.primary,
-              paddingHorizontal: theme.spacing.sm,
-              borderRadius: theme.radius.input,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: theme.spacing.xxs,
-            }}
-          >
-            <Ionicons
-              name={sortAscending ? 'arrow-up' : 'arrow-down'}
-              size={14}
-              color={theme.colors.textSecondary}
-            />
-            <Text variant="body" color="textSecondary">
-              Tarih
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="cardTitle" numberOfLines={1}>
+              Tek ekrandan kontrol sizde
             </Text>
-          </Pressable>
+            <Text variant="caption" color="textSecondary" numberOfLines={2}>
+              Vade ve ödeme durumunu tek ekrandan takip edin.
+            </Text>
+          </Stack>
+          <DocumentCalendarIllustration size={72} />
         </Row>
+      </Card>
 
-        {obligationsQuery.error ? (
-          <Text variant="body" color="danger" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-            {obligationsQuery.error instanceof Error ? obligationsQuery.error.message : 'Kayıtlar yüklenemedi'}
-          </Text>
-        ) : null}
+      {/* İstatistik hero kartı: üstte gerçek borç/alacak tutarı + gecikme halkası, altta
+          aktif/toplam/gecikmiş sayaçları — Ana Sayfa'daki BalanceHero ile aynı dil
+          (büyük tutar + halka + ayraçlı özet satırı). Sayaçlar sekme/arama filtresinden
+          bağımsız `overviewQuery`den gelir ki "Kapalı" sekmesine geçmek hero'yu değiştirmesin. */}
+      <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+        <Stack gap="lg">
+          <Row gap="md" align="center">
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.4 }}>
+                {showsPayable ? 'TOPLAM BORÇ' : 'TOPLAM ALACAK'}
+              </Text>
+              <Amount
+                amountMinor={showsPayable ? heroPayableMinor : heroReceivableMinor}
+                direction={showsPayable ? 'payable' : 'receivable'}
+                variant="displayAmount"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.55}
+              />
+              {heroPayableMinor > 0 && heroReceivableMinor > 0 ? (
+                <Row gap="xs" align="center">
+                  <Text variant="caption" color="textSecondary">
+                    Alacak:
+                  </Text>
+                  <Amount amountMinor={heroReceivableMinor} direction="receivable" variant="caption" />
+                </Row>
+              ) : null}
+            </Stack>
 
-        {/* Liste, üstteki başlık/filtre bloklarının altına sıkışmadan kalan tüm dikey alanı
-            kaplasın diye `flex: 1` alır — aksi halde FlatList içeriği kadar yer kaplayıp
-            kendi içinde kaydırılamayan, "ayrı bir kutu" gibi görünen bir alana dönüşürdü. */}
-        {obligationsQuery.isLoading && rows.length === 0 ? (
-          <Row style={{ flex: 1, justifyContent: 'center' }}>
-            <ActivityIndicator color={theme.colors.textSecondary} />
-          </Row>
-        ) : rows.length === 0 ? (
-          <Stack
-            gap="md"
-            align="center"
-            style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
-          >
             <View
               style={{
-                width: 64,
-                height: 64,
-                borderRadius: 32,
+                width: 52,
+                height: 52,
+                borderRadius: theme.radius.input,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
+                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
               }}
             >
               <Ionicons
-                name={isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
-                size={28}
+                name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
+                size={24}
                 color={theme.colors.brandPrimary}
               />
             </View>
-            <Stack gap="xxs" align="center">
-              <Text variant="cardTitle" style={{ textAlign: 'center' }}>
-                {isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}
+          </Row>
+
+          <Stack gap="xs">
+            <Row align="center" style={{ justifyContent: 'space-between' }}>
+              <Text variant="caption" color="textSecondary">
+                İLERLEME ORANI
               </Text>
-              <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-                {isFiltered
-                  ? 'Arama terimini veya filtreleri değiştirin.'
-                  : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'}
+              <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>
+                %{Math.round(progressRatio * 100)}
               </Text>
-            </Stack>
-            {!isFiltered ? (
-              <Pressable
-                onPress={() =>
-                  router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
-                }
-                style={{
-                  paddingHorizontal: theme.spacing.lg,
-                  height: theme.controlHeight.segmented,
-                  borderRadius: 999,
-                  backgroundColor: theme.colors.brandPrimary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text variant="body" style={{ color: theme.colors.brandPrimaryText, fontWeight: '600' }}>
-                  {`Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`}
-                </Text>
-              </Pressable>
-            ) : null}
-          </Stack>
-        ) : (
-          <>
-            <FlatList
-              data={rows}
-              keyExtractor={(item) => item.id}
-              style={{ flex: 1 }}
-              contentContainerStyle={{
-                paddingHorizontal: theme.screenEdge.standard,
-                gap: theme.spacing.sm,
-                paddingBottom: theme.spacing.lg,
+            </Row>
+            <View
+              style={{
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
+                overflow: 'hidden',
               }}
-              renderItem={({ item }) => (
-                <ObligationRowCard
-                  item={item}
-                  installmentSummary={installmentSummaries[item.id]}
-                  onDelete={confirmDelete}
-                  deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
-                />
-              )}
-            />
-            {totalPages > 1 ? (
+            >
               <View
                 style={{
-                  paddingHorizontal: theme.screenEdge.standard,
-                  paddingTop: theme.spacing.sm,
-                  paddingBottom: theme.spacing.xs,
-                  borderTopWidth: 1,
-                  borderTopColor: theme.colors.border,
+                  width: `${Math.max(0, Math.min(100, Math.round(progressRatio * 100)))}%`,
+                  height: '100%',
+                  borderRadius: 4,
+                  backgroundColor: theme.colors.brandPrimary,
+                }}
+              />
+            </View>
+          </Stack>
+
+          <Divider />
+
+          <Row>
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                AKTİF {typeLabel.toLocaleUpperCase('tr-TR')}
+              </Text>
+              <Text variant="cardTitle" tabular>
+                {activeCount}
+              </Text>
+            </Stack>
+            <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                TOPLAM {typeLabel.toLocaleUpperCase('tr-TR')}
+              </Text>
+              <Text variant="cardTitle" tabular>
+                {totalTypeCount}
+              </Text>
+            </Stack>
+            {overdueCount > 0 ? (
+              <>
+                <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
+                <Stack gap="xxs" style={{ flex: 1 }}>
+                  <Text variant="caption" color="danger" numberOfLines={1}>
+                    GECİKMİŞ
+                  </Text>
+                  <Text variant="cardTitle" tabular style={{ color: theme.colors.danger }}>
+                    {overdueCount}
+                  </Text>
+                </Stack>
+              </>
+            ) : null}
+          </Row>
+
+          <Button
+            icon="add"
+            label={`Yeni ${typeLabel} Ekle`}
+            onPress={() =>
+              router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
+            }
+          />
+        </Stack>
+      </Card>
+
+      <SegmentedControl options={STATUS_OPTIONS} value={statusKey} onChange={setStatusKey} size="compact" stretch />
+
+      <Row gap="xs">
+        <View style={{ flex: 1, position: 'relative', justifyContent: 'center' }}>
+          <Ionicons
+            name="search"
+            size={18}
+            color={theme.colors.textSecondary}
+            style={{ position: 'absolute', left: theme.spacing.sm, zIndex: 1 }}
+          />
+          <TextField
+            placeholder={`${title} ara...`}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            returnKeyType="search"
+            autoCorrect={false}
+            style={{ paddingLeft: theme.spacing.xxl }}
+          />
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Tarihe göre sırala"
+          onPress={() => setSortAscending((v) => !v)}
+          style={{
+            height: theme.buttonHeight.primary,
+            paddingHorizontal: theme.spacing.sm,
+            borderRadius: theme.radius.input,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.xxs,
+          }}
+        >
+          <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
+          <Text variant="body" color="textSecondary">
+            Tarih
+          </Text>
+        </Pressable>
+      </Row>
+
+      {obligationsQuery.error ? (
+        <Text variant="body" color="danger">
+          {obligationsQuery.error instanceof Error ? obligationsQuery.error.message : 'Kayıtlar yüklenemedi'}
+        </Text>
+      ) : null}
+    </Stack>
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <FlatList
+        data={rows}
+        keyExtractor={(item) => item.id}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: theme.screenEdge.standard,
+          paddingBottom: theme.spacing.xxl,
+          gap: theme.spacing.md,
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeader}
+        renderItem={({ item }) => (
+          <ObligationRowCard
+            item={item}
+            installmentSummary={installmentSummaries[item.id]}
+            onDelete={confirmDelete}
+            deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
+          />
+        )}
+        ListEmptyComponent={
+          isInitialLoading ? (
+            <Row style={{ flex: 1, justifyContent: 'center' }}>
+              <ActivityIndicator color={theme.colors.textSecondary} />
+            </Row>
+          ) : (
+            <Stack gap="md" align="center" style={{ flex: 1, justifyContent: 'center' }}>
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
                 }}
               >
-                <Pagination
-                  page={effectivePage}
-                  totalPages={totalPages}
-                  loading={obligationsQuery.isFetching}
-                  onChange={setPage}
+                <Ionicons
+                  name={
+                    isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'
+                  }
+                  size={28}
+                  color={theme.colors.brandPrimary}
                 />
               </View>
-            ) : null}
-          </>
-        )}
-      </Stack>
+              <Stack gap="xxs" align="center">
+                <Text variant="cardTitle" style={{ textAlign: 'center' }}>
+                  {isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}
+                </Text>
+                <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
+                  {isFiltered
+                    ? 'Arama terimini veya filtreleri değiştirin.'
+                    : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'}
+                </Text>
+              </Stack>
+              {!isFiltered ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
+                  }
+                  style={{
+                    paddingHorizontal: theme.spacing.lg,
+                    height: theme.controlHeight.segmented,
+                    borderRadius: 999,
+                    backgroundColor: theme.colors.brandPrimary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text variant="body" style={{ color: theme.colors.brandPrimaryText, fontWeight: '600' }}>
+                    {`Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </Stack>
+          )
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
+            <View
+              style={{
+                paddingTop: theme.spacing.sm,
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.border,
+              }}
+            >
+              <Pagination
+                page={effectivePage}
+                totalPages={totalPages}
+                loading={obligationsQuery.isFetching}
+                onChange={setPage}
+              />
+            </View>
+          ) : null
+        }
+      />
     </SafeAreaView>
   );
 }

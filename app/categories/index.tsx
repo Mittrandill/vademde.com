@@ -49,45 +49,50 @@ export default function CategoriesScreen() {
 
   const isFiltered = search.trim().length > 0 || kindFilter !== 'all';
 
+  // Tek dikey scroll sahibi: başlık, arama ve filtre SectionList'in ListHeaderComponent'ine
+  // taşınır ki liste kaydırıldığında hepsi tek parça halinde birlikte kaysın — üstte sabit
+  // kalıp listeyi küçük bir kutuya sıkıştırmasınlar. (Önceki halinde SectionList'e `flex: 1`
+  // verilmemişti; bu da liste yerine doğal içerik yüksekliğine sıkışmasına yol açıyordu.)
+  const listHeader = (
+    <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
+      <Row align="center">
+        <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+        </Pressable>
+        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
+          Kategoriler
+        </Text>
+        <Pressable onPress={() => router.push('/categories/new')} hitSlop={12}>
+          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        </Pressable>
+      </Row>
+
+      <Stack gap="sm">
+        <TextField
+          placeholder="Kategori adında ara"
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+        <SegmentedControl options={KIND_FILTERS} value={kindFilter} onChange={setKindFilter} size="compact" stretch />
+      </Stack>
+    </Stack>
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="lg" style={{ flex: 1, paddingTop: theme.spacing.md }}>
-        <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-            Kategoriler
-          </Text>
-          <Pressable onPress={() => router.push('/categories/new')} hitSlop={12}>
-            <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
-          </Pressable>
-        </Row>
-
-        <Stack gap="sm" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <TextField
-            placeholder="Kategori adında ara"
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          <SegmentedControl
-            options={KIND_FILTERS}
-            value={kindFilter}
-            onChange={setKindFilter}
-            size="compact"
-            stretch
-          />
-        </Stack>
-
         <SectionList
           sections={sections}
           keyExtractor={(item: Category) => item.id}
+          style={{ flex: 1 }}
           contentContainerStyle={{
             paddingHorizontal: theme.screenEdge.standard,
             paddingBottom: theme.spacing.xxl,
+            flexGrow: 1,
           }}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={listHeader}
           renderSectionHeader={({ section }) => (
             <Text
               variant="caption"
@@ -142,7 +147,6 @@ export default function CategoriesScreen() {
             ) : null
           }
         />
-      </Stack>
     </SafeAreaView>
   );
 }

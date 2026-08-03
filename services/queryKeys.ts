@@ -19,6 +19,8 @@ export const queryKeys = {
     [workspaceId, 'obligations', 'by-type-list', filterKey] as const,
   obligationsByTypeSummary: (workspaceId: string, filterKey: string) =>
     [workspaceId, 'obligations', 'by-type-summary', filterKey] as const,
+  obligationsByTypeOverview: (workspaceId: string, documentType: string) =>
+    [workspaceId, 'obligations', 'by-type-overview', documentType] as const,
   obligationTotalsByType: (workspaceId: string) =>
     [workspaceId, 'obligations', 'type-totals'] as const,
   obligationInstallmentSummaries: (workspaceId: string, idsKey: string) =>

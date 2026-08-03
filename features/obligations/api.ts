@@ -90,6 +90,9 @@ export interface ObligationSummary {
   count: number;
   payableMinor: number;
   receivableMinor: number;
+  /** Kalan değil, kaydın orijinal toplam tutarı — ilerleme oranı (ödenen pay) hesaplamak için. */
+  payableTotalMinor: number;
+  receivableTotalMinor: number;
   overdueCount: number;
 }
 
@@ -105,7 +108,7 @@ export async function getObligationSummary({
 }: Omit<ListObligationsFilter, 'page' | 'pageSize' | 'dueFrom' | 'dueTo'>): Promise<ObligationSummary> {
   let query = supabase
     .from('obligations')
-    .select('direction, remaining_amount_minor, status')
+    .select('direction, remaining_amount_minor, total_amount_minor, status')
     .eq('workspace_id', workspaceId);
   if (direction) query = query.eq('direction', direction);
   if (documentType) query = query.eq('document_type', documentType);
@@ -125,6 +128,12 @@ export async function getObligationSummary({
     receivableMinor: rows
       .filter((r) => r.direction === 'receivable')
       .reduce((sum, r) => sum + r.remaining_amount_minor, 0),
+    payableTotalMinor: rows
+      .filter((r) => r.direction === 'payable')
+      .reduce((sum, r) => sum + r.total_amount_minor, 0),
+    receivableTotalMinor: rows
+      .filter((r) => r.direction === 'receivable')
+      .reduce((sum, r) => sum + r.total_amount_minor, 0),
     overdueCount: rows.filter((r) => r.status === 'gecikti').length,
   };
 }

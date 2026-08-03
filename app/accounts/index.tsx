@@ -91,155 +91,147 @@ export default function AccountsScreen() {
     0
   );
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="lg" style={{ flex: 1, paddingTop: theme.spacing.md }}>
-        <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-            Hesaplar
-          </Text>
-          <Pressable onPress={() => router.push('/accounts/new')} hitSlop={12}>
-            <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
-          </Pressable>
-        </Row>
+  // Tek dikey scroll sahibi: başlık, hero bakiye kartı, arama ve filtre FlatList'in
+  // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde
+  // birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
+  const listHeader = (
+    <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
+      <Row align="center">
+        <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+        </Pressable>
+        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
+          Hesaplar
+        </Text>
+        <Pressable onPress={() => router.push('/accounts/new')} hitSlop={12}>
+          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        </Pressable>
+      </Row>
 
-        {allAccounts.length > 0 ? (
-          <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-            <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
-              <Stack gap="xs">
-                <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                  TOPLAM BAKİYE
-                </Text>
-                <Amount
-                  amountMinor={totalBalanceMinor}
-                  variant="displayAmount"
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.6}
-                />
-                <Text variant="caption" color="textSecondary">
-                  {allAccounts.length} hesap
-                </Text>
-              </Stack>
-            </Card>
-          </Stack>
-        ) : null}
-
-        <Stack gap="sm" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <TextField
-            placeholder="Hesap adı veya IBAN'da ara"
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          <SegmentedControl
-            options={TYPE_FILTERS}
-            value={typeFilter}
-            onChange={setTypeFilter}
-            size="compact"
-            stretch
-          />
-        </Stack>
-
-        {accountsQuery.error ? (
-          <Text
-            variant="body"
-            color="danger"
-            style={{ paddingHorizontal: theme.screenEdge.standard }}
-          >
-            {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Hesaplar yüklenemedi'}
-          </Text>
-        ) : null}
-
-        {accountsQuery.isSuccess && accounts.length === 0 ? (
-          <Stack
-            gap="xs"
-            style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
-          >
-            <Text variant="cardTitle">{allAccounts.length === 0 ? 'Henüz hesap yok' : 'Sonuç bulunamadı'}</Text>
-            <Text variant="body" color="textSecondary">
-              {allAccounts.length === 0
-                ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.'
-                : 'Arama terimini veya filtreyi değiştirin.'}
+      {allAccounts.length > 0 ? (
+        <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+          <Stack gap="xs">
+            <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+              TOPLAM BAKİYE
+            </Text>
+            <Amount
+              amountMinor={totalBalanceMinor}
+              variant="displayAmount"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            />
+            <Text variant="caption" color="textSecondary">
+              {allAccounts.length} hesap
             </Text>
           </Stack>
-        ) : (
-          <>
-          <FlatList
-            data={pagedAccounts}
-            keyExtractor={(item) => item.id}
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: theme.screenEdge.standard,
-              gap: theme.spacing.sm,
-              paddingBottom: theme.spacing.xxl,
-            }}
-            renderItem={({ item }) => {
-              const balanceMinor = balanceByAccountId.get(item.id) ?? item.opening_balance_minor;
-              const type = item.type as Account['type'];
+        </Card>
+      ) : null}
 
-              return (
-                <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
-                  <Card>
-                    <Row gap="sm" align="center">
-                      <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={40} />
-                      <Stack gap="xxs" style={{ flex: 1 }}>
-                        <Text variant="cardTitle" numberOfLines={1}>
-                          {item.name}
+      <Stack gap="sm">
+        <TextField
+          placeholder="Hesap adı veya IBAN'da ara"
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+        <SegmentedControl options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} size="compact" stretch />
+      </Stack>
+
+      {accountsQuery.error ? (
+        <Text variant="body" color="danger">
+          {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Hesaplar yüklenemedi'}
+        </Text>
+      ) : null}
+    </Stack>
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <FlatList
+        data={pagedAccounts}
+        keyExtractor={(item) => item.id}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: theme.screenEdge.standard,
+          gap: theme.spacing.sm,
+          paddingBottom: theme.spacing.xxl,
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeader}
+        renderItem={({ item }) => {
+          const balanceMinor = balanceByAccountId.get(item.id) ?? item.opening_balance_minor;
+          const type = item.type as Account['type'];
+
+          return (
+            <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
+              <Card>
+                <Row gap="sm" align="center">
+                  <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={40} />
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="cardTitle" numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Row gap="xs" align="center">
+                      <View
+                        style={{
+                          paddingHorizontal: theme.spacing.xs,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                          backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
+                        }}
+                      >
+                        <Text variant="caption" color="textSecondary">
+                          {TYPE_LABEL[type]}
                         </Text>
-                        <Row gap="xs" align="center">
-                          <View
-                            style={{
-                              paddingHorizontal: theme.spacing.xs,
-                              paddingVertical: 2,
-                              borderRadius: 999,
-                              backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
-                            }}
-                          >
-                            <Text variant="caption" color="textSecondary">
-                              {TYPE_LABEL[type]}
-                            </Text>
-                          </View>
-                          {item.iban ? (
-                            <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
-                              {maskIban(item.iban)}
-                            </Text>
-                          ) : null}
-                        </Row>
-                      </Stack>
-                      <Amount
-                        amountMinor={balanceMinor}
-                        currencyCode={item.currency_code}
-                        variant="cardTitle"
-                        numberOfLines={1}
-                        style={{ color: balanceMinor < 0 ? theme.colors.danger : undefined }}
-                      />
+                      </View>
+                      {item.iban ? (
+                        <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
+                          {maskIban(item.iban)}
+                        </Text>
+                      ) : null}
                     </Row>
-                  </Card>
-                </Pressable>
-              );
-            }}
-          />
-          {totalPages > 1 ? (
+                  </Stack>
+                  <Amount
+                    amountMinor={balanceMinor}
+                    currencyCode={item.currency_code}
+                    variant="cardTitle"
+                    numberOfLines={1}
+                    style={{ color: balanceMinor < 0 ? theme.colors.danger : undefined }}
+                  />
+                </Row>
+              </Card>
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          accountsQuery.isSuccess ? (
+            <Stack gap="xs" style={{ flex: 1, justifyContent: 'center' }}>
+              <Text variant="cardTitle">{allAccounts.length === 0 ? 'Henüz hesap yok' : 'Sonuç bulunamadı'}</Text>
+              <Text variant="body" color="textSecondary">
+                {allAccounts.length === 0
+                  ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.'
+                  : 'Arama terimini veya filtreyi değiştirin.'}
+              </Text>
+            </Stack>
+          ) : null
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
             <View
               style={{
-                paddingHorizontal: theme.screenEdge.standard,
                 paddingTop: theme.spacing.sm,
-                paddingBottom: theme.spacing.xs,
                 borderTopWidth: 1,
                 borderTopColor: theme.colors.border,
               }}
             >
               <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} />
             </View>
-          ) : null}
-          </>
-        )}
-      </Stack>
+          ) : null
+        }
+      />
     </SafeAreaView>
   );
 }

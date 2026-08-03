@@ -132,12 +132,15 @@ export default function CounterpartyDetailScreen() {
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
+        style={{ flex: 1 }}
         stickySectionHeadersEnabled={false}
         contentContainerStyle={{
           padding: theme.screenEdge.standard,
           paddingBottom: theme.spacing.huge,
           gap: theme.spacing.xs,
+          flexGrow: 1,
         }}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <Stack gap="lg" style={{ marginBottom: theme.spacing.lg }}>
             <Row align="center">

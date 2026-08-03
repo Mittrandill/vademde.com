@@ -44,7 +44,9 @@ export default function MoreScreen() {
       <ScrollView
         contentContainerStyle={{
           padding: theme.screenEdge.standard,
-          paddingBottom: theme.spacing.huge,
+          // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
+          // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
+          paddingBottom: 100,
           gap: theme.spacing.lg,
         }}
       >

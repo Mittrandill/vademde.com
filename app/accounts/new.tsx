@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -90,7 +90,11 @@ export default function NewAccountScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        <Stack gap="lg" style={{ flex: 1, padding: theme.screenEdge.standard }}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: theme.screenEdge.standard }}
+        >
+        <Stack gap="lg">
           <Row align="center">
             <Pressable onPress={() => router.back()} hitSlop={12}>
               <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
@@ -193,6 +197,7 @@ export default function NewAccountScreen() {
             disabled={!name.trim()}
           />
         </Stack>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
