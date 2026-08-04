@@ -33,11 +33,13 @@ function isValidDayOfMonth(value: string): boolean {
 export default function NewAccountScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, type: typeParam } = useLocalSearchParams<{ id?: string; type?: string }>();
   const isEditing = !!id;
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [name, setName] = useState('');
-  const [type, setType] = useState<Account['type']>('cash');
+  const [type, setType] = useState<Account['type']>(
+    TYPES.some((t) => t.value === typeParam) ? (typeParam as Account['type']) : 'cash'
+  );
   const [bankCode, setBankCode] = useState<string | null>(null);
   const [iban, setIban] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');

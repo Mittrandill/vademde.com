@@ -10,6 +10,7 @@ import { withAlpha } from '@/theme/colors';
 import { Card, Divider, EmptyState, Pagination, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { archiveAccount, getAccount, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listObligations } from '@/features/obligations/api';
@@ -123,21 +124,33 @@ export default function AccountDetailScreen() {
     balancesQuery.data?.find((b) => b.accountId === account.id)?.balanceMinor ?? account.opening_balance_minor;
 
   // Son 6 ay (bu ay dahil): her biri için aynı ay içinde vadesi olan bir ekstre
-  // (obligation) var mı diye bakılır — varsa "Yüklendi", yoksa "Yüklenmedi" rozeti.
+  // (obligation) var mı diye bakılır — varsa borç tutarıyla birlikte gösterilir ve
+  // dokununca o ekstrenin detayına (obligations/[id]) gidilir, yoksa "Yüklenmedi" rozeti.
   const statementMonths = isCreditCardAccount
     ? Array.from({ length: 6 }, (_, i) => {
         const now = new Date();
         const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const periodKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
-        const fulfilled = (statementsQuery.data ?? []).some((o) => {
+        const obligation = (statementsQuery.data ?? []).find((o) => {
           if (!o.due_date) return false;
           const d = new Date(o.due_date);
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === periodKey;
         });
-        return { periodKey, monthDate, fulfilled };
+        return { periodKey, monthDate, obligation: obligation ?? null };
       })
     : [];
-  const mostRecentUnfulfilled = statementMonths.find((m) => !m.fulfilled);
+  const mostRecentUnfulfilled = statementMonths.find((m) => !m.obligation);
+
+  // Ekran web'de doğrudan bu URL'e gidilerek (sayfa yenileme, deep link) açılırsa
+  // stack'te geri gidilecek bir geçmiş olmayabilir — o durumda hesabın türüne uygun
+  // listeye düşülür (credit-cards.tsx'teki aynı korumaya bkz.).
+  function goBack() {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(isCreditCardAccount ? '/accounts/credit-cards' : '/accounts');
+    }
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -155,108 +168,157 @@ export default function AccountDetailScreen() {
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <Stack gap="lg" style={{ marginBottom: theme.spacing.lg }}>
-            <Row align="center">
-              <Pressable onPress={() => router.back()} hitSlop={12}>
-                <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
-              </Pressable>
-              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-                {account.name}
-              </Text>
-              <Pressable onPress={() => router.push({ pathname: '/accounts/new', params: { id: account.id } })} hitSlop={12}>
-                <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
-              </Pressable>
-            </Row>
+            {isCreditCardAccount ? (
+              // Kredi kartı: obligations/[id].tsx'teki (kredi detayı) aynı başlıksız
+              // düzen — kart görseli zaten kimliği (isim, banka) taşıdığı için ayrıca
+              // sayfa başlığına gerek yok, geri/düzenle aynı daire ikon butonları.
+              <Row align="center">
+                <CircleIconButton icon="arrow-back" label="Geri" onPress={goBack} />
+                <View style={{ flex: 1 }} />
+                <CircleIconButton
+                  icon="create-outline"
+                  label="Düzenle"
+                  onPress={() => router.push({ pathname: '/accounts/new', params: { id: account.id } })}
+                />
+              </Row>
+            ) : (
+              <Row align="center">
+                <Pressable onPress={goBack} hitSlop={12}>
+                  <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
+                </Pressable>
+                <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
+                  {account.name}
+                </Text>
+                <Pressable onPress={() => router.push({ pathname: '/accounts/new', params: { id: account.id } })} hitSlop={12}>
+                  <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
+                </Pressable>
+              </Row>
+            )}
 
-            {/* Hero: banka logosu, hesap türü/IBAN kimliği ve güncel bakiye tek kartta —
-                sayfanın tek büyük rakamı. */}
-            <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
-              <Stack gap="lg">
-                <Row gap="sm" align="center">
-                  <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={44} />
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Row gap="xs" align="center">
-                      <View
-                        style={{
-                          paddingHorizontal: theme.spacing.xs,
-                          paddingVertical: 2,
-                          borderRadius: 999,
-                          backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
-                        }}
-                      >
-                        <Text variant="caption" color="textSecondary">
-                          {TYPE_LABEL[type]}
-                        </Text>
-                      </View>
-                    </Row>
-                    {account.iban ? (
-                      <Text variant="caption" color="textSecondary" tabular>
-                        {maskIban(account.iban)}
-                      </Text>
-                    ) : null}
+            {isCreditCardAccount ? (
+              // Kredi kartı: fiziksel kartı andıran ayrı bir görsel (banka, maskeli
+              // numara, kesim/son ödeme) + altında güncel borç kartı. Diğer hesap
+              // türlerinde tek kart (logo + tür rozeti + bakiye) yeterli.
+              <Stack gap="sm">
+                <CreditCardVisual account={account} />
+                <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+                  <Stack gap="xxs">
+                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                      GÜNCEL BORÇ
+                    </Text>
+                    <Amount
+                      amountMinor={balanceMinor}
+                      currencyCode={account.currency_code}
+                      variant="displayAmount"
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.6}
+                      style={{ color: balanceMinor > 0 ? theme.colors.danger : theme.colors.textPrimary }}
+                    />
                   </Stack>
-                </Row>
-
-                <Divider />
-
-                <Stack gap="xxs">
-                  <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    GÜNCEL BAKİYE
-                  </Text>
-                  <Amount
-                    amountMinor={balanceMinor}
-                    currencyCode={account.currency_code}
-                    variant="displayAmount"
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.6}
-                    style={{ color: balanceMinor < 0 ? theme.colors.danger : theme.colors.textPrimary }}
-                  />
-                </Stack>
+                </Card>
               </Stack>
-            </Card>
+            ) : (
+              <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+                <Stack gap="lg">
+                  <Row gap="sm" align="center">
+                    <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={44} />
+                    <Stack gap="xxs" style={{ flex: 1 }}>
+                      <Row gap="xs" align="center">
+                        <View
+                          style={{
+                            paddingHorizontal: theme.spacing.xs,
+                            paddingVertical: 2,
+                            borderRadius: 999,
+                            backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
+                          }}
+                        >
+                          <Text variant="caption" color="textSecondary">
+                            {TYPE_LABEL[type]}
+                          </Text>
+                        </View>
+                      </Row>
+                      {account.iban ? (
+                        <Text variant="caption" color="textSecondary" tabular>
+                          {maskIban(account.iban)}
+                        </Text>
+                      ) : null}
+                    </Stack>
+                  </Row>
+
+                  <Divider />
+
+                  <Stack gap="xxs">
+                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                      GÜNCEL BAKİYE
+                    </Text>
+                    <Amount
+                      amountMinor={balanceMinor}
+                      currencyCode={account.currency_code}
+                      variant="displayAmount"
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.6}
+                      style={{ color: balanceMinor < 0 ? theme.colors.danger : theme.colors.textPrimary }}
+                    />
+                  </Stack>
+                </Stack>
+              </Card>
+            )}
 
             {isCreditCardAccount ? (
               <Stack gap="sm">
                 <SectionHeader title="Ekstre Geçmişi" />
                 <Card>
                   <Stack gap="sm">
-                    {statementMonths.map((m, index) => (
-                      <View key={m.periodKey}>
+                    {statementMonths.map((m, index) => {
+                      const row = (
                         <Row align="center">
                           <Text variant="body" style={{ flex: 1, textTransform: 'capitalize' }}>
                             {monthFormatter.format(m.monthDate)}
                           </Text>
-                          <Row
-                            gap="xxs"
-                            align="center"
-                            style={{
-                              paddingHorizontal: theme.spacing.xs,
-                              paddingVertical: 2,
-                              borderRadius: 999,
-                              backgroundColor: withAlpha(
-                                m.fulfilled ? theme.colors.success : theme.colors.textSecondary,
-                                0.14
-                              ),
-                            }}
-                          >
-                            <Ionicons
-                              name={m.fulfilled ? 'checkmark-circle' : 'alert-circle-outline'}
-                              size={13}
-                              color={m.fulfilled ? theme.colors.success : theme.colors.textSecondary}
-                            />
-                            <Text
-                              variant="caption"
-                              style={{ color: m.fulfilled ? theme.colors.success : theme.colors.textSecondary }}
+                          {m.obligation ? (
+                            <Row gap="sm" align="center">
+                              <Amount
+                                amountMinor={m.obligation.remaining_amount_minor}
+                                currencyCode={m.obligation.currency_code}
+                                variant="body"
+                              />
+                              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+                            </Row>
+                          ) : (
+                            <Row
+                              gap="xxs"
+                              align="center"
+                              style={{
+                                paddingHorizontal: theme.spacing.xs,
+                                paddingVertical: 2,
+                                borderRadius: 999,
+                                backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
+                              }}
                             >
-                              {m.fulfilled ? 'Yüklendi' : 'Yüklenmedi'}
-                            </Text>
-                          </Row>
+                              <Ionicons name="alert-circle-outline" size={13} color={theme.colors.textSecondary} />
+                              <Text variant="caption" color="textSecondary">
+                                Yüklenmedi
+                              </Text>
+                            </Row>
+                          )}
                         </Row>
-                        {index < statementMonths.length - 1 ? (
-                          <Divider style={{ marginTop: theme.spacing.sm }} />
-                        ) : null}
-                      </View>
-                    ))}
+                      );
+
+                      return (
+                        <View key={m.periodKey}>
+                          {m.obligation ? (
+                            <Pressable onPress={() => router.push(`/obligations/${m.obligation!.id}`)}>{row}</Pressable>
+                          ) : (
+                            row
+                          )}
+                          {index < statementMonths.length - 1 ? (
+                            <Divider style={{ marginTop: theme.spacing.sm }} />
+                          ) : null}
+                        </View>
+                      );
+                    })}
                   </Stack>
                 </Card>
                 {mostRecentUnfulfilled ? (
@@ -322,6 +384,37 @@ export default function AccountDetailScreen() {
         }
       />
     </SafeAreaView>
+  );
+}
+
+interface CircleIconButtonProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}
+
+// obligations/[id].tsx'teki aynı buton — kredi kartı hero'sunda başlıksız düzenin
+// geri/düzenle butonları bu bileşenle bire bir aynı görünür.
+function CircleIconButton({ icon, label, onPress }: CircleIconButtonProps) {
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={8}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.surfaceElevated,
+      }}
+    >
+      <Ionicons name={icon} size={19} color={theme.colors.textPrimary} />
+    </Pressable>
   );
 }
 

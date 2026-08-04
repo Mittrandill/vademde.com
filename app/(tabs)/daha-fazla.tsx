@@ -8,6 +8,7 @@ import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import { Card, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { listAccounts } from '@/features/accounts/api';
+import { getAccountBalances } from '@/features/reports/api';
 import { getObligationTotalsByType } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_ICON, DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -15,8 +16,10 @@ import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
 // Hub'da gösterilecek belge türleri. Tümü değil, günlük kullanımda sık geçenler —
-// gerisine Hareketler'in belge türü filtresinden ulaşılır.
-const PINNED_DOCUMENT_TYPES = ['kredi', 'kredi_karti_ekstresi', 'cek', 'senet', 'kira', 'fatura'];
+// gerisine Hareketler'in belge türü filtresinden ulaşılır. "Kredi" ve "Kredi Kartlarım"
+// (hesap bazlı, kendi ekranı) elle en başa yerleştirildiği için burada değil; geri kalanlar
+// aynı sırayla map'lenir.
+const OTHER_DOCUMENT_TYPES = ['cek', 'senet', 'kira', 'fatura'];
 
 export default function MoreScreen() {
   const theme = useTheme();
@@ -36,8 +39,20 @@ export default function MoreScreen() {
     enabled: !!activeWorkspaceId,
   });
 
+  const balancesQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
+    queryFn: () => getAccountBalances(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+
   const totalsByType = totalsQuery.data;
   const accounts = accountsQuery.data ?? [];
+  const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
+  const creditCardAccounts = accounts.filter((a) => a.type === 'credit_card');
+  const totalCardDebtMinor = creditCardAccounts.reduce(
+    (sum, a) => sum + (balanceByAccountId.get(a.id) ?? a.opening_balance_minor),
+    0
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -55,7 +70,31 @@ export default function MoreScreen() {
         <Stack gap="sm">
           <SectionHeader title="Kayıt Türleri" />
           <Row gap="sm" style={{ flexWrap: 'wrap' }}>
-            {PINNED_DOCUMENT_TYPES.map((type) => {
+            <HubTile
+              icon={DOCUMENT_TYPE_ICON.kredi ?? 'cash-outline'}
+              label={DOCUMENT_TYPE_LABEL.kredi ?? 'Kredi'}
+              detail={
+                totalsByType?.kredi
+                  ? `${totalsByType.kredi.count} kayıt · ${formatMinorAmount(totalsByType.kredi.totalMinor)}`
+                  : 'Kayıt yok'
+              }
+              accent={theme.colors.accentViolet}
+              href={{ pathname: '/obligations', params: { type: 'kredi' } }}
+            />
+            {/* Kartlar artık obligation türü değil, hesap bazlı bir liste — kendi
+                ekranına (Kredi Kartlarım) gider, Kredi'nin hemen ardında yer alır. */}
+            <HubTile
+              icon="card-outline"
+              label="Kredi Kartlarım"
+              detail={
+                creditCardAccounts.length > 0
+                  ? `${creditCardAccounts.length} kart · ${formatMinorAmount(totalCardDebtMinor)}`
+                  : 'Kart yok'
+              }
+              accent={theme.colors.accentViolet}
+              href="/accounts/credit-cards"
+            />
+            {OTHER_DOCUMENT_TYPES.map((type) => {
               const totals = totalsByType?.[type];
               return (
                 <HubTile
