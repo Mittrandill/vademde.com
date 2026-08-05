@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, InteractionManager, Modal, ScrollView, View } from 'react-native';
+import { ActivityIndicator, InteractionManager, Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -14,13 +14,15 @@ import {
   EmptyState,
   Pagination,
   Pressable,
-  ProgressRing,
   Row,
   SegmentedControl,
   Stack,
   Text,
   TextField,
 } from '@/components/primitives';
+import { StatColumns } from '@/components/primitives/StatColumns';
+import { DetailScaffold } from '@/components/navigation/DetailScaffold';
+import { DetailHeroCard, DetailIdentityRow, DetailMetricRow } from '@/components/finance/DetailHero';
 import { Amount } from '@/components/finance/Amount';
 import { OBLIGATION_STATUS_LABEL, StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
@@ -82,17 +84,15 @@ export default function ObligationDetailScreen() {
 
   if (detailQuery.isLoading || !detailQuery.data) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          {detailQuery.error ? (
-            <Text variant="body" color="danger">
-              {detailQuery.error instanceof Error ? detailQuery.error.message : 'Kayıt yüklenemedi'}
-            </Text>
-          ) : (
-            <ActivityIndicator color={theme.colors.brandPrimary} />
-          )}
-        </Stack>
-      </SafeAreaView>
+      <DetailScaffold
+        header={{ title: '' }}
+        isLoading
+        loadingIndicator={<ActivityIndicator color={theme.colors.brandPrimary} />}
+        error={detailQuery.error}
+        errorFallbackMessage="Kayıt yüklenemedi"
+      >
+        {null}
+      </DetailScaffold>
     );
   }
 
@@ -159,206 +159,140 @@ export default function ObligationDetailScreen() {
   const effectiveRatio = hasRateData && principalSumMinor > 0 ? (interestSumMinor / principalSumMinor) * 100 : null;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
-        <Stack gap="lg">
-          <Row align="center">
-            <Pressable
-              accessibilityLabel="Geri"
-              onPress={() => router.back()}
-              hitSlop={8}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: theme.radius.input,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.colors.surfaceElevated,
-              }}
-            >
-              <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-              {heroPrimaryName}
-            </Text>
-            <Pressable
-              accessibilityLabel="Düzenle"
-              onPress={() => router.push({ pathname: '/obligations/new', params: { id: obligation.id } })}
-              hitSlop={8}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: theme.radius.input,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.colors.surfaceElevated,
-              }}
-            >
-              <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-          </Row>
+    <>
+      <DetailScaffold
+        header={{
+          title: heroPrimaryName,
+          right: {
+            icon: 'pencil',
+            accessibilityLabel: 'Düzenle',
+            onPress: () => router.push({ pathname: '/obligations/new', params: { id: obligation.id } }),
+          },
+        }}
+        isLoading={false}
+      >
+        <DetailHeroCard
+          sections={[
+            <DetailIdentityRow
+              key="identity"
+              icon={
+                <ObligationIcon
+                  documentType={obligation.document_type}
+                  bankCode={obligation.bank_code}
+                  serviceCode={obligation.service_code}
+                  fallbackName={obligation.title}
+                  size={44}
+                />
+              }
+              title={heroPrimaryName}
+              subtitle={heroSubtitle}
+              badge={<StatusBadge status={obligation.status} />}
+            />,
+            <DetailMetricRow
+              key="metric"
+              label={isPayable ? 'KALAN BORÇ' : 'KALAN ALACAK'}
+              value={formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)}
+              valueStyle={{ color: heroAmountColor }}
+              ring={
+                hasInstallments
+                  ? {
+                      progress: clampedProgress,
+                      color: stateAccent,
+                      trackColor: withAlpha(stateAccent, 0.18),
+                      centerContent: (
+                        <Text variant="cardTitle" tabular>
+                          %{Math.round(clampedProgress * 100)}
+                        </Text>
+                      ),
+                    }
+                  : undefined
+              }
+            />,
+            <StatColumns
+              key="stats"
+              columns={[
+                {
+                  label: hasInstallments ? 'SONRAKİ ÖDEME' : 'TOPLAM',
+                  value: hasInstallments
+                    ? formatMinorAmount(nextInstallment?.remaining_amount_minor ?? 0, obligation.currency_code)
+                    : formatMinorAmount(obligation.total_amount_minor, obligation.currency_code),
+                },
+                {
+                  label: hasInstallments ? `KALAN ${unitLabel.toLocaleUpperCase('tr-TR')}` : 'VADE',
+                  value: hasInstallments
+                    ? `${installments.length - paidInstallments}`
+                    : obligation.due_date
+                      ? shortDateFormatter.format(new Date(obligation.due_date))
+                      : 'Yok',
+                  align: 'flex-end',
+                },
+              ]}
+            />,
+          ]}
+        />
 
-          {/* Hero: temanın nötr elevated yüzeyinde banka/belge kimliği, kalan tutar ve
-              ödeme durumunu toplar — açık temada beyaza yakın, koyu temada grafit. */}
-          <Card elevated variant="hero">
-            <Stack gap="lg">
+        {!isClosed && obligation.status !== 'iptal_edildi' && obligation.remaining_amount_minor > 0 ? (
+          <Button label="Ödeme Ekle" onPress={() => setPayingInstallment('obligation')} />
+        ) : null}
+
+        <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
+
+        {tab === 'genel' ? (
+          <Card>
+            <Stack gap="md">
               <Row gap="sm" align="center">
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: theme.radius.input,
-                    backgroundColor: theme.colors.backgroundPrimary,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <ObligationIcon
-                    documentType={obligation.document_type}
-                    bankCode={obligation.bank_code}
-                    serviceCode={obligation.service_code}
-                    fallbackName={obligation.title}
-                    size={44}
-                  />
-                </View>
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle" numberOfLines={2}>
-                    {heroPrimaryName}
-                  </Text>
-                  <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                    {heroSubtitle}
-                  </Text>
-                </Stack>
-                <StatusBadge status={obligation.status} />
+                <Ionicons name="document-text-outline" size={18} color={theme.colors.brandPrimary} />
+                <Text variant="cardTitle">{DOCUMENT_TYPE_LABEL[obligation.document_type] ?? 'Kayıt'} Bilgileri</Text>
               </Row>
-
               <Divider />
-
-              <Row gap="md" align="center">
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    {isPayable ? 'KALAN BORÇ' : 'KALAN ALACAK'}
-                  </Text>
-                  <Text
-                    variant="displayAmount"
-                    tabular
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.5}
-                    style={{ color: heroAmountColor }}
-                  >
-                    {formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)}
-                  </Text>
-                </Stack>
-                {hasInstallments ? (
-                  <ProgressRing
-                    size={88}
-                    strokeWidth={10}
-                    progress={clampedProgress}
-                    color={stateAccent}
-                    trackColor={withAlpha(stateAccent, 0.18)}
-                    cap
-                  >
-                    <Text variant="cardTitle" tabular>
-                      %{Math.round(clampedProgress * 100)}
-                    </Text>
-                  </ProgressRing>
-                ) : null}
-              </Row>
-
-              <Divider />
-
-              <Row>
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary">
-                    {hasInstallments ? 'SONRAKİ ÖDEME' : 'TOPLAM'}
-                  </Text>
-                  <Text variant="cardTitle" tabular numberOfLines={1}>
-                    {hasInstallments
-                      ? formatMinorAmount(nextInstallment?.remaining_amount_minor ?? 0, obligation.currency_code)
-                      : formatMinorAmount(obligation.total_amount_minor, obligation.currency_code)}
-                  </Text>
-                </Stack>
-                <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-                  <Text variant="caption" color="textSecondary">
-                    {hasInstallments ? `KALAN ${unitLabel.toLocaleUpperCase('tr-TR')}` : 'VADE'}
-                  </Text>
-                  <Text variant="cardTitle" tabular numberOfLines={1}>
-                    {hasInstallments
-                      ? `${installments.length - paidInstallments}`
-                      : obligation.due_date
-                        ? shortDateFormatter.format(new Date(obligation.due_date))
-                        : 'Yok'}
-                  </Text>
-                </Stack>
-              </Row>
+              <InfoRow
+                label={isSubscription ? 'Toplam Tutar' : 'Başlangıç Tutarı'}
+                value={formatMinorAmount(obligation.total_amount_minor, obligation.currency_code)}
+              />
+              {effectiveRatio !== null ? (
+                <InfoRow label="Faiz Oranı" value={`%${effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`} />
+              ) : null}
+              {hasInstallments ? (
+                <InfoRow label={`Toplam ${unitLabel}`} value={String(installments.length)} />
+              ) : null}
+              {obligation.due_date ? <InfoRow label="Vade Tarihi" value={dateFormatter.format(new Date(obligation.due_date))} /> : null}
+              {bankName ? <InfoRow label="Banka" value={bankName} /> : null}
+              {serviceName ? <InfoRow label="Servis" value={serviceName} /> : null}
+              <InfoRow label="Durum" value={OBLIGATION_STATUS_LABEL[obligation.status as keyof typeof OBLIGATION_STATUS_LABEL] ?? obligation.status} />
             </Stack>
           </Card>
-
-          {!isClosed && obligation.status !== 'iptal_edildi' && obligation.remaining_amount_minor > 0 ? (
-            <Button label="Ödeme Ekle" onPress={() => setPayingInstallment('obligation')} />
-          ) : null}
-
-          <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
-
-          {tab === 'genel' ? (
-            <Card>
-              <Stack gap="md">
-                <Row gap="sm" align="center">
-                  <Ionicons name="document-text-outline" size={18} color={theme.colors.brandPrimary} />
-                  <Text variant="cardTitle">{DOCUMENT_TYPE_LABEL[obligation.document_type] ?? 'Kayıt'} Bilgileri</Text>
-                </Row>
-                <Divider />
-                <InfoRow
-                  label={isSubscription ? 'Toplam Tutar' : 'Başlangıç Tutarı'}
-                  value={formatMinorAmount(obligation.total_amount_minor, obligation.currency_code)}
+        ) : tab === 'plan' && hasInstallments ? (
+          <Stack gap="md">
+            <View>
+              {visibleInstallments.map((installment, index) => (
+                <TimelineInstallmentRow
+                  key={installment.id}
+                  installment={installment}
+                  currencyCode={obligation.currency_code}
+                  isNext={installment.id === nextInstallment?.id}
+                  isLast={index === visibleInstallments.length - 1}
+                  unitLabel={unitLabel}
+                  onPay={() => setPayingInstallment(installment)}
                 />
-                {effectiveRatio !== null ? (
-                  <InfoRow label="Faiz Oranı" value={`%${effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`} />
-                ) : null}
-                {hasInstallments ? (
-                  <InfoRow label={`Toplam ${unitLabel}`} value={String(installments.length)} />
-                ) : null}
-                {obligation.due_date ? <InfoRow label="Vade Tarihi" value={dateFormatter.format(new Date(obligation.due_date))} /> : null}
-                {bankName ? <InfoRow label="Banka" value={bankName} /> : null}
-                {serviceName ? <InfoRow label="Servis" value={serviceName} /> : null}
-                <InfoRow label="Durum" value={OBLIGATION_STATUS_LABEL[obligation.status as keyof typeof OBLIGATION_STATUS_LABEL] ?? obligation.status} />
-              </Stack>
-            </Card>
-          ) : tab === 'plan' && hasInstallments ? (
-            <Stack gap="md">
-              <View>
-                {visibleInstallments.map((installment, index) => (
-                  <TimelineInstallmentRow
-                    key={installment.id}
-                    installment={installment}
-                    currencyCode={obligation.currency_code}
-                    isNext={installment.id === nextInstallment?.id}
-                    isLast={index === visibleInstallments.length - 1}
-                    unitLabel={unitLabel}
-                    onPay={() => setPayingInstallment(installment)}
-                  />
+              ))}
+            </View>
+            <Pagination page={effectivePlanPage} totalPages={planPageCount} onChange={setPlanPage} />
+          </Stack>
+        ) : (
+          <Stack gap="md">
+            {visiblePayments.length === 0 ? (
+              <EmptyState icon="receipt-outline" message="Henüz ödeme kaydı yok." />
+            ) : (
+              <Stack gap="xs">
+                {visiblePayments.map((payment) => (
+                  <PaymentRow key={payment.id} payment={payment} currencyCode={obligation.currency_code} />
                 ))}
-              </View>
-              <Pagination page={effectivePlanPage} totalPages={planPageCount} onChange={setPlanPage} />
-            </Stack>
-          ) : (
-            <Stack gap="md">
-              {visiblePayments.length === 0 ? (
-                <EmptyState icon="receipt-outline" message="Henüz ödeme kaydı yok." />
-              ) : (
-                <Stack gap="xs">
-                  {visiblePayments.map((payment) => (
-                    <PaymentRow key={payment.id} payment={payment} currencyCode={obligation.currency_code} />
-                  ))}
-                </Stack>
-              )}
-              <Pagination page={effectiveHistoryPage} totalPages={historyPageCount} onChange={setHistoryPage} />
-            </Stack>
-          )}
-        </Stack>
-      </ScrollView>
+              </Stack>
+            )}
+            <Pagination page={effectiveHistoryPage} totalPages={historyPageCount} onChange={setHistoryPage} />
+          </Stack>
+        )}
+      </DetailScaffold>
 
       <Modal
         visible={payingInstallment !== null}
@@ -399,7 +333,7 @@ export default function ObligationDetailScreen() {
           />
         ) : null}
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 

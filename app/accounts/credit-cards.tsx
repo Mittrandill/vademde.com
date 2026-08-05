@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Divider, Pagination, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { listAccounts, type Account } from '@/features/accounts/api';
@@ -122,41 +123,16 @@ export default function CreditCardsScreen() {
 
   const listHeader = (
     <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
-      <Row align="center">
-        <Pressable
-          accessibilityLabel="Kapat"
-          onPress={closeScreen}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.surfaceElevated,
-          }}
-        >
-          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-          Kredi Kartlarım
-        </Text>
-        <Pressable
-          accessibilityLabel="Yeni kredi kartı"
-          onPress={() => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } })}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.brandPrimary,
-          }}
-        >
-          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
-        </Pressable>
-      </Row>
+      <ScreenHeader
+        title="Kredi Kartlarım"
+        left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: closeScreen }}
+        right={{
+          icon: 'add',
+          accessibilityLabel: 'Yeni kredi kartı',
+          variant: 'accent',
+          onPress: () => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } }),
+        }}
+      />
 
       {/* Tanıtım şeridi: obligations/index.tsx'teki aynı sakin yüzey — istatistiklerden
           ayrı, sayfanın kimliğini taşır. */}

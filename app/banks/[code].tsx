@@ -1,24 +1,14 @@
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import {
-  Card,
-  Divider,
-  EmptyState,
-  Pagination,
-  Pressable,
-  ProgressRing,
-  Row,
-  SegmentedControl,
-  Stack,
-  Text,
-} from '@/components/primitives';
+import { Card, Divider, EmptyState, Pagination, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { DetailScaffold } from '@/components/navigation/DetailScaffold';
+import { DetailHeroCard, DetailIdentityRow, DetailMetricRow } from '@/components/finance/DetailHero';
+import { StatColumns } from '@/components/primitives/StatColumns';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
@@ -36,9 +26,10 @@ const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', mo
 const TAB_PAGE_SIZE = 10;
 type DetailTab = 'genel' | 'krediler';
 
-// app/obligations/[id].tsx'teki kredi detayıyla aynı hero + sekme deseni: kredi
-// kayıtları kişi/firma değil banka bazlı tutulduğu için (bkz. app/obligations/new.tsx),
-// bu ekran o bankaya ait toplam kredi durumunu tek bir "kredi" gibi özetler.
+// app/obligations/[id].tsx'teki kredi detayıyla aynı hero + sekme deseni (DetailScaffold/
+// DetailHeroCard üzerinden paylaşılıyor): kredi kayıtları kişi/firma değil banka bazlı
+// tutulduğu için (bkz. app/obligations/new.tsx), bu ekran o bankaya ait toplam kredi
+// durumunu tek bir "kredi" gibi özetler.
 export default function BankDetailScreen() {
   const theme = useTheme();
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -96,154 +87,88 @@ export default function BankDetailScreen() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
-        <Stack gap="lg">
-          <Row align="center">
-            <Pressable
-              accessibilityLabel="Geri"
-              onPress={() => router.back()}
-              hitSlop={8}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: theme.radius.input,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.colors.surfaceElevated,
-              }}
-            >
-              <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-              {bankName}
-            </Text>
-          </Row>
+    <DetailScaffold header={{ title: bankName }} isLoading={false}>
+      <DetailHeroCard
+        sections={[
+          <DetailIdentityRow
+            key="identity"
+            icon={<BankLogo bankCode={code as string} fallbackName={bankName} size={44} />}
+            title={bankName}
+            subtitle="Banka"
+            badge={hasOverdue ? <StatusBadge status="gecikti" /> : null}
+          />,
+          <DetailMetricRow
+            key="metric"
+            label="KALAN BORÇ"
+            value={formatMinorAmount(payableMinor)}
+            valueStyle={{ color: hasOverdue ? theme.colors.danger : theme.colors.textPrimary }}
+            ring={
+              totalPayableMinor > 0
+                ? {
+                    progress: clampedProgress,
+                    color: stateAccent,
+                    trackColor: withAlpha(stateAccent, 0.18),
+                    centerContent: (
+                      <Text variant="cardTitle" tabular>
+                        %{Math.round(clampedProgress * 100)}
+                      </Text>
+                    ),
+                  }
+                : undefined
+            }
+          />,
+          <StatColumns
+            key="stats"
+            columns={[
+              { label: 'AÇIK KREDİ', value: ledger?.openCount ?? 0 },
+              {
+                label: 'EN YAKIN VADE',
+                value: ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok',
+                align: 'flex-end',
+              },
+            ]}
+          />,
+        ]}
+      />
 
-          <Card elevated variant="hero">
-            <Stack gap="lg">
-              <Row gap="sm" align="center">
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: theme.radius.input,
-                    backgroundColor: theme.colors.backgroundPrimary,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <BankLogo bankCode={code as string} fallbackName={bankName} size={44} />
-                </View>
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle" numberOfLines={2}>
-                    {bankName}
-                  </Text>
-                  <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                    Banka
-                  </Text>
-                </Stack>
-                {hasOverdue ? <StatusBadge status="gecikti" /> : null}
-              </Row>
+      <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
 
-              <Divider />
-
-              <Row gap="md" align="center">
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    KALAN BORÇ
-                  </Text>
-                  <Text
-                    variant="displayAmount"
-                    tabular
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.5}
-                    style={{ color: hasOverdue ? theme.colors.danger : theme.colors.textPrimary }}
-                  >
-                    {formatMinorAmount(payableMinor)}
-                  </Text>
-                </Stack>
-                {totalPayableMinor > 0 ? (
-                  <ProgressRing
-                    size={88}
-                    strokeWidth={10}
-                    progress={clampedProgress}
-                    color={stateAccent}
-                    trackColor={withAlpha(stateAccent, 0.18)}
-                    cap
-                  >
-                    <Text variant="cardTitle" tabular>
-                      %{Math.round(clampedProgress * 100)}
-                    </Text>
-                  </ProgressRing>
-                ) : null}
-              </Row>
-
-              <Divider />
-
-              <Row>
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary">
-                    AÇIK KREDİ
-                  </Text>
-                  <Text variant="cardTitle" tabular numberOfLines={1}>
-                    {ledger?.openCount ?? 0}
-                  </Text>
-                </Stack>
-                <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-                  <Text variant="caption" color="textSecondary">
-                    EN YAKIN VADE
-                  </Text>
-                  <Text variant="cardTitle" tabular numberOfLines={1}>
-                    {ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok'}
-                  </Text>
-                </Stack>
-              </Row>
-            </Stack>
-          </Card>
-
-          <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
-
-          {tab === 'genel' ? (
-            <Card>
-              <Stack gap="md">
-                <Row gap="sm" align="center">
-                  <Ionicons name="business-outline" size={18} color={theme.colors.brandPrimary} />
-                  <Text variant="cardTitle">Banka Bilgileri</Text>
-                </Row>
-                <Divider />
-                <InfoRow label="Açık Kredi Sayısı" value={String(ledger?.openCount ?? 0)} />
-                <InfoRow label="Kalan Borç" value={formatMinorAmount(ledger?.payableMinor ?? 0)} />
-                {totalPayableMinor > 0 ? (
-                  <InfoRow label="Toplam Anapara" value={formatMinorAmount(totalPayableMinor)} />
-                ) : null}
-                <InfoRow label="Geciken Tutar" value={formatMinorAmount(ledger?.overdueMinor ?? 0)} />
-                {ledger?.nearestDueDate ? (
-                  <InfoRow label="En Yakın Vade" value={dateFormatter.format(new Date(ledger.nearestDueDate))} />
-                ) : null}
-              </Stack>
-            </Card>
+      {tab === 'genel' ? (
+        <Card>
+          <Stack gap="md">
+            <Row gap="sm" align="center">
+              <Ionicons name="business-outline" size={18} color={theme.colors.brandPrimary} />
+              <Text variant="cardTitle">Banka Bilgileri</Text>
+            </Row>
+            <Divider />
+            <InfoRow label="Açık Kredi Sayısı" value={String(ledger?.openCount ?? 0)} />
+            <InfoRow label="Kalan Borç" value={formatMinorAmount(ledger?.payableMinor ?? 0)} />
+            {totalPayableMinor > 0 ? (
+              <InfoRow label="Toplam Anapara" value={formatMinorAmount(totalPayableMinor)} />
+            ) : null}
+            <InfoRow label="Geciken Tutar" value={formatMinorAmount(ledger?.overdueMinor ?? 0)} />
+            {ledger?.nearestDueDate ? (
+              <InfoRow label="En Yakın Vade" value={dateFormatter.format(new Date(ledger.nearestDueDate))} />
+            ) : null}
+          </Stack>
+        </Card>
+      ) : (
+        <Stack gap="md">
+          {openObligations.length === 0 ? (
+            <EmptyState icon="checkmark-circle-outline" message="Bu bankaya ait açık kredi yok." />
           ) : (
-            <Stack gap="md">
-              {openObligations.length === 0 ? (
-                <EmptyState icon="checkmark-circle-outline" message="Bu bankaya ait açık kredi yok." />
-              ) : (
-                <Stack gap="xs">
-                  {openObligations.map((o) => (
-                    <OpenLoanRow key={o.id} obligation={o} />
-                  ))}
-                </Stack>
-              )}
-              {obligationsTotalPages > 1 ? (
-                <Pagination page={effectiveObligationsPage} totalPages={obligationsTotalPages} onChange={setObligationsPage} />
-              ) : null}
+            <Stack gap="xs">
+              {openObligations.map((o) => (
+                <OpenLoanRow key={o.id} obligation={o} />
+              ))}
             </Stack>
           )}
+          {obligationsTotalPages > 1 ? (
+            <Pagination page={effectiveObligationsPage} totalPages={obligationsTotalPages} onChange={setObligationsPage} />
+          ) : null}
         </Stack>
-      </ScrollView>
-    </SafeAreaView>
+      )}
+    </DetailScaffold>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, ScrollView, SectionList, View } from 'react-native';
+import { Alert, SectionList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -13,13 +13,16 @@ import {
   EmptyState,
   Pagination,
   Pressable,
-  ProgressRing,
   Row,
   SectionHeader,
   SegmentedControl,
   Stack,
   Text,
 } from '@/components/primitives';
+import { StatColumns } from '@/components/primitives/StatColumns';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
+import { DetailScaffold } from '@/components/navigation/DetailScaffold';
+import { DetailHeroCard, DetailMetricRow } from '@/components/finance/DetailHero';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
@@ -126,15 +129,14 @@ export default function AccountDetailScreen() {
 
   if (accountQuery.isLoading || !accountQuery.data) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          {accountQuery.error ? (
-            <Text variant="body" color="danger">
-              {accountQuery.error instanceof Error ? accountQuery.error.message : 'Hesap yüklenemedi'}
-            </Text>
-          ) : null}
-        </Stack>
-      </SafeAreaView>
+      <DetailScaffold
+        header={{ title: '' }}
+        isLoading
+        error={accountQuery.error}
+        errorFallbackMessage="Hesap yüklenemedi"
+      >
+        {null}
+      </DetailScaffold>
     );
   }
 
@@ -173,9 +175,10 @@ export default function AccountDetailScreen() {
   }
 
   if (isCreditCardAccount) {
-    // app/obligations/[id].tsx'teki kredi detayıyla aynı hero + sekme deseni: fiziksel
-    // kart görseli üstte, altında büyük tutar + limit kullanım halkasından oluşan hero
-    // kart, ardından Genel/Ekstreler/Hareketler sekmeleri.
+    // app/obligations/[id].tsx'teki kredi detayıyla aynı hero + sekme deseni
+    // (DetailScaffold/DetailHeroCard üzerinden paylaşılıyor): fiziksel kart görseli
+    // üstte, altında büyük tutar + limit kullanım halkasından oluşan hero kart,
+    // ardından Genel/Ekstreler/Hareketler sekmeleri.
     const hasLimit = (account.credit_limit_minor ?? 0) > 0;
     const utilization = hasLimit ? balanceMinor / (account.credit_limit_minor as number) : 0;
     const clampedUtilization = Math.max(0, Math.min(1, utilization));
@@ -192,256 +195,208 @@ export default function AccountDetailScreen() {
     ];
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
-          <Stack gap="lg">
-            <Row align="center">
-              <Pressable
-                accessibilityLabel="Geri"
-                onPress={goBack}
-                hitSlop={8}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: theme.radius.input,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.surfaceElevated,
-                }}
-              >
-                <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
-              </Pressable>
-              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-                {account.name}
-              </Text>
-              <Pressable
-                accessibilityLabel="Düzenle"
-                onPress={() => router.push({ pathname: '/accounts/new', params: { id: account.id } })}
-                hitSlop={8}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: theme.radius.input,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.surfaceElevated,
-                }}
-              >
-                <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
-              </Pressable>
-            </Row>
+      <DetailScaffold
+        header={{
+          title: account.name,
+          left: { icon: 'chevron-back', accessibilityLabel: 'Geri', onPress: goBack },
+          right: {
+            icon: 'pencil',
+            accessibilityLabel: 'Düzenle',
+            onPress: () => router.push({ pathname: '/accounts/new', params: { id: account.id } }),
+          },
+        }}
+        isLoading={false}
+      >
+        <CreditCardVisual account={account} />
 
-            <CreditCardVisual account={account} />
+        <DetailHeroCard
+          sections={[
+            <DetailMetricRow
+              key="metric"
+              label="GÜNCEL BORÇ"
+              value={formatMinorAmount(balanceMinor, account.currency_code)}
+              valueStyle={{ color: heroAmountColor }}
+              ring={
+                hasLimit
+                  ? {
+                      progress: clampedUtilization,
+                      color: stateAccent,
+                      trackColor: withAlpha(stateAccent, 0.18),
+                      centerContent: (
+                        <Text variant="cardTitle" tabular>
+                          %{Math.round(clampedUtilization * 100)}
+                        </Text>
+                      ),
+                    }
+                  : undefined
+              }
+            />,
+            <StatColumns
+              key="stats"
+              columns={[
+                {
+                  label: 'SON ÖDEME GÜNÜ',
+                  value: account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok',
+                },
+                {
+                  label: 'KULLANILABİLİR LİMİT',
+                  value: hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok',
+                  align: 'flex-end',
+                },
+              ]}
+            />,
+          ]}
+        />
 
-            <Card elevated variant="hero">
-              <Stack gap="lg">
-                <Row gap="md" align="center">
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                      GÜNCEL BORÇ
-                    </Text>
-                    <Text
-                      variant="displayAmount"
-                      tabular
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.5}
-                      style={{ color: heroAmountColor }}
-                    >
-                      {formatMinorAmount(balanceMinor, account.currency_code)}
-                    </Text>
-                  </Stack>
-                  {hasLimit ? (
-                    <ProgressRing
-                      size={88}
-                      strokeWidth={10}
-                      progress={clampedUtilization}
-                      color={stateAccent}
-                      trackColor={withAlpha(stateAccent, 0.18)}
-                      cap
-                    >
-                      <Text variant="cardTitle" tabular>
-                        %{Math.round(clampedUtilization * 100)}
+        <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
+
+        {tab === 'genel' ? (
+          <Card>
+            <Stack gap="md">
+              <Row gap="sm" align="center">
+                <Ionicons name="card-outline" size={18} color={theme.colors.brandPrimary} />
+                <Text variant="cardTitle">Kart Bilgileri</Text>
+              </Row>
+              <Divider />
+              <InfoRow label="Kart No" value={`•••• ${account.card_last_four ?? '····'}`} />
+              <InfoRow label="Kesim Günü" value={account.statement_day ? `Her ayın ${account.statement_day}.` : 'Yok'} />
+              <InfoRow
+                label="Son Ödeme Günü"
+                value={account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok'}
+              />
+              {hasLimit ? (
+                <InfoRow
+                  label="Kredi Limiti"
+                  value={formatMinorAmount(account.credit_limit_minor as number, account.currency_code)}
+                />
+              ) : null}
+              <InfoRow label="Güncel Borç" value={formatMinorAmount(balanceMinor, account.currency_code)} />
+              {hasLimit ? (
+                <InfoRow label="Kullanılabilir Limit" value={formatMinorAmount(availableMinor, account.currency_code)} />
+              ) : null}
+            </Stack>
+          </Card>
+        ) : tab === 'ekstreler' ? (
+          <Stack gap="sm">
+            <Card>
+              <Stack gap="sm">
+                {statementMonths.map((m, index) => {
+                  const row = (
+                    <Row align="center">
+                      <Text variant="body" style={{ flex: 1, textTransform: 'capitalize' }}>
+                        {monthFormatter.format(m.monthDate)}
                       </Text>
-                    </ProgressRing>
-                  ) : null}
-                </Row>
+                      {m.obligation ? (
+                        <Row gap="sm" align="center">
+                          <Amount
+                            amountMinor={m.obligation.remaining_amount_minor}
+                            currencyCode={m.obligation.currency_code}
+                            variant="body"
+                          />
+                          <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+                        </Row>
+                      ) : (
+                        <Row
+                          gap="xxs"
+                          align="center"
+                          style={{
+                            paddingHorizontal: theme.spacing.xs,
+                            paddingVertical: 2,
+                            borderRadius: 999,
+                            backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
+                          }}
+                        >
+                          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.textSecondary} />
+                          <Text variant="caption" color="textSecondary">
+                            Yüklenmedi
+                          </Text>
+                        </Row>
+                      )}
+                    </Row>
+                  );
 
-                <Divider />
-
-                <Row>
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary">
-                      SON ÖDEME GÜNÜ
-                    </Text>
-                    <Text variant="cardTitle" tabular numberOfLines={1}>
-                      {account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok'}
-                    </Text>
-                  </Stack>
-                  <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                  <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-                    <Text variant="caption" color="textSecondary">
-                      KULLANILABİLİR LİMİT
-                    </Text>
-                    <Text variant="cardTitle" tabular numberOfLines={1}>
-                      {hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok'}
-                    </Text>
-                  </Stack>
-                </Row>
+                  return (
+                    <View key={m.periodKey}>
+                      {m.obligation ? (
+                        <Pressable onPress={() => router.push(`/obligations/${m.obligation!.id}`)}>{row}</Pressable>
+                      ) : (
+                        row
+                      )}
+                      {index < statementMonths.length - 1 ? (
+                        <Divider style={{ marginTop: theme.spacing.sm }} />
+                      ) : null}
+                    </View>
+                  );
+                })}
               </Stack>
             </Card>
-
-            <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
-
-            {tab === 'genel' ? (
-              <Card>
-                <Stack gap="md">
-                  <Row gap="sm" align="center">
-                    <Ionicons name="card-outline" size={18} color={theme.colors.brandPrimary} />
-                    <Text variant="cardTitle">Kart Bilgileri</Text>
-                  </Row>
-                  <Divider />
-                  <InfoRow label="Kart No" value={`•••• ${account.card_last_four ?? '····'}`} />
-                  <InfoRow label="Kesim Günü" value={account.statement_day ? `Her ayın ${account.statement_day}.` : 'Yok'} />
-                  <InfoRow
-                    label="Son Ödeme Günü"
-                    value={account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok'}
-                  />
-                  {hasLimit ? (
-                    <InfoRow
-                      label="Kredi Limiti"
-                      value={formatMinorAmount(account.credit_limit_minor as number, account.currency_code)}
-                    />
-                  ) : null}
-                  <InfoRow label="Güncel Borç" value={formatMinorAmount(balanceMinor, account.currency_code)} />
-                  {hasLimit ? (
-                    <InfoRow label="Kullanılabilir Limit" value={formatMinorAmount(availableMinor, account.currency_code)} />
-                  ) : null}
-                </Stack>
-              </Card>
-            ) : tab === 'ekstreler' ? (
-              <Stack gap="sm">
-                <Card>
-                  <Stack gap="sm">
-                    {statementMonths.map((m, index) => {
-                      const row = (
-                        <Row align="center">
-                          <Text variant="body" style={{ flex: 1, textTransform: 'capitalize' }}>
-                            {monthFormatter.format(m.monthDate)}
-                          </Text>
-                          {m.obligation ? (
-                            <Row gap="sm" align="center">
-                              <Amount
-                                amountMinor={m.obligation.remaining_amount_minor}
-                                currencyCode={m.obligation.currency_code}
-                                variant="body"
-                              />
-                              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
-                            </Row>
-                          ) : (
-                            <Row
-                              gap="xxs"
-                              align="center"
-                              style={{
-                                paddingHorizontal: theme.spacing.xs,
-                                paddingVertical: 2,
-                                borderRadius: 999,
-                                backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
-                              }}
-                            >
-                              <Ionicons name="alert-circle-outline" size={13} color={theme.colors.textSecondary} />
-                              <Text variant="caption" color="textSecondary">
-                                Yüklenmedi
-                              </Text>
-                            </Row>
-                          )}
-                        </Row>
-                      );
-
-                      return (
-                        <View key={m.periodKey}>
-                          {m.obligation ? (
-                            <Pressable onPress={() => router.push(`/obligations/${m.obligation!.id}`)}>{row}</Pressable>
-                          ) : (
-                            row
-                          )}
-                          {index < statementMonths.length - 1 ? (
-                            <Divider style={{ marginTop: theme.spacing.sm }} />
-                          ) : null}
-                        </View>
-                      );
-                    })}
-                  </Stack>
-                </Card>
-                {mostRecentUnfulfilled ? (
-                  <Pressable
-                    onPress={() =>
-                      router.push({
-                        pathname: '/obligations/new',
-                        params: { type: 'kredi_karti_ekstresi', accountId: account.id },
-                      })
-                    }
-                    style={{
-                      height: theme.controlHeight.segmented,
-                      borderRadius: theme.radius.widget,
-                      borderWidth: 1,
-                      borderColor: theme.colors.brandPrimary,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: theme.spacing.xxs,
-                    }}
-                  >
-                    <Ionicons name="add-circle-outline" size={16} color={theme.colors.brandPrimary} />
-                    <Text variant="body" color="brandPrimary">
-                      {monthFormatter.format(mostRecentUnfulfilled.monthDate)} Ekstresi Ekle
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </Stack>
+            {mostRecentUnfulfilled ? (
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/obligations/new',
+                    params: { type: 'kredi_karti_ekstresi', accountId: account.id },
+                  })
+                }
+                style={{
+                  height: theme.controlHeight.segmented,
+                  borderRadius: theme.radius.widget,
+                  borderWidth: 1,
+                  borderColor: theme.colors.brandPrimary,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: theme.spacing.xxs,
+                }}
+              >
+                <Ionicons name="add-circle-outline" size={16} color={theme.colors.brandPrimary} />
+                <Text variant="body" color="brandPrimary">
+                  {monthFormatter.format(mostRecentUnfulfilled.monthDate)} Ekstresi Ekle
+                </Text>
+              </Pressable>
+            ) : null}
+          </Stack>
+        ) : (
+          <Stack gap="md">
+            {sections.length === 0 ? (
+              <EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />
             ) : (
               <Stack gap="md">
-                {sections.length === 0 ? (
-                  <EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />
-                ) : (
-                  <Stack gap="md">
-                    {sections.map((section) => (
-                      <Stack gap="xs" key={section.title}>
-                        <SectionHeader title={section.title} />
-                        <Stack gap="xs">
-                          {section.data.map((item) => (
-                            <TransactionRow key={item.id} item={item} />
-                          ))}
-                        </Stack>
-                      </Stack>
-                    ))}
+                {sections.map((section) => (
+                  <Stack gap="xs" key={section.title}>
+                    <SectionHeader title={section.title} />
+                    <Stack gap="xs">
+                      {section.data.map((item) => (
+                        <TransactionRow key={item.id} item={item} />
+                      ))}
+                    </Stack>
                   </Stack>
-                )}
-                {totalPages > 1 ? <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} /> : null}
+                ))}
               </Stack>
             )}
-
-            <Pressable
-              onPress={confirmArchive}
-              style={{
-                height: theme.controlHeight.segmented,
-                borderRadius: theme.radius.widget,
-                borderWidth: 1,
-                borderColor: theme.colors.danger,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: theme.spacing.xxs,
-              }}
-            >
-              <Ionicons name="archive-outline" size={16} color={theme.colors.danger} />
-              <Text variant="body" color="danger">
-                Hesabı Arşivle
-              </Text>
-            </Pressable>
+            {totalPages > 1 ? <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} /> : null}
           </Stack>
-        </ScrollView>
-      </SafeAreaView>
+        )}
+
+        <Pressable
+          onPress={confirmArchive}
+          style={{
+            height: theme.controlHeight.segmented,
+            borderRadius: theme.radius.widget,
+            borderWidth: 1,
+            borderColor: theme.colors.danger,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: theme.spacing.xxs,
+          }}
+        >
+          <Ionicons name="archive-outline" size={16} color={theme.colors.danger} />
+          <Text variant="body" color="danger">
+            Hesabı Arşivle
+          </Text>
+        </Pressable>
+      </DetailScaffold>
     );
   }
 
@@ -461,41 +416,15 @@ export default function AccountDetailScreen() {
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <Stack gap="lg" style={{ marginBottom: theme.spacing.lg }}>
-            <Row align="center">
-              <Pressable
-                accessibilityLabel="Geri"
-                onPress={goBack}
-                hitSlop={8}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: theme.radius.input,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.surfaceElevated,
-                }}
-              >
-                <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
-              </Pressable>
-              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-                {account.name}
-              </Text>
-              <Pressable
-                accessibilityLabel="Düzenle"
-                onPress={() => router.push({ pathname: '/accounts/new', params: { id: account.id } })}
-                hitSlop={8}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: theme.radius.input,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.surfaceElevated,
-                }}
-              >
-                <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
-              </Pressable>
-            </Row>
+            <ScreenHeader
+              title={account.name}
+              left={{ icon: 'chevron-back', accessibilityLabel: 'Geri', onPress: goBack }}
+              right={{
+                icon: 'pencil',
+                accessibilityLabel: 'Düzenle',
+                onPress: () => router.push({ pathname: '/accounts/new', params: { id: account.id } }),
+              }}
+            />
 
             <HeroStatCard
               label="GÜNCEL BAKİYE"

@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -13,13 +11,15 @@ import {
   EmptyState,
   Pagination,
   Pressable,
-  ProgressRing,
   Row,
   SectionHeader,
   SegmentedControl,
   Stack,
   Text,
 } from '@/components/primitives';
+import { StatColumns } from '@/components/primitives/StatColumns';
+import { DetailScaffold } from '@/components/navigation/DetailScaffold';
+import { DetailHeroCard, DetailIdentityRow, DetailMetricRow } from '@/components/finance/DetailHero';
 import { Amount } from '@/components/finance/Amount';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
@@ -38,9 +38,9 @@ const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', mo
 const TAB_PAGE_SIZE = 10;
 type DetailTab = 'genel' | 'kayitlar' | 'hareketler';
 
-// app/obligations/[id].tsx'teki hero + sekme deseninin cari karşılığı — tek büyük
-// kart (kimlik, ana bakiye, ikincil istatistikler) ve altında Genel/Açık Kayıtlar/
-// Hareketler sekmeleri.
+// app/obligations/[id].tsx'teki hero + sekme deseninin cari karşılığı (DetailScaffold/
+// DetailHeroCard üzerinden paylaşılıyor) — tek büyük kart (kimlik, ana bakiye, ikincil
+// istatistikler) ve altında Genel/Açık Kayıtlar/Hareketler sekmeleri.
 export default function CounterpartyDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -92,15 +92,14 @@ export default function CounterpartyDetailScreen() {
 
   if (!counterparty) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          {counterpartyQuery.error ? (
-            <Text variant="body" color="danger">
-              {counterpartyQuery.error instanceof Error ? counterpartyQuery.error.message : 'Kayıt yüklenemedi'}
-            </Text>
-          ) : null}
-        </Stack>
-      </SafeAreaView>
+      <DetailScaffold
+        header={{ title: '' }}
+        isLoading
+        error={counterpartyQuery.error}
+        errorFallbackMessage="Kayıt yüklenemedi"
+      >
+        {null}
+      </DetailScaffold>
     );
   }
 
@@ -140,196 +139,122 @@ export default function CounterpartyDetailScreen() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
-        <Stack gap="lg">
-          <Row align="center">
-            <Pressable
-              accessibilityLabel="Geri"
-              onPress={() => router.back()}
-              hitSlop={8}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: theme.radius.input,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.colors.surfaceElevated,
-              }}
-            >
-              <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-              {counterparty.name}
-            </Text>
-            <Pressable
-              accessibilityLabel="Düzenle"
-              onPress={() => router.push({ pathname: '/counterparties/new', params: { id: counterparty.id } })}
-              hitSlop={8}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: theme.radius.input,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.colors.surfaceElevated,
-              }}
-            >
-              <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-          </Row>
+    <DetailScaffold
+      header={{
+        title: counterparty.name,
+        right: {
+          icon: 'pencil',
+          accessibilityLabel: 'Düzenle',
+          onPress: () => router.push({ pathname: '/counterparties/new', params: { id: counterparty.id } }),
+        },
+      }}
+      isLoading={false}
+    >
+      <DetailHeroCard
+        sections={[
+          <DetailIdentityRow
+            key="identity"
+            icon={<PersonAvatar name={counterparty.name} size={44} />}
+            title={counterparty.name}
+            subtitle={`${counterparty.type === 'company' ? 'Firma' : 'Kişi'}${
+              counterparty.phone || counterparty.email
+                ? ` · ${[counterparty.phone, counterparty.email].filter(Boolean).join(' · ')}`
+                : ''
+            }`}
+          />,
+          <DetailMetricRow
+            key="metric"
+            label="CARİ BAKİYE"
+            value={formatMinorAmount(Math.abs(netMinor))}
+            valueStyle={{ color: netColor }}
+            caption={netLabel}
+            ring={
+              directionalTotal > 0
+                ? {
+                    progress: receivableShare,
+                    color: theme.colors.success,
+                    trackColor: withAlpha(theme.colors.success, 0.18),
+                    centerContent: <Ionicons name="people-outline" size={22} color={theme.colors.success} />,
+                  }
+                : undefined
+            }
+          />,
+          <StatColumns
+            key="stats"
+            columns={[
+              { label: 'AÇIK KAYIT', value: ledger?.openCount ?? 0 },
+              {
+                label: 'EN YAKIN VADE',
+                value: ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok',
+                align: 'flex-end',
+              },
+            ]}
+          />,
+        ]}
+      />
 
-          <Card elevated variant="hero">
-            <Stack gap="lg">
-              <Row gap="sm" align="center">
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: theme.radius.input,
-                    backgroundColor: theme.colors.backgroundPrimary,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <PersonAvatar name={counterparty.name} size={44} />
-                </View>
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle" numberOfLines={2}>
-                    {counterparty.name}
-                  </Text>
-                  <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                    {counterparty.type === 'company' ? 'Firma' : 'Kişi'}
-                    {counterparty.phone || counterparty.email
-                      ? ` · ${[counterparty.phone, counterparty.email].filter(Boolean).join(' · ')}`
-                      : ''}
-                  </Text>
-                </Stack>
-              </Row>
+      <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
 
-              <Divider />
-
-              <Row gap="md" align="center">
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    CARİ BAKİYE
-                  </Text>
-                  <Text
-                    variant="displayAmount"
-                    tabular
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.5}
-                    style={{ color: netColor }}
-                  >
-                    {formatMinorAmount(Math.abs(netMinor))}
-                  </Text>
-                  <Text variant="caption" color="textSecondary">
-                    {netLabel}
-                  </Text>
-                </Stack>
-                {directionalTotal > 0 ? (
-                  <ProgressRing
-                    size={88}
-                    strokeWidth={10}
-                    progress={receivableShare}
-                    color={theme.colors.success}
-                    trackColor={withAlpha(theme.colors.success, 0.18)}
-                    cap
-                  >
-                    <Ionicons name="people-outline" size={22} color={theme.colors.success} />
-                  </ProgressRing>
-                ) : null}
-              </Row>
-
-              <Divider />
-
-              <Row>
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary">
-                    AÇIK KAYIT
-                  </Text>
-                  <Text variant="cardTitle" tabular numberOfLines={1}>
-                    {ledger?.openCount ?? 0}
-                  </Text>
-                </Stack>
-                <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-                  <Text variant="caption" color="textSecondary">
-                    EN YAKIN VADE
-                  </Text>
-                  <Text variant="cardTitle" tabular numberOfLines={1}>
-                    {ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok'}
-                  </Text>
-                </Stack>
-              </Row>
-            </Stack>
-          </Card>
-
-          <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
-
-          {tab === 'genel' ? (
-            <Card>
-              <Stack gap="md">
-                <Row gap="sm" align="center">
-                  <Ionicons name="person-outline" size={18} color={theme.colors.brandPrimary} />
-                  <Text variant="cardTitle">Cari Bilgileri</Text>
-                </Row>
-                <Divider />
-                <InfoRow label="Tür" value={counterparty.type === 'company' ? 'Firma' : 'Kişi'} />
-                {counterparty.phone ? <InfoRow label="Telefon" value={counterparty.phone} /> : null}
-                {counterparty.email ? <InfoRow label="E-posta" value={counterparty.email} /> : null}
-                {counterparty.tax_number ? <InfoRow label="Vergi No" value={counterparty.tax_number} /> : null}
-                <InfoRow label="Alacak" value={formatMinorAmount(ledger?.receivableMinor ?? 0)} />
-                <InfoRow label="Borç" value={formatMinorAmount(ledger?.payableMinor ?? 0)} />
-                <InfoRow label="Geciken" value={formatMinorAmount(ledger?.overdueMinor ?? 0)} />
-                {ledger?.nearestDueDate ? (
-                  <InfoRow label="En Yakın Vade" value={dateFormatter.format(new Date(ledger.nearestDueDate))} />
-                ) : null}
-                {counterparty.notes ? <InfoRow label="Notlar" value={counterparty.notes} /> : null}
-              </Stack>
-            </Card>
-          ) : tab === 'kayitlar' ? (
-            <Stack gap="md">
-              {openObligations.length === 0 ? (
-                <EmptyState icon="checkmark-circle-outline" message="Açık borç veya alacak yok." />
-              ) : (
-                <Stack gap="xs">
-                  {openObligations.map((o) => (
-                    <OpenObligationRow key={o.id} obligation={o} />
-                  ))}
-                </Stack>
-              )}
-              {obligationsTotalPages > 1 ? (
-                <Pagination page={effectiveObligationsPage} totalPages={obligationsTotalPages} onChange={setObligationsPage} />
-              ) : null}
-            </Stack>
+      {tab === 'genel' ? (
+        <Card>
+          <Stack gap="md">
+            <Row gap="sm" align="center">
+              <Ionicons name="person-outline" size={18} color={theme.colors.brandPrimary} />
+              <Text variant="cardTitle">Cari Bilgileri</Text>
+            </Row>
+            <Divider />
+            <InfoRow label="Tür" value={counterparty.type === 'company' ? 'Firma' : 'Kişi'} />
+            {counterparty.phone ? <InfoRow label="Telefon" value={counterparty.phone} /> : null}
+            {counterparty.email ? <InfoRow label="E-posta" value={counterparty.email} /> : null}
+            {counterparty.tax_number ? <InfoRow label="Vergi No" value={counterparty.tax_number} /> : null}
+            <InfoRow label="Alacak" value={formatMinorAmount(ledger?.receivableMinor ?? 0)} />
+            <InfoRow label="Borç" value={formatMinorAmount(ledger?.payableMinor ?? 0)} />
+            <InfoRow label="Geciken" value={formatMinorAmount(ledger?.overdueMinor ?? 0)} />
+            {ledger?.nearestDueDate ? (
+              <InfoRow label="En Yakın Vade" value={dateFormatter.format(new Date(ledger.nearestDueDate))} />
+            ) : null}
+            {counterparty.notes ? <InfoRow label="Notlar" value={counterparty.notes} /> : null}
+          </Stack>
+        </Card>
+      ) : tab === 'kayitlar' ? (
+        <Stack gap="md">
+          {openObligations.length === 0 ? (
+            <EmptyState icon="checkmark-circle-outline" message="Açık borç veya alacak yok." />
           ) : (
-            <Stack gap="md">
-              {transactionSections.length === 0 ? (
-                <EmptyState icon="receipt-outline" message="Bu cariyle henüz hareket yok." />
-              ) : (
-                <Stack gap="md">
-                  {transactionSections.map((section) => (
-                    <Stack gap="xs" key={section.title}>
-                      <SectionHeader title={section.title} />
-                      <Stack gap="xs">
-                        {section.data.map((item) => (
-                          <TransactionRow key={item.id} transaction={item} />
-                        ))}
-                      </Stack>
-                    </Stack>
-                  ))}
-                </Stack>
-              )}
-              {transactionsTotalPages > 1 ? (
-                <Pagination page={effectiveTransactionsPage} totalPages={transactionsTotalPages} onChange={setTransactionsPage} />
-              ) : null}
+            <Stack gap="xs">
+              {openObligations.map((o) => (
+                <OpenObligationRow key={o.id} obligation={o} />
+              ))}
             </Stack>
           )}
+          {obligationsTotalPages > 1 ? (
+            <Pagination page={effectiveObligationsPage} totalPages={obligationsTotalPages} onChange={setObligationsPage} />
+          ) : null}
         </Stack>
-      </ScrollView>
-    </SafeAreaView>
+      ) : (
+        <Stack gap="md">
+          {transactionSections.length === 0 ? (
+            <EmptyState icon="receipt-outline" message="Bu cariyle henüz hareket yok." />
+          ) : (
+            <Stack gap="md">
+              {transactionSections.map((section) => (
+                <Stack gap="xs" key={section.title}>
+                  <SectionHeader title={section.title} />
+                  <Stack gap="xs">
+                    {section.data.map((item) => (
+                      <TransactionRow key={item.id} transaction={item} />
+                    ))}
+                  </Stack>
+                </Stack>
+              ))}
+            </Stack>
+          )}
+          {transactionsTotalPages > 1 ? (
+            <Pagination page={effectiveTransactionsPage} totalPages={transactionsTotalPages} onChange={setTransactionsPage} />
+          ) : null}
+        </Stack>
+      )}
+    </DetailScaffold>
   );
 }
 

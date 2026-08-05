@@ -22,6 +22,7 @@ import {
   Text,
   TextField,
 } from '@/components/primitives';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
@@ -123,41 +124,16 @@ export default function CounterpartiesScreen() {
   // birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
   const listHeader = (
     <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
-      <Row align="center">
-        <Pressable
-          accessibilityLabel="Kapat"
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.surfaceElevated,
-          }}
-        >
-          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-          Kişi / Firmalar
-        </Text>
-        <Pressable
-          accessibilityLabel="Yeni kişi/firma"
-          onPress={() => router.push('/counterparties/new')}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.brandPrimary,
-          }}
-        >
-          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
-        </Pressable>
-      </Row>
+      <ScreenHeader
+        title="Kişi / Firmalar"
+        left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+        right={{
+          icon: 'add',
+          accessibilityLabel: 'Yeni kişi/firma',
+          variant: 'accent',
+          onPress: () => router.push('/counterparties/new'),
+        }}
+      />
 
       {(counterpartiesQuery.data ?? []).length > 0 ? (
         <Card variant="hero">

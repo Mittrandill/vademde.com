@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Alert, ScrollView, Share } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useTheme } from '@/theme';
-import { ActionSheet, Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { ActionSheet, Card, Divider, Row, Stack, Text } from '@/components/primitives';
+import { DetailScaffold } from '@/components/navigation/DetailScaffold';
+import { DetailHeroCard, DetailIdentityRow } from '@/components/finance/DetailHero';
 import { AccountLabelRow } from '@/components/finance/AccountLabelRow';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -32,7 +32,6 @@ const DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function TransactionDetailScreen() {
-  const theme = useTheme();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -82,50 +81,41 @@ export default function TransactionDetailScreen() {
 
   if (transactionQuery.isLoading || !transaction) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          {transactionQuery.error ? (
-            <Text variant="body" color="danger">
-              {transactionQuery.error instanceof Error ? transactionQuery.error.message : 'Hareket yüklenemedi'}
-            </Text>
-          ) : null}
-        </Stack>
-      </SafeAreaView>
+      <DetailScaffold
+        header={{ title: '' }}
+        isLoading
+        error={transactionQuery.error}
+        errorFallbackMessage="Hareket yüklenemedi"
+      >
+        {null}
+      </DetailScaffold>
     );
   }
 
   const title =
     transaction.description?.trim() || transaction.category?.name || DIRECTION_LABEL[transaction.direction] || 'Hareket';
   const isObligationPayment = (transaction.payments?.length ?? 0) > 0;
-  const chipStyle = {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.input,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    backgroundColor: theme.colors.surfaceElevated,
-  };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
-        <Stack gap="lg">
-          <Row align="center">
-            <Pressable accessibilityLabel="Geri" onPress={() => router.back()} hitSlop={8} style={chipStyle}>
-              <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-              {title}
-            </Text>
-            <Pressable accessibilityLabel="Diğer seçenekler" onPress={() => setMenuOpen(true)} hitSlop={8} style={chipStyle}>
-              <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-          </Row>
-
-          <Card variant="hero">
-            <Stack gap="lg">
-              <Row gap="sm" align="center">
-                {isObligationPayment ? (
+    <>
+      <DetailScaffold
+        header={{
+          title,
+          right: {
+            icon: 'ellipsis-horizontal',
+            accessibilityLabel: 'Diğer seçenekler',
+            onPress: () => setMenuOpen(true),
+          },
+        }}
+        isLoading={false}
+      >
+        <DetailHeroCard
+          sections={[
+            <DetailIdentityRow
+              key="identity"
+              circleBackground={false}
+              icon={
+                isObligationPayment ? (
                   <BankLogo bankCode={transaction.account?.bank_code} fallbackName={transaction.account?.name} size={44} />
                 ) : transaction.category?.icon ? (
                   <CategoryIcon icon={transaction.category.icon} size={44} />
@@ -138,103 +128,95 @@ export default function TransactionDetailScreen() {
                     fallbackIcon={DIRECTION_ICON[transaction.direction] ?? 'ellipse-outline'}
                     size={44}
                   />
-                )}
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle" numberOfLines={2}>
-                    {title}
-                  </Text>
-                  <Text variant="caption" color="textSecondary">
-                    {dateFormatter.format(new Date(transaction.occurred_at))}
-                  </Text>
-                </Stack>
-              </Row>
+                )
+              }
+              title={title}
+              subtitle={dateFormatter.format(new Date(transaction.occurred_at))}
+            />,
+            <Amount
+              key="amount"
+              amountMinor={transaction.amount_minor}
+              currencyCode={transaction.currency_code}
+              direction={transaction.direction as 'income' | 'expense' | 'transfer'}
+              variant="displayAmount"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            />,
+          ]}
+        />
 
-              <Divider />
-
-              <Amount
-                amountMinor={transaction.amount_minor}
-                currencyCode={transaction.currency_code}
-                direction={transaction.direction as 'income' | 'expense' | 'transfer'}
-                variant="displayAmount"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.6}
-              />
-            </Stack>
-          </Card>
-
-          <Card>
-            <Stack gap="md">
-              {transaction.category ? (
-                <Row gap="sm" align="center">
-                  <CategoryIcon icon={transaction.category.icon} size={36} />
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                      KATEGORİ
-                    </Text>
-                    <Text variant="body">{transaction.category.name}</Text>
-                  </Stack>
-                </Row>
-              ) : null}
-
-              {transaction.category ? <Divider /> : null}
-
+        <Card>
+          <Stack gap="md">
+            {transaction.category ? (
               <Row gap="sm" align="center">
-                <BankLogo
-                  bankCode={transaction.account?.bank_code}
-                  fallbackName={transaction.account?.name}
-                  size={36}
-                />
+                <CategoryIcon icon={transaction.category.icon} size={36} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    HESAP
+                    KATEGORİ
                   </Text>
-                  <AccountLabelRow
-                    bankCode={transaction.account?.bank_code}
-                    accountName={transaction.account?.name}
-                    accountType={transaction.account?.type}
-                    cardLastFour={transaction.account?.card_last_four}
-                  />
+                  <Text variant="body">{transaction.category.name}</Text>
                 </Stack>
               </Row>
+            ) : null}
 
-              {transaction.direction === 'transfer' && transaction.transferToAccount ? (
-                <>
-                  <Divider />
-                  <Row gap="sm" align="center">
-                    <BankLogo
-                      bankCode={transaction.transferToAccount.bank_code}
-                      fallbackName={transaction.transferToAccount.name}
-                      size={36}
-                    />
-                    <Stack gap="xxs" style={{ flex: 1 }}>
-                      <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                        HEDEF HESAP
-                      </Text>
-                      <Text variant="body">{transaction.transferToAccount.name}</Text>
-                    </Stack>
-                  </Row>
-                </>
-              ) : null}
+            {transaction.category ? <Divider /> : null}
 
-              {transaction.counterparty ? (
-                <>
-                  <Divider />
-                  <Row gap="sm" align="center">
-                    <PersonAvatar name={transaction.counterparty.name} size={36} />
-                    <Stack gap="xxs" style={{ flex: 1 }}>
-                      <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                        KİŞİ / FİRMA
-                      </Text>
-                      <Text variant="body">{transaction.counterparty.name}</Text>
-                    </Stack>
-                  </Row>
-                </>
-              ) : null}
-            </Stack>
-          </Card>
-        </Stack>
-      </ScrollView>
+            <Row gap="sm" align="center">
+              <BankLogo
+                bankCode={transaction.account?.bank_code}
+                fallbackName={transaction.account?.name}
+                size={36}
+              />
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                  HESAP
+                </Text>
+                <AccountLabelRow
+                  bankCode={transaction.account?.bank_code}
+                  accountName={transaction.account?.name}
+                  accountType={transaction.account?.type}
+                  cardLastFour={transaction.account?.card_last_four}
+                />
+              </Stack>
+            </Row>
+
+            {transaction.direction === 'transfer' && transaction.transferToAccount ? (
+              <>
+                <Divider />
+                <Row gap="sm" align="center">
+                  <BankLogo
+                    bankCode={transaction.transferToAccount.bank_code}
+                    fallbackName={transaction.transferToAccount.name}
+                    size={36}
+                  />
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                      HEDEF HESAP
+                    </Text>
+                    <Text variant="body">{transaction.transferToAccount.name}</Text>
+                  </Stack>
+                </Row>
+              </>
+            ) : null}
+
+            {transaction.counterparty ? (
+              <>
+                <Divider />
+                <Row gap="sm" align="center">
+                  <PersonAvatar name={transaction.counterparty.name} size={36} />
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                      KİŞİ / FİRMA
+                    </Text>
+                    <Text variant="body">{transaction.counterparty.name}</Text>
+                  </Stack>
+                </Row>
+              </>
+            ) : null}
+          </Stack>
+        </Card>
+      </DetailScaffold>
 
       <ActionSheet
         visible={menuOpen}
@@ -251,6 +233,6 @@ export default function TransactionDetailScreen() {
           { key: 'delete', label: 'Sil', icon: 'trash-outline', danger: true, onPress: confirmDelete },
         ]}
       />
-    </SafeAreaView>
+    </>
   );
 }

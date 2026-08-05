@@ -13,3 +13,4 @@ export * from './Pagination';
 export * from './EmptyState';
 export * from './ActionSheet';
 export * from './Skeleton';
+export * from './StatColumns';

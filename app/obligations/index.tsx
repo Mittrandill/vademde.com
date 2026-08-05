@@ -23,6 +23,8 @@ import {
   Text,
   TextField,
 } from '@/components/primitives';
+import { StatColumns } from '@/components/primitives/StatColumns';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { DocumentCalendarIllustration } from '@/components/finance/DocumentCalendarIllustration';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
@@ -249,41 +251,16 @@ export default function ObligationsByTypeScreen() {
 
   const listHeader = (
     <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
-      <Row align="center">
-        <Pressable
-          accessibilityLabel="Kapat"
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.surfaceElevated,
-          }}
-        >
-          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
-          {title}
-        </Text>
-        <Pressable
-          accessibilityLabel="Yeni kayıt"
-          onPress={() => router.push('/obligations/new')}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.brandPrimary,
-          }}
-        >
-          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
-        </Pressable>
-      </Row>
+      <ScreenHeader
+        title={title}
+        left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+        right={{
+          icon: 'add',
+          accessibilityLabel: 'Yeni kayıt',
+          variant: 'accent',
+          onPress: () => router.push('/obligations/new'),
+        }}
+      />
 
       {/* Tanıtım şeridi: sayfanın kimliği ve kısa açıklaması, istatistiklerden ayrı
           sakin bir yüzeyde — tutarlar aşağıdaki karta ait, burada dikkat dağıtmaz. */}
@@ -400,38 +377,15 @@ export default function ObligationsByTypeScreen() {
 
           <Divider />
 
-          <Row>
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                AKTİF {typeLabel.toLocaleUpperCase('tr-TR')}
-              </Text>
-              <Text variant="cardTitle" tabular>
-                {activeCount}
-              </Text>
-            </Stack>
-            <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                TOPLAM {typeLabel.toLocaleUpperCase('tr-TR')}
-              </Text>
-              <Text variant="cardTitle" tabular>
-                {totalTypeCount}
-              </Text>
-            </Stack>
-            {overdueCount > 0 ? (
-              <>
-                <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="danger" numberOfLines={1}>
-                    GECİKMİŞ
-                  </Text>
-                  <Text variant="cardTitle" tabular style={{ color: theme.colors.danger }}>
-                    {overdueCount}
-                  </Text>
-                </Stack>
-              </>
-            ) : null}
-          </Row>
+          <StatColumns
+            columns={[
+              { label: `AKTİF ${typeLabel.toLocaleUpperCase('tr-TR')}`, value: activeCount },
+              { label: `TOPLAM ${typeLabel.toLocaleUpperCase('tr-TR')}`, value: totalTypeCount },
+              ...(overdueCount > 0
+                ? [{ label: 'GECİKMİŞ', labelColor: 'danger' as const, valueColor: 'danger' as const, value: overdueCount }]
+                : []),
+            ]}
+          />
 
           <Button
             icon="add"
