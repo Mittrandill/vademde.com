@@ -1,19 +1,20 @@
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import type { Ionicons } from '@expo/vector-icons';
 
+import { useTheme } from '@/theme';
 import { Card, Divider, EmptyState, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { AccountLabelRow } from './AccountLabelRow';
 import { Amount } from './Amount';
 import { BankLogo } from './BankLogo';
 import { CategoryIcon } from './CategoryIcon';
+import { DateBlock } from './DateBlock';
 import { PersonAvatar } from './PersonAvatar';
 import type { TransactionWithRelations } from '@/features/transactions/api';
 
 export interface RecentTransactionsListProps {
   transactions: TransactionWithRelations[];
 }
-
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
 
 const DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   income: 'arrow-down-circle-outline',
@@ -22,6 +23,8 @@ const DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 export function RecentTransactionsList({ transactions }: RecentTransactionsListProps) {
+  const theme = useTheme();
+
   return (
     <Stack gap="sm">
       <SectionHeader
@@ -33,11 +36,16 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
       {transactions.length === 0 ? (
         <EmptyState icon="receipt-outline" message="Henüz hareket yok." />
       ) : (
-        <Stack gap="xs">
-          {transactions.map((t) => (
-            <Pressable key={t.id} onPress={() => router.push(`/transactions/${t.id}`)}>
-              <Card>
-                <Row gap="sm">
+        // Hareketler sekmesindeki listeyle aynı desen: tek arka plan üzerinde satır
+        // araları çizgiyle ayrılır, her satır ayrı bir kart olmaz.
+        <Card style={{ padding: 0 }}>
+          {transactions.map((t, index) => (
+            <View key={t.id}>
+              <Pressable
+                onPress={() => router.push(`/transactions/${t.id}`)}
+                style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}
+              >
+                <Row gap="sm" align="center">
                   {(t.payments?.length ?? 0) > 0 ? (
                     // Bir borç/alacak ödemesinden otomatik oluşturulan hareket — kategorisi
                     // ne olursa olsun (belge türü kategori değildir) ödemenin yapıldığı
@@ -55,6 +63,7 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
                       size={36}
                     />
                   )}
+                  <DateBlock date={t.occurred_at} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">
                       {t.description?.trim() ||
@@ -66,20 +75,13 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
                         {t.counterparty.name}
                       </Text>
                     ) : t.account ? (
-                      <>
-                        <Divider style={{ marginVertical: 2 }} />
-                        <AccountLabelRow
-                          bankCode={t.account.bank_code}
-                          accountName={t.account.name}
-                          accountType={t.account.type}
-                          cardLastFour={t.account.card_last_four}
-                        />
-                      </>
-                    ) : (
-                      <Text variant="caption" color="textSecondary">
-                        {dateFormatter.format(new Date(t.occurred_at))}
-                      </Text>
-                    )}
+                      <AccountLabelRow
+                        bankCode={t.account.bank_code}
+                        accountName={t.account.name}
+                        accountType={t.account.type}
+                        cardLastFour={t.account.card_last_four}
+                      />
+                    ) : null}
                   </Stack>
                   <Amount
                     amountMinor={t.amount_minor}
@@ -88,10 +90,13 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
                     variant="body"
                   />
                 </Row>
-              </Card>
-            </Pressable>
+              </Pressable>
+              {index < transactions.length - 1 ? (
+                <Divider style={{ marginHorizontal: theme.spacing.md }} />
+              ) : null}
+            </View>
           ))}
-        </Stack>
+        </Card>
       )}
     </Stack>
   );

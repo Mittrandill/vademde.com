@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import {
   ActionSheet,
-  Card,
   Divider,
   EmptyState,
   Pagination,
@@ -25,6 +24,7 @@ import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
+import { DateBlock } from '@/components/finance/DateBlock';
 import { listTransactions } from '@/features/transactions/api';
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -250,11 +250,6 @@ export default function HareketlerScreen() {
   const error = transactionsQuery.error || obligationsQuery.error || installmentsQuery.error;
   const isLoading = transactionsQuery.isLoading || obligationsQuery.isLoading || (wantsObligations && !search && installmentsQuery.isLoading);
 
-  const dateFormatter = useMemo(
-    () => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' }),
-    []
-  );
-
   // Tek dikey scroll sahibi: başlık, arama/sıralama ve segment filtresi FlatList'in
   // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde
   // birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
@@ -322,7 +317,6 @@ export default function HareketlerScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,
-          gap: theme.spacing.sm,
           // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
           // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
           paddingBottom: theme.layout.tabBarClearance,
@@ -330,16 +324,35 @@ export default function HareketlerScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() =>
-              item.kind === 'obligation'
-                ? router.push(`/obligations/${item.id}`)
-                : router.push(`/transactions/${item.id}`)
-            }
-          >
-            <Card>
-              <Row gap="sm" align="center">
+        // Satırlar artık ayrı ayrı kart değil, tek bir arka plan üzerinde ayraç
+        // çizgileriyle bölünmüş tek bir liste gövdesi oluşturur (yalnızca ilk/son
+        // satır köşeleri yuvarlanır) — Krediler/Borçlar'daki zengin kartlardan farklı
+        // olarak burası tek satırlık kompakt kayıtlar içindir.
+        ItemSeparatorComponent={() => <Divider style={{ marginHorizontal: theme.spacing.md }} />}
+        renderItem={({ item, index }) => {
+          const isFirst = index === 0;
+          const isLast = index === visibleRows.length - 1;
+          return (
+            <Pressable
+              onPress={() =>
+                item.kind === 'obligation'
+                  ? router.push(`/obligations/${item.id}`)
+                  : router.push(`/transactions/${item.id}`)
+              }
+            >
+              <Row
+                gap="sm"
+                align="center"
+                style={{
+                  backgroundColor: theme.colors.surfacePrimary,
+                  paddingHorizontal: theme.spacing.md,
+                  paddingVertical: theme.spacing.sm,
+                  borderTopLeftRadius: isFirst ? theme.radius.widget : 0,
+                  borderTopRightRadius: isFirst ? theme.radius.widget : 0,
+                  borderBottomLeftRadius: isLast ? theme.radius.widget : 0,
+                  borderBottomRightRadius: isLast ? theme.radius.widget : 0,
+                }}
+              >
                 {item.kind === 'obligation' ? (
                   <ObligationIcon
                     documentType={item.documentType ?? 'diger'}
@@ -358,35 +371,21 @@ export default function HareketlerScreen() {
                 ) : (
                   <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={36} />
                 )}
+                <DateBlock date={item.date} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle">{item.title}</Text>
                   {item.kind === 'transaction' && !item.counterpartyName && item.accountName ? (
-                    <>
-                      <Divider style={{ marginVertical: 2 }} />
-                      <Row gap="xs" align="center">
-                        <AccountLabelRow
-                          bankCode={item.bankCode}
-                          accountName={item.accountName}
-                          accountType={item.accountType}
-                          cardLastFour={item.cardLastFour}
-                        />
-                        <Text variant="caption" color="textSecondary" style={{ marginLeft: 'auto' }}>
-                          {dateFormatter.format(new Date(item.date))}
-                        </Text>
-                      </Row>
-                    </>
-                  ) : (
-                    <Row gap="xs">
-                      {item.subtitle ? (
-                        <Text variant="caption" color="textSecondary">
-                          {item.subtitle}
-                        </Text>
-                      ) : null}
-                      <Text variant="caption" color="textSecondary">
-                        {dateFormatter.format(new Date(item.date))}
-                      </Text>
-                    </Row>
-                  )}
+                    <AccountLabelRow
+                      bankCode={item.bankCode}
+                      accountName={item.accountName}
+                      accountType={item.accountType}
+                      cardLastFour={item.cardLastFour}
+                    />
+                  ) : item.subtitle ? (
+                    <Text variant="caption" color="textSecondary">
+                      {item.subtitle}
+                    </Text>
+                  ) : null}
                   {item.status ? <StatusBadge status={item.status} /> : null}
                 </Stack>
                 <Text
@@ -398,9 +397,9 @@ export default function HareketlerScreen() {
                   {formatMinorAmount(item.amountMinor, item.currencyCode)}
                 </Text>
               </Row>
-            </Card>
-          </Pressable>
-        )}
+            </Pressable>
+          );
+        }}
         ListEmptyComponent={
           isInitialLoading ? (
             <Stack gap="sm">
