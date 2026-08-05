@@ -58,10 +58,10 @@ export function Pagination({ page, totalPages, onChange, loading }: PaginationPr
             accessibilityLabel={`${p + 1}. sayfa`}
             onPress={() => onChange(p)}
             style={{
-              minWidth: 32,
-              height: 32,
-              paddingHorizontal: 6,
-              borderRadius: 16,
+              minWidth: theme.touchTarget.minimum,
+              height: theme.touchTarget.minimum,
+              paddingHorizontal: theme.spacing.xs,
+              borderRadius: theme.radius.pill,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: p === page ? theme.colors.brandPrimary : 'transparent',
@@ -112,9 +112,9 @@ function StepButton({ icon, label, disabled, onPress }: StepButtonProps) {
       disabled={disabled}
       onPress={onPress}
       style={{
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: theme.touchTarget.minimum,
+        height: theme.touchTarget.minimum,
+        borderRadius: theme.radius.pill,
         borderWidth: 1,
         borderColor: theme.colors.border,
         alignItems: 'center',
@@ -122,7 +122,7 @@ function StepButton({ icon, label, disabled, onPress }: StepButtonProps) {
         opacity: disabled ? 0.35 : 1,
       }}
     >
-      <Ionicons name={icon} size={16} color={theme.colors.textPrimary} />
+      <Ionicons name={icon} size={theme.iconSize.md} color={theme.colors.textPrimary} />
     </Pressable>
   );
 }

@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { listAccounts } from '@/features/accounts/api';
@@ -20,6 +20,7 @@ import {
   type Transaction,
 } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { showSuccessAlert } from '@/utils/alerts';
 import { toMinorUnits } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
@@ -142,7 +143,9 @@ function TransactionForm({ id, initial }: TransactionFormProps) {
       if (activeWorkspaceId) {
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
       }
-      router.back();
+      showSuccessAlert(isEditing ? 'Hareket başarıyla güncellendi.' : 'Hareket başarıyla oluşturuldu.', () =>
+        router.back()
+      );
     },
   });
 
@@ -152,7 +155,7 @@ function TransactionForm({ id, initial }: TransactionFormProps) {
       if (activeWorkspaceId) {
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
       }
-      router.back();
+      showSuccessAlert('Hareket başarıyla silindi.', () => router.back());
     },
   });
 
@@ -182,47 +185,18 @@ function TransactionForm({ id, initial }: TransactionFormProps) {
               </Text>
             </Row>
 
-            <Row gap="xs">
-              {DIRECTIONS.map((option) => {
-                const selected = option.value === direction;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => {
-                      setDirection(option.value);
-                      setCategoryId(null);
-                      setTransferToAccountId(null);
-                    }}
-                    style={{
-                      flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: theme.spacing.sm,
-                      borderRadius: theme.radius.input,
-                      backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                    }}
-                  >
-                    <Text
-                      variant="body"
-                      style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textPrimary }}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </Row>
+            <SegmentedControl
+              options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
+              value={direction}
+              onChange={(value) => {
+                setDirection(value);
+                setCategoryId(null);
+                setTransferToAccountId(null);
+              }}
+              stretch
+            />
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                TUTAR
-              </Text>
-              <TextField
-                placeholder="0,00"
-                keyboardType="decimal-pad"
-                value={amount}
-                onChangeText={setAmount}
-              />
-            </Stack>
+            <TextField label="TUTAR" placeholder="0,00" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
@@ -271,19 +245,14 @@ function TransactionForm({ id, initial }: TransactionFormProps) {
               </Stack>
             )}
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                TARİH
-              </Text>
-              <TextField placeholder="YYYY-AA-GG" value={dateStr} onChangeText={setDateStr} />
-            </Stack>
+            <TextField label="TARİH" placeholder="YYYY-AA-GG" value={dateStr} onChangeText={setDateStr} />
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                AÇIKLAMA (İSTEĞE BAĞLI)
-              </Text>
-              <TextField placeholder="Örn. Market alışverişi" value={description} onChangeText={setDescription} />
-            </Stack>
+            <TextField
+              label="AÇIKLAMA (İSTEĞE BAĞLI)"
+              placeholder="Örn. Market alışverişi"
+              value={description}
+              onChangeText={setDescription}
+            />
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">

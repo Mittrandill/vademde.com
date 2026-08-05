@@ -12,3 +12,4 @@ export * from './SectionHeader';
 export * from './Pagination';
 export * from './EmptyState';
 export * from './ActionSheet';
+export * from './Skeleton';

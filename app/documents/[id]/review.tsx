@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Card, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -33,6 +33,7 @@ import { DOCUMENT_TYPE_LABEL, DOCUMENT_TYPE_ICON, BANK_DOCUMENT_TYPES } from '@/
 import { matchBankByName } from '@/features/banks/banks';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
+import { showSuccessAlert } from '@/utils/alerts';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
@@ -447,16 +448,23 @@ export default function DocumentReviewScreen() {
       // Kredi taksit önizlemesi gibi çok satırlı bir listenin hemen ardından ekranı
       // değiştirmek, Fabric henüz mount transaction'ını bitirmeden view'ları söküp
       // "componentViewDescriptorWithTag" assertion'ıyla native çökmeye yol açabiliyor;
-      // navigasyon bir sonraki etkileşim turuna ertelenir.
-      InteractionManager.runAfterInteractions(() => {
-        if (result?.installmentPlanFailed) {
-          Alert.alert(
-            'Taksitler oluşturulamadı',
-            'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.'
-          );
-        }
-        router.replace('/(tabs)/hareketler');
-      });
+      // navigasyon Alert'in "Tamam" butonuna ertelenir.
+      if (result?.installmentPlanFailed) {
+        Alert.alert(
+          'Taksitler oluşturulamadı',
+          'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.',
+          [
+            {
+              text: 'Tamam',
+              onPress: () => InteractionManager.runAfterInteractions(() => router.replace('/(tabs)/hareketler')),
+            },
+          ]
+        );
+      } else {
+        showSuccessAlert('Belge başarıyla onaylandı ve kayıt oluşturuldu.', () => {
+          InteractionManager.runAfterInteractions(() => router.replace('/(tabs)/hareketler'));
+        });
+      }
     },
   });
 
@@ -466,7 +474,7 @@ export default function DocumentReviewScreen() {
       if (activeWorkspaceId) {
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
       }
-      router.back();
+      showSuccessAlert('Belge başarıyla silindi.', () => router.back());
     },
   });
 
@@ -650,14 +658,8 @@ export default function DocumentReviewScreen() {
             )}
 
             {isLoanDocument && installmentDrafts.length > 0 ? (
-              <Stack
-                gap="sm"
-                style={{
-                  backgroundColor: theme.colors.surfacePrimary,
-                  borderRadius: theme.radius.widget,
-                  padding: theme.spacing.md,
-                }}
-              >
+              <Card>
+                <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
                   {installmentDrafts.length} TAKSİT OTOMATİK OLUŞTURULACAK — VADE, TUTAR VE ÖDENDİ DURUMU DÜZENLENEBİLİR
                 </Text>
@@ -707,7 +709,8 @@ export default function DocumentReviewScreen() {
                     </Row>
                   </Stack>
                 ))}
-              </Stack>
+                </Stack>
+              </Card>
             ) : null}
 
             {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
@@ -716,7 +719,7 @@ export default function DocumentReviewScreen() {
                   BANKA (İSTEĞE BAĞLI)
                 </Text>
                 <Row gap="sm" align="center">
-                  <BankLogo bankCode={bankCode} fallbackName={!bankCode ? extractedBankName : null} size={32} />
+                  <BankLogo bankCode={bankCode} fallbackName={!bankCode ? extractedBankName : null} size={36} />
                   <Stack style={{ flex: 1 }}>
                     <BankPicker selectedId={bankCode} onSelect={setBankCode} />
                   </Stack>
@@ -743,14 +746,8 @@ export default function DocumentReviewScreen() {
                   onChange={(key) => setCategorizeCardSpending(key === 'categorize')}
                 />
                 {categorizeCardSpending ? (
-                  <Stack
-                    gap="sm"
-                    style={{
-                      backgroundColor: theme.colors.surfacePrimary,
-                      borderRadius: theme.radius.widget,
-                      padding: theme.spacing.md,
-                    }}
-                  >
+                  <Card>
+                    <Stack gap="sm">
                     <Text variant="caption" color="textSecondary">
                       Her işlem, seçtiğiniz hesaba ayrı bir gider olarak kaydedilir.
                     </Text>
@@ -775,7 +772,8 @@ export default function DocumentReviewScreen() {
                         ) : null}
                       </Stack>
                     ))}
-                  </Stack>
+                    </Stack>
+                  </Card>
                 ) : null}
               </Stack>
             ) : null}

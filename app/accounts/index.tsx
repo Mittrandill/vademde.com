@@ -7,9 +7,21 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import { Card, Pagination, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import {
+  Card,
+  EmptyState,
+  Pagination,
+  Pressable,
+  Row,
+  SegmentedControl,
+  Skeleton,
+  Stack,
+  Text,
+  TextField,
+} from '@/components/primitives';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { HeroStatCard } from '@/components/finance/HeroStatCard';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -101,35 +113,47 @@ export default function AccountsScreen() {
   const listHeader = (
     <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
       <Row align="center">
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+        <Pressable
+          accessibilityLabel="Kapat"
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.surfaceElevated,
+          }}
+        >
+          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
         </Pressable>
         <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
           Hesaplar
         </Text>
-        <Pressable onPress={() => router.push('/accounts/new')} hitSlop={12}>
-          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        <Pressable
+          accessibilityLabel="Yeni hesap"
+          onPress={() => router.push('/accounts/new')}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.brandPrimary,
+          }}
+        >
+          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
         </Pressable>
       </Row>
 
       {allAccounts.length > 0 ? (
-        <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
-          <Stack gap="xs">
-            <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-              TOPLAM BAKİYE
-            </Text>
-            <Amount
-              amountMinor={totalBalanceMinor}
-              variant="displayAmount"
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.6}
-            />
-            <Text variant="caption" color="textSecondary">
-              {allAccounts.length} hesap
-            </Text>
-          </Stack>
-        </Card>
+        <HeroStatCard
+          label="TOPLAM BAKİYE"
+          amountMinor={totalBalanceMinor}
+          caption={`${allAccounts.length} hesap`}
+        />
       ) : null}
 
       <Stack gap="sm">
@@ -173,7 +197,7 @@ export default function AccountsScreen() {
             <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
               <Card>
                 <Row gap="sm" align="center">
-                  <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={40} />
+                  <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={36} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle" numberOfLines={1}>
                       {item.name}
@@ -211,16 +235,25 @@ export default function AccountsScreen() {
           );
         }}
         ListEmptyComponent={
-          accountsQuery.isSuccess ? (
-            <Stack gap="xs" style={{ flex: 1, justifyContent: 'center' }}>
-              <Text variant="cardTitle">{allAccounts.length === 0 ? 'Henüz hesap yok' : 'Sonuç bulunamadı'}</Text>
-              <Text variant="body" color="textSecondary">
-                {allAccounts.length === 0
-                  ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.'
-                  : 'Arama terimini veya filtreyi değiştirin.'}
-              </Text>
+          !accountsQuery.isSuccess ? (
+            <Stack gap="sm">
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
             </Stack>
-          ) : null
+          ) : (
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <EmptyState
+                icon="wallet-outline"
+                title={allAccounts.length === 0 ? 'Henüz hesap yok' : 'Sonuç bulunamadı'}
+                message={
+                  allAccounts.length === 0
+                    ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.'
+                    : 'Arama terimini veya filtreyi değiştirin.'
+                }
+              />
+            </View>
+          )
         }
         ListFooterComponent={
           totalPages > 1 ? (

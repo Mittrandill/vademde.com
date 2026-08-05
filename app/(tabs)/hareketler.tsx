@@ -1,15 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { ActionSheet, Pagination, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import {
+  ActionSheet,
+  Card,
+  Divider,
+  EmptyState,
+  Pagination,
+  Pressable,
+  Row,
+  SegmentedControl,
+  Skeleton,
+  Stack,
+  Text,
+  TextField,
+} from '@/components/primitives';
+import { AccountLabelRow } from '@/components/finance/AccountLabelRow';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import { listTransactions } from '@/features/transactions/api';
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -39,7 +54,17 @@ interface HareketRow {
   status?: string;
   documentType?: string;
   bankCode?: string | null;
+  serviceCode?: string | null;
+  categoryIcon?: string | null;
+  isObligationPayment?: boolean;
   installmentId?: string | null;
+  // Yalnızca kind === 'transaction' satırlarında doldurulur — hesap kimliğini alt
+  // başlıkta banka logolu, yapılandırılmış bir satır olarak göstermek için (bkz.
+  // AccountLabelRow). Kişi/firma varsa bunun yerine o gösterilir.
+  counterpartyName?: string | null;
+  accountName?: string | null;
+  accountType?: string | null;
+  cardLastFour?: string | null;
 }
 
 const DIRECTION_PREFIX: Record<string, string> = {
@@ -150,6 +175,12 @@ export default function HareketlerScreen() {
           currencyCode: t.currency_code,
           direction: t.direction,
           bankCode: t.account?.bank_code ?? null,
+          categoryIcon: t.category?.icon ?? null,
+          counterpartyName: t.counterparty?.name ?? null,
+          accountName: t.account?.name ?? null,
+          accountType: t.account?.type ?? null,
+          cardLastFour: t.account?.card_last_four ?? null,
+          isObligationPayment: (t.payments?.length ?? 0) > 0,
         }))
       : [];
 
@@ -171,6 +202,7 @@ export default function HareketlerScreen() {
             status: o.status,
             documentType: o.document_type,
             bankCode: o.bank_code,
+            serviceCode: o.service_code,
           }))
       : [];
 
@@ -193,6 +225,7 @@ export default function HareketlerScreen() {
       status: o.status,
       documentType: o.document_type,
       bankCode: o.bank_code,
+      serviceCode: o.service_code,
       installmentId: o.installment_id,
     }));
 
@@ -292,7 +325,7 @@ export default function HareketlerScreen() {
           gap: theme.spacing.sm,
           // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
           // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
-          paddingBottom: 100,
+          paddingBottom: theme.layout.tabBarClearance,
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
@@ -302,60 +335,87 @@ export default function HareketlerScreen() {
             onPress={() =>
               item.kind === 'obligation'
                 ? router.push(`/obligations/${item.id}`)
-                : router.push({ pathname: '/transactions/new', params: { id: item.id } })
+                : router.push(`/transactions/${item.id}`)
             }
           >
-            <Row
-              gap="sm"
-              align="center"
-              style={{
-                backgroundColor: theme.colors.surfacePrimary,
-                borderRadius: theme.radius.widget,
-                padding: theme.spacing.md,
-              }}
-            >
-              {item.kind === 'obligation' ? (
-                <ObligationIcon documentType={item.documentType ?? 'diger'} bankCode={item.bankCode} size={40} />
-              ) : (
-                <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={40} />
-              )}
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="cardTitle">{item.title}</Text>
-                <Row gap="xs">
-                  {item.subtitle ? (
-                    <Text variant="caption" color="textSecondary">
-                      {item.subtitle}
-                    </Text>
-                  ) : null}
-                  <Text variant="caption" color="textSecondary">
-                    {dateFormatter.format(new Date(item.date))}
-                  </Text>
-                </Row>
-                {item.status ? <StatusBadge status={item.status} /> : null}
-              </Stack>
-              <Text
-                variant="body"
-                tabular
-                color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
-              >
-                {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
-                {formatMinorAmount(item.amountMinor, item.currencyCode)}
-              </Text>
-            </Row>
+            <Card>
+              <Row gap="sm" align="center">
+                {item.kind === 'obligation' ? (
+                  <ObligationIcon
+                    documentType={item.documentType ?? 'diger'}
+                    bankCode={item.bankCode}
+                    serviceCode={item.serviceCode}
+                    fallbackName={item.title}
+                    size={36}
+                  />
+                ) : item.isObligationPayment ? (
+                  // Bir borç/alacak ödemesinden otomatik oluşturulan hareket — kategorisi
+                  // ne olursa olsun (belge türü kategori değildir) ödemenin yapıldığı
+                  // hesabın banka logosu gösterilir.
+                  <BankLogo bankCode={item.bankCode} size={36} />
+                ) : item.categoryIcon ? (
+                  <CategoryIcon icon={item.categoryIcon} size={36} />
+                ) : (
+                  <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={36} />
+                )}
+                <Stack gap="xxs" style={{ flex: 1 }}>
+                  <Text variant="cardTitle">{item.title}</Text>
+                  {item.kind === 'transaction' && !item.counterpartyName && item.accountName ? (
+                    <>
+                      <Divider style={{ marginVertical: 2 }} />
+                      <Row gap="xs" align="center">
+                        <AccountLabelRow
+                          bankCode={item.bankCode}
+                          accountName={item.accountName}
+                          accountType={item.accountType}
+                          cardLastFour={item.cardLastFour}
+                        />
+                        <Text variant="caption" color="textSecondary" style={{ marginLeft: 'auto' }}>
+                          {dateFormatter.format(new Date(item.date))}
+                        </Text>
+                      </Row>
+                    </>
+                  ) : (
+                    <Row gap="xs">
+                      {item.subtitle ? (
+                        <Text variant="caption" color="textSecondary">
+                          {item.subtitle}
+                        </Text>
+                      ) : null}
+                      <Text variant="caption" color="textSecondary">
+                        {dateFormatter.format(new Date(item.date))}
+                      </Text>
+                    </Row>
+                  )}
+                  {item.status ? <StatusBadge status={item.status} /> : null}
+                </Stack>
+                <Text
+                  variant="body"
+                  tabular
+                  color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
+                >
+                  {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
+                  {formatMinorAmount(item.amountMinor, item.currencyCode)}
+                </Text>
+              </Row>
+            </Card>
           </Pressable>
         )}
         ListEmptyComponent={
           isInitialLoading ? (
-            <Row style={{ flex: 1, justifyContent: 'center' }}>
-              <ActivityIndicator color={theme.colors.textSecondary} />
-            </Row>
-          ) : (
-            <Stack gap="xs" style={{ flex: 1, justifyContent: 'center' }}>
-              <Text variant="cardTitle">{search ? 'Sonuç bulunamadı' : 'Henüz hareket yok'}</Text>
-              <Text variant="body" color="textSecondary">
-                {search ? 'Farklı bir arama terimi deneyin.' : 'Sağ üstteki + ile ilk kaydınızı ekleyin.'}
-              </Text>
+            <Stack gap="sm">
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
             </Stack>
+          ) : (
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <EmptyState
+                icon="receipt-outline"
+                title={search ? 'Sonuç bulunamadı' : 'Henüz hareket yok'}
+                message={search ? 'Farklı bir arama terimi deneyin.' : 'Sağ üstteki + ile ilk kaydınızı ekleyin.'}
+              />
+            </View>
           )
         }
         ListFooterComponent={

@@ -27,7 +27,7 @@ export function CreditCardDueWidget({ obligation }: CreditCardDueWidgetProps) {
     <Pressable onPress={() => router.push(`/obligations/${obligation.id}`)}>
       <Card>
         <Row gap="sm">
-          <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={28} />
+          <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={36} />
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="cardTitle">{obligation.title}</Text>
             <Row gap="xs">

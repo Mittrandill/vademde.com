@@ -192,7 +192,7 @@ export default function CreditCardsScreen() {
       </Card>
 
       {/* İstatistik hero kartı: Kredilerim'deki büyük tutar + sayaç satırı dili. */}
-      <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+      <Card variant="hero">
         <Stack gap="lg">
           <Row gap="md" align="center">
             <Stack gap="xxs" style={{ flex: 1 }}>

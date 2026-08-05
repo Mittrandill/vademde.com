@@ -29,11 +29,13 @@ import { getObligation, getObligationWithInstallments, type Installment, type Ob
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { listPaymentsForObligation, recordPayment, type Payment } from '@/features/payments/api';
 import { BANK_NAME } from '@/features/banks/banks';
+import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, toMinorUnits } from '@/utils/money';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
+import { showSuccessAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
@@ -119,6 +121,9 @@ export default function ObligationDetailScreen() {
   // (docs/08-tasarim-sistemi.md §12.3 — kart içinde mikro grafikler/zaman çizgisi).
   const nextInstallment = installments.find((i) => i.remaining_amount_minor > 0) ?? null;
   const bankName = obligation.bank_code ? (BANK_NAME[obligation.bank_code] ?? null) : null;
+  const isSubscription = obligation.document_type === 'abonelik';
+  const serviceName = obligation.service_code ? (SERVICE_NAME[obligation.service_code] ?? null) : null;
+  const unitLabel = isSubscription ? 'Ay' : 'Taksit';
 
   // Hero yüzeyi her zaman temanın nötr "elevated" tonundadır (açıkta beyaza yakın,
   // koyuda grafit) — sabit sarı/renkli kart tema değişince kırılıyordu. Durum anlamı
@@ -126,8 +131,11 @@ export default function ObligationDetailScreen() {
   // aynı tek "state accent" rengini paylaşır (docs §12.4 — üçten fazla vurgu rengi olmaz).
   const stateAccent = isClosed ? theme.colors.success : isOverdue ? theme.colors.danger : theme.colors.brandPrimary;
   const heroAmountColor = isOverdue ? theme.colors.danger : isPayable ? theme.colors.textPrimary : theme.colors.success;
-  const heroPrimaryName = bankName ?? obligation.title;
-  const heroSubtitle = bankName ? obligation.title : (DOCUMENT_TYPE_LABEL[obligation.document_type] ?? obligation.document_type);
+  const heroPrimaryName = bankName ?? serviceName ?? obligation.title;
+  const heroSubtitle =
+    bankName || serviceName
+      ? obligation.title
+      : (DOCUMENT_TYPE_LABEL[obligation.document_type] ?? obligation.document_type);
 
   const nextIndex = installments.findIndex((i) => i.id === nextInstallment?.id);
   const smartPlanPage = nextIndex >= 0 ? Math.floor(nextIndex / TAB_PAGE_SIZE) : 0;
@@ -155,20 +163,44 @@ export default function ObligationDetailScreen() {
       <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
         <Stack gap="lg">
           <Row align="center">
-            <CircleIconButton icon="arrow-back" label="Geri" onPress={() => router.back()} />
-            <Text variant="sectionTitle" style={{ flex: 1, textAlign: 'center' }} numberOfLines={1}>
-              {(DOCUMENT_TYPE_LABEL[obligation.document_type] ?? 'Kayıt') + ' Detayı'}
+            <Pressable
+              accessibilityLabel="Geri"
+              onPress={() => router.back()}
+              hitSlop={8}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: theme.radius.input,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.colors.surfaceElevated,
+              }}
+            >
+              <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
+            </Pressable>
+            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }} numberOfLines={1}>
+              {heroPrimaryName}
             </Text>
-            <CircleIconButton
-              icon="create-outline"
-              label="Düzenle"
+            <Pressable
+              accessibilityLabel="Düzenle"
               onPress={() => router.push({ pathname: '/obligations/new', params: { id: obligation.id } })}
-            />
+              hitSlop={8}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: theme.radius.input,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.colors.surfaceElevated,
+              }}
+            >
+              <Ionicons name="pencil" size={22} color={theme.colors.textPrimary} />
+            </Pressable>
           </Row>
 
           {/* Hero: temanın nötr elevated yüzeyinde banka/belge kimliği, kalan tutar ve
               ödeme durumunu toplar — açık temada beyaza yakın, koyu temada grafit. */}
-          <Card elevated style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+          <Card elevated variant="hero">
             <Stack gap="lg">
               <Row gap="sm" align="center">
                 <View
@@ -181,7 +213,13 @@ export default function ObligationDetailScreen() {
                     justifyContent: 'center',
                   }}
                 >
-                  <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={40} />
+                  <ObligationIcon
+                    documentType={obligation.document_type}
+                    bankCode={obligation.bank_code}
+                    serviceCode={obligation.service_code}
+                    fallbackName={obligation.title}
+                    size={44}
+                  />
                 </View>
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle" numberOfLines={2}>
@@ -244,7 +282,7 @@ export default function ObligationDetailScreen() {
                 <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
                 <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
                   <Text variant="caption" color="textSecondary">
-                    {hasInstallments ? 'KALAN TAKSİT' : 'VADE'}
+                    {hasInstallments ? `KALAN ${unitLabel.toLocaleUpperCase('tr-TR')}` : 'VADE'}
                   </Text>
                   <Text variant="cardTitle" tabular numberOfLines={1}>
                     {hasInstallments
@@ -272,13 +310,19 @@ export default function ObligationDetailScreen() {
                   <Text variant="cardTitle">{DOCUMENT_TYPE_LABEL[obligation.document_type] ?? 'Kayıt'} Bilgileri</Text>
                 </Row>
                 <Divider />
-                <InfoRow label="Başlangıç Tutarı" value={formatMinorAmount(obligation.total_amount_minor, obligation.currency_code)} />
+                <InfoRow
+                  label={isSubscription ? 'Toplam Tutar' : 'Başlangıç Tutarı'}
+                  value={formatMinorAmount(obligation.total_amount_minor, obligation.currency_code)}
+                />
                 {effectiveRatio !== null ? (
                   <InfoRow label="Faiz Oranı" value={`%${effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`} />
                 ) : null}
-                {hasInstallments ? <InfoRow label="Toplam Taksit" value={String(installments.length)} /> : null}
+                {hasInstallments ? (
+                  <InfoRow label={`Toplam ${unitLabel}`} value={String(installments.length)} />
+                ) : null}
                 {obligation.due_date ? <InfoRow label="Vade Tarihi" value={dateFormatter.format(new Date(obligation.due_date))} /> : null}
                 {bankName ? <InfoRow label="Banka" value={bankName} /> : null}
+                {serviceName ? <InfoRow label="Servis" value={serviceName} /> : null}
                 <InfoRow label="Durum" value={OBLIGATION_STATUS_LABEL[obligation.status as keyof typeof OBLIGATION_STATUS_LABEL] ?? obligation.status} />
               </Stack>
             </Card>
@@ -292,6 +336,7 @@ export default function ObligationDetailScreen() {
                     currencyCode={obligation.currency_code}
                     isNext={installment.id === nextInstallment?.id}
                     isLast={index === visibleInstallments.length - 1}
+                    unitLabel={unitLabel}
                     onPay={() => setPayingInstallment(installment)}
                   />
                 ))}
@@ -334,19 +379,21 @@ export default function ObligationDetailScreen() {
             accounts={accountsQuery.data ?? []}
             onClose={() => setPayingInstallment(null)}
             onSuccess={() => {
-              // Modal'ı hemen kapat (native dismiss transition'ı temiz başlasın), önbellek
-              // geçersizleştirme/yeniden render gibi ağır işi bir sonraki etkileşim turuna
-              // ertele — aksi halde Fabric, modal dismiss animasyonuyla aynı anda arkadaki
+              // Modal'ı Alert'in "Tamam"ına kadar açık tutuyoruz; kapatma ve önbellek
+              // geçersizleştirme/yeniden render gibi ağır iş bir sonraki etkileşim turuna
+              // ertelenir — aksi halde Fabric, modal dismiss animasyonuyla aynı anda arkadaki
               // listeyi (taksitler vb.) yeniden mount etmeye çalışıp çöküyor (bkz.
               // review.tsx'teki InteractionManager.runAfterInteractions ile aynı düzeltme).
-              setPayingInstallment(null);
-              InteractionManager.runAfterInteractions(async () => {
-                invalidateAll();
-                queryClient.invalidateQueries({ queryKey: ['obligation', id, 'payments'] });
-                if (activeWorkspaceId) {
-                  const fresh = await getObligation(id as string);
-                  await syncObligationReminder(activeWorkspaceId, fresh);
-                }
+              showSuccessAlert('Ödeme başarıyla kaydedildi.', () => {
+                setPayingInstallment(null);
+                InteractionManager.runAfterInteractions(async () => {
+                  invalidateAll();
+                  queryClient.invalidateQueries({ queryKey: ['obligation', id, 'payments'] });
+                  if (activeWorkspaceId) {
+                    const fresh = await getObligation(id as string);
+                    await syncObligationReminder(activeWorkspaceId, fresh);
+                  }
+                });
               });
             }}
           />
@@ -355,36 +402,6 @@ export default function ObligationDetailScreen() {
     </SafeAreaView>
   );
 }
-
-interface CircleIconButtonProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-}
-
-function CircleIconButton({ icon, label, onPress }: CircleIconButtonProps) {
-  const theme = useTheme();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      hitSlop={8}
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.colors.surfaceElevated,
-      }}
-    >
-      <Ionicons name={icon} size={19} color={theme.colors.textPrimary} />
-    </Pressable>
-  );
-}
-
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -404,6 +421,7 @@ interface TimelineInstallmentRowProps {
   currencyCode: string;
   isNext: boolean;
   isLast: boolean;
+  unitLabel: string;
   onPay: () => void;
 }
 
@@ -411,7 +429,7 @@ interface TimelineInstallmentRowProps {
 // Ödenmiş taksit dolu yeşil, sıradaki dolu Saffron, gelecek taksitler soluk anahat.
 // Markerlar arasındaki dikey çizgi ödeme takvimini gerçek bir zaman çizgisi olarak
 // okunur kılar (docs/08-tasarim-sistemi.md §12.15 — "taksit zaman çizgisi").
-function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, onPay }: TimelineInstallmentRowProps) {
+function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, unitLabel, onPay }: TimelineInstallmentRowProps) {
   const theme = useTheme();
   const paid = installment.remaining_amount_minor <= 0;
 
@@ -459,7 +477,7 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, onP
           <Row gap="sm">
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="cardTitle" numberOfLines={1}>
-                {installment.installment_number}. Taksit — {shortDateFormatter.format(new Date(installment.due_date))}
+                {installment.installment_number}. {unitLabel} — {shortDateFormatter.format(new Date(installment.due_date))}
               </Text>
               {installment.principal_minor !== null && installment.interest_minor !== null ? (
                 <Text variant="caption" color="textSecondary">

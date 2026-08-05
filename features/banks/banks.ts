@@ -1,4 +1,5 @@
 import type { ImageSourcePropType } from 'react-native';
+import { getAvatarColor, getInitials } from '@/utils/avatarColor';
 
 // docs/08-tasarim-sistemi.md — hesap, kredi, kredi kartı ekstresi ve çek kayıtlarını
 // bankalarla eşleştirip yanında gerçek banka logosunu göstermek için sabit BDDK banka
@@ -93,24 +94,13 @@ export function matchBankByName(rawName: string | null | undefined): string | nu
   return match?.code ?? null;
 }
 
-const AVATAR_COLORS = ['#EF6C57', '#3D8BFF', '#22A06B', '#9B6EF3', '#F2A93B', '#12A594', '#E8577A', '#5D6B98'];
-
 // bank_code eşleşmesi bulunamayan (58'lik statik listede olmayan) bir banka OCR'dan
 // çıkarsa, kırık/boş bir görsel yerine banka adının baş harfleriyle renkli, isme göre
-// deterministik bir avatar gösterilir (bkz. components/finance/BankLogo.tsx).
-export function getBankAvatarColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  }
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-}
-
-export function getBankInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const letters = words.slice(0, 2).map((w) => w[0]?.toLocaleUpperCase('tr-TR') ?? '');
-  return letters.join('') || '?';
-}
+// deterministik bir avatar gösterilir (bkz. components/finance/BankLogo.tsx). Genel
+// isim->renk/baş harf mantığı utils/avatarColor.ts'te (kişi avatarları ve servis
+// logoları da aynısını kullanır).
+export const getBankAvatarColor = getAvatarColor;
+export const getBankInitials = getInitials;
 
 // Metro statik analizle bulabilsin diye her require() ayrı, literal bir satırda olmalı.
 export const BANK_LOGOS: Record<string, ImageSourcePropType> = {

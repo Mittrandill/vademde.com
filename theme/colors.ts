@@ -13,6 +13,7 @@ export interface ThemeColors {
   success: string;
   danger: string;
   border: string;
+  overlay: string;
 }
 
 // docs/08-tasarim-sistemi.md §12.5 — Graphite Finance renk sistemi.
@@ -27,6 +28,8 @@ const shared = {
   accentAqua: '#86DDEB',
   success: '#52CE96',
   danger: '#FF625C',
+  // ActionSheet ve diğer modal/sheet backdrop'ları için ortak scrim (docs §12.8 — ağır efekt değil, kontrollü karartma).
+  overlay: 'rgba(0, 0, 0, 0.45)',
 };
 
 export const darkColors: ThemeColors = {

@@ -6,7 +6,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import {
   createCategory,
   deleteCategory,
@@ -14,35 +15,15 @@ import {
   updateCategory,
   type Category,
 } from '@/features/categories/api';
+import { CATEGORY_ICON_OPTIONS } from '@/features/categories/categoryIcons';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { showSuccessAlert } from '@/utils/alerts';
 
 type Kind = 'income' | 'expense';
 
 const KINDS: Array<{ value: Kind; label: string }> = [
   { value: 'expense', label: 'Gider' },
   { value: 'income', label: 'Gelir' },
-];
-
-const ICON_OPTIONS: (keyof typeof Ionicons.glyphMap)[] = [
-  'pricetag-outline',
-  'cart-outline',
-  'home-outline',
-  'car-outline',
-  'flash-outline',
-  'medkit-outline',
-  'school-outline',
-  'construct-outline',
-  'cube-outline',
-  'people-outline',
-  'shield-checkmark-outline',
-  'repeat-outline',
-  'cash-outline',
-  'business-outline',
-  'briefcase-outline',
-  'rocket-outline',
-  'stats-chart-outline',
-  'trending-up-outline',
-  'ellipsis-horizontal-outline',
 ];
 
 export default function NewCategoryScreen() {
@@ -81,7 +62,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
 
   const [name, setName] = useState(initial?.name ?? '');
   const [kind, setKind] = useState<Kind>((initial?.kind as Kind) ?? 'expense');
-  const [icon, setIcon] = useState<string>(initial?.icon ?? ICON_OPTIONS[0]);
+  const [icon, setIcon] = useState<string>(initial?.icon ?? CATEGORY_ICON_OPTIONS[0].icon);
 
   function invalidate() {
     if (activeWorkspaceId) {
@@ -99,7 +80,9 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
     },
     onSuccess: () => {
       invalidate();
-      router.back();
+      showSuccessAlert(isEditing ? 'Kategori başarıyla güncellendi.' : 'Kategori başarıyla oluşturuldu.', () =>
+        router.back()
+      );
     },
   });
 
@@ -107,7 +90,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
     mutationFn: () => deleteCategory(id as string),
     onSuccess: () => {
       invalidate();
-      router.back();
+      showSuccessAlert('Kategori başarıyla silindi.', () => router.back());
     },
     onError: () => {
       Alert.alert(
@@ -137,64 +120,37 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
             </Text>
           </Row>
 
-          <Row gap="xs">
-            {KINDS.map((option) => {
-              const selected = option.value === kind;
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => setKind(option.value)}
-                  style={{
-                    flex: 1,
-                    alignItems: 'center',
-                    paddingVertical: theme.spacing.sm,
-                    borderRadius: theme.radius.input,
-                    backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                  }}
-                >
-                  <Text
-                    variant="body"
-                    style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textPrimary }}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </Row>
+          <SegmentedControl
+            options={KINDS.map((k) => ({ key: k.value, label: k.label }))}
+            value={kind}
+            onChange={setKind}
+            stretch
+          />
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              AD
-            </Text>
-            <TextField placeholder="Örn. Ulaşım" value={name} onChangeText={setName} />
-          </Stack>
+          <TextField label="AD" placeholder="Örn. Ulaşım" value={name} onChangeText={setName} />
 
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
               SİMGE
             </Text>
             <Row gap="sm" style={{ flexWrap: 'wrap' }}>
-              {ICON_OPTIONS.map((option) => {
-                const selected = option === icon;
+              {CATEGORY_ICON_OPTIONS.map((option) => {
+                const selected = option.icon === icon;
                 return (
                   <Pressable
-                    key={option}
-                    onPress={() => setIcon(option)}
+                    key={option.icon}
+                    accessibilityLabel={option.label}
+                    onPress={() => setIcon(option.icon)}
                     style={{
                       width: 44,
                       height: 44,
                       borderRadius: theme.radius.input,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
+                      backgroundColor: selected ? option.color : withAlpha(option.color, 0.14),
                     }}
                   >
-                    <Ionicons
-                      name={option}
-                      size={20}
-                      color={selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary}
-                    />
+                    <Ionicons name={option.icon} size={20} color={selected ? '#FFFFFF' : option.color} />
                   </Pressable>
                 );
               })}

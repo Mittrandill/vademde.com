@@ -236,7 +236,7 @@ export default function RaporlarScreen() {
           padding: theme.screenEdge.standard,
           // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
           // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
-          paddingBottom: 100,
+          paddingBottom: theme.layout.tabBarClearance,
           gap: theme.spacing.lg,
         }}
       >

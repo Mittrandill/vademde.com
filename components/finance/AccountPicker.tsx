@@ -26,7 +26,7 @@ export function AccountPicker({ accounts, selectedId, onSelect, placeholder, tit
       selectedId={selectedId}
       onSelect={onSelect}
       renderLeading={(item) => (
-        <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={24} />
+        <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={36} />
       )}
       placeholder={placeholder ?? 'Hesap seçin'}
       title={title ?? 'Hesap Seç'}

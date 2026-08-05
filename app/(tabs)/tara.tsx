@@ -368,7 +368,7 @@ export default function TaraScreen() {
                     <Button label="Tekrar Dene" variant="secondary" onPress={reset} />
                   </>
                 ) : (
-                  <View style={[styles.progressPill, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+                  <View style={[styles.progressPill, { backgroundColor: withAlpha('#000000', 0.55) }]}>
                     <ActivityIndicator size="small" color={theme.colors.brandPrimary} />
                     <Text variant="body" style={{ color: '#fff', marginLeft: theme.spacing.xs }}>
                       {STEP_LABELS[status ?? 'uploaded']}... %{progress}
@@ -400,7 +400,7 @@ export default function TaraScreen() {
           contentContainerStyle={{
             padding: theme.screenEdge.standard,
             // Yüzen tab bar (64pt) içeriği kapatmasın.
-            paddingBottom: theme.spacing.massive + theme.spacing.xl,
+            paddingBottom: theme.layout.tabBarClearance,
             gap: theme.spacing.lg,
           }}
         >
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: withAlpha('#000000', 0.4),
     alignItems: 'center',
     justifyContent: 'center',
   },

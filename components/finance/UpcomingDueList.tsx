@@ -66,7 +66,13 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
             <Pressable key={o.installment_id ?? o.id} onPress={() => router.push(`/obligations/${o.id}`)}>
               <Card>
                 <Row gap="sm">
-                  <ObligationIcon documentType={o.document_type} bankCode={o.bank_code} size={28} />
+                  <ObligationIcon
+                    documentType={o.document_type}
+                    bankCode={o.bank_code}
+                    serviceCode={o.service_code}
+                    fallbackName={o.title}
+                    size={36}
+                  />
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">{o.title}</Text>
                     <Row gap="xs">

@@ -1,5 +1,6 @@
 import { SearchablePicker } from '@/components/primitives';
 import { createCounterparty, type Counterparty } from '@/features/counterparties/api';
+import { PersonAvatar } from './PersonAvatar';
 
 export interface CounterpartyPickerProps {
   counterparties: Counterparty[];
@@ -21,7 +22,7 @@ export function CounterpartyPicker({
       items={counterparties}
       selectedId={selectedId}
       onSelect={onSelect}
-      getIcon={() => 'person-outline'}
+      renderLeading={(item) => <PersonAvatar name={item.name} size={36} />}
       placeholder="Kişi / firma seçin"
       title="Kişi / Firma Seç"
       emptyLabel="Eşleşen kişi/firma bulunamadı."

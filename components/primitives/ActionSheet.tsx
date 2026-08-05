@@ -37,7 +37,7 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
         <Pressable
           accessibilityLabel="Kapat"
           onPress={onClose}
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.overlay }]}
         />
         <View
           style={{

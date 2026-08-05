@@ -35,7 +35,7 @@ export function BalanceHero({
   const receivableShare = directionalTotal > 0 ? receivableMinor / directionalTotal : 0;
 
   return (
-    <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+    <Card variant="hero">
       <Stack gap="md">
         <Row align="center">
           <Text variant="caption" color="textSecondary" style={{ flex: 1, letterSpacing: 0.6 }}>

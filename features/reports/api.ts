@@ -90,13 +90,14 @@ export async function getMonthlyComparison(workspaceId: string, monthsBack = 6):
 export interface CategoryBreakdownItem {
   categoryId: string | null;
   name: string;
+  icon: string | null;
   amountMinor: number;
   percentage: number;
 }
 
 type CategoryTransactionRow = {
   amount_minor: number;
-  category: { id: string; name: string } | null;
+  category: { id: string; name: string; icon: string | null } | null;
 };
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Kategori bazlı harcamalar/gelirler.
@@ -107,7 +108,7 @@ export async function getCategoryBreakdown(
 ): Promise<CategoryBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, category:categories(id, name)')
+    .select('amount_minor, category:categories(id, name, icon)')
     .eq('workspace_id', workspaceId)
     .eq('direction', direction);
   if (range.from) query = query.gte('occurred_at', range.from);
@@ -116,12 +117,12 @@ export async function getCategoryBreakdown(
   const { data, error } = await query;
   if (error) throw error;
 
-  const totals = new Map<string, { name: string; amountMinor: number }>();
+  const totals = new Map<string, { name: string; icon: string | null; amountMinor: number }>();
   let grandTotal = 0;
   for (const row of data as unknown as CategoryTransactionRow[]) {
     const key = row.category?.id ?? 'uncategorized';
     const name = row.category?.name ?? 'Kategorisiz';
-    const existing = totals.get(key) ?? { name, amountMinor: 0 };
+    const existing = totals.get(key) ?? { name, icon: row.category?.icon ?? null, amountMinor: 0 };
     existing.amountMinor += row.amount_minor;
     totals.set(key, existing);
     grandTotal += row.amount_minor;
@@ -131,6 +132,7 @@ export async function getCategoryBreakdown(
     .map(([categoryId, value]) => ({
       categoryId: categoryId === 'uncategorized' ? null : categoryId,
       name: value.name,
+      icon: value.icon,
       amountMinor: value.amountMinor,
       percentage: grandTotal > 0 ? value.amountMinor / grandTotal : 0,
     }))
@@ -186,6 +188,7 @@ export async function getCounterpartyBreakdown(
 export interface AccountBalanceReportItem {
   accountId: string;
   name: string;
+  bankCode: string | null;
   currencyCode: string;
   balanceMinor: number;
 }
@@ -198,7 +201,7 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
     await Promise.all([
       supabase
         .from('accounts')
-        .select('id, name, currency_code, opening_balance_minor')
+        .select('id, name, bank_code, currency_code, opening_balance_minor')
         .eq('workspace_id', workspaceId)
         .eq('is_archived', false)
         .order('created_at', { ascending: true }),
@@ -226,6 +229,7 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
   return accounts.map((account) => ({
     accountId: account.id,
     name: account.name,
+    bankCode: account.bank_code,
     currencyCode: account.currency_code,
     balanceMinor: account.opening_balance_minor + (deltas.get(account.id) ?? 0),
   }));

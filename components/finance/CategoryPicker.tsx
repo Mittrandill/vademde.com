@@ -1,9 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
-
 import { SearchablePicker } from '@/components/primitives';
+import { CategoryIcon } from './CategoryIcon';
 import type { Category } from '@/features/categories/api';
-
-const FALLBACK_ICON: keyof typeof Ionicons.glyphMap = 'pricetag-outline';
 
 export interface CategoryPickerProps {
   categories: Category[];
@@ -18,7 +15,7 @@ export function CategoryPicker({ categories, selectedId, onSelect, placeholder }
       items={categories}
       selectedId={selectedId}
       onSelect={onSelect}
-      getIcon={(item) => (item.icon as keyof typeof Ionicons.glyphMap) || FALLBACK_ICON}
+      renderLeading={(item) => <CategoryIcon icon={item.icon} size={36} />}
       placeholder={placeholder ?? 'Kategori seçin'}
       title="Kategori Seç"
       emptyLabel="Eşleşen kategori bulunamadı."

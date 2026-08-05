@@ -17,7 +17,7 @@ export function BankPicker({ selectedId, onSelect, placeholder, title }: BankPic
       items={BANK_ITEMS}
       selectedId={selectedId}
       onSelect={onSelect}
-      renderLeading={(item) => <BankLogo bankCode={item.id} size={24} />}
+      renderLeading={(item) => <BankLogo bankCode={item.id} size={36} />}
       placeholder={placeholder ?? 'Banka seçin'}
       title={title ?? 'Banka Seç'}
       emptyLabel="Eşleşen banka bulunamadı."

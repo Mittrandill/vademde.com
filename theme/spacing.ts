@@ -21,6 +21,7 @@ export const radius = {
   widget: 20,
   heroWidget: 30,
   input: 15,
+  pill: 999,
 } as const;
 
 export const touchTarget = {
@@ -35,4 +36,10 @@ export const buttonHeight = {
 // ekranda farklı boyda kapsüller görünür. 46 = Takvim/Raporlar'daki mevcut ölçü.
 export const controlHeight = {
   segmented: 46,
+} as const;
+
+// Floating TabBar tüm sekme kök ekranlarının içeriğini kapatmamalı; 100 = mevcut
+// tab ekranlarının çoğunda kullanılan pay, tek bir yerden yönetilir.
+export const layout = {
+  tabBarClearance: 100,
 } as const;

@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, Skeleton, Stack, Text, TextField } from '@/components/primitives';
 import { BalanceHero } from '@/components/finance/BalanceHero';
 import { ObligationSummaryCard } from '@/components/finance/ObligationSummaryCard';
 import { IncomeExpenseAnalysis } from '@/components/finance/IncomeExpenseAnalysis';
@@ -104,7 +104,9 @@ export default function HomeScreen() {
   // gösterilsin diye (bkz. app/(tabs)/takvim.tsx aynı desen) — kredinin toplam
   // borcu yalnızca /obligations/[id] detay sayfasında gösterilir.
   const dueInstallmentsQuery = useQuery({
-    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'dashboard-installments'] : ['dashboard-installments', 'disabled'],
+    queryKey: activeWorkspaceId
+      ? [activeWorkspaceId, 'obligations', 'dashboard-installments']
+      : ['dashboard-installments', 'disabled'],
     queryFn: () =>
       listInstallmentsDue({ workspaceId: activeWorkspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
     enabled: !!activeWorkspaceId,
@@ -169,7 +171,14 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      {!workspacesQuery.isSuccess ? null : workspaces.length === 0 ? (
+      {!workspacesQuery.isSuccess ? (
+        <Stack gap="lg" style={{ padding: theme.screenEdge.standard }}>
+          <Skeleton height={32} width="60%" />
+          <Skeleton height={180} borderRadius={theme.radius.heroWidget} />
+          <Skeleton height={100} borderRadius={theme.radius.widget} />
+          <Skeleton height={100} borderRadius={theme.radius.widget} />
+        </Stack>
+      ) : workspaces.length === 0 ? (
         <Stack gap="xl" style={{ flex: 1, padding: theme.screenEdge.standard, justifyContent: 'center' }}>
           <Stack gap="lg">
             <Stack gap="xs">
@@ -203,7 +212,7 @@ export default function HomeScreen() {
             padding: theme.screenEdge.standard,
             // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
             // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
-            paddingBottom: 100,
+            paddingBottom: theme.layout.tabBarClearance,
             gap: theme.spacing.lg,
           }}
         >

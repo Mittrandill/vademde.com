@@ -6,13 +6,12 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Card, EmptyState, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import { listCategories, type Category } from '@/features/categories/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
-
-const FALLBACK_ICON: keyof typeof Ionicons.glyphMap = 'pricetag-outline';
 
 type KindFilterKey = 'all' | 'expense' | 'income';
 
@@ -56,14 +55,38 @@ export default function CategoriesScreen() {
   const listHeader = (
     <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
       <Row align="center">
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+        <Pressable
+          accessibilityLabel="Kapat"
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.surfaceElevated,
+          }}
+        >
+          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
         </Pressable>
         <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
           Kategoriler
         </Text>
-        <Pressable onPress={() => router.push('/categories/new')} hitSlop={12}>
-          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        <Pressable
+          accessibilityLabel="Yeni kategori"
+          onPress={() => router.push('/categories/new')}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.brandPrimary,
+          }}
+        >
+          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
         </Pressable>
       </Row>
 
@@ -104,45 +127,36 @@ export default function CategoriesScreen() {
           )}
           renderItem={({ item }) => (
             <Pressable onPress={() => router.push({ pathname: '/categories/new', params: { id: item.id } })}>
-              <Row
-                gap="sm"
-                style={{
-                  backgroundColor: theme.colors.surfacePrimary,
-                  borderRadius: theme.radius.widget,
-                  padding: theme.spacing.md,
-                  marginBottom: theme.spacing.sm,
-                }}
-              >
-                <Ionicons
-                  name={(item.icon as keyof typeof Ionicons.glyphMap) || FALLBACK_ICON}
-                  size={20}
-                  color={theme.colors.textSecondary}
-                />
-                <Text variant="body" style={{ flex: 1 }}>
-                  {item.name}
-                </Text>
-                {item.is_default ? (
-                  <Text variant="caption" color="textSecondary">
-                    Varsayılan
+              <Card style={{ marginBottom: theme.spacing.sm }}>
+                <Row gap="sm">
+                  <CategoryIcon icon={item.icon} size={36} />
+                  <Text variant="body" style={{ flex: 1 }}>
+                    {item.name}
                   </Text>
-                ) : null}
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-              </Row>
+                  {item.is_default ? (
+                    <Text variant="caption" color="textSecondary">
+                      Varsayılan
+                    </Text>
+                  ) : null}
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                </Row>
+              </Card>
             </Pressable>
           )}
           ListEmptyComponent={
             categoriesQuery.isSuccess ? (
-              <Stack gap="xs" style={{ paddingTop: theme.spacing.lg }}>
-                <Text variant="cardTitle">
-                  {categories.length === 0 ? 'Henüz kategori yok' : 'Sonuç bulunamadı'}
-                </Text>
-                <Text variant="body" color="textSecondary">
-                  {categories.length === 0
-                    ? 'Sağ üstteki + ile ilk kategorinizi ekleyin.'
-                    : isFiltered
-                      ? 'Arama terimini veya filtreyi değiştirin.'
-                      : ''}
-                </Text>
+              <Stack style={{ paddingTop: theme.spacing.lg }}>
+                <EmptyState
+                  icon="pricetag-outline"
+                  title={categories.length === 0 ? 'Henüz kategori yok' : 'Sonuç bulunamadı'}
+                  message={
+                    categories.length === 0
+                      ? 'Sağ üstteki + ile ilk kategorinizi ekleyin.'
+                      : isFiltered
+                        ? 'Arama terimini veya filtreyi değiştirin.'
+                        : ' '
+                  }
+                />
               </Stack>
             ) : null
           }

@@ -10,18 +10,24 @@ import { withAlpha } from '@/theme/colors';
 import {
   Card,
   Divider,
+  EmptyState,
   Pagination,
   Pressable,
   ProgressRing,
   Row,
+  SectionHeader,
   SegmentedControl,
+  Skeleton,
   Stack,
   Text,
   TextField,
 } from '@/components/primitives';
 import { Amount } from '@/components/finance/Amount';
+import { BankLogo } from '@/components/finance/BankLogo';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { getCounterpartyBalances, listCounterparties } from '@/features/counterparties/api';
+import { listBanksWithLoans, type BankWithLoans } from '@/features/banks/api';
+import { BANK_NAME } from '@/features/banks/banks';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -57,6 +63,15 @@ export default function CounterpartiesScreen() {
     enabled: !!activeWorkspaceId,
   });
   const balances = balancesQuery.data;
+
+  // Krediler kişi/firma değil banka bazlı tutulur (bkz. app/obligations/new.tsx) —
+  // bu yüzden Kişi/Firmalar'da carilerin yanında açık kredisi olan bankalar da listelenir.
+  const banksQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.banksWithLoans(activeWorkspaceId) : ['banks-with-loans', 'disabled'],
+    queryFn: () => listBanksWithLoans(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+  const banks = banksQuery.data ?? [];
 
   const filtered = useMemo(() => {
     const counterparties = counterpartiesQuery.data ?? [];
@@ -109,19 +124,43 @@ export default function CounterpartiesScreen() {
   const listHeader = (
     <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
       <Row align="center">
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+        <Pressable
+          accessibilityLabel="Kapat"
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.surfaceElevated,
+          }}
+        >
+          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
         </Pressable>
         <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
           Kişi / Firmalar
         </Text>
-        <Pressable onPress={() => router.push('/counterparties/new')} hitSlop={12}>
-          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        <Pressable
+          accessibilityLabel="Yeni kişi/firma"
+          onPress={() => router.push('/counterparties/new')}
+          hitSlop={8}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.brandPrimary,
+          }}
+        >
+          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
         </Pressable>
       </Row>
 
       {(counterpartiesQuery.data ?? []).length > 0 ? (
-        <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+        <Card variant="hero">
           <Row gap="md" align="center">
             <ProgressRing
               size={60}
@@ -166,6 +205,17 @@ export default function CounterpartiesScreen() {
         </Card>
       ) : null}
 
+      {banks.length > 0 ? (
+        <Stack gap="sm">
+          <SectionHeader title="Bankalar" />
+          <Stack gap="xs">
+            {banks.map((bank) => (
+              <BankRow key={bank.bankCode} bank={bank} />
+            ))}
+          </Stack>
+        </Stack>
+      ) : null}
+
       <Stack gap="sm">
         <TextField
           placeholder="İsim, telefon veya e-postada ara"
@@ -204,7 +254,7 @@ export default function CounterpartiesScreen() {
           <Pressable onPress={() => router.push(`/counterparties/${item.id}`)}>
             <Card>
               <Row gap="sm" align="center">
-                <PersonAvatar name={item.name} size={40} />
+                <PersonAvatar name={item.name} size={36} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Row gap="xxs" align="center">
                     <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
@@ -226,18 +276,25 @@ export default function CounterpartiesScreen() {
           </Pressable>
         )}
         ListEmptyComponent={
-          counterpartiesQuery.isSuccess ? (
-            <Stack gap="xs" style={{ flex: 1, justifyContent: 'center' }}>
-              <Text variant="cardTitle">
-                {(counterpartiesQuery.data ?? []).length === 0 ? 'Henüz kişi/firma yok' : 'Sonuç bulunamadı'}
-              </Text>
-              <Text variant="body" color="textSecondary">
-                {(counterpartiesQuery.data ?? []).length === 0
-                  ? 'Sağ üstteki + ile ilk kişi veya firmanızı ekleyin.'
-                  : 'Arama terimini veya filtreyi değiştirin.'}
-              </Text>
+          !counterpartiesQuery.isSuccess ? (
+            <Stack gap="sm">
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
+              <Skeleton height={64} borderRadius={theme.radius.widget} />
             </Stack>
-          ) : null
+          ) : (
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <EmptyState
+                icon="people-outline"
+                title={(counterpartiesQuery.data ?? []).length === 0 ? 'Henüz kişi/firma yok' : 'Sonuç bulunamadı'}
+                message={
+                  (counterpartiesQuery.data ?? []).length === 0
+                    ? 'Sağ üstteki + ile ilk kişi veya firmanızı ekleyin.'
+                    : 'Arama terimini veya filtreyi değiştirin.'
+                }
+              />
+            </View>
+          )
         }
         ListFooterComponent={
           totalPages > 1 ? (
@@ -254,6 +311,30 @@ export default function CounterpartiesScreen() {
         }
       />
     </SafeAreaView>
+  );
+}
+
+// Banka satırı, cari satırıyla aynı görsel dili paylaşır (avatar yerine logo) — açık
+// kredi sayısı ve net bakiye (neredeyse her zaman borç) tek satırda özetlenir.
+function BankRow({ bank }: { bank: BankWithLoans }) {
+  const bankName = BANK_NAME[bank.bankCode] ?? bank.bankCode;
+  return (
+    <Pressable onPress={() => router.push(`/banks/${bank.bankCode}`)}>
+      <Card>
+        <Row gap="sm" align="center">
+          <BankLogo bankCode={bank.bankCode} fallbackName={bankName} size={36} />
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {bankName}
+            </Text>
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {bank.count} kredi{bank.overdueCount > 0 ? ` · ${bank.overdueCount} gecikmiş` : ''}
+            </Text>
+          </Stack>
+          <CounterpartyBalance netMinor={bank.netMinor} />
+        </Row>
+      </Card>
+    </Pressable>
   );
 }
 

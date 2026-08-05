@@ -12,11 +12,13 @@ import {
   Button,
   Card,
   Divider,
+  EmptyState,
   Pagination,
   Pressable,
   ProgressRing,
   Row,
   SegmentedControl,
+  Skeleton,
   Stack,
   Text,
   TextField,
@@ -38,9 +40,11 @@ import {
 } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_LABEL, DOCUMENT_TYPE_LABEL_PLURAL, DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
 import { BANK_NAME } from '@/features/banks/banks';
+import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { cancelObligationReminder } from '@/services/notifications';
+import { showSuccessAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -197,12 +201,14 @@ export default function ObligationsByTypeScreen() {
     onSuccess: (_data, obligationId) => {
       // new.tsx'teki aynı Fabric çakışması düzeltmesi: Alert'in kapanma animasyonu,
       // listeden bir satırın kaldırılmasıyla aynı ana denk gelirse çöküyor — önbellek
-      // geçersizleştirme bir sonraki etkileşim turuna ertelenir.
-      InteractionManager.runAfterInteractions(() => {
-        if (activeWorkspaceId) {
-          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
-        }
-        queryClient.removeQueries({ queryKey: ['obligation', obligationId] });
+      // geçersizleştirme, kullanıcı başarı Alert'ini kapatana kadar ertelenir.
+      showSuccessAlert('Kayıt başarıyla silindi.', () => {
+        InteractionManager.runAfterInteractions(() => {
+          if (activeWorkspaceId) {
+            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+          }
+          queryClient.removeQueries({ queryKey: ['obligation', obligationId] });
+        });
       });
     },
   });
@@ -321,7 +327,7 @@ export default function ObligationsByTypeScreen() {
           aktif/toplam/gecikmiş sayaçları — Ana Sayfa'daki BalanceHero ile aynı dil
           (büyük tutar + halka + ayraçlı özet satırı). Sayaçlar sekme/arama filtresinden
           bağımsız `overviewQuery`den gelir ki "Kapalı" sekmesine geçmek hero'yu değiştirmesin. */}
-      <Card style={{ borderRadius: theme.radius.heroWidget, padding: theme.spacing.lg }}>
+      <Card variant="hero">
         <Stack gap="lg">
           <Row gap="md" align="center">
             <Stack gap="xxs" style={{ flex: 1 }}>
@@ -510,59 +516,37 @@ export default function ObligationsByTypeScreen() {
         )}
         ListEmptyComponent={
           isInitialLoading ? (
-            <Row style={{ flex: 1, justifyContent: 'center' }}>
-              <ActivityIndicator color={theme.colors.textSecondary} />
-            </Row>
-          ) : (
-            <Stack gap="md" align="center" style={{ flex: 1, justifyContent: 'center' }}>
-              <View
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 32,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
-                }}
-              >
-                <Ionicons
-                  name={
-                    isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'
-                  }
-                  size={28}
-                  color={theme.colors.brandPrimary}
-                />
-              </View>
-              <Stack gap="xxs" align="center">
-                <Text variant="cardTitle" style={{ textAlign: 'center' }}>
-                  {isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}
-                </Text>
-                <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-                  {isFiltered
-                    ? 'Arama terimini veya filtreleri değiştirin.'
-                    : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'}
-                </Text>
-              </Stack>
-              {!isFiltered ? (
-                <Pressable
-                  onPress={() =>
-                    router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
-                  }
-                  style={{
-                    paddingHorizontal: theme.spacing.lg,
-                    height: theme.controlHeight.segmented,
-                    borderRadius: 999,
-                    backgroundColor: theme.colors.brandPrimary,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text variant="body" style={{ color: theme.colors.brandPrimaryText, fontWeight: '600' }}>
-                    {`Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`}
-                  </Text>
-                </Pressable>
-              ) : null}
+            <Stack gap="sm">
+              <Skeleton height={72} borderRadius={theme.radius.widget} />
+              <Skeleton height={72} borderRadius={theme.radius.widget} />
+              <Skeleton height={72} borderRadius={theme.radius.widget} />
             </Stack>
+          ) : (
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <EmptyState
+                icon={
+                  isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'
+                }
+                title={isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}
+                message={
+                  isFiltered
+                    ? 'Arama terimini veya filtreleri değiştirin.'
+                    : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'
+                }
+                actionLabel={
+                  isFiltered ? undefined : `Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`
+                }
+                onActionPress={
+                  isFiltered
+                    ? undefined
+                    : () =>
+                        router.push({
+                          pathname: '/obligations/new',
+                          params: documentType ? { type: documentType } : {},
+                        })
+                }
+              />
+            </View>
           )
         }
         ListFooterComponent={
@@ -604,6 +588,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
   const hasInstallments = (installmentSummary?.totalCount ?? 0) > 0;
   const isPayable = item.direction === 'payable';
   const bankName = item.bank_code ? (BANK_NAME[item.bank_code] ?? null) : null;
+  const serviceName = item.service_code ? (SERVICE_NAME[item.service_code] ?? null) : null;
   const progress =
     item.total_amount_minor > 0 ? 1 - item.remaining_amount_minor / item.total_amount_minor : 0;
   const clampedProgress = Math.max(0, Math.min(1, progress));
@@ -619,14 +604,20 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
         <Card style={{ opacity: deleting ? 0.5 : 1 }}>
           <Stack gap="sm">
             <Row gap="sm" align="center">
-              <ObligationIcon documentType={item.document_type} bankCode={item.bank_code} size={36} />
+              <ObligationIcon
+                documentType={item.document_type}
+                bankCode={item.bank_code}
+                serviceCode={item.service_code}
+                fallbackName={item.title}
+                size={36}
+              />
               <Stack gap="xxs" style={{ flex: 1 }}>
                 <Text variant="cardTitle" numberOfLines={1}>
-                  {bankName ?? item.title}
+                  {bankName ?? serviceName ?? item.title}
                 </Text>
                 <Text variant="caption" color="textSecondary" numberOfLines={1}>
                   {DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type}
-                  {bankName ? ` · ${item.title}` : ''}
+                  {bankName || serviceName ? ` · ${item.title}` : ''}
                 </Text>
               </Stack>
               <StatusBadge status={item.status} />

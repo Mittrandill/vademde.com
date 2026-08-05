@@ -19,7 +19,7 @@ import { queryKeys } from '@/services/queryKeys';
 // gerisine Hareketler'in belge türü filtresinden ulaşılır. "Kredi" ve "Kredi Kartlarım"
 // (hesap bazlı, kendi ekranı) elle en başa yerleştirildiği için burada değil; geri kalanlar
 // aynı sırayla map'lenir.
-const OTHER_DOCUMENT_TYPES = ['cek', 'senet', 'kira', 'fatura'];
+const OTHER_DOCUMENT_TYPES = ['cek', 'senet', 'kira', 'abonelik'];
 
 export default function MoreScreen() {
   const theme = useTheme();
@@ -61,7 +61,7 @@ export default function MoreScreen() {
           padding: theme.screenEdge.standard,
           // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
           // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
-          paddingBottom: 100,
+          paddingBottom: theme.layout.tabBarClearance,
           gap: theme.spacing.lg,
         }}
       >

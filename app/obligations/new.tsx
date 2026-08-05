@@ -6,12 +6,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { BankPicker } from '@/components/finance/BankPicker';
+import { ServicePicker } from '@/components/finance/ServicePicker';
 import { BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
@@ -29,6 +30,7 @@ import { toMinorUnits, formatMinorAmount } from '@/utils/money';
 import { buildAmortizedInstallments } from '@/utils/installmentPlan';
 import { queryKeys } from '@/services/queryKeys';
 import { cancelObligationReminder, syncObligationReminder } from '@/services/notifications';
+import { showSuccessAlert } from '@/utils/alerts';
 
 type Direction = 'payable' | 'receivable';
 
@@ -93,6 +95,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
     initial?.document_type ?? initialDocumentType ?? null
   );
   const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? null);
+  const [serviceCode, setServiceCode] = useState<string | null>(initial?.service_code ?? null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [totalAmount, setTotalAmount] = useState(
     initial ? (initial.total_amount_minor / 100).toFixed(2).replace('.', ',') : ''
@@ -124,8 +127,19 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
     enabled: !!activeWorkspaceId,
   });
 
-  const totalAmountMinor = totalAmount ? toMinorUnits(Number(totalAmount.replace(',', '.'))) : 0;
+  // Kredi kayıtlarında borçlu taraf kişi/firma değil bankadır — KİŞİ/FİRMA alanı yerine
+  // zorunlu BANKA seçimi gösterilir, karta banka logosuyla temsil edilir. Abonelik
+  // kayıtlarında da borçlu taraf kişi/firma değil servistir (Netflix, YouTube vb.) —
+  // aynı gerekçeyle KİŞİ/FİRMA yerine isteğe bağlı SERVİS seçimi gösterilir.
+  const isLoanType = documentType === 'kredi';
+  const isSubscriptionType = documentType === 'abonelik';
+
   const installmentCount = Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1));
+  const enteredAmountMinor = totalAmount ? toMinorUnits(Number(totalAmount.replace(',', '.'))) : 0;
+  // Aboneliklerde TUTAR alanı aylık ödemeyi temsil eder; toplam, aylık × ay sayısıdır.
+  // Diğer türlerde TUTAR zaten toplamın kendisidir (kredi'de anapara, taksitler ondan türer).
+  const totalAmountMinor =
+    isSubscriptionType && installmentCount > 1 ? enteredAmountMinor * installmentCount : enteredAmountMinor;
   // Faiz oranı yalnızca kredi eklerken ve birden fazla taksitte istenir; TUTAR alanı bu
   // durumda anaparayı temsil eder, taksitler azalan bakiye üzerinden hesaplanır ve
   // obligation'ın toplamı anapara+toplam faiz olur.
@@ -144,6 +158,8 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
       }
 
       const bankCodeForType = BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null;
+      const serviceCodeForType = isSubscriptionType ? serviceCode : null;
+      const counterpartyIdForType = isLoanType || isSubscriptionType ? null : counterpartyId;
 
       if (isEditing) {
         const obligation = await updateObligation(id, {
@@ -151,10 +167,11 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
           document_type: documentType,
           title: title.trim(),
           due_date: dueDate,
-          counterparty_id: counterpartyId,
+          counterparty_id: counterpartyIdForType,
           account_id: accountId,
           category_id: categoryId,
           bank_code: bankCodeForType,
+          service_code: serviceCodeForType,
           ...(hasInstallments ? {} : { total_amount_minor: totalAmountMinor }),
         });
         await syncObligationReminder(activeWorkspaceId, obligation);
@@ -178,10 +195,11 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
         title: title.trim(),
         total_amount_minor: obligationTotalMinor,
         due_date: dueDate,
-        counterparty_id: counterpartyId,
+        counterparty_id: counterpartyIdForType,
         account_id: accountId,
         category_id: categoryId,
         bank_code: bankCodeForType,
+        service_code: serviceCodeForType,
       });
 
       if (installments.length > 0) {
@@ -198,13 +216,17 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
       return obligation;
     },
     onSuccess: () => {
-      // Aynı Fabric çakışmasını önlemek için önce geri dönülür, önbellek
-      // geçersizleştirme bir sonraki etkileşim turuna ertelenir.
-      router.back();
-      InteractionManager.runAfterInteractions(() => {
-        if (activeWorkspaceId) {
-          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
-        }
+      // Navigasyon, başarı Alert'inin "Tamam" butonuna ertelenir — bu hem kullanıcıya
+      // net bir onay verir hem de Alert'in kapanış animasyonuyla ekran geçişinin aynı
+      // anda tetiklenip Fabric'i çökertmesini önler (aynı çakışma sınıfı için bkz.
+      // aşağıdaki deleteMutation).
+      showSuccessAlert(isEditing ? 'Kayıt başarıyla güncellendi.' : 'Kayıt başarıyla oluşturuldu.', () => {
+        router.back();
+        InteractionManager.runAfterInteractions(() => {
+          if (activeWorkspaceId) {
+            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+          }
+        });
       });
     },
   });
@@ -218,17 +240,17 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
       // Bu ekrana genelde /obligations/[id] detay sayfasından gelinir; oraya
       // router.back() ile dönmek, ['obligation', id] önbelleği tazelenene kadar
       // (veya hiç) az önce silinen kaydı göstermeye devam ediyordu. Silinen bir
-      // kaydın detayına dönmek yerine doğrudan listeye çıkılır.
-      // Navigasyon önce, önbellek geçersizleştirme sonra (bir sonraki etkileşim
-      // turunda) yapılır — aksi halde bu, silme onayı Alert'inin native dismiss
-      // animasyonuyla aynı anda çalışıp Fabric'i çökertiyor (bkz. obligations/[id].tsx
-      // PaymentForm onSuccess'teki aynı düzeltme).
-      router.replace('/(tabs)/hareketler');
-      InteractionManager.runAfterInteractions(() => {
-        if (activeWorkspaceId) {
-          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
-        }
-        queryClient.removeQueries({ queryKey: ['obligation', id] });
+      // kaydın detayına dönmek yerine doğrudan listeye çıkılır. Navigasyon başarı
+      // Alert'inin "Tamam" butonuna ertelenir — bu sırayla çalıştığı için (silme
+      // onayı Alert'i çoktan kapanmış olur) Fabric çakışma riski oluşmaz.
+      showSuccessAlert('Kayıt başarıyla silindi.', () => {
+        router.replace('/(tabs)/hareketler');
+        InteractionManager.runAfterInteractions(() => {
+          if (activeWorkspaceId) {
+            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+          }
+          queryClient.removeQueries({ queryKey: ['obligation', id] });
+        });
       });
     },
   });
@@ -246,7 +268,8 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
     );
   }
 
-  const canSubmit = !!title.trim() && totalAmountMinor > 0 && !!documentType;
+  const canSubmit =
+    !!title.trim() && totalAmountMinor > 0 && !!documentType && (!isLoanType || !!bankCode);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -262,45 +285,21 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               </Text>
             </Row>
 
-            <Row gap="xs">
-              {DIRECTIONS.map((option) => {
-                const selected = option.value === direction;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => {
-                      setDirection(option.value);
-                      setCategoryId(null);
-                    }}
-                    style={{
-                      flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: theme.spacing.sm,
-                      borderRadius: theme.radius.input,
-                      backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                    }}
-                  >
-                    <Text
-                      variant="body"
-                      style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textPrimary }}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </Row>
+            <SegmentedControl
+              options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
+              value={direction}
+              onChange={(value) => {
+                setDirection(value);
+                setCategoryId(null);
+              }}
+              stretch
+            />
+
+            <TextField label="BAŞLIK" placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                BAŞLIK
-              </Text>
-              <TextField placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
-            </Stack>
-
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                TUTAR
+                {isSubscriptionType ? 'AYLIK ÖDEME' : 'TUTAR'}
               </Text>
               {isEditing && hasInstallments ? (
                 <Text variant="body" color="textSecondary">
@@ -316,29 +315,31 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               )}
             </Stack>
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                {!isEditing && installmentCount > 1 ? 'İLK VADE' : 'VADE'}
-              </Text>
-              <TextField placeholder="YYYY-AA-GG" value={dueDate} onChangeText={setDueDate} />
-            </Stack>
+            <TextField
+              label={!isEditing && installmentCount > 1 ? 'İLK VADE' : 'VADE'}
+              placeholder="YYYY-AA-GG"
+              value={dueDate}
+              onChangeText={setDueDate}
+            />
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                KİŞİ / FİRMA
-              </Text>
-              {activeWorkspaceId ? (
-                <CounterpartyPicker
-                  workspaceId={activeWorkspaceId}
-                  counterparties={counterpartiesQuery.data ?? []}
-                  selectedId={counterpartyId}
-                  onSelect={setCounterpartyId}
-                  onCreated={() => {
-                    queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
-                  }}
-                />
-              ) : null}
-            </Stack>
+            {isLoanType || isSubscriptionType ? null : (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  KİŞİ / FİRMA
+                </Text>
+                {activeWorkspaceId ? (
+                  <CounterpartyPicker
+                    workspaceId={activeWorkspaceId}
+                    counterparties={counterpartiesQuery.data ?? []}
+                    selectedId={counterpartyId}
+                    onSelect={setCounterpartyId}
+                    onCreated={() => {
+                      queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
+                    }}
+                  />
+                ) : null}
+              </Stack>
+            )}
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
@@ -350,9 +351,18 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
             {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
-                  BANKA (İSTEĞE BAĞLI)
+                  {isLoanType ? 'BANKA' : 'BANKA (İSTEĞE BAĞLI)'}
                 </Text>
                 <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+              </Stack>
+            ) : null}
+
+            {isSubscriptionType ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  SERVİS (İSTEĞE BAĞLI)
+                </Text>
+                <ServicePicker selectedId={serviceCode} onSelect={setServiceCode} />
               </Stack>
             ) : null}
 
@@ -387,17 +397,13 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
             </Stack>
 
             {isEditing ? null : (
-              <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
-                  TAKSİT SAYISI
-                </Text>
-                <TextField
-                  placeholder="1"
-                  keyboardType="number-pad"
-                  value={installmentCountStr}
-                  onChangeText={setInstallmentCountStr}
-                />
-              </Stack>
+              <TextField
+                label={isSubscriptionType ? 'KAÇ AY' : 'TAKSİT SAYISI'}
+                placeholder="1"
+                keyboardType="number-pad"
+                value={installmentCountStr}
+                onChangeText={setInstallmentCountStr}
+              />
             )}
 
             {showInterestField ? (
@@ -420,13 +426,13 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
             {installmentPreview.length > 0 ? (
               <Stack gap="xs">
                 <Text variant="caption" color="textSecondary">
-                  TAKSİT ÖNİZLEME
+                  {isSubscriptionType ? 'AY ÖNİZLEME' : 'TAKSİT ÖNİZLEME'}
                 </Text>
                 <Stack gap="xxs" style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.widget, padding: theme.spacing.md }}>
                   {installmentPreview.map((item) => (
                     <Row key={item.installmentNumber} align="center">
                       <Text variant="body" color="textSecondary" style={{ flex: 1 }}>
-                        {item.installmentNumber}. taksit — {item.dueDate}
+                        {item.installmentNumber}. {isSubscriptionType ? 'ay' : 'taksit'} — {item.dueDate}
                       </Text>
                       <Text variant="body" tabular>
                         {formatMinorAmount(item.amountMinor)}

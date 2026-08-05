@@ -6,12 +6,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { toMinorUnits } from '@/utils/money';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
+import { showSuccessAlert } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 
@@ -46,6 +47,7 @@ export default function NewAccountScreen() {
   const [statementDay, setStatementDay] = useState('');
   const [paymentDueDay, setPaymentDueDay] = useState('');
   const [cardLastFour, setCardLastFour] = useState('');
+  const [creditLimit, setCreditLimit] = useState('');
   const [initialized, setInitialized] = useState(false);
   const isCreditCard = type === 'credit_card';
 
@@ -66,6 +68,7 @@ export default function NewAccountScreen() {
     setStatementDay(account.statement_day != null ? String(account.statement_day) : '');
     setPaymentDueDay(account.payment_due_day != null ? String(account.payment_due_day) : '');
     setCardLastFour(account.card_last_four ?? '');
+    setCreditLimit(account.credit_limit_minor != null ? (account.credit_limit_minor / 100).toFixed(2).replace('.', ',') : '');
     setInitialized(true);
   }, [accountQuery.data, initialized]);
 
@@ -83,6 +86,7 @@ export default function NewAccountScreen() {
         statement_day: isCreditCard && statementDay ? Number(statementDay) : null,
         payment_due_day: isCreditCard && paymentDueDay ? Number(paymentDueDay) : null,
         card_last_four: isCreditCard && cardLastFour ? cardLastFour : null,
+        credit_limit_minor: isCreditCard && creditLimit ? toMinorUnits(Number(creditLimit.replace(',', '.'))) : null,
       };
       return isEditing
         ? updateAccount(id as string, payload)
@@ -99,7 +103,9 @@ export default function NewAccountScreen() {
       if (isEditing) {
         queryClient.invalidateQueries({ queryKey: ['account', id] });
       }
-      router.back();
+      showSuccessAlert(isEditing ? 'Hesap başarıyla güncellendi.' : 'Hesap başarıyla oluşturuldu.', () =>
+        router.back()
+      );
     },
   });
 
@@ -139,43 +145,18 @@ export default function NewAccountScreen() {
             </Text>
           </Row>
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              HESAP ADI
-            </Text>
-            <TextField placeholder="Örn. Nakit Kasa" value={name} onChangeText={setName} />
-          </Stack>
+          <TextField label="HESAP ADI" placeholder="Örn. Nakit Kasa" value={name} onChangeText={setName} />
 
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
               HESAP TÜRÜ
             </Text>
-            <Row gap="xs">
-              {TYPES.map((option) => {
-                const selected = option.value === type;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setType(option.value)}
-                    style={{
-                      flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: theme.spacing.sm,
-                      borderRadius: theme.radius.input,
-                      backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                    }}
-                  >
-                    <Text
-                      variant="body"
-                      numberOfLines={1}
-                      style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textPrimary }}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </Row>
+            <SegmentedControl
+              options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
+              value={type}
+              onChange={setType}
+              stretch
+            />
           </Stack>
 
           {type === 'bank' || isCreditCard ? (
@@ -188,62 +169,42 @@ export default function NewAccountScreen() {
           ) : null}
 
           {type === 'bank' ? (
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                IBAN (İSTEĞE BAĞLI)
-              </Text>
-              <TextField
-                placeholder="TR00 0000 0000 0000 0000 0000 00"
-                value={iban}
-                onChangeText={(value) => setIban(formatIbanInput(value))}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                maxLength={32}
-              />
-              {ibanHasError ? (
-                <Text variant="caption" color="danger">
-                  IBAN "TR" ile başlamalı ve 26 karakter olmalı.
-                </Text>
-              ) : null}
-            </Stack>
+            <TextField
+              label="IBAN (İSTEĞE BAĞLI)"
+              placeholder="TR00 0000 0000 0000 0000 0000 00"
+              value={iban}
+              onChangeText={(value) => setIban(formatIbanInput(value))}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={32}
+              error={ibanHasError ? 'IBAN "TR" ile başlamalı ve 26 karakter olmalı.' : undefined}
+            />
           ) : null}
 
           {isCreditCard ? (
             <>
               <Row gap="sm">
-                <Stack gap="sm" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary">
-                    HESAP KESİM GÜNÜ
-                  </Text>
+                <Stack style={{ flex: 1 }}>
                   <TextField
+                    label="HESAP KESİM GÜNÜ"
                     placeholder="Örn. 15"
                     keyboardType="number-pad"
                     maxLength={2}
                     value={statementDay}
                     onChangeText={setStatementDay}
+                    error={statementDayHasError ? '1-31 arası bir gün girin.' : undefined}
                   />
-                  {statementDayHasError ? (
-                    <Text variant="caption" color="danger">
-                      1-31 arası bir gün girin.
-                    </Text>
-                  ) : null}
                 </Stack>
-                <Stack gap="sm" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary">
-                    SON ÖDEME GÜNÜ (İSTEĞE BAĞLI)
-                  </Text>
+                <Stack style={{ flex: 1 }}>
                   <TextField
+                    label="SON ÖDEME GÜNÜ (İSTEĞE BAĞLI)"
                     placeholder="Örn. 5"
                     keyboardType="number-pad"
                     maxLength={2}
                     value={paymentDueDay}
                     onChangeText={setPaymentDueDay}
+                    error={paymentDueDayHasError ? '1-31 arası bir gün girin.' : undefined}
                   />
-                  {paymentDueDayHasError ? (
-                    <Text variant="caption" color="danger">
-                      1-31 arası bir gün girin.
-                    </Text>
-                  ) : null}
                 </Stack>
               </Row>
               <Text variant="caption" color="textSecondary">
@@ -251,33 +212,38 @@ export default function NewAccountScreen() {
               </Text>
 
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
-                  KART SON 4 HANE (İSTEĞE BAĞLI)
-                </Text>
                 <TextField
+                  label="KART SON 4 HANE (İSTEĞE BAĞLI)"
                   placeholder="0000"
                   keyboardType="number-pad"
                   maxLength={4}
                   value={cardLastFour}
                   onChangeText={(value) => setCardLastFour(value.replace(/[^0-9]/g, ''))}
+                  error={cardLastFourHasError ? '4 haneli rakam girin.' : undefined}
                 />
-                {cardLastFourHasError ? (
-                  <Text variant="caption" color="danger">
-                    4 haneli rakam girin.
-                  </Text>
-                ) : null}
                 <Text variant="caption" color="textSecondary">
                   Güvenlik nedeniyle yalnızca son 4 hane saklanır, tam kart numarası hiçbir zaman istenmez.
+                </Text>
+              </Stack>
+
+              <Stack gap="sm">
+                <TextField
+                  label="KREDİ LİMİTİ (İSTEĞE BAĞLI)"
+                  placeholder="0,00"
+                  keyboardType="decimal-pad"
+                  value={creditLimit}
+                  onChangeText={setCreditLimit}
+                />
+                <Text variant="caption" color="textSecondary">
+                  Girilirse kart detayında kullanılabilir limit ve limit kullanım oranı gösterilir.
                 </Text>
               </Stack>
             </>
           ) : null}
 
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              {isCreditCard ? 'GÜNCEL KART BORCU (İSTEĞE BAĞLI)' : 'AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)'}
-            </Text>
             <TextField
+              label={isCreditCard ? 'GÜNCEL KART BORCU (İSTEĞE BAĞLI)' : 'AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)'}
               placeholder="0,00"
               keyboardType="decimal-pad"
               value={openingBalance}

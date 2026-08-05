@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import {
   createCounterparty,
   deleteCounterparty,
@@ -15,6 +15,7 @@ import {
   type Counterparty,
 } from '@/features/counterparties/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { showSuccessAlert } from '@/utils/alerts';
 
 type PartyType = 'individual' | 'company';
 
@@ -86,7 +87,9 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
     },
     onSuccess: () => {
       invalidate();
-      router.back();
+      showSuccessAlert(isEditing ? 'Kişi/Firma başarıyla güncellendi.' : 'Kişi/Firma başarıyla oluşturuldu.', () =>
+        router.back()
+      );
     },
   });
 
@@ -94,7 +97,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
     mutationFn: () => deleteCounterparty(id as string),
     onSuccess: () => {
       invalidate();
-      router.back();
+      showSuccessAlert('Kişi/Firma başarıyla silindi.', () => router.back());
     },
     onError: () => {
       Alert.alert(
@@ -124,72 +127,46 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
             </Text>
           </Row>
 
-          <Row gap="xs">
-            {TYPES.map((option) => {
-              const selected = option.value === type;
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => setType(option.value)}
-                  style={{
-                    flex: 1,
-                    alignItems: 'center',
-                    paddingVertical: theme.spacing.sm,
-                    borderRadius: theme.radius.input,
-                    backgroundColor: selected ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                  }}
-                >
-                  <Text
-                    variant="body"
-                    style={{ color: selected ? theme.colors.brandPrimaryText : theme.colors.textPrimary }}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </Row>
+          <SegmentedControl
+            options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
+            value={type}
+            onChange={setType}
+            stretch
+          />
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              AD
-            </Text>
-            <TextField placeholder={type === 'company' ? 'Firma adı' : 'Ad Soyad'} value={name} onChangeText={setName} />
-          </Stack>
+          <TextField
+            label="AD"
+            placeholder={type === 'company' ? 'Firma adı' : 'Ad Soyad'}
+            value={name}
+            onChangeText={setName}
+          />
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              TELEFON (İSTEĞE BAĞLI)
-            </Text>
-            <TextField placeholder="05xx xxx xx xx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          </Stack>
+          <TextField
+            label="TELEFON (İSTEĞE BAĞLI)"
+            placeholder="05xx xxx xx xx"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+          />
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              E-POSTA (İSTEĞE BAĞLI)
-            </Text>
-            <TextField
-              placeholder="ornek@eposta.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </Stack>
+          <TextField
+            label="E-POSTA (İSTEĞE BAĞLI)"
+            placeholder="ornek@eposta.com"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              {type === 'company' ? 'VERGİ NUMARASI (İSTEĞE BAĞLI)' : 'TC/VERGİ NUMARASI (İSTEĞE BAĞLI)'}
-            </Text>
-            <TextField placeholder="Numara" value={taxNumber} onChangeText={setTaxNumber} keyboardType="number-pad" />
-          </Stack>
+          <TextField
+            label={type === 'company' ? 'VERGİ NUMARASI (İSTEĞE BAĞLI)' : 'TC/VERGİ NUMARASI (İSTEĞE BAĞLI)'}
+            placeholder="Numara"
+            value={taxNumber}
+            onChangeText={setTaxNumber}
+            keyboardType="number-pad"
+          />
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              NOT (İSTEĞE BAĞLI)
-            </Text>
-            <TextField placeholder="Ek bilgi" value={notes} onChangeText={setNotes} />
-          </Stack>
+          <TextField label="NOT (İSTEĞE BAĞLI)" placeholder="Ek bilgi" value={notes} onChangeText={setNotes} />
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">

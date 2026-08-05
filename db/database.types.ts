@@ -571,6 +571,7 @@ export type Database = {
           id: string
           notes: string | null
           remaining_amount_minor: number
+          service_code: string | null
           status: string
           title: string
           total_amount_minor: number
@@ -590,6 +591,7 @@ export type Database = {
           id?: string
           notes?: string | null
           remaining_amount_minor?: number
+          service_code?: string | null
           status?: string
           title: string
           total_amount_minor: number
@@ -609,6 +611,7 @@ export type Database = {
           id?: string
           notes?: string | null
           remaining_amount_minor?: number
+          service_code?: string | null
           status?: string
           title?: string
           total_amount_minor?: number
@@ -978,6 +981,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transactions_transfer_to_account_id_fkey"
+            columns: ["transfer_to_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "transactions_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
@@ -989,13 +999,6 @@ export type Database = {
             columns: ["counterparty_id"]
             isOneToOne: false
             referencedRelation: "counterparties"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transactions_transfer_to_account_id_fkey"
-            columns: ["transfer_to_account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
           {
@@ -1018,7 +1021,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          role?: string
+          role: string
           user_id: string
           workspace_id: string
         }

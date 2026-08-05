@@ -16,7 +16,7 @@ export interface BankLogoProps {
 // docs/08-tasarim-sistemi.md §12.9 — hesap/kredi/kredi kartı/çek kayıtlarında özel banka
 // logosu; eşleşen banka yoksa (fallbackName varsa) baş harfli avatara, yoksa çağıranın
 // verdiği belge/hesap türü ikonuna düşer, böylece kırık görsel yerine anlamlı bir şey kalır.
-export function BankLogo({ bankCode, fallbackName, size = 32, fallbackIcon = 'business-outline' }: BankLogoProps) {
+export function BankLogo({ bankCode, fallbackName, size = 36, fallbackIcon = 'business-outline' }: BankLogoProps) {
   const theme = useTheme();
   const source = bankCode ? BANK_LOGOS[bankCode] : undefined;
   const showInitials = !source && !!fallbackName?.trim();

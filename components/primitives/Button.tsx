@@ -40,7 +40,7 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
         backgroundColor: background,
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: disabled ? 0.5 : 1,
+        opacity: disabled ? theme.opacity.disabled : 1,
       }}
     >
       {loading ? (

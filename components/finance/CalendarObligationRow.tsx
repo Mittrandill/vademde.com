@@ -65,7 +65,13 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
       <Row gap="sm">
         <Pressable onPress={() => router.push(`/obligations/${obligation.id}`)} style={{ flex: 1 }}>
           <Row gap="sm">
-            <ObligationIcon documentType={obligation.document_type} bankCode={obligation.bank_code} size={28} />
+            <ObligationIcon
+              documentType={obligation.document_type}
+              bankCode={obligation.bank_code}
+              serviceCode={obligation.service_code}
+              fallbackName={obligation.title}
+              size={36}
+            />
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="cardTitle">
                 {obligation.title}

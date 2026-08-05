@@ -4,6 +4,9 @@ import { View } from 'react-native';
 import { useTheme } from '@/theme';
 import { Card, Row, Stack, Text } from '@/components/primitives';
 import { formatMinorAmount } from '@/utils/money';
+import { Amount } from './Amount';
+import { CategoryIcon } from './CategoryIcon';
+import { getCategoryIconColor } from '@/features/categories/categoryIcons';
 import type { CategoryBreakdownItem } from '@/features/reports/api';
 
 export interface CategoryBreakdownListProps {
@@ -40,13 +43,12 @@ export function CategoryBreakdownList({ title, items, emptyLabel, limit = 6, hea
                 gap="xxs"
                 accessibilityLabel={`${item.name}: ${formatMinorAmount(item.amountMinor)}, toplamın yüzde ${Math.round(item.percentage * 100)}`}
               >
-                <Row align="center">
+                <Row gap="sm" align="center">
+                  <CategoryIcon icon={item.icon} size={28} />
                   <Text variant="body" style={{ flex: 1 }}>
                     {item.name}
                   </Text>
-                  <Text variant="body" tabular>
-                    {formatMinorAmount(item.amountMinor)}
-                  </Text>
+                  <Amount amountMinor={item.amountMinor} variant="body" />
                 </Row>
                 <View
                   style={{
@@ -61,7 +63,7 @@ export function CategoryBreakdownList({ title, items, emptyLabel, limit = 6, hea
                       height: '100%',
                       width: `${Math.max(2, item.percentage * 100)}%`,
                       borderRadius: 3,
-                      backgroundColor: theme.colors.accentViolet,
+                      backgroundColor: getCategoryIconColor(item.icon),
                     }}
                   />
                 </View>

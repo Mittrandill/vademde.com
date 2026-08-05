@@ -3,10 +3,28 @@ import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 
 export type Transaction = Tables<'transactions'>;
 
+export type TransactionAccountRef = {
+  name: string;
+  bank_code: string | null;
+  type: string;
+  card_last_four: string | null;
+};
+
 export type TransactionWithRelations = Transaction & {
-  category: { name: string } | null;
+  category: { name: string; icon: string | null } | null;
   counterparty: { name: string } | null;
-  account: { name: string; bank_code: string | null } | null;
+  account: TransactionAccountRef | null;
+  // Boş değilse bu hareket bir borç/alacak (kredi, kredi kartı, çek, senet, fatura)
+  // ödemesinden otomatik oluşturulmuştur — bu kayıtlar docs/01-finansal-kayit-modeli.md
+  // gereği birer "belge türü"dür, kategori değil; ikon önceliğinde bankaya öncelik
+  // verilir (bkz. RecentTransactionsList/hareketler.tsx). Supabase normalde boş bir
+  // dizi döndürür ama tanımsız gelme ihtimaline karşı opsiyonel işaretlenir.
+  payments?: { id: string }[];
+};
+
+// Hareket detay ekranı için: transfer hedefi hesabı da içerir.
+export type TransactionDetail = TransactionWithRelations & {
+  transferToAccount: { name: string; bank_code: string | null } | null;
 };
 
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
@@ -34,7 +52,7 @@ export async function listTransactions({
   let query = supabase
     .from('transactions')
     .select(
-      '*, category:categories(name), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code)'
+      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), payments(id)'
     )
     .eq('workspace_id', workspaceId)
     .order('occurred_at', { ascending: false })
@@ -55,6 +73,19 @@ export async function getTransaction(id: string): Promise<Transaction> {
   const { data, error } = await supabase.from('transactions').select('*').eq('id', id).single();
   if (error) throw error;
   return data;
+}
+
+// Hareket detay ekranı (app/transactions/[id].tsx) için ilişkili tüm alanlarla birlikte.
+export async function getTransactionWithRelations(id: string): Promise<TransactionDetail> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code), payments(id)'
+    )
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data as unknown as TransactionDetail;
 }
 
 export async function createTransaction(

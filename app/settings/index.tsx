@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { withAlpha } from '@/theme/colors';
 import { Button, Card, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { deleteAccount, signOut } from '@/features/auth/api';
 import { useSession } from '@/features/auth/useSession';
@@ -13,6 +14,7 @@ import { listMyWorkspaces } from '@/features/workspaces/api';
 import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
 import { getMyProfile, updateMyProfile } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
+import { showSuccessAlert } from '@/utils/alerts';
 import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 
 const THEME_OPTIONS = [
@@ -80,8 +82,8 @@ export default function SettingsScreen() {
       return updateMyProfile(session.user.id, fullName);
     },
     onSuccess: () => {
-      setIsEditingName(false);
       queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
+      showSuccessAlert('Ad Soyad başarıyla güncellendi.', () => setIsEditingName(false));
     },
   });
 
@@ -229,8 +231,10 @@ export default function SettingsScreen() {
                   paddingHorizontal: theme.spacing.xs,
                   paddingVertical: 3,
                   borderRadius: 999,
-                  backgroundColor:
-                    (planCode === 'free' ? theme.colors.textSecondary : theme.colors.brandPrimary) + '26',
+                  backgroundColor: withAlpha(
+                    planCode === 'free' ? theme.colors.textSecondary : theme.colors.brandPrimary,
+                    0.15
+                  ),
                 }}
               >
                 <Text

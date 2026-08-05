@@ -60,7 +60,9 @@ export default function TakvimScreen() {
   // listInstallmentsDue) — bu obligation'ların tekil listObligations satırı (ilk
   // taksidin vadesi) aşağıda dışlanır, aksi halde ilk taksit iki kez görünür.
   const installmentsQuery = useQuery({
-    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'calendar-installments', rangeKey] : ['calendar-installments', 'disabled'],
+    queryKey: activeWorkspaceId
+      ? [activeWorkspaceId, 'obligations', 'calendar-installments', rangeKey]
+      : ['calendar-installments', 'disabled'],
     queryFn: () =>
       listInstallmentsDue({
         workspaceId: activeWorkspaceId as string,
@@ -126,7 +128,7 @@ export default function TakvimScreen() {
           padding: theme.screenEdge.standard,
           // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
           // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
-          paddingBottom: 100,
+          paddingBottom: theme.layout.tabBarClearance,
           gap: theme.spacing.lg,
         }}
       >

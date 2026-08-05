@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Text } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
 import type { ThemeColors } from '@/theme/colors';
 
 // docs/01-finansal-kayit-modeli.md §3.4 — kayıt durumları.
@@ -51,8 +52,8 @@ export function StatusBadge({ status }: { status: string }) {
         alignSelf: 'flex-start',
         paddingHorizontal: theme.spacing.xs,
         paddingVertical: 3,
-        borderRadius: 999,
-        backgroundColor: color + '26',
+        borderRadius: theme.radius.pill,
+        backgroundColor: withAlpha(color, 0.15),
       }}
     >
       <Text variant="caption" style={{ color, fontWeight: '600' }}>

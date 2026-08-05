@@ -12,7 +12,7 @@ export function Pressable({ style, hitSlop, ...rest }: PressableProps) {
     <RNPressable
       hitSlop={hitSlop ?? theme.touchTarget.minimum / 4}
       style={(state) => [
-        { opacity: state.pressed ? 0.7 : 1 },
+        { opacity: state.pressed ? theme.opacity.pressed : 1 },
         typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}

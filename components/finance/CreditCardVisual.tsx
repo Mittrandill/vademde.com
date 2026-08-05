@@ -60,7 +60,7 @@ export function CreditCardVisual({ account }: CreditCardVisualProps) {
 
       <Stack gap="xl">
         <Row align="center">
-          <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={40} />
+          <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={44} />
           <View style={{ flex: 1 }} />
           <Ionicons
             name="wifi"

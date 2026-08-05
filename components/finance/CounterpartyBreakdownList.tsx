@@ -1,5 +1,6 @@
 import { Card, Row, Stack, Text } from '@/components/primitives';
-import { formatMinorAmount } from '@/utils/money';
+import { Amount } from './Amount';
+import { PersonAvatar } from './PersonAvatar';
 import type { CounterpartyBreakdownItem } from '@/features/reports/api';
 
 export interface CounterpartyBreakdownListProps {
@@ -22,16 +23,15 @@ export function CounterpartyBreakdownList({ items, limit = 6 }: CounterpartyBrea
         ) : (
           <Stack gap="xs">
             {visible.map((item) => (
-              <Row key={item.counterpartyId} align="center">
+              <Row key={item.counterpartyId} gap="sm" align="center">
+                <PersonAvatar name={item.name} size={36} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="body">{item.name}</Text>
                   <Text variant="caption" color="textSecondary">
                     {item.count} hareket
                   </Text>
                 </Stack>
-                <Text variant="body" tabular>
-                  {formatMinorAmount(item.amountMinor)}
-                </Text>
+                <Amount amountMinor={item.amountMinor} variant="body" />
               </Row>
             ))}
             {remaining > 0 ? (
