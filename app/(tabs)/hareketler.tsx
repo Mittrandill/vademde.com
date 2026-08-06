@@ -461,13 +461,10 @@ export default function HareketlerScreen() {
         }
         ListFooterComponent={
           totalPages > 1 ? (
-            <View
-              style={{
-                paddingTop: theme.spacing.sm,
-                borderTopWidth: 1,
-                borderTopColor: theme.colors.border,
-              }}
-            >
+            // Liste artık tek bir yuvarlak köşeli kart olarak bittiği için üstte ayrıca
+            // bir ayraç çizgisi gerekmiyor — eski kart-başına-kart tasarımından kalan
+            // borderTop, kartın hemen altında fazladan bir çizgi gibi görünüyordu.
+            <View style={{ paddingTop: theme.spacing.md }}>
               <Pagination
                 page={effectivePage}
                 totalPages={totalPages}
