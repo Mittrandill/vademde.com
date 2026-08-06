@@ -27,6 +27,7 @@ export type Database = {
           is_archived: boolean
           name: string
           opening_balance_minor: number
+          overdraft_limit_minor: number | null
           payment_due_day: number | null
           statement_day: number | null
           type: string
@@ -44,6 +45,7 @@ export type Database = {
           is_archived?: boolean
           name: string
           opening_balance_minor?: number
+          overdraft_limit_minor?: number | null
           payment_due_day?: number | null
           statement_day?: number | null
           type: string
@@ -61,6 +63,7 @@ export type Database = {
           is_archived?: boolean
           name?: string
           opening_balance_minor?: number
+          overdraft_limit_minor?: number | null
           payment_due_day?: number | null
           statement_day?: number | null
           type?: string
@@ -981,13 +984,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "transactions_transfer_to_account_id_fkey"
-            columns: ["transfer_to_account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "transactions_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
@@ -999,6 +995,13 @@ export type Database = {
             columns: ["counterparty_id"]
             isOneToOne: false
             referencedRelation: "counterparties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_transfer_to_account_id_fkey"
+            columns: ["transfer_to_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
           {
@@ -1021,7 +1024,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          role: string
+          role?: string
           user_id: string
           workspace_id: string
         }
@@ -1223,3 +1226,9 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

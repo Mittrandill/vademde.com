@@ -144,6 +144,8 @@ export default function AccountDetailScreen() {
   const type = account.type as Account['type'];
   const balanceMinor =
     balancesQuery.data?.find((b) => b.accountId === account.id)?.balanceMinor ?? account.opening_balance_minor;
+  const overdraftLimitMinor = account.overdraft_limit_minor ?? 0;
+  const hasOverdraft = type === 'bank' && overdraftLimitMinor > 0;
 
   // Son 6 ay (bu ay dahil): her biri için aynı ay içinde vadesi olan bir ekstre
   // (obligation) var mı diye bakılır — varsa borç tutarıyla birlikte gösterilir ve
@@ -459,6 +461,10 @@ export default function AccountDetailScreen() {
               }
             />
 
+            {hasOverdraft ? (
+              <OverdraftCard accountId={account.id} balanceMinor={balanceMinor} limitMinor={overdraftLimitMinor} currencyCode={account.currency_code} />
+            ) : null}
+
             <Text variant="sectionTitle">Hareketler</Text>
           </Stack>
         }
@@ -494,6 +500,60 @@ export default function AccountDetailScreen() {
         }
       />
     </SafeAreaView>
+  );
+}
+
+interface OverdraftCardProps {
+  accountId: string;
+  balanceMinor: number;
+  limitMinor: number;
+  currencyCode: string;
+}
+
+// Ek hesap (KMH): bakiye sıfırın altına indiğinde kullanılan tutar, limitle sınırlıdır.
+// Faiz bankadan bankaya/güne göre değiştiği için otomatik hesaplanmaz — kullanıcı ayına ait
+// tutarı öğrendiğinde tek dokunuşla gider olarak eklenir (bkz. /transactions/new accountId ön dolumu).
+function OverdraftCard({ accountId, balanceMinor, limitMinor, currencyCode }: OverdraftCardProps) {
+  const theme = useTheme();
+  const usedMinor = Math.min(Math.max(-balanceMinor, 0), limitMinor);
+  const availableMinor = Math.max(0, limitMinor - usedMinor);
+
+  return (
+    <Card>
+      <Stack gap="md">
+        <Row gap="sm" align="center">
+          <Ionicons name="trending-down-outline" size={18} color={theme.colors.brandPrimary} />
+          <Text variant="cardTitle">Ek Hesap (KMH)</Text>
+        </Row>
+        <Divider />
+        <InfoRow label="Ek Hesap Limiti" value={formatMinorAmount(limitMinor, currencyCode)} />
+        <InfoRow label="Kullanılan" value={formatMinorAmount(usedMinor, currencyCode)} />
+        <InfoRow label="Kullanılabilir" value={formatMinorAmount(availableMinor, currencyCode)} />
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: '/transactions/new',
+              params: { accountId, direction: 'expense', description: 'Ek hesap faizi' },
+            })
+          }
+          style={{
+            height: theme.controlHeight.segmented,
+            borderRadius: theme.radius.widget,
+            borderWidth: 1,
+            borderColor: theme.colors.brandPrimary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: theme.spacing.xxs,
+          }}
+        >
+          <Ionicons name="add-circle-outline" size={16} color={theme.colors.brandPrimary} />
+          <Text variant="body" color="brandPrimary">
+            Ek Hesap Faizi Ekle
+          </Text>
+        </Pressable>
+      </Stack>
+    </Card>
   );
 }
 

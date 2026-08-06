@@ -48,8 +48,10 @@ export default function NewAccountScreen() {
   const [paymentDueDay, setPaymentDueDay] = useState('');
   const [cardLastFour, setCardLastFour] = useState('');
   const [creditLimit, setCreditLimit] = useState('');
+  const [overdraftLimit, setOverdraftLimit] = useState('');
   const [initialized, setInitialized] = useState(false);
   const isCreditCard = type === 'credit_card';
+  const isBank = type === 'bank';
 
   const accountQuery = useQuery({
     queryKey: ['account', id, 'edit'],
@@ -69,6 +71,9 @@ export default function NewAccountScreen() {
     setPaymentDueDay(account.payment_due_day != null ? String(account.payment_due_day) : '');
     setCardLastFour(account.card_last_four ?? '');
     setCreditLimit(account.credit_limit_minor != null ? (account.credit_limit_minor / 100).toFixed(2).replace('.', ',') : '');
+    setOverdraftLimit(
+      account.overdraft_limit_minor != null ? (account.overdraft_limit_minor / 100).toFixed(2).replace('.', ',') : ''
+    );
     setInitialized(true);
   }, [accountQuery.data, initialized]);
 
@@ -87,6 +92,7 @@ export default function NewAccountScreen() {
         payment_due_day: isCreditCard && paymentDueDay ? Number(paymentDueDay) : null,
         card_last_four: isCreditCard && cardLastFour ? cardLastFour : null,
         credit_limit_minor: isCreditCard && creditLimit ? toMinorUnits(Number(creditLimit.replace(',', '.'))) : null,
+        overdraft_limit_minor: isBank && overdraftLimit ? toMinorUnits(Number(overdraftLimit.replace(',', '.'))) : null,
       };
       return isEditing
         ? updateAccount(id as string, payload)
@@ -179,6 +185,22 @@ export default function NewAccountScreen() {
               maxLength={32}
               error={ibanHasError ? 'IBAN "TR" ile başlamalı ve 26 karakter olmalı.' : undefined}
             />
+          ) : null}
+
+          {isBank ? (
+            <Stack gap="sm">
+              <TextField
+                label="EK HESAP (KMH) LİMİTİ (İSTEĞE BAĞLI)"
+                placeholder="0,00"
+                keyboardType="decimal-pad"
+                value={overdraftLimit}
+                onChangeText={setOverdraftLimit}
+              />
+              <Text variant="caption" color="textSecondary">
+                Girilirse bakiyeniz bu tutara kadar sıfırın altına inebilir; hesap detayında ek hesap kullanımınız
+                gösterilir. Aylık ek hesap faizini bildiğinizde hesap detayından gider olarak ekleyebilirsiniz.
+              </Text>
+            </Stack>
           ) : null}
 
           {isCreditCard ? (
