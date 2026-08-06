@@ -9,7 +9,10 @@ import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
 import { configurePurchases, logOutPurchases } from '@/services/purchases';
 import { useWorkspaceRealtime } from '@/services/realtime';
+import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useOnboardingStore } from '@/store/onboardingStore';
+import { Splash } from '@/components/brand/Splash';
 
 function AppStatusBar() {
   const theme = useTheme();
@@ -20,6 +23,7 @@ function RootNavigator() {
   const { session, isLoading } = useSession();
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const hasSeenWelcome = useOnboardingStore((s) => s.hasSeenWelcome);
 
   useWorkspaceRealtime(session ? activeWorkspaceId : null);
 
@@ -32,7 +36,7 @@ function RootNavigator() {
     }
   }, [session?.user?.id]);
 
-  if (isLoading) return null;
+  if (isLoading) return <Splash />;
 
   return (
     <Stack
@@ -41,11 +45,18 @@ function RootNavigator() {
         contentStyle: { backgroundColor: theme.colors.backgroundPrimary },
       }}
     >
+      {/* docs/03-bilgi-mimarisi-ekranlar.md §5.2 — üç değer önerisi ekranı yalnızca ilk
+          açılışta ve oturum yokken (auth) grubundan önce gösterilir. */}
+      <Stack.Protected guard={!session && !hasSeenWelcome}>
+        <Stack.Screen name="(onboarding)" />
+      </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="workspace-setup" />
+        <Stack.Screen name="reset-password" />
         <Stack.Screen name="accounts" options={{ presentation: 'modal' }} />
         <Stack.Screen name="accounts/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="accounts/[id]" />
@@ -57,6 +68,8 @@ function RootNavigator() {
         <Stack.Screen name="obligations/[id]" />
         <Stack.Screen name="documents/[id]/review" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="profile/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="subscription/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="paywall/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="categories/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="categories/new" options={{ presentation: 'modal' }} />
@@ -74,7 +87,12 @@ export default function RootLayout() {
     initDatabase().catch((error) => {
       console.error('SQLite migration hatası', error);
     });
-    return attachFocusManager();
+    const detachFocusManager = attachFocusManager();
+    const detachAuthDeepLinks = attachAuthDeepLinkHandler();
+    return () => {
+      detachFocusManager();
+      detachAuthDeepLinks();
+    };
   }, []);
 
   return (

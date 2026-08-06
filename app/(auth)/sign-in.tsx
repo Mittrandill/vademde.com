@@ -1,21 +1,33 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { Button, Stack, Text, TextField } from '@/components/primitives';
-import { signInWithPassword } from '@/features/auth/api';
+import { Button, Divider, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { AuthHeader } from '@/components/brand/AuthHeader';
+import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
+import {
+  resetPasswordForEmail,
+  signInWithApple,
+  signInWithGoogle,
+  signInWithPassword,
+} from '@/features/auth/api';
 
 export default function SignInScreen() {
   const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   async function handleSubmit() {
     setError(null);
+    setInfo(null);
     setLoading(true);
     try {
       await signInWithPassword(email.trim(), password);
@@ -26,50 +38,127 @@ export default function SignInScreen() {
     }
   }
 
+  async function handleApple() {
+    setError(null);
+    setInfo(null);
+    setAppleLoading(true);
+    try {
+      await signInWithApple();
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code !== 'ERR_REQUEST_CANCELED') {
+        setError(err instanceof Error ? err.message : 'Apple ile giriş yapılamadı');
+      }
+    } finally {
+      setAppleLoading(false);
+    }
+  }
+
+  async function handleGoogle() {
+    setError(null);
+    setInfo(null);
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google ile giriş yapılamadı');
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    setError(null);
+    setInfo(null);
+    if (!email.trim()) {
+      setError('Şifre sıfırlama bağlantısı için önce e-posta adresinizi girin.');
+      return;
+    }
+    try {
+      await resetPasswordForEmail(email.trim());
+      setInfo('Şifre sıfırlama bağlantısı gönderildi. Gelen kutunuzu kontrol edin.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bağlantı gönderilemedi');
+    }
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard }}
+        style={{ flex: 1 }}
       >
-        <Stack gap="xl">
-          <Stack gap="xs">
-            <Text variant="pageTitle">Vademde</Text>
-            <Text variant="body" color="textSecondary">
-              Hesabınıza giriş yapın
-            </Text>
-          </Stack>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: 'center',
+            paddingHorizontal: theme.screenEdge.standard,
+            paddingVertical: theme.spacing.xxl,
+          }}
+        >
+          <Stack gap="xl">
+            <AuthHeader markSize={48} />
 
-          <Stack gap="sm">
-            <TextField
-              placeholder="E-posta"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
+            <SocialSignInButtons
+              onApplePress={handleApple}
+              onGooglePress={handleGoogle}
+              appleLoading={appleLoading}
+              googleLoading={googleLoading}
+              disabled={loading}
             />
-            <TextField
-              placeholder="Şifre"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+
+            <Row gap="sm" align="center">
+              <Divider style={{ flex: 1 }} />
+              <Text variant="caption" color="textSecondary">
+                veya
+              </Text>
+              <Divider style={{ flex: 1 }} />
+            </Row>
+
+            <Stack gap="sm">
+              <TextField
+                placeholder="E-posta adresiniz"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextField
+                placeholder="Şifreniz"
+                secureTextEntry={!passwordVisible}
+                value={password}
+                onChangeText={setPassword}
+                rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+                onRightIconPress={() => setPasswordVisible((v) => !v)}
+              />
+              <Pressable onPress={handleForgotPassword} style={{ alignSelf: 'flex-end' }}>
+                <Text variant="caption" color="textSecondary">
+                  Şifremi unuttum?
+                </Text>
+              </Pressable>
+            </Stack>
+
+            {error ? (
+              <Text variant="caption" color="danger">
+                {error}
+              </Text>
+            ) : null}
+            {info ? (
+              <Text variant="caption" color="success">
+                {info}
+              </Text>
+            ) : null}
+
+            <Button label="Giriş Yap" onPress={handleSubmit} loading={loading} />
+
+            <Link href="/(auth)/sign-up" style={{ alignSelf: 'center' }}>
+              <Text variant="body" color="textSecondary">
+                Hesabınız yok mu? <Text variant="body" color="brandPrimary">Kayıt olun</Text>
+              </Text>
+            </Link>
           </Stack>
-
-          {error ? (
-            <Text variant="caption" color="danger">
-              {error}
-            </Text>
-          ) : null}
-
-          <Button label="Giriş Yap" onPress={handleSubmit} loading={loading} />
-
-          <Link href="/(auth)/sign-up" style={{ alignSelf: 'center' }}>
-            <Text variant="body" color="textSecondary">
-              Hesabınız yok mu? <Text variant="body" color="brandPrimary">Kayıt olun</Text>
-            </Text>
-          </Link>
-        </Stack>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

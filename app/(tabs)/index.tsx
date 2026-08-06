@@ -3,10 +3,10 @@ import { ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, Skeleton, Stack, Text, TextField } from '@/components/primitives';
+import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import { BalanceHero } from '@/components/finance/BalanceHero';
 import { ObligationSummaryCard } from '@/components/finance/ObligationSummaryCard';
 import { IncomeExpenseAnalysis } from '@/components/finance/IncomeExpenseAnalysis';
@@ -14,7 +14,7 @@ import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
 import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
 import { RecentTransactionsList } from '@/components/finance/RecentTransactionsList';
-import { createWorkspace, listMyWorkspaces } from '@/features/workspaces/api';
+import { listMyWorkspaces } from '@/features/workspaces/api';
 import { listAccounts } from '@/features/accounts/api';
 import {
   listObligations,
@@ -32,7 +32,6 @@ export default function HomeScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { activeWorkspaceId, setActiveWorkspaceId, balanceHidden, toggleBalanceHidden } = useWorkspaceStore();
-  const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const workspacesQuery = useQuery({
@@ -46,17 +45,16 @@ export default function HomeScreen() {
     },
   });
 
-  const createWorkspaceMutation = useMutation({
-    mutationFn: () => createWorkspace({ name: newWorkspaceName.trim(), type: 'personal' }),
-    onSuccess: (workspace) => {
-      setActiveWorkspaceId(workspace.id);
-      setNewWorkspaceName('');
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
-    },
-  });
-
   const workspaces = workspacesQuery.data ?? [];
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+
+  // Oturum açmış ama hiç çalışma alanı olmayan kullanıcı (ör. yeni kayıt) burada boş bir
+  // form yerine doğrudan onboarding'in çalışma alanı kurulum ekranına yönlendirilir.
+  useEffect(() => {
+    if (workspacesQuery.isSuccess && workspaces.length === 0) {
+      router.replace('/workspace-setup');
+    }
+  }, [workspacesQuery.isSuccess, workspaces.length]);
 
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
@@ -167,43 +165,14 @@ export default function HomeScreen() {
   );
   const directionalTotalMinor = payableTotalMinor + receivableTotalMinor;
 
-  const error = workspacesQuery.error || createWorkspaceMutation.error;
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      {!workspacesQuery.isSuccess ? (
+      {!workspacesQuery.isSuccess || workspaces.length === 0 ? (
         <Stack gap="lg" style={{ padding: theme.screenEdge.standard }}>
           <Skeleton height={32} width="60%" />
           <Skeleton height={180} borderRadius={theme.radius.heroWidget} />
           <Skeleton height={100} borderRadius={theme.radius.widget} />
           <Skeleton height={100} borderRadius={theme.radius.widget} />
-        </Stack>
-      ) : workspaces.length === 0 ? (
-        <Stack gap="xl" style={{ flex: 1, padding: theme.screenEdge.standard, justifyContent: 'center' }}>
-          <Stack gap="lg">
-            <Stack gap="xs">
-              <Text variant="pageTitle">İlk çalışma alanınız</Text>
-              <Text variant="body" color="textSecondary">
-                Kişisel veya işletme bütçenizi takip etmek için bir çalışma alanı oluşturun.
-              </Text>
-            </Stack>
-            <TextField
-              placeholder="Örn. Akın'ın Bütçesi"
-              value={newWorkspaceName}
-              onChangeText={setNewWorkspaceName}
-            />
-            {error ? (
-              <Text variant="caption" color="danger">
-                {error instanceof Error ? error.message : 'Bir hata oluştu'}
-              </Text>
-            ) : null}
-            <Button
-              label="Çalışma Alanı Oluştur"
-              onPress={() => createWorkspaceMutation.mutate()}
-              loading={createWorkspaceMutation.isPending}
-              disabled={!newWorkspaceName.trim()}
-            />
-          </Stack>
         </Stack>
       ) : (
         <ScrollView
