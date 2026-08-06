@@ -530,20 +530,20 @@ export default function TaraScreen() {
   if (!permission.granted) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack
-          gap="lg"
-          align="center"
-          style={{ flex: 1, justifyContent: 'center', padding: theme.screenEdge.standard }}
-        >
-          <Ionicons name="camera-outline" size={40} color={theme.colors.textSecondary} />
-          <Text variant="cardTitle" style={{ textAlign: 'center' }}>
-            Kameraya erişim gerekiyor
-          </Text>
-          <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-            Çek, senet veya fatura fotoğrafını taramak için kamera izni gerekir.
-          </Text>
-          <Button label="İzin Ver" onPress={requestPermission} />
-          <Button label="Vazgeç" variant="secondary" onPress={() => setMode('select')} />
+        <Stack gap="xl" style={{ flex: 1, justifyContent: 'center', padding: theme.screenEdge.standard }}>
+          <Stack gap="lg" align="center">
+            <Ionicons name="camera-outline" size={40} color={theme.colors.textSecondary} />
+            <Text variant="cardTitle" style={{ textAlign: 'center' }}>
+              Kameraya erişim gerekiyor
+            </Text>
+            <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
+              Çek, senet veya fatura fotoğrafını taramak için kamera izni gerekir.
+            </Text>
+          </Stack>
+          <Stack gap="sm">
+            <Button label="İzin Ver" onPress={requestPermission} />
+            <Button label="Vazgeç" variant="secondary" onPress={() => setMode('select')} />
+          </Stack>
         </Stack>
       </SafeAreaView>
     );
