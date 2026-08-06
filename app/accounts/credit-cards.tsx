@@ -11,6 +11,7 @@ import { Button, Card, Divider, Pagination, Pressable, Row, Stack, Text, TextFie
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { DocumentCalendarIllustration } from '@/components/finance/DocumentCalendarIllustration';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
@@ -164,6 +165,7 @@ export default function CreditCardsScreen() {
               Borç, ekstre ve ödeme tarihlerini tek yerden takip edin.
             </Text>
           </Stack>
+          <DocumentCalendarIllustration size={72} />
         </Row>
       </Card>
 
@@ -407,7 +409,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, currentPeriodKey
                 currencyCode={account.currency_code}
                 variant="cardTitle"
                 numberOfLines={1}
-                style={{ color: balanceMinor > 0 ? theme.colors.danger : undefined }}
+                overdue={balanceMinor > 0}
               />
             </Stack>
             <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />

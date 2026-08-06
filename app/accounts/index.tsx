@@ -203,7 +203,7 @@ export default function AccountsScreen() {
                     currencyCode={item.currency_code}
                     variant="cardTitle"
                     numberOfLines={1}
-                    style={{ color: balanceMinor < 0 ? theme.colors.danger : undefined }}
+                    overdue={balanceMinor < 0}
                   />
                 </Row>
               </Card>

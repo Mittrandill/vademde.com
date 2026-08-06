@@ -181,17 +181,6 @@ export default function CounterpartiesScreen() {
         </Card>
       ) : null}
 
-      {banks.length > 0 ? (
-        <Stack gap="sm">
-          <SectionHeader title="Bankalar" />
-          <Stack gap="xs">
-            {banks.map((bank) => (
-              <BankRow key={bank.bankCode} bank={bank} />
-            ))}
-          </Stack>
-        </Stack>
-      ) : null}
-
       <Stack gap="sm">
         <TextField
           placeholder="İsim, telefon veya e-postada ara"
@@ -208,6 +197,17 @@ export default function CounterpartiesScreen() {
           stretch
         />
       </Stack>
+
+      {banks.length > 0 ? (
+        <Stack gap="sm">
+          <SectionHeader title="Bankalar" />
+          <Stack gap="xs">
+            {banks.map((bank) => (
+              <BankRow key={bank.bankCode} bank={bank} />
+            ))}
+          </Stack>
+        </Stack>
+      ) : null}
     </Stack>
   );
 
