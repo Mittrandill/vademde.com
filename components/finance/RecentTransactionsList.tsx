@@ -9,8 +9,9 @@ import { Amount } from './Amount';
 import { BankLogo } from './BankLogo';
 import { CategoryIcon } from './CategoryIcon';
 import { DateBlock } from './DateBlock';
+import { ObligationIcon } from './ObligationIcon';
 import { PersonAvatar } from './PersonAvatar';
-import type { TransactionWithRelations } from '@/features/transactions/api';
+import { getPaymentObligation, type TransactionWithRelations } from '@/features/transactions/api';
 
 export interface RecentTransactionsListProps {
   transactions: TransactionWithRelations[];
@@ -23,8 +24,6 @@ const DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 export function RecentTransactionsList({ transactions }: RecentTransactionsListProps) {
-  const theme = useTheme();
-
   return (
     <Stack gap="sm">
       <SectionHeader
@@ -40,59 +39,83 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
         // araları çizgiyle ayrılır, her satır ayrı bir kart olmaz.
         <Card style={{ padding: 0 }}>
           {transactions.map((t, index) => (
-            <View key={t.id}>
-              <Pressable
-                onPress={() => router.push(`/transactions/${t.id}`)}
-                style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}
-              >
-                <Row gap="sm" align="center">
-                  <DateBlock date={t.occurred_at} />
-                  {t.category?.icon ? (
-                    <CategoryIcon icon={t.category.icon} size={36} />
-                  ) : t.counterparty ? (
-                    <PersonAvatar name={t.counterparty.name} size={36} />
-                  ) : (
-                    <BankLogo
-                      bankCode={null}
-                      fallbackName={t.account?.name}
-                      fallbackIcon={DIRECTION_ICON[t.direction] ?? 'ellipse-outline'}
-                      size={36}
-                    />
-                  )}
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle">
-                      {t.description?.trim() ||
-                        t.category?.name ||
-                        (t.direction === 'transfer' ? 'Transfer' : t.direction === 'income' ? 'Gelir' : 'Gider')}
-                    </Text>
-                    {t.counterparty ? (
-                      <Text variant="caption" color="textSecondary">
-                        {t.counterparty.name}
-                      </Text>
-                    ) : t.account ? (
-                      <AccountLabelRow
-                        bankCode={t.account.bank_code}
-                        accountName={t.account.name}
-                        accountType={t.account.type}
-                        cardLastFour={t.account.card_last_four}
-                      />
-                    ) : null}
-                  </Stack>
-                  <Amount
-                    amountMinor={t.amount_minor}
-                    currencyCode={t.currency_code}
-                    direction={t.direction as 'income' | 'expense' | 'transfer'}
-                    variant="body"
-                  />
-                </Row>
-              </Pressable>
-              {index < transactions.length - 1 ? (
-                <Divider style={{ marginHorizontal: theme.spacing.md }} />
-              ) : null}
-            </View>
+            <RecentTransactionRow key={t.id} transaction={t} isLast={index === transactions.length - 1} />
           ))}
         </Card>
       )}
     </Stack>
+  );
+}
+
+interface RecentTransactionRowProps {
+  transaction: TransactionWithRelations;
+  isLast: boolean;
+}
+
+function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowProps) {
+  const theme = useTheme();
+  // Bu işlem bir borç/taksit ödemesinden otomatik oluştuysa, ana ikon o borcun/servisin
+  // kendi kimliğini gösterir (ör. bir abonelik ödemesinde Youtube logosu) — ödemenin
+  // yapıldığı hesap zaten alt başlıkta (AccountLabelRow) ayrıca gösterildiği için burada
+  // tekrar banka logosu kullanılmaz.
+  const paymentObligation = getPaymentObligation(t);
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => router.push(`/transactions/${t.id}`)}
+        style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}
+      >
+        <Row gap="sm" align="center">
+          <DateBlock date={t.occurred_at} />
+          {paymentObligation ? (
+            <ObligationIcon
+              documentType={paymentObligation.document_type}
+              bankCode={paymentObligation.bank_code}
+              serviceCode={paymentObligation.service_code}
+              fallbackName={paymentObligation.title}
+              size={36}
+            />
+          ) : t.category?.icon ? (
+            <CategoryIcon icon={t.category.icon} size={36} />
+          ) : t.counterparty ? (
+            <PersonAvatar name={t.counterparty.name} size={36} />
+          ) : (
+            <BankLogo
+              bankCode={null}
+              fallbackName={t.account?.name}
+              fallbackIcon={DIRECTION_ICON[t.direction] ?? 'ellipse-outline'}
+              size={36}
+            />
+          )}
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="cardTitle">
+              {t.description?.trim() ||
+                t.category?.name ||
+                (t.direction === 'transfer' ? 'Transfer' : t.direction === 'income' ? 'Gelir' : 'Gider')}
+            </Text>
+            {t.counterparty ? (
+              <Text variant="caption" color="textSecondary">
+                {t.counterparty.name}
+              </Text>
+            ) : t.account ? (
+              <AccountLabelRow
+                bankCode={t.account.bank_code}
+                accountName={t.account.name}
+                accountType={t.account.type}
+                cardLastFour={t.account.card_last_four}
+              />
+            ) : null}
+          </Stack>
+          <Amount
+            amountMinor={t.amount_minor}
+            currencyCode={t.currency_code}
+            direction={t.direction as 'income' | 'expense' | 'transfer'}
+            variant="body"
+          />
+        </Row>
+      </Pressable>
+      {!isLast ? <Divider style={{ marginHorizontal: theme.spacing.md }} /> : null}
+    </View>
   );
 }

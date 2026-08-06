@@ -10,18 +10,35 @@ export type TransactionAccountRef = {
   card_last_four: string | null;
 };
 
+// Bir ödemenin ait olduğu borcun kimliği — taksitli ödemelerde borç, `installment` üzerinden
+// dolaylı gelir (bkz. PaymentRef.installment). RecentTransactionsList bunu, borç ödemesinden
+// oluşan işlemlerde banka logosu yerine borcun/servisin kendi ikonunu (ör. Youtube) göstermek
+// için kullanır — bkz. ObligationIcon.
+export type PaymentObligationRef = {
+  document_type: string;
+  bank_code: string | null;
+  service_code: string | null;
+  title: string;
+};
+
+export type PaymentRef = {
+  id: string;
+  obligation_id: string | null;
+  installment_id: string | null;
+  obligation: PaymentObligationRef | null;
+  installment: { obligation: PaymentObligationRef | null } | null;
+};
+
 export type TransactionWithRelations = Transaction & {
   category: { name: string; icon: string | null } | null;
   counterparty: { name: string } | null;
   account: TransactionAccountRef | null;
   // Boş değilse bu hareket bir borç/alacak (kredi, kredi kartı, çek, senet, fatura)
   // ödemesinden otomatik oluşturulmuştur — bu kayıtlar docs/01-finansal-kayit-modeli.md
-  // gereği birer "belge türü"dür, kategori değil; ikon önceliğinde bankaya öncelik
-  // verilir (bkz. RecentTransactionsList/hareketler.tsx). Supabase normalde boş bir
-  // dizi döndürür ama tanımsız gelme ihtimaline karşı opsiyonel işaretlenir.
-  // obligation_id/installment_id, hareketler.tsx'te bu işlemi ilgili borç/taksit
-  // satırıyla eşleyip tek satırda birleştirmek için kullanılır.
-  payments?: { id: string; obligation_id: string | null; installment_id: string | null }[];
+  // gereği birer "belge türü"dür, kategori değil (bkz. RecentTransactionsList/hareketler.tsx).
+  // Supabase normalde boş bir dizi döndürür ama tanımsız gelme ihtimaline karşı opsiyonel
+  // işaretlenir.
+  payments?: PaymentRef[];
 };
 
 // Hareket detay ekranı için: transfer hedefi hesabı da içerir.
@@ -54,7 +71,7 @@ export async function listTransactions({
   let query = supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), payments(id, obligation_id, installment_id)'
+      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
     )
     .eq('workspace_id', workspaceId)
     .order('occurred_at', { ascending: false })
@@ -71,6 +88,15 @@ export async function listTransactions({
   return data as unknown as TransactionWithRelations[];
 }
 
+// Bir işlem bir borç/taksit ödemesinden otomatik oluştuysa, o borcun kimliğini döner
+// (taksitliyse installment üzerinden dolaylı) — yoksa null. RecentTransactionsList bunu
+// satırın ana ikonunu seçerken kullanır (bkz. ObligationIcon).
+export function getPaymentObligation(t: TransactionWithRelations): PaymentObligationRef | null {
+  const payment = t.payments?.[0];
+  if (!payment) return null;
+  return payment.obligation ?? payment.installment?.obligation ?? null;
+}
+
 export async function getTransaction(id: string): Promise<Transaction> {
   const { data, error } = await supabase.from('transactions').select('*').eq('id', id).single();
   if (error) throw error;
@@ -82,7 +108,7 @@ export async function getTransactionWithRelations(id: string): Promise<Transacti
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code), payments(id, obligation_id, installment_id)'
+      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
     )
     .eq('id', id)
     .single();
