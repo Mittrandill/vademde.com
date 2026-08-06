@@ -46,6 +46,7 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
                 style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}
               >
                 <Row gap="sm" align="center">
+                  <DateBlock date={t.occurred_at} />
                   {(t.payments?.length ?? 0) > 0 ? (
                     // Bir borç/alacak ödemesinden otomatik oluşturulan hareket — kategorisi
                     // ne olursa olsun (belge türü kategori değildir) ödemenin yapıldığı
@@ -63,7 +64,6 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
                       size={36}
                     />
                   )}
-                  <DateBlock date={t.occurred_at} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">
                       {t.description?.trim() ||

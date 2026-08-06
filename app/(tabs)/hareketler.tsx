@@ -25,7 +25,7 @@ import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import { DateBlock } from '@/components/finance/DateBlock';
-import { listTransactions } from '@/features/transactions/api';
+import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
@@ -56,7 +56,6 @@ interface HareketRow {
   bankCode?: string | null;
   serviceCode?: string | null;
   categoryIcon?: string | null;
-  isObligationPayment?: boolean;
   installmentId?: string | null;
   // Yalnızca kind === 'transaction' satırlarında doldurulur — hesap kimliğini alt
   // başlıkta banka logolu, yapılandırılmış bir satır olarak göstermek için (bkz.
@@ -65,6 +64,14 @@ interface HareketRow {
   accountName?: string | null;
   accountType?: string | null;
   cardLastFour?: string | null;
+  // Yalnızca kind === 'obligation' satırlarında doldurulur: bu taksit/borç bir hesaptan
+  // ödendiyse (bkz. rows useMemo'daki eşleme), ödemenin yapıldığı hesap — ayrı bir
+  // "işlem" satırı göstermek yerine bu bilgi doğrudan taksit/borç satırının alt
+  // başlığında gösterilir.
+  paidAccountBankCode?: string | null;
+  paidAccountName?: string | null;
+  paidAccountType?: string | null;
+  paidAccountCardLastFour?: string | null;
 }
 
 const DIRECTION_PREFIX: Record<string, string> = {
@@ -161,28 +168,43 @@ export default function HareketlerScreen() {
   });
 
   const rows = useMemo<HareketRow[]>(() => {
-    const transactionRows: HareketRow[] = wantsTransactions
-      ? (transactionsQuery.data ?? []).map((t) => ({
-          id: t.id,
-          kind: 'transaction',
-          title:
-            t.description?.trim() ||
-            t.category?.name ||
-            (t.direction === 'transfer' ? 'Transfer' : t.direction === 'income' ? 'Gelir' : 'Gider'),
-          subtitle: t.counterparty?.name || t.account?.name || '',
-          date: t.occurred_at,
-          amountMinor: t.amount_minor,
-          currencyCode: t.currency_code,
-          direction: t.direction,
-          bankCode: t.account?.bank_code ?? null,
-          categoryIcon: t.category?.icon ?? null,
-          counterpartyName: t.counterparty?.name ?? null,
-          accountName: t.account?.name ?? null,
-          accountType: t.account?.type ?? null,
-          cardLastFour: t.account?.card_last_four ?? null,
-          isObligationPayment: (t.payments?.length ?? 0) > 0,
-        }))
-      : [];
+    const transactionsData = wantsTransactions ? (transactionsQuery.data ?? []) : [];
+
+    // Bir taksit/borç bir hesaptan ödendiğinde hem hesap çıkışını temsil eden bir
+    // `transaction` hem de bu taksit/borç kaydı oluşur — ikisi aynı olayın iki yüzüdür.
+    // İki ayrı satır yerine tek satır göstermek için: ödeme kaydı taşıyan işlemler
+    // (payments doluysa) aşağıda hiç ayrı satır olarak eklenmez; hangi hesaptan
+    // ödendiği bilgisi ilgili taksit/borç satırının alt başlığına taşınır.
+    const paymentTxByInstallmentId = new Map<string, TransactionWithRelations>();
+    const paymentTxByObligationId = new Map<string, TransactionWithRelations>();
+    for (const t of transactionsData) {
+      for (const p of t.payments ?? []) {
+        if (p.installment_id) paymentTxByInstallmentId.set(p.installment_id, t);
+        else if (p.obligation_id) paymentTxByObligationId.set(p.obligation_id, t);
+      }
+    }
+
+    const transactionRows: HareketRow[] = transactionsData
+      .filter((t) => (t.payments?.length ?? 0) === 0)
+      .map((t) => ({
+        id: t.id,
+        kind: 'transaction',
+        title:
+          t.description?.trim() ||
+          t.category?.name ||
+          (t.direction === 'transfer' ? 'Transfer' : t.direction === 'income' ? 'Gelir' : 'Gider'),
+        subtitle: t.counterparty?.name || t.account?.name || '',
+        date: t.occurred_at,
+        amountMinor: t.amount_minor,
+        currencyCode: t.currency_code,
+        direction: t.direction,
+        bankCode: t.account?.bank_code ?? null,
+        categoryIcon: t.category?.icon ?? null,
+        counterpartyName: t.counterparty?.name ?? null,
+        accountName: t.account?.name ?? null,
+        accountType: t.account?.type ?? null,
+        cardLastFour: t.account?.card_last_four ?? null,
+      }));
 
     const installmentItems = wantsObligations ? (installmentsQuery.data ?? []) : [];
     const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
@@ -190,20 +212,27 @@ export default function HareketlerScreen() {
     const obligationRows: HareketRow[] = wantsObligations
       ? (obligationsQuery.data ?? [])
           .filter((o) => !obligationIdsWithInstallments.has(o.id))
-          .map((o) => ({
-            id: o.id,
-            kind: 'obligation',
-            title: o.title,
-            subtitle: o.counterparty?.name || o.category?.name || '',
-            date: o.due_date ?? o.created_at,
-            amountMinor: o.total_amount_minor,
-            currencyCode: o.currency_code,
-            direction: o.direction,
-            status: o.status,
-            documentType: o.document_type,
-            bankCode: o.bank_code,
-            serviceCode: o.service_code,
-          }))
+          .map((o) => {
+            const paymentTx = paymentTxByObligationId.get(o.id);
+            return {
+              id: o.id,
+              kind: 'obligation',
+              title: o.title,
+              subtitle: o.counterparty?.name || o.category?.name || '',
+              date: o.due_date ?? o.created_at,
+              amountMinor: o.total_amount_minor,
+              currencyCode: o.currency_code,
+              direction: o.direction,
+              status: o.status,
+              documentType: o.document_type,
+              bankCode: o.bank_code,
+              serviceCode: o.service_code,
+              paidAccountBankCode: paymentTx?.account?.bank_code ?? null,
+              paidAccountName: paymentTx?.account?.name ?? null,
+              paidAccountType: paymentTx?.account?.type ?? null,
+              paidAccountCardLastFour: paymentTx?.account?.card_last_four ?? null,
+            };
+          })
       : [];
 
     // Hareketler yalnızca gerçekleşmiş hareketleri gösterir: henüz ödenmemiş (bekleyen)
@@ -213,21 +242,28 @@ export default function HareketlerScreen() {
     // bile burada ayrıca görünmesin.
     const paidInstallmentItems = installmentItems.filter((o) => o.remaining_amount_minor <= 0);
 
-    const installmentRows: HareketRow[] = paidInstallmentItems.map((o) => ({
-      id: o.id,
-      kind: 'obligation',
-      title: `${o.title} — ${o.installment_number}. Taksit`,
-      subtitle: o.counterparty?.name || o.category?.name || '',
-      date: o.due_date ?? o.created_at,
-      amountMinor: o.total_amount_minor,
-      currencyCode: o.currency_code,
-      direction: o.direction,
-      status: o.status,
-      documentType: o.document_type,
-      bankCode: o.bank_code,
-      serviceCode: o.service_code,
-      installmentId: o.installment_id,
-    }));
+    const installmentRows: HareketRow[] = paidInstallmentItems.map((o) => {
+      const paymentTx = o.installment_id ? paymentTxByInstallmentId.get(o.installment_id) : undefined;
+      return {
+        id: o.id,
+        kind: 'obligation',
+        title: `${o.title} — ${o.installment_number}. Taksit`,
+        subtitle: o.counterparty?.name || o.category?.name || '',
+        date: o.due_date ?? o.created_at,
+        amountMinor: o.total_amount_minor,
+        currencyCode: o.currency_code,
+        direction: o.direction,
+        status: o.status,
+        documentType: o.document_type,
+        bankCode: o.bank_code,
+        serviceCode: o.service_code,
+        installmentId: o.installment_id,
+        paidAccountBankCode: paymentTx?.account?.bank_code ?? null,
+        paidAccountName: paymentTx?.account?.name ?? null,
+        paidAccountType: paymentTx?.account?.type ?? null,
+        paidAccountCardLastFour: paymentTx?.account?.card_last_four ?? null,
+      };
+    });
 
     return [...transactionRows, ...obligationRows, ...installmentRows].sort((a, b) =>
       sortAscending
@@ -237,7 +273,7 @@ export default function HareketlerScreen() {
   }, [
     transactionsQuery.data,
     obligationsQuery.data,
-    installmentsQuery.data,
+    installmentsQuery,
     wantsTransactions,
     wantsObligations,
     sortAscending,
@@ -353,6 +389,7 @@ export default function HareketlerScreen() {
                   borderBottomRightRadius: isLast ? theme.radius.widget : 0,
                 }}
               >
+                <DateBlock date={item.date} />
                 {item.kind === 'obligation' ? (
                   <ObligationIcon
                     documentType={item.documentType ?? 'diger'}
@@ -361,17 +398,11 @@ export default function HareketlerScreen() {
                     fallbackName={item.title}
                     size={36}
                   />
-                ) : item.isObligationPayment ? (
-                  // Bir borç/alacak ödemesinden otomatik oluşturulan hareket — kategorisi
-                  // ne olursa olsun (belge türü kategori değildir) ödemenin yapıldığı
-                  // hesabın banka logosu gösterilir.
-                  <BankLogo bankCode={item.bankCode} size={36} />
                 ) : item.categoryIcon ? (
                   <CategoryIcon icon={item.categoryIcon} size={36} />
                 ) : (
                   <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={36} />
                 )}
-                <DateBlock date={item.date} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle">{item.title}</Text>
                   {item.kind === 'transaction' && !item.counterpartyName && item.accountName ? (
@@ -381,21 +412,32 @@ export default function HareketlerScreen() {
                       accountType={item.accountType}
                       cardLastFour={item.cardLastFour}
                     />
+                  ) : item.kind === 'obligation' && (item.paidAccountName || item.paidAccountBankCode) ? (
+                    // Bu taksit/borç bir hesaptan ödendi — ayrı bir işlem satırı yerine
+                    // ödemenin yapıldığı hesap doğrudan burada gösterilir (bkz. rows useMemo).
+                    <AccountLabelRow
+                      bankCode={item.paidAccountBankCode}
+                      accountName={item.paidAccountName}
+                      accountType={item.paidAccountType}
+                      cardLastFour={item.paidAccountCardLastFour}
+                    />
                   ) : item.subtitle ? (
                     <Text variant="caption" color="textSecondary">
                       {item.subtitle}
                     </Text>
                   ) : null}
+                </Stack>
+                <Stack gap="xxs" align="flex-end">
+                  <Text
+                    variant="body"
+                    tabular
+                    color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
+                  >
+                    {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
+                    {formatMinorAmount(item.amountMinor, item.currencyCode)}
+                  </Text>
                   {item.status ? <StatusBadge status={item.status} /> : null}
                 </Stack>
-                <Text
-                  variant="body"
-                  tabular
-                  color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
-                >
-                  {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
-                  {formatMinorAmount(item.amountMinor, item.currencyCode)}
-                </Text>
               </Row>
             </Pressable>
           );

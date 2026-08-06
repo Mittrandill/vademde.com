@@ -19,7 +19,9 @@ export type TransactionWithRelations = Transaction & {
   // gereği birer "belge türü"dür, kategori değil; ikon önceliğinde bankaya öncelik
   // verilir (bkz. RecentTransactionsList/hareketler.tsx). Supabase normalde boş bir
   // dizi döndürür ama tanımsız gelme ihtimaline karşı opsiyonel işaretlenir.
-  payments?: { id: string }[];
+  // obligation_id/installment_id, hareketler.tsx'te bu işlemi ilgili borç/taksit
+  // satırıyla eşleyip tek satırda birleştirmek için kullanılır.
+  payments?: { id: string; obligation_id: string | null; installment_id: string | null }[];
 };
 
 // Hareket detay ekranı için: transfer hedefi hesabı da içerir.
@@ -52,7 +54,7 @@ export async function listTransactions({
   let query = supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), payments(id)'
+      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), payments(id, obligation_id, installment_id)'
     )
     .eq('workspace_id', workspaceId)
     .order('occurred_at', { ascending: false })
@@ -80,7 +82,7 @@ export async function getTransactionWithRelations(id: string): Promise<Transacti
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code), payments(id)'
+      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code), payments(id, obligation_id, installment_id)'
     )
     .eq('id', id)
     .single();
