@@ -47,12 +47,7 @@ export function RecentTransactionsList({ transactions }: RecentTransactionsListP
               >
                 <Row gap="sm" align="center">
                   <DateBlock date={t.occurred_at} />
-                  {(t.payments?.length ?? 0) > 0 ? (
-                    // Bir borç/alacak ödemesinden otomatik oluşturulan hareket — kategorisi
-                    // ne olursa olsun (belge türü kategori değildir) ödemenin yapıldığı
-                    // hesabın banka logosu gösterilir.
-                    <BankLogo bankCode={t.account?.bank_code} fallbackName={t.account?.name} size={36} />
-                  ) : t.category?.icon ? (
+                  {t.category?.icon ? (
                     <CategoryIcon icon={t.category.icon} size={36} />
                   ) : t.counterparty ? (
                     <PersonAvatar name={t.counterparty.name} size={36} />
