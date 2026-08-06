@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Card, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -29,7 +29,12 @@ import { recordPayment } from '@/features/payments/api';
 import { createTransaction, createTransfer } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, toMinorUnits } from '@/utils/money';
-import { DOCUMENT_TYPE_LABEL, DOCUMENT_TYPE_ICON, BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
+import {
+  DOCUMENT_TYPE_LABEL,
+  DOCUMENT_TYPE_ICON,
+  BANK_DOCUMENT_TYPES,
+  COUNTERPARTY_LESS_DOCUMENT_TYPES,
+} from '@/features/obligations/documentTypes';
 import { matchBankByName } from '@/features/banks/banks';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
@@ -175,16 +180,16 @@ export default function DocumentReviewScreen() {
   }, [documentQuery.data, initialized]);
 
   // docs/04-ocr-belge-isleme.md §6.6 — isim benzerliğiyle kişi/firma eşleştirme;
-  // eşleşme yoksa yeni kişi/firma otomatik oluşturulur. Banka belgelerinde (kredi, kredi
-  // kartı ekstresi, çek) OCR'ın "kişi/firma" olarak okuduğu isim aslında bankadır — bu
-  // belgelerde banka kimliği zaten bank_code/logo üzerinden temsil edildiğinden burada
-  // ayrıca bir "kişi/firma" kaydı açılmaz.
+  // eşleşme yoksa yeni kişi/firma otomatik oluşturulur. Kredi ve kredi kartı ekstresinde
+  // OCR'ın "kişi/firma" olarak okuduğu isim aslında bankadır — bu ikisinde banka kimliği
+  // zaten bank_code/logo üzerinden temsil edildiğinden ayrıca bir kişi/firma kaydı açılmaz.
+  // Çek/senet'te ise isim gerçek bir karşı taraftır (lehtar/borçlu) — orada bu adım çalışır.
   useEffect(() => {
     const document = documentQuery.data;
     if (!document?.counterparty_name || !activeWorkspaceId || !counterpartiesQuery.isSuccess || counterpartyResolved) {
       return;
     }
-    if (document.document_type && BANK_DOCUMENT_TYPES.has(document.document_type)) {
+    if (document.document_type && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(document.document_type)) {
       setCounterpartyResolved(true);
       return;
     }
@@ -440,15 +445,20 @@ export default function DocumentReviewScreen() {
       }
     },
     onSuccess: (result) => {
-      if (activeWorkspaceId) {
+      // Kredi taksit önizlemesi gibi çok satırlı bir listenin hemen ardından cache
+      // invalidation + ekran değişimi tetiklemek, Fabric henüz mount/unmount
+      // transaction'ını bitirmeden view'ları söküp "componentViewDescriptorWithTag"
+      // assertion'ıyla native çökmeye yol açabiliyor (bkz. obligations/[id].tsx'teki
+      // aynı düzeltme) — hem invalidation hem navigasyon Alert'in "Tamam" butonuna
+      // ve InteractionManager.runAfterInteractions'a ertelenir, aksi halde ekran hâlâ
+      // mount'luyken arka planda liste yeniden render olup çökmeye yol açabilir.
+      function invalidateAll() {
+        if (!activeWorkspaceId) return;
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
       }
-      // Kredi taksit önizlemesi gibi çok satırlı bir listenin hemen ardından ekranı
-      // değiştirmek, Fabric henüz mount transaction'ını bitirmeden view'ları söküp
-      // "componentViewDescriptorWithTag" assertion'ıyla native çökmeye yol açabiliyor;
-      // navigasyon Alert'in "Tamam" butonuna ertelenir.
+
       if (result?.installmentPlanFailed) {
         Alert.alert(
           'Taksitler oluşturulamadı',
@@ -456,13 +466,20 @@ export default function DocumentReviewScreen() {
           [
             {
               text: 'Tamam',
-              onPress: () => InteractionManager.runAfterInteractions(() => router.replace('/(tabs)/hareketler')),
+              onPress: () =>
+                InteractionManager.runAfterInteractions(() => {
+                  invalidateAll();
+                  router.replace('/(tabs)/hareketler');
+                }),
             },
           ]
         );
       } else {
         showSuccessAlert('Belge başarıyla onaylandı ve kayıt oluşturuldu.', () => {
-          InteractionManager.runAfterInteractions(() => router.replace('/(tabs)/hareketler'));
+          InteractionManager.runAfterInteractions(() => {
+            invalidateAll();
+            router.replace('/(tabs)/hareketler');
+          });
         });
       }
     },
@@ -644,7 +661,7 @@ export default function DocumentReviewScreen() {
                   </Text>
                   <LowConfidenceHint fieldName="dueDate" />
                 </Row>
-                <TextField placeholder="YYYY-AA-GG" value={dueDate} onChangeText={setDueDate} />
+                <DateField value={dueDate} onChangeText={setDueDate} />
               </Stack>
             ) : null}
 
@@ -672,8 +689,7 @@ export default function DocumentReviewScreen() {
                       <Text variant="caption" color="textSecondary" style={{ width: 28 }}>
                         {draft.sortOrder}.
                       </Text>
-                      <TextField
-                        placeholder="YYYY-AA-GG"
+                      <DateField
                         value={draft.dueDate}
                         onChangeText={(value) =>
                           setInstallmentDrafts((prev) =>
@@ -790,7 +806,7 @@ export default function DocumentReviewScreen() {
               </Stack>
             )}
 
-            {!(documentType && BANK_DOCUMENT_TYPES.has(documentType)) ? (
+            {!(documentType && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(documentType)) ? (
               <Stack gap="sm">
                 <Row align="center">
                   <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>

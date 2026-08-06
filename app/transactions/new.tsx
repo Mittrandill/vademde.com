@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { listAccounts } from '@/features/accounts/api';
@@ -34,7 +34,12 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 
 export default function NewTransactionScreen() {
   const theme = useTheme();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, accountId, direction, description } = useLocalSearchParams<{
+    id?: string;
+    accountId?: string;
+    direction?: string;
+    description?: string;
+  }>();
   const isEditing = !!id;
 
   const existingQuery = useQuery({
@@ -57,22 +62,36 @@ export default function NewTransactionScreen() {
     );
   }
 
-  return <TransactionForm id={isEditing ? (id as string) : null} initial={existingQuery.data ?? null} />;
+  return (
+    <TransactionForm
+      id={isEditing ? (id as string) : null}
+      initial={existingQuery.data ?? null}
+      initialAccountId={typeof accountId === 'string' ? accountId : undefined}
+      initialDirection={DIRECTIONS.some((d) => d.value === direction) ? (direction as Direction) : undefined}
+      initialDescription={typeof description === 'string' ? description : undefined}
+    />
+  );
 }
 
 interface TransactionFormProps {
   id: string | null;
   initial: Transaction | null;
+  /** Hesap detayından "Ek Hesap Faizi Ekle" gibi kısayollarla gelindiğinde hesabı/yönü/açıklamayı önceden doldurur. */
+  initialAccountId?: string;
+  initialDirection?: Direction;
+  initialDescription?: string;
 }
 
-function TransactionForm({ id, initial }: TransactionFormProps) {
+function TransactionForm({ id, initial, initialAccountId, initialDirection, initialDescription }: TransactionFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const isEditing = !!id;
 
-  const [direction, setDirection] = useState<Direction>((initial?.direction as Direction) ?? 'expense');
-  const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? null);
+  const [direction, setDirection] = useState<Direction>(
+    (initial?.direction as Direction) ?? initialDirection ?? 'expense'
+  );
+  const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
   const [transferToAccountId, setTransferToAccountId] = useState<string | null>(
     initial?.transfer_to_account_id ?? null
   );
@@ -81,7 +100,7 @@ function TransactionForm({ id, initial }: TransactionFormProps) {
   const [dateStr, setDateStr] = useState(
     initial ? initial.occurred_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
-  const [description, setDescription] = useState(initial?.description ?? '');
+  const [description, setDescription] = useState(initial?.description ?? initialDescription ?? '');
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -245,7 +264,7 @@ function TransactionForm({ id, initial }: TransactionFormProps) {
               </Stack>
             )}
 
-            <TextField label="TARİH" placeholder="YYYY-AA-GG" value={dateStr} onChangeText={setDateStr} />
+            <DateField label="TARİH" value={dateStr} onChangeText={setDateStr} />
 
             <TextField
               label="AÇIKLAMA (İSTEĞE BAĞLI)"

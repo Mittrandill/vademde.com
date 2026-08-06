@@ -54,3 +54,9 @@ export const DOCUMENT_TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> 
 
 // Bu belge türleri bir banka tarafından düzenlenir; diğerlerinde (senet, fatura vb.) banka alanı yoktur.
 export const BANK_DOCUMENT_TYPES = new Set(['kredi', 'kredi_karti_ekstresi', 'cek']);
+
+// Bu belge türlerinde karşı taraf gerçekten bankadır (banka kimliği bank_code/logo üzerinden
+// temsil edilir) — kişi/firma alanı bu ikisinde anlamsızdır. Çek/senet'te ise durum farklı:
+// çekte hem düzenleyen bankası hem de ayrı bir lehtar/karşı taraf vardır (docs/04-ocr-belge-isleme.md
+// §7.1) — bu yüzden BANK_DOCUMENT_TYPES'tan (banka alanı görünürlüğü) ayrı tutulur.
+export const COUNTERPARTY_LESS_DOCUMENT_TYPES = new Set(['kredi', 'kredi_karti_ekstresi']);
