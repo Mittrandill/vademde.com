@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -315,9 +315,8 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               )}
             </Stack>
 
-            <TextField
+            <DateField
               label={!isEditing && installmentCount > 1 ? 'İLK VADE' : 'VADE'}
-              placeholder="YYYY-AA-GG"
               value={dueDate}
               onChangeText={setDueDate}
             />
