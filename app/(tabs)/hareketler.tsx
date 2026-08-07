@@ -28,7 +28,7 @@ import { DateBlock } from '@/components/finance/DateBlock';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount } from '@/utils/money';
+import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 
 type FilterKey = 'all' | 'income' | 'expense' | 'payable' | 'receivable' | 'transfer';
 
@@ -50,6 +50,9 @@ interface HareketRow {
   date: string;
   amountMinor: number;
   currencyCode: string;
+  // Yalnızca kind === 'obligation' satırlarında anlamlıdır (bkz. Amount/formatValueUnitAmount
+  // — currencyCode kıymetli maden kodu ise ISO 4217 formatlayıcısı RangeError fırlatır).
+  valueUnitType?: string;
   direction: string;
   status?: string;
   documentType?: string;
@@ -222,6 +225,7 @@ export default function HareketlerScreen() {
               date: o.due_date ?? o.created_at,
               amountMinor: o.total_amount_minor,
               currencyCode: o.currency_code,
+              valueUnitType: o.value_unit_type,
               direction: o.direction,
               status: o.status,
               documentType: o.document_type,
@@ -252,6 +256,7 @@ export default function HareketlerScreen() {
         date: o.due_date ?? o.created_at,
         amountMinor: o.total_amount_minor,
         currencyCode: o.currency_code,
+        valueUnitType: o.value_unit_type,
         direction: o.direction,
         status: o.status,
         documentType: o.document_type,
@@ -434,7 +439,9 @@ export default function HareketlerScreen() {
                     color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
                   >
                     {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
-                    {formatMinorAmount(item.amountMinor, item.currencyCode)}
+                    {item.valueUnitType === 'kiymetli_maden'
+                      ? formatValueUnitAmount(item.amountMinor, item.currencyCode)
+                      : formatMinorAmount(item.amountMinor, item.currencyCode)}
                   </Text>
                   {item.status ? <StatusBadge status={item.status} /> : null}
                 </Stack>

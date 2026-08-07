@@ -6,7 +6,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
@@ -68,6 +68,18 @@ export default function TaraScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  // Hesap detayından "X Ekstresi Ekle → Kameradan Tara" ile gelindiğinde taşınır (bkz.
+  // app/accounts/[id].tsx); OCR sonucuna (review ekranına) aktarılır ki kullanıcı hangi
+  // hesaba/türe taradığını tekrar seçmek zorunda kalmasın (bkz. B2/B3 notları).
+  const { accountId: incomingAccountId, documentType: incomingDocumentType } = useLocalSearchParams<{
+    accountId?: string;
+    documentType?: string;
+  }>();
+  // Tara bir sekme ekranı; kamera ve tarama katmanları tam ekran olsa da yüzen TabBar
+  // onların üzerinde çizilir. Bu katmanlardaki kontroller çubuğun kapladığı yüksekliği
+  // atlamalı — SafeAreaView zaten insets.bottom'ı eklediği için burada yalnızca
+  // çubuğun kendi yüksekliği + alt boşluğu kadar pay gerekir (bkz. theme/spacing.ts).
+  const tabBarOverlap = theme.layout.tabBarHeight + theme.layout.tabBarBottomGap;
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('back');
@@ -136,11 +148,18 @@ export default function TaraScreen() {
   useFocusEffect(
     useCallback(() => {
       if (documentQuery.data?.status === 'ready_for_review' && documentId) {
-        router.push(`/documents/${documentId}/review`);
+        router.push({
+          pathname: '/documents/[id]/review',
+          params: {
+            id: documentId,
+            ...(incomingAccountId ? { accountId: incomingAccountId } : {}),
+            ...(incomingDocumentType ? { documentType: incomingDocumentType } : {}),
+          },
+        });
         reset();
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [documentQuery.data?.status, documentId])
+    }, [documentQuery.data?.status, documentId, incomingAccountId, incomingDocumentType])
   );
 
   function reset() {
@@ -285,11 +304,23 @@ export default function TaraScreen() {
   if (pendingAsset) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack gap="xl" style={{ flex: 1, padding: theme.screenEdge.standard, justifyContent: 'center' }}>
+        {/* Önizleme görseli + uzun izin metni + iki buton küçük ekranlara (ve büyük
+            yazı tipi ayarlarına) sığmıyor, alttaki "Vazgeç" ekran dışında kalıyordu.
+            flexGrow ile birlikte ScrollView: yer varsa içerik dikeyde ortalanır, yoksa
+            kaydırılır — buton her koşulda erişilebilir kalır. */}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: 'center',
+            padding: theme.screenEdge.standard,
+            gap: theme.spacing.lg,
+          }}
+        >
           {pendingAsset.mimeType !== 'application/pdf' ? (
             <Image
               source={{ uri: pendingAsset.uri }}
-              style={{ width: '100%', height: 180, borderRadius: theme.radius.widget }}
+              style={{ width: '100%', height: 160, borderRadius: theme.radius.widget }}
               resizeMode="cover"
             />
           ) : null}
@@ -299,9 +330,11 @@ export default function TaraScreen() {
               {OCR_CONSENT_TEXT}
             </Text>
           </Stack>
-          <Button label="Kabul Et ve Akıllı Tara" onPress={handleConsentAccept} />
-          <Button label="Vazgeç" variant="secondary" onPress={handleConsentDecline} />
-        </Stack>
+          <Stack gap="sm">
+            <Button label="Kabul Et ve Akıllı Tara" onPress={handleConsentAccept} />
+            <Button label="Vazgeç" variant="secondary" onPress={handleConsentDecline} />
+          </Stack>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -315,23 +348,25 @@ export default function TaraScreen() {
           <Image source={{ uri: localUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         )}
         <SafeAreaView style={{ flex: 1 }}>
-          <Pressable
-            onPress={reset}
-            hitSlop={12}
-            style={[
-              styles.iconButton,
-              {
-                position: 'absolute',
-                top: theme.spacing.sm,
-                right: theme.screenEdge.standard,
-                zIndex: 1,
-              },
-            ]}
+          {/* Kapatma düğmesi eskiden position:absolute ile katmanın tepesine
+              iliştirilmişti; kamera modundaki üst kontrol satırıyla aynı hizaya
+              gelmiyor, olduğundan yukarıda duruyordu. Artık iki ekran da aynı
+              akış içindeki üst satırı kullanıyor. */}
+          <Row
+            style={{
+              justifyContent: 'flex-end',
+              paddingHorizontal: theme.screenEdge.standard,
+              paddingTop: theme.spacing.sm,
+            }}
           >
-            <Ionicons name="close" size={22} color="#fff" />
-          </Pressable>
+            <Pressable onPress={reset} hitSlop={12} style={styles.iconButton}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </Pressable>
+          </Row>
 
-          <Stack style={{ flex: 1, justifyContent: 'center' }}>
+          {/* Yüzen TabBar bu tam ekran katmanın üstünde durduğu için içerik onun
+              üstünde kalacak kadar yukarı alınır. */}
+          <Stack style={{ flex: 1, justifyContent: 'center', paddingBottom: tabBarOverlap }}>
             <Stack align="center">
               <View style={styles.scanFrame}>
                 {status !== 'failed' ? (
@@ -530,7 +565,17 @@ export default function TaraScreen() {
   if (!permission.granted) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <Stack gap="xl" style={{ flex: 1, justifyContent: 'center', padding: theme.screenEdge.standard }}>
+        {/* İzin ekranı da izin metni ekranıyla aynı desende kaydırılabilir: büyük yazı
+            tipi ayarlarında buton çifti ekran dışına taşmasın. */}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: 'center',
+            padding: theme.screenEdge.standard,
+            gap: theme.spacing.xl,
+          }}
+        >
           <Stack gap="lg" align="center">
             <Ionicons name="camera-outline" size={40} color={theme.colors.textSecondary} />
             <Text variant="cardTitle" style={{ textAlign: 'center' }}>
@@ -544,7 +589,7 @@ export default function TaraScreen() {
             <Button label="İzin Ver" onPress={requestPermission} />
             <Button label="Vazgeç" variant="secondary" onPress={() => setMode('select')} />
           </Stack>
-        </Stack>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -594,7 +639,10 @@ export default function TaraScreen() {
               justifyContent: 'space-between',
               alignItems: 'center',
               paddingHorizontal: theme.screenEdge.standard + theme.spacing.md,
-              paddingBottom: theme.spacing.xl,
+              // Deklanşörün alt yarısı yüzen TabBar'ın arkasında kalıyordu: satır
+              // yalnızca insets.bottom + 24'te duruyor, TabBar ise insets.bottom + 68'e
+              // kadar yükseliyor. Kontroller çubuğun tamamen üstüne alınır.
+              paddingBottom: tabBarOverlap + theme.spacing.lg,
             }}
           >
             <Pressable onPress={handlePickLibrary} style={styles.iconButton}>

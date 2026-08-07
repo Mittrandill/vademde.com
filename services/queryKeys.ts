@@ -53,6 +53,7 @@ export const queryKeys = {
   reportOverdueObligations: (workspaceId: string) => [workspaceId, 'reports', 'overdue'] as const,
   reportCashFlow: (workspaceId: string) => [workspaceId, 'reports', 'cash-flow'] as const,
   reportMonthlyComparison: (workspaceId: string) => [workspaceId, 'reports', 'monthly-comparison'] as const,
+  valueUnitRates: () => ['value-unit-rates'] as const,
   profile: () => ['profile'] as const,
   subscription: () => ['subscription'] as const,
   planLimits: () => ['plan-limits'] as const,

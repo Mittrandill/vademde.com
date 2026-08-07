@@ -124,6 +124,19 @@ export async function createTransaction(
   return data;
 }
 
+// Kredi kartı ekstresini kategorilere ayırırken her harcama satırı için ayrı bir
+// createTransaction çağrısı yapılıyordu (bkz. app/documents/[id]/review.tsx); 80 işlemlik
+// bir ekstrede bu 80 ardışık ağ gidiş-dönüşü demek ve onay ekranı dakikalarca yanıt
+// vermiyordu. Toplu insert tek çağrıda yazar; satır tetikleyicileri yine satır başına çalışır.
+export async function createTransactions(
+  rows: TablesInsert<'transactions'>[]
+): Promise<Transaction[]> {
+  if (rows.length === 0) return [];
+  const { data, error } = await supabase.from('transactions').insert(rows).select('*');
+  if (error) throw error;
+  return data;
+}
+
 export async function updateTransaction(
   id: string,
   input: TablesUpdate<'transactions'>

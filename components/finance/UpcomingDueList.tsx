@@ -6,6 +6,7 @@ import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
 import type { ObligationDueItem } from '@/features/obligations/api';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 
 export interface UpcomingDueListProps {
   obligations: ObligationDueItem[];
@@ -82,7 +83,14 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
                       <StatusBadge status={o.status} />
                     </Row>
                   </Stack>
-                  <Amount amountMinor={o.remaining_amount_minor} currencyCode={o.currency_code} direction={o.direction as 'payable' | 'receivable'} overdue={o.status === 'gecikti'} variant="body" />
+                  <Amount
+                    amountMinor={o.remaining_amount_minor}
+                    currencyCode={o.currency_code}
+                    valueUnitType={o.value_unit_type as ValueUnitType}
+                    direction={o.direction as 'payable' | 'receivable'}
+                    overdue={o.status === 'gecikti'}
+                    variant="body"
+                  />
                 </Row>
               </Card>
             </Pressable>

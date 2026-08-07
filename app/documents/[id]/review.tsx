@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { withAlpha } from '@/theme/colors';
 import { Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
@@ -18,6 +19,7 @@ import {
   getDocument,
   getDocumentFields,
   getDocumentLineItems,
+  getDocumentWarnings,
   getSignedUrl,
   markDocumentConfirmed,
 } from '@/features/documents/api';
@@ -25,10 +27,10 @@ import { listAccounts } from '@/features/accounts/api';
 import { listCategories, createCategory } from '@/features/categories/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
 import { createObligation, createInstallmentPlan, type Installment } from '@/features/obligations/api';
-import { recordPayment } from '@/features/payments/api';
-import { createTransaction, createTransfer } from '@/features/transactions/api';
+import { recordPastInstallmentPayments } from '@/features/payments/api';
+import { createTransaction, createTransactions } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount, toMinorUnits } from '@/utils/money';
+import { formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import {
   DOCUMENT_TYPE_LABEL,
   DOCUMENT_TYPE_ICON,
@@ -51,8 +53,26 @@ const DIRECTIONS: { key: Direction; label: string }[] = [
 
 const LOW_CONFIDENCE_THRESHOLD = 0.7;
 
+// OCR'dan gelen tarihler her zaman geçerli ISO olmayabiliyor (model 'YYYY-AA-GG' yerine
+// serbest metin döndürebilir, kullanıcı da alanı elle düzenleyebilir). new Date(bozuk)
+// → Invalid Date → .toISOString() RangeError fırlatır ve onay akışının tamamını düşürürdü;
+// burada geçersiz değer sessizce null'a çevrilir, çağıran tarafta bugüne düşülür.
+function isoOrNull(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 export default function DocumentReviewScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // accountId/documentType: hesap detayından "Ekstresi Ekle → Kameradan Tara" ile
+  // gelindiğinde tara.tsx üzerinden taşınır (bkz. B2 notu). Kullanıcının açık niyeti
+  // olduğu için aşağıdaki OCR tabanlı otomatik eşleştirmelerden (cardLastFourFromOcr)
+  // önceliklidir.
+  const { id, accountId: paramAccountId, documentType: paramDocumentType } = useLocalSearchParams<{
+    id: string;
+    accountId?: string;
+    documentType?: string;
+  }>();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -61,7 +81,7 @@ export default function DocumentReviewScreen() {
   const [initialized, setInitialized] = useState(false);
   const [counterpartyResolved, setCounterpartyResolved] = useState(false);
   const [direction, setDirection] = useState<Direction>('payable');
-  const [documentType, setDocumentType] = useState<string | null>(null);
+  const [documentType, setDocumentType] = useState<string | null>(paramDocumentType ?? null);
   const [bankCode, setBankCode] = useState<string | null>(null);
   const [extractedBankName, setExtractedBankName] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -69,7 +89,7 @@ export default function DocumentReviewScreen() {
   const [dueDate, setDueDate] = useState('');
   const [documentNumber, setDocumentNumber] = useState('');
   const [counterpartyId, setCounterpartyId] = useState<string | null>(null);
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(paramAccountId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [categoryAutoSet, setCategoryAutoSet] = useState(false);
   // Kredi belgelerine özel: OCR'ın çıkardığı faiz oranı ve toplam geri ödeme (bilgi amaçlı,
@@ -80,7 +100,10 @@ export default function DocumentReviewScreen() {
   // arasında otomatik eşleştirme (docs/04-ocr-belge-isleme.md §7.4). Eşleşme bulunamazsa
   // kullanıcı AccountPicker'dan elle seçer — form akışı bozulmaz.
   const [cardLastFourFromOcr, setCardLastFourFromOcr] = useState<string | null>(null);
-  const [cardAccountMatchAttempted, setCardAccountMatchAttempted] = useState(false);
+  // paramAccountId zaten accountId'yi doldurduysa aşağıdaki eşleştirme useEffect'i onu
+  // hiç çalıştırmıyor (kontrolü !accountId); burada true başlatmak yalnızca niyeti
+  // açık kılar, davranışı değiştirmez.
+  const [cardAccountMatchAttempted, setCardAccountMatchAttempted] = useState(!!paramAccountId);
   // "Sadece toplam borç" ile "harcamaları kategorilere ayır" arasındaki seçim — ikincisinde
   // her ekstre satırı için ayrı bir gider işlemi ve kategori seçimi gerekir.
   const [categorizeCardSpending, setCategorizeCardSpending] = useState(false);
@@ -107,6 +130,12 @@ export default function DocumentReviewScreen() {
   const lineItemsQuery = useQuery({
     queryKey: ['document', id, 'line-items'],
     queryFn: () => getDocumentLineItems(id as string),
+    enabled: !!id,
+  });
+
+  const warningsQuery = useQuery({
+    queryKey: ['document', id, 'warnings'],
+    queryFn: () => getDocumentWarnings(id as string),
     enabled: !!id,
   });
   const installmentItems = (lineItemsQuery.data ?? []).filter((item) => item.kind === 'installment');
@@ -137,7 +166,10 @@ export default function DocumentReviewScreen() {
     if (!document || initialized) return;
 
     setDirection((document.direction as Direction) ?? 'payable');
-    setDocumentType(document.document_type);
+    // Kullanıcı "Ekstresi Ekle" ile geldiyse niyeti bellidir — OCR belgeyi yanlış
+    // sınıflandırsa bile (ör. "banka_dekontu" tahmin etse) paramDocumentType kazanır.
+    // Kullanıcı yine de DocumentTypePicker'dan değiştirebilir.
+    setDocumentType(paramDocumentType ?? document.document_type);
     setAmount(document.total_amount_minor ? (document.total_amount_minor / 100).toFixed(2).replace('.', ',') : '');
     setDueDate(document.due_date ?? document.issue_date ?? '');
     setDocumentNumber(document.document_number ?? '');
@@ -283,7 +315,10 @@ export default function DocumentReviewScreen() {
   const confirmMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId) throw new Error('Çalışma alanı bulunamadı');
-      const amountMinor = toMinorUnits(Number(amount.replace(',', '.')));
+      const amountMinor = parseAmountToMinor(amount);
+      // Eskiden çözümlenemeyen tutar sessizce NaN olup kayda yazılıyordu; artık kullanıcıya
+      // dönülür (docs/01-finansal-kayit-modeli.md §8.1 — tutarsız veri asla yazılmaz).
+      if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
 
       if (direction === 'payable' || direction === 'receivable') {
         if (!documentType) throw new Error('Belge türü seçin');
@@ -296,9 +331,8 @@ export default function DocumentReviewScreen() {
         const mergedInstallments = hasInstallmentPlan
           ? installmentItems.map((item, index) => {
               const draft = draftById.get(item.id);
-              const installmentAmountMinor = draft
-                ? toMinorUnits(Number(draft.amount.replace(',', '.')) || 0)
-                : item.amount_minor;
+              const installmentAmountMinor =
+                (draft ? parseAmountToMinor(draft.amount) : null) ?? item.amount_minor;
               const installmentDueDate =
                 draft?.dueDate.trim() || item.occurred_at || dueDate || new Date().toISOString().slice(0, 10);
               return {
@@ -365,35 +399,32 @@ export default function DocumentReviewScreen() {
         }
 
         // Vadesi geçmiş taksitler switch ile "ödendi" işaretlenmişse, hiçbir hesaba
-        // bağlanmadan (account_id: null → recordPayment transaction oluşturmaz, bkz.
-        // features/payments/api.ts) geçmiş tarihiyle ödenmiş kaydedilir — mevcut hesap
-        // bakiyelerini etkilemez, sadece taksit/borç durumu "ödendi" olur.
+        // bağlanmadan (bkz. recordPastInstallmentPayments — account_id null olduğu için
+        // transaction oluşmaz) geçmiş tarihiyle ödenmiş kaydedilir: mevcut hesap
+        // bakiyelerini etkilemez, sadece taksit/borç durumu "ödendi" olur. Tamamı tek
+        // insert'te yazılır; taksit başına ayrı çağrı ekranı uzun süre kilitliyordu.
         if (!installmentPlanFailed && createdInstallments.length > 0) {
           const paidInstallmentNumbers = new Set(
             mergedInstallments.filter((item) => item.paid).map((item) => item.installmentNumber)
           );
-          for (const installment of createdInstallments) {
-            if (!paidInstallmentNumbers.has(installment.installment_number)) continue;
-            try {
-              await recordPayment({
-                workspace_id: activeWorkspaceId,
-                obligation_id: obligation.id,
-                installment_id: installment.id,
-                account_id: null,
-                amount_minor: installment.amount_minor,
-                paid_at: new Date(installment.due_date).toISOString(),
-                notes: 'Otomatik: vadesi geçmiş taksit',
-                obligationDirection: direction as 'payable' | 'receivable',
-                obligationTitle: title.trim() || 'Belge',
-                obligationCategoryId: categoryId,
-                obligationCounterpartyId: counterpartyId,
-                obligationCurrencyCode: documentQuery.data?.currency_code ?? 'TRY',
-              });
-            } catch {
-              // Bir taksidin geçmiş ödeme kaydı başarısız olsa bile borç/taksit planı
-              // oluşturulmuş kalır; kullanıcı taksidi obligation detayından manuel
-              // "ödendi" işaretleyebilir.
-            }
+          const paidRows = createdInstallments
+            .filter((installment) => paidInstallmentNumbers.has(installment.installment_number))
+            .map((installment) => ({
+              workspace_id: activeWorkspaceId,
+              obligation_id: obligation.id,
+              installment_id: installment.id,
+              amount_minor: installment.amount_minor,
+              // due_date DB'den 'YYYY-MM-DD' olarak gelir; yine de bozuk bir değerde
+              // new Date(...).toISOString() RangeError fırlatıp tüm onayı düşürmesin diye
+              // geçerlilik kontrol edilir.
+              paid_at: isoOrNull(installment.due_date) ?? new Date().toISOString(),
+              notes: 'Otomatik: vadesi geçmiş taksit',
+            }));
+          try {
+            await recordPastInstallmentPayments(paidRows);
+          } catch {
+            // Geçmiş ödeme kayıtları başarısız olsa bile borç/taksit planı oluşturulmuş
+            // kalır; kullanıcı taksitleri obligation detayından manuel "ödendi" işaretleyebilir.
           }
         }
 
@@ -402,28 +433,30 @@ export default function DocumentReviewScreen() {
         // olarak oluşturuldu; "kategorilere ayır" seçiliyse her ekstre satırı ayrıca gider
         // işlemi olarak kaydedilir (kategori kırılımı raporları bu şekilde beslenir).
         // İkisi bilinçli olarak birbirinden bağımsızdır — bkz. plan kararı #3.
+        let cardTransactionsFailed = false;
         if (documentType === 'kredi_karti_ekstresi' && categorizeCardSpending && accountId) {
-          for (const item of cardTransactionItems) {
-            try {
-              await createTransaction({
+          try {
+            await createTransactions(
+              cardTransactionItems.map((item) => ({
                 workspace_id: activeWorkspaceId,
                 account_id: accountId,
-                direction: 'expense',
+                direction: 'expense' as const,
                 category_id: cardTransactionCategoryById[item.id] ?? null,
                 amount_minor: item.amount_minor,
-                occurred_at: item.occurred_at ? new Date(item.occurred_at).toISOString() : new Date().toISOString(),
+                occurred_at: isoOrNull(item.occurred_at) ?? new Date().toISOString(),
                 description: item.description,
-              });
-            } catch {
-              // Bir satır başarısız olsa bile diğerleri ve ana obligation kaydı kalır;
-              // kullanıcı Hareketler'den eksik kalanı manuel ekleyebilir.
-            }
+              }))
+            );
+          } catch {
+            // Ana obligation kaydı yine de kalır; kullanıcı Hareketler'den harcamaları
+            // manuel ekleyebilir. Sessizce yutulmaz, aşağıda kullanıcıya bildirilir.
+            cardTransactionsFailed = true;
           }
         }
 
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
         await syncObligationReminder(activeWorkspaceId, obligation);
-        return { installmentPlanFailed };
+        return { installmentPlanFailed, cardTransactionsFailed };
       }
 
       if (!accountId) throw new Error('Hesap seçin');
@@ -436,7 +469,7 @@ export default function DocumentReviewScreen() {
               category_id: categoryId,
               counterparty_id: counterpartyId,
               amount_minor: amountMinor,
-              occurred_at: dueDate ? new Date(dueDate).toISOString() : new Date().toISOString(),
+              occurred_at: isoOrNull(dueDate) ?? new Date().toISOString(),
               description: title.trim() || null,
             })
           : null;
@@ -459,10 +492,18 @@ export default function DocumentReviewScreen() {
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
       }
 
-      if (result?.installmentPlanFailed) {
+      // Kısmi başarılar sessizce geçilmez: ana kayıt oluştu ama yan kayıtlar
+      // (taksit planı / ekstre harcamaları) yazılamadıysa kullanıcı bunu bilmeli.
+      const partialFailureMessage = result?.installmentPlanFailed
+        ? 'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.'
+        : result?.cardTransactionsFailed
+          ? 'Kart borcu kaydedildi ancak ekstre harcamaları işlem olarak eklenemedi. Hareketler ekranından manuel ekleyebilirsiniz.'
+          : null;
+
+      if (partialFailureMessage) {
         Alert.alert(
-          'Taksitler oluşturulamadı',
-          'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.',
+          result?.installmentPlanFailed ? 'Taksitler oluşturulamadı' : 'Harcamalar eklenemedi',
+          partialFailureMessage,
           [
             {
               text: 'Tamam',
@@ -540,17 +581,24 @@ export default function DocumentReviewScreen() {
     (documentType !== 'kredi_karti_ekstresi' || !categorizeCardSpending || !!accountId);
 
   const isLoanDocument = documentType === 'kredi';
-  const principalMinor = amount ? toMinorUnits(Number(amount.replace(',', '.')) || 0) : 0;
+  const principalMinor = parseAmountToMinor(amount) ?? 0;
   const totalRepaymentMinor =
     installmentDrafts.length > 0
-      ? installmentDrafts.reduce((sum, item) => sum + toMinorUnits(Number(item.amount.replace(',', '.')) || 0), 0)
+      ? installmentDrafts.reduce((sum, item) => sum + (parseAmountToMinor(item.amount) ?? 0), 0)
       : ocrTotalRepaymentMinor;
   const totalInterestMinor = totalRepaymentMinor !== null ? totalRepaymentMinor - principalMinor : null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            padding: theme.screenEdge.standard,
+            // Formun sonundaki üç buton ekranın alt kenarına yapışmasın.
+            paddingBottom: theme.spacing.xxl,
+          }}
+        >
           <Stack gap="lg">
             <Row align="center">
               <Pressable onPress={() => router.back()} hitSlop={12}>
@@ -589,6 +637,26 @@ export default function DocumentReviewScreen() {
               <Text variant="caption" color="textSecondary">
                 Genel güven: %{Math.round((document.overall_confidence ?? 0) * 100)}
               </Text>
+            ) : null}
+
+            {/* docs/04-ocr-belge-isleme.md — okuması şüpheli alanlar kullanıcı onaylamadan
+                önce açıkça gösterilir (ör. tutar mutabakatı tutmadığında belgede ne yazdığı). */}
+            {(warningsQuery.data ?? []).length > 0 ? (
+              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.danger, 0.4) }}>
+                <Stack gap="xs">
+                  <Row gap="xs" align="center">
+                    <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
+                    <Text variant="cardTitle" style={{ color: theme.colors.danger }}>
+                      Kontrol edilmesi gerekenler
+                    </Text>
+                  </Row>
+                  {(warningsQuery.data ?? []).map((warning) => (
+                    <Text key={warning} variant="caption" color="textSecondary">
+                      • {warning}
+                    </Text>
+                  ))}
+                </Stack>
+              </Card>
             ) : null}
 
             <Stack gap="xs">

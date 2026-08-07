@@ -25,7 +25,14 @@ const RESPONSE_SCHEMA = {
     direction: { type: 'STRING', enum: ['payable', 'receivable', 'income', 'expense', 'transfer'] },
     directionConfidence: { type: 'NUMBER' },
     currency: { type: 'STRING' },
-    totalAmountMinor: { type: 'INTEGER' },
+    // Tutarlar modelden ana birimde (TL) ondalık sayı olarak istenir, kuruşa çevirme işi
+    // koda aittir — bkz. toMinor(). Modele "×100 yap" dedirtmek, Türkçe binlik ayıracıyla
+    // birleşince 2.000,00 TL'yi 20.000 TL olarak yazdıran bir hata sınıfı üretiyordu.
+    totalAmount: { type: 'NUMBER' },
+    // Belgede yazdığı haliyle, ayıraçlarıyla birlikte ham metin ("2.000,00 TL"). Kod bunu
+    // kendi ayrıştırıcısıyla çözüp modelin verdiği sayıyla karşılaştırır; ikisi tutmazsa
+    // ham metinden çözülen değer esas alınır ve kullanıcıya uyarı düşülür.
+    totalAmountRaw: { type: 'STRING', nullable: true },
     issueDate: { type: 'STRING', nullable: true },
     dueDate: { type: 'STRING', nullable: true },
     counterpartyName: { type: 'STRING', nullable: true },
@@ -55,7 +62,7 @@ const RESPONSE_SCHEMA = {
       properties: {
         bankName: { type: 'STRING', nullable: true },
         loanType: { type: 'STRING', nullable: true },
-        totalRepaymentMinor: { type: 'INTEGER', nullable: true },
+        totalRepayment: { type: 'NUMBER', nullable: true },
         installmentCount: { type: 'INTEGER', nullable: true },
         interestRatePercent: { type: 'NUMBER', nullable: true },
         installments: {
@@ -65,13 +72,13 @@ const RESPONSE_SCHEMA = {
             properties: {
               installmentNumber: { type: 'INTEGER' },
               dueDate: { type: 'STRING' },
-              principalMinor: { type: 'INTEGER', nullable: true },
-              interestMinor: { type: 'INTEGER', nullable: true },
-              taxMinor: { type: 'INTEGER', nullable: true },
-              installmentAmountMinor: { type: 'INTEGER' },
-              remainingPrincipalMinor: { type: 'INTEGER', nullable: true },
+              principal: { type: 'NUMBER', nullable: true },
+              interest: { type: 'NUMBER', nullable: true },
+              tax: { type: 'NUMBER', nullable: true },
+              installmentAmount: { type: 'NUMBER' },
+              remainingPrincipal: { type: 'NUMBER', nullable: true },
             },
-            required: ['installmentNumber', 'dueDate', 'installmentAmountMinor'],
+            required: ['installmentNumber', 'dueDate', 'installmentAmount'],
           },
         },
       },
@@ -84,9 +91,9 @@ const RESPONSE_SCHEMA = {
         bankName: { type: 'STRING', nullable: true },
         cardLastFourDigits: { type: 'STRING', nullable: true },
         statementDate: { type: 'STRING', nullable: true },
-        minimumPaymentMinor: { type: 'INTEGER', nullable: true },
-        previousDebtMinor: { type: 'INTEGER', nullable: true },
-        totalSpendingMinor: { type: 'INTEGER', nullable: true },
+        minimumPayment: { type: 'NUMBER', nullable: true },
+        previousDebt: { type: 'NUMBER', nullable: true },
+        totalSpending: { type: 'NUMBER', nullable: true },
         transactions: {
           type: 'ARRAY',
           items: {
@@ -94,9 +101,9 @@ const RESPONSE_SCHEMA = {
             properties: {
               date: { type: 'STRING' },
               description: { type: 'STRING' },
-              amountMinor: { type: 'INTEGER' },
+              amount: { type: 'NUMBER' },
             },
-            required: ['date', 'description', 'amountMinor'],
+            required: ['date', 'description', 'amount'],
           },
         },
       },
@@ -110,11 +117,11 @@ const RESPONSE_SCHEMA = {
         properties: {
           description: { type: 'STRING' },
           quantity: { type: 'NUMBER', nullable: true },
-          unitPriceMinor: { type: 'INTEGER', nullable: true },
+          unitPrice: { type: 'NUMBER', nullable: true },
           taxRatePercent: { type: 'NUMBER', nullable: true },
-          lineTotalMinor: { type: 'INTEGER' },
+          lineTotal: { type: 'NUMBER' },
         },
-        required: ['description', 'lineTotalMinor'],
+        required: ['description', 'lineTotal'],
       },
     },
     // docs §7.5 — fatura özel alanları.
@@ -128,15 +135,15 @@ const RESPONSE_SCHEMA = {
         sellerTaxNumber: { type: 'STRING', nullable: true },
         buyerName: { type: 'STRING', nullable: true },
         buyerTaxNumber: { type: 'STRING', nullable: true },
-        subtotalMinor: { type: 'INTEGER', nullable: true },
-        vatTotalMinor: { type: 'INTEGER', nullable: true },
-        discountMinor: { type: 'INTEGER', nullable: true },
-        grandTotalMinor: { type: 'INTEGER', nullable: true },
+        subtotal: { type: 'NUMBER', nullable: true },
+        vatTotal: { type: 'NUMBER', nullable: true },
+        discount: { type: 'NUMBER', nullable: true },
+        grandTotal: { type: 'NUMBER', nullable: true },
       },
     },
   },
   required: [
-    'documentType', 'documentTypeConfidence', 'direction', 'totalAmountMinor',
+    'documentType', 'documentTypeConfidence', 'direction', 'totalAmount',
     'fields', 'warnings', 'missingRequiredFields',
   ],
 };
@@ -145,7 +152,11 @@ const PROMPT = `Bu görsel bir finansal belgedir (çek, senet, fatura, makbuz, d
 Görevin belgeyi sınıflandırıp aşağıdaki şemaya uygun yapılandırılmış JSON döndürmek.
 
 Genel kurallar:
-- Her *Minor alanı daima tam sayı olmalı ve belgenin para biriminin en küçük birimidir (TRY için kuruş). Örn. 185.000,00 TL -> 18500000.
+- TUTARLAR EN KRİTİK ALANDIR. Tüm tutar alanlarını belgenin ANA para biriminde (TL, kuruş değil) ondalık sayı olarak döndür. Kuruşa çevirme, 100 ile çarpma gibi bir işlem YAPMA; bunu sistem kendisi yapar.
+- Türkçe finansal belgelerde binlik ayıracı nokta, ondalık ayıracı virgüldür. "2.000,00 TL" iki bin TL demektir -> 2000.00 döndür (20000 veya 200000 DEĞİL). "185.000,00 TL" -> 185000.00. "1.234,56" -> 1234.56.
+- JSON çıktısında sayıları daima nokta ondalık ayıracıyla ve binlik ayıracı olmadan yaz.
+- totalAmountRaw alanına, toplam tutarı belgede yazdığı haliyle, hiçbir şey değiştirmeden karakteri karakterine kopyala (ör. "2.000,00 TL"). Sistem bu ham metni kendi ayrıştırıcısıyla çözüp senin verdiğin sayıyla karşılaştırır; bu yüzden ham metnin birebir doğru olması, tahmin edilmemesi gerekir. Belgede net bir toplam yoksa null bırak.
+- Bir tutarı okuyamıyor veya emin olamıyorsan uydurma; ilgili alanı null bırak ve missingRequiredFields'a ekle.
 - Çek veya senet belgesinde rakamla ve yazıyla tutar birbirini tutmuyorsa warnings dizisine "Rakamla ve yazıyla tutar uyuşmuyor" ekle.
 - Tarihleri ISO 8601 (YYYY-MM-DD) formatında döndür; belge üzerinde yoksa null bırak.
 - direction alanı için: ödeyecek taraf belirtilmişse veya belge bir borç niteliğindeyse "payable"; tahsil edilecekse "receivable"; belge zaten gerçekleşmiş bir gider ise "expense", gerçekleşmiş bir gelir ise "income"; hesaplar arası transfer ise "transfer".
@@ -153,8 +164,8 @@ Genel kurallar:
 - Emin olmadığın veya belgede bulunmayan alanlar için confidence düşük olsun ve missingRequiredFields dizisine ekle.
 
 Belge türüne özel kurallar:
-- documentType "kredi" ise installmentPlan alanını doldur: her taksit satırı için vade, anapara, faiz, vergi, taksit tutarı ve kalan anapara. installmentPlan.totalRepaymentMinor toplam geri ödemedir, totalAmountMinor kredi anaparasıdır.
-- documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmountMinor'a, asgari ödeme minimumPaymentMinor'a yazılır; işlem satırlarını transactions dizisine ekle.
+- documentType "kredi" ise installmentPlan alanını doldur: her taksit satırı için vade, anapara, faiz, vergi, taksit tutarı ve kalan anapara. installmentPlan.totalRepayment toplam geri ödemedir, totalAmount kredi anaparasıdır.
+- documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz.
 - documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur.
 - documentType "makbuz_fis" ise lineItems alanını doldur (varsa).
 - Diğer türlerde installmentPlan, cardStatement, lineItems, invoiceDetails alanlarını null/boş bırak.
@@ -162,6 +173,45 @@ Belge türüne özel kurallar:
 
 interface ProcessRequest {
   documentId: string;
+}
+
+// Modelden gelen ana birim (TL) ondalık tutarı kuruşa çevirir. Bu dönüşüm bilinçli olarak
+// modelde değil burada yapılır — bkz. PROMPT ve RESPONSE_SCHEMA notları.
+function toMinor(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return Math.round(value * 100);
+}
+
+// Belgede yazdığı haliyle kopyalanan ham tutar metnini kuruşa çevirir. Türkçe yazımda
+// binlik ayıracı "." ondalık ayıracı ","dır ("2.000,00"); İngilizce belgelerde tersi
+// olabilir, bu yüzden sonda gelen ayıraç ondalık kabul edilir. Mantık utils/money.ts
+// içindeki parseAmount ile aynıdır; Edge Function ayrı bir Deno bundle'ı olduğundan
+// paylaşılmak yerine burada tekrarlanır.
+function parseAmountTextToMinor(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.replace(/[^\d.,-]/g, '').trim();
+  if (!cleaned || !/\d/.test(cleaned)) return null;
+
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+  let normalized: string;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimalSeparator = lastComma > lastDot ? ',' : '.';
+    const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+    normalized = cleaned.split(thousandsSeparator).join('').replace(decimalSeparator, '.');
+  } else if (lastComma >= 0) {
+    normalized = cleaned.replace(',', '.');
+  } else if (lastDot >= 0) {
+    // Yalnızca nokta belirsiz: son noktadan sonra tam 3 hane varsa binlik ayıracıdır
+    // ("2.000" -> 2000), aksi halde ondalıktır ("12.50" -> 12.5).
+    normalized = cleaned.length - lastDot - 1 === 3 ? cleaned.split('.').join('') : cleaned;
+  } else {
+    normalized = cleaned;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
 }
 
 // Büyük dosyalarda String.fromCharCode(...bytes) çağrı yığınını taşırdığı için
@@ -323,6 +373,27 @@ Deno.serve(async (req: Request) => {
 
     const parsed = JSON.parse(outputText);
 
+    // Toplam tutar iki bağımsız yoldan elde edilir: modelin verdiği ondalık sayı ve
+    // belgeden birebir kopyalanan ham metnin kod tarafından ayrıştırılması. İkisi
+    // tutmuyorsa deterministik olan (ham metin) esas alınır ve kullanıcı onay ekranında
+    // görsün diye uyarı düşülür — docs/04-ocr-belge-isleme.md gereği düşük güvenli alan
+    // işaretlenir, sessizce yanlış tutar yazılmaz.
+    const warnings: string[] = Array.isArray(parsed.warnings) ? [...parsed.warnings] : [];
+    const modelTotalMinor = toMinor(parsed.totalAmount);
+    const rawTotalMinor = parseAmountTextToMinor(parsed.totalAmountRaw);
+    let totalAmountMinor = rawTotalMinor ?? modelTotalMinor ?? 0;
+    let totalAmountConfidence: number | null = null;
+
+    if (rawTotalMinor !== null && modelTotalMinor !== null && rawTotalMinor !== modelTotalMinor) {
+      totalAmountMinor = rawTotalMinor;
+      totalAmountConfidence = 0.4;
+      warnings.push(
+        `Tutar okuması belirsiz: belgede "${parsed.totalAmountRaw}" yazıyor. ` +
+          `Kaydedilen tutar ${(rawTotalMinor / 100).toFixed(2)}; lütfen doğrulayın.`
+      );
+    }
+    parsed.warnings = warnings;
+
     await adminClient.from('document_extractions').insert({
       workspace_id: document.workspace_id,
       document_id: documentId,
@@ -331,23 +402,56 @@ Deno.serve(async (req: Request) => {
       structured_output: parsed,
     });
 
-    if (Array.isArray(parsed.fields) && parsed.fields.length > 0) {
-      await adminClient.from('document_fields').insert(
-        parsed.fields.map((field: Record<string, unknown>) => ({
+    const fieldRows = (Array.isArray(parsed.fields) ? parsed.fields : []).map(
+      (field: Record<string, unknown>) => ({
+        workspace_id: document.workspace_id,
+        document_id: documentId,
+        field_name: field.fieldName,
+        raw_value: field.rawValue ?? null,
+        normalized_value: field.normalizedValue ?? null,
+        confidence: field.confidence ?? null,
+      })
+    );
+
+    // Tutar mutabakatı tutmadıysa onay ekranındaki "Kontrol et — düşük güven" uyarısı
+    // TUTAR alanının yanında çıksın diye alan adı review.tsx'in aradığı 'totalAmount'
+    // olarak yazılır; modelin kendi totalAmount satırı varsa onun güveni de düşürülür.
+    if (totalAmountConfidence !== null) {
+      const existing = fieldRows.find(
+        (row: { field_name: unknown }) =>
+          String(row.field_name).toLowerCase() === 'totalamount'
+      );
+      if (existing) {
+        existing.confidence = totalAmountConfidence;
+        existing.raw_value = parsed.totalAmountRaw ?? existing.raw_value;
+      } else {
+        fieldRows.push({
           workspace_id: document.workspace_id,
           document_id: documentId,
-          field_name: field.fieldName,
-          raw_value: field.rawValue ?? null,
-          normalized_value: field.normalizedValue ?? null,
-          confidence: field.confidence ?? null,
-        }))
-      );
+          field_name: 'totalAmount',
+          raw_value: parsed.totalAmountRaw ?? null,
+          normalized_value: (totalAmountMinor / 100).toFixed(2),
+          confidence: totalAmountConfidence,
+        });
+      }
+    }
+
+    if (fieldRows.length > 0) {
+      await adminClient.from('document_fields').insert(fieldRows);
     }
 
     const lineItemRows: LineItemRow[] = [];
 
+    // Satır tutarları da modelden ana birimde gelir; kuruşa çevirme burada yapılır.
+    // Çevrilemeyen (null/NaN) bir satır tutarı veritabanına 0 olarak yazılmaz — satır
+    // tamamen atlanır, aksi halde kullanıcı onay ekranında sessizce 0,00 TL'lik bir
+    // taksit/harcama görürdü.
     if (parsed.installmentPlan?.installments?.length) {
       parsed.installmentPlan.installments.forEach((item: Record<string, unknown>, index: number) => {
+        const amountMinor = toMinor(item.installmentAmount);
+        if (amountMinor === null) return;
+        const interestMinor = toMinor(item.interest) ?? 0;
+        const taxMinor = toMinor(item.tax) ?? 0;
         lineItemRows.push({
           workspace_id: document.workspace_id,
           document_id: documentId,
@@ -357,15 +461,17 @@ Deno.serve(async (req: Request) => {
           occurred_at: (item.dueDate as string) ?? null,
           quantity: null,
           unit_price_minor: null,
-          tax_minor: ((item.interestMinor as number) ?? 0) + ((item.taxMinor as number) ?? 0) || null,
-          amount_minor: item.installmentAmountMinor as number,
-          remaining_minor: (item.remainingPrincipalMinor as number) ?? null,
+          tax_minor: interestMinor + taxMinor || null,
+          amount_minor: amountMinor,
+          remaining_minor: toMinor(item.remainingPrincipal),
         });
       });
     }
 
     if (parsed.cardStatement?.transactions?.length) {
       parsed.cardStatement.transactions.forEach((item: Record<string, unknown>, index: number) => {
+        const amountMinor = toMinor(item.amount);
+        if (amountMinor === null) return;
         lineItemRows.push({
           workspace_id: document.workspace_id,
           document_id: documentId,
@@ -376,7 +482,7 @@ Deno.serve(async (req: Request) => {
           quantity: null,
           unit_price_minor: null,
           tax_minor: null,
-          amount_minor: item.amountMinor as number,
+          amount_minor: amountMinor,
           remaining_minor: null,
         });
       });
@@ -384,6 +490,8 @@ Deno.serve(async (req: Request) => {
 
     if (parsed.lineItems?.length) {
       parsed.lineItems.forEach((item: Record<string, unknown>, index: number) => {
+        const amountMinor = toMinor(item.lineTotal);
+        if (amountMinor === null) return;
         lineItemRows.push({
           workspace_id: document.workspace_id,
           document_id: documentId,
@@ -392,9 +500,9 @@ Deno.serve(async (req: Request) => {
           description: (item.description as string) ?? null,
           occurred_at: null,
           quantity: (item.quantity as number) ?? null,
-          unit_price_minor: (item.unitPriceMinor as number) ?? null,
+          unit_price_minor: toMinor(item.unitPrice),
           tax_minor: null,
-          amount_minor: item.lineTotalMinor as number,
+          amount_minor: amountMinor,
           remaining_minor: null,
         });
       });
@@ -404,12 +512,15 @@ Deno.serve(async (req: Request) => {
       await adminClient.from('document_line_items').insert(lineItemRows);
     }
 
+    // extracted_summary'nin anahtarları bilinçli olarak "*Minor" kalır: istemci (bkz.
+    // app/documents/[id]/review.tsx) bu adlarla okur ve değerler kuruş cinsindendir —
+    // değişen yalnızca modelden hangi biçimde alındığıdır.
     const extractedSummary: Record<string, unknown> = {};
     if (parsed.installmentPlan) {
       extractedSummary.loan = {
         bankName: parsed.installmentPlan.bankName,
         loanType: parsed.installmentPlan.loanType,
-        totalRepaymentMinor: parsed.installmentPlan.totalRepaymentMinor,
+        totalRepaymentMinor: toMinor(parsed.installmentPlan.totalRepayment),
         installmentCount: parsed.installmentPlan.installmentCount,
         interestRatePercent: parsed.installmentPlan.interestRatePercent,
       };
@@ -419,13 +530,19 @@ Deno.serve(async (req: Request) => {
         bankName: parsed.cardStatement.bankName,
         cardLastFourDigits: parsed.cardStatement.cardLastFourDigits,
         statementDate: parsed.cardStatement.statementDate,
-        minimumPaymentMinor: parsed.cardStatement.minimumPaymentMinor,
-        previousDebtMinor: parsed.cardStatement.previousDebtMinor,
-        totalSpendingMinor: parsed.cardStatement.totalSpendingMinor,
+        minimumPaymentMinor: toMinor(parsed.cardStatement.minimumPayment),
+        previousDebtMinor: toMinor(parsed.cardStatement.previousDebt),
+        totalSpendingMinor: toMinor(parsed.cardStatement.totalSpending),
       };
     }
     if (parsed.invoiceDetails) {
-      extractedSummary.invoice = parsed.invoiceDetails;
+      extractedSummary.invoice = {
+        ...parsed.invoiceDetails,
+        subtotalMinor: toMinor(parsed.invoiceDetails.subtotal),
+        vatTotalMinor: toMinor(parsed.invoiceDetails.vatTotal),
+        discountMinor: toMinor(parsed.invoiceDetails.discount),
+        grandTotalMinor: toMinor(parsed.invoiceDetails.grandTotal),
+      };
     }
 
     await adminClient
@@ -434,7 +551,7 @@ Deno.serve(async (req: Request) => {
         status: 'ready_for_review',
         document_type: parsed.documentType,
         direction: parsed.direction,
-        total_amount_minor: parsed.totalAmountMinor,
+        total_amount_minor: totalAmountMinor,
         currency_code: parsed.currency ?? 'TRY',
         issue_date: parsed.issueDate ?? null,
         due_date: parsed.dueDate ?? null,

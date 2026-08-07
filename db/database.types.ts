@@ -579,6 +579,7 @@ export type Database = {
           title: string
           total_amount_minor: number
           updated_at: string
+          value_unit_type: string
           workspace_id: string
         }
         Insert: {
@@ -599,6 +600,7 @@ export type Database = {
           title: string
           total_amount_minor: number
           updated_at?: string
+          value_unit_type?: string
           workspace_id: string
         }
         Update: {
@@ -619,6 +621,7 @@ export type Database = {
           title?: string
           total_amount_minor?: number
           updated_at?: string
+          value_unit_type?: string
           workspace_id?: string
         }
         Relationships: [
@@ -1013,6 +1016,57 @@ export type Database = {
           },
         ]
       }
+      value_unit_rates: {
+        Row: {
+          cached_at: string
+          id: string
+          source: string
+          source_fetched_at: string | null
+          try_equivalent_minor: number
+          unit_code: string
+          unit_type: string
+        }
+        Insert: {
+          cached_at?: string
+          id?: string
+          source: string
+          source_fetched_at?: string | null
+          try_equivalent_minor: number
+          unit_code: string
+          unit_type: string
+        }
+        Update: {
+          cached_at?: string
+          id?: string
+          source?: string
+          source_fetched_at?: string | null
+          try_equivalent_minor?: number
+          unit_code?: string
+          unit_type?: string
+        }
+        Relationships: []
+      }
+      waitlist_signups: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
       workspace_members: {
         Row: {
           created_at: string
@@ -1049,6 +1103,7 @@ export type Database = {
         Row: {
           archived_at: string | null
           created_at: string
+          default_value_unit_code: string
           id: string
           name: string
           owner_id: string
@@ -1058,6 +1113,7 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           created_at?: string
+          default_value_unit_code?: string
           id?: string
           name: string
           owner_id: string
@@ -1067,6 +1123,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           created_at?: string
+          default_value_unit_code?: string
           id?: string
           name?: string
           owner_id?: string

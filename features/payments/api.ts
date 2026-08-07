@@ -78,6 +78,32 @@ export async function recordPayment({
   return data;
 }
 
+export interface RecordPastInstallmentPaymentInput {
+  workspace_id: string;
+  obligation_id: string;
+  installment_id: string;
+  amount_minor: number;
+  paid_at: string;
+  notes?: string | null;
+}
+
+// Belge onayında vadesi geçmiş taksitleri toplu "ödendi" işaretlemek için (bkz.
+// app/documents/[id]/review.tsx). Bu yolda kasıtlı olarak hesap seçilmez — ödeme geçmiş
+// tarihlidir ve mevcut hesap bakiyelerini etkilememelidir — bu yüzden recordPayment'ın
+// transaction oluşturan dalına hiç girilmez ve tüm taksitler tek insert'te yazılabilir.
+// Taksit başına ayrı çağrı, uzun kredi planlarında onay ekranını kilitliyordu.
+export async function recordPastInstallmentPayments(
+  rows: RecordPastInstallmentPaymentInput[]
+): Promise<Payment[]> {
+  if (rows.length === 0) return [];
+  const { data, error } = await supabase
+    .from('payments')
+    .insert(rows.map((row) => ({ ...row, account_id: null, transaction_id: null })))
+    .select('*');
+  if (error) throw error;
+  return data;
+}
+
 export async function deletePayment(id: string): Promise<void> {
   const { error } = await supabase.from('payments').delete().eq('id', id);
   if (error) throw error;

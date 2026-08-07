@@ -31,8 +31,12 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
+  // Kapalıyken hiç mount edilmez (bkz. DateField/SearchablePicker'daki aynı not):
+  // iOS'ta her Modal ayrı bir UIViewController açar, liste içinde tekrarlanırsa birikir.
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
           accessibilityLabel="Kapat"

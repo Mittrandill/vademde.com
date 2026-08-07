@@ -10,7 +10,7 @@ import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from
 import { BankPicker } from '@/components/finance/BankPicker';
 import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { toMinorUnits } from '@/utils/money';
+import { parseAmountToMinor } from '@/utils/money';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { showSuccessAlert } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
@@ -87,12 +87,12 @@ export default function NewAccountScreen() {
         type,
         bank_code: type === 'bank' || isCreditCard ? bankCode : null,
         iban: type === 'bank' && normalizedIban ? normalizedIban : null,
-        opening_balance_minor: openingBalance ? toMinorUnits(Number(openingBalance.replace(',', '.'))) : 0,
+        opening_balance_minor: parseAmountToMinor(openingBalance) ?? 0,
         statement_day: isCreditCard && statementDay ? Number(statementDay) : null,
         payment_due_day: isCreditCard && paymentDueDay ? Number(paymentDueDay) : null,
         card_last_four: isCreditCard && cardLastFour ? cardLastFour : null,
-        credit_limit_minor: isCreditCard && creditLimit ? toMinorUnits(Number(creditLimit.replace(',', '.'))) : null,
-        overdraft_limit_minor: isBank && overdraftLimit ? toMinorUnits(Number(overdraftLimit.replace(',', '.'))) : null,
+        credit_limit_minor: isCreditCard ? parseAmountToMinor(creditLimit) : null,
+        overdraft_limit_minor: isBank ? parseAmountToMinor(overdraftLimit) : null,
       };
       return isEditing
         ? updateAccount(id as string, payload)

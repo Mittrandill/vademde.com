@@ -41,6 +41,7 @@ import {
   type ObligationWithRelations,
 } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_LABEL, DOCUMENT_TYPE_LABEL_PLURAL, DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -597,6 +598,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
                 <Amount
                   amountMinor={item.remaining_amount_minor}
                   currencyCode={item.currency_code}
+                  valueUnitType={item.value_unit_type as ValueUnitType}
                   direction={item.direction as 'payable' | 'receivable'}
                   overdue={item.status === 'gecikti'}
                   variant="cardTitle"
@@ -613,6 +615,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
                     <Amount
                       amountMinor={installmentSummary?.nextAmountMinor ?? 0}
                       currencyCode={item.currency_code}
+                      valueUnitType={item.value_unit_type as ValueUnitType}
                       variant="cardTitle"
                       numberOfLines={1}
                     />

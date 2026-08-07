@@ -19,6 +19,7 @@ import { listObligations, ACTIVE_OBLIGATION_STATUSES, type ObligationWithRelatio
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
@@ -205,6 +206,7 @@ function OpenLoanRow({ obligation }: { obligation: ObligationWithRelations }) {
           <Amount
             amountMinor={obligation.remaining_amount_minor}
             currencyCode={obligation.currency_code}
+            valueUnitType={obligation.value_unit_type as ValueUnitType}
             direction={obligation.direction as 'payable' | 'receivable'}
             overdue={obligation.status === 'gecikti'}
             variant="body"

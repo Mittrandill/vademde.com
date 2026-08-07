@@ -10,7 +10,7 @@ import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWo
 import { createWorkspace, type Workspace } from '@/features/workspaces/api';
 import { createAccount } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { toMinorUnits } from '@/utils/money';
+import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
 type WorkspaceMode = 'personal' | 'business' | 'both';
@@ -60,7 +60,7 @@ export default function WorkspaceSetupScreen() {
           workspace_id: workspace.id,
           name: 'Kasa',
           type: 'cash',
-          opening_balance_minor: toMinorUnits(Number(balance.replace(',', '.'))),
+          opening_balance_minor: parseAmountToMinor(balance) ?? 0,
         });
       }
 

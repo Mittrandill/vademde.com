@@ -104,7 +104,13 @@ export function SearchablePicker<T extends { id: string; name: string }>({
         <Ionicons name="chevron-down" size={18} color={theme.colors.textSecondary} />
       </Pressable>
 
-      <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
+      {/* Modal yalnızca açıkken mount edilir — bkz. DateField'daki aynı not. Bu seçici
+          liste satırlarında tekrarlanabiliyor (ör. kredi kartı ekstresini kategorilere
+          ayırırken her işlem satırı için bir CategoryPicker); pageSheet sunum stili
+          iOS'ta her örnek için ayrı bir UIViewController açtığından, kapalı modalları
+          ağaçta tutmak onlarca satırlık ekstrelerde uygulamayı çökertiyordu. */}
+      {open ? (
+      <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
           <Stack gap="md" style={{ flex: 1, paddingTop: theme.spacing.md }}>
             <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
@@ -203,6 +209,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
           </Stack>
         </SafeAreaView>
       </Modal>
+      ) : null}
     </>
   );
 }

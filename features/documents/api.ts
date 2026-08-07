@@ -133,6 +133,23 @@ export async function getDocumentFields(documentId: string): Promise<DocumentFie
   return data;
 }
 
+// process-document, okuması şüpheli tutar/tarih gibi durumları structured_output.warnings
+// içine yazıyordu ama bu uyarılar hiçbir ekranda gösterilmiyordu — docs/04-ocr-belge-isleme.md
+// gereği kullanıcı onaylamadan önce belirsizlikleri görmeli. Onay ekranı bunu kullanır.
+export async function getDocumentWarnings(documentId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('document_extractions')
+    .select('structured_output')
+    .eq('document_id', documentId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+
+  const warnings = (data?.structured_output as { warnings?: unknown } | null)?.warnings;
+  return Array.isArray(warnings) ? warnings.filter((w): w is string => typeof w === 'string') : [];
+}
+
 export async function getSignedUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60 * 10);
   if (error) throw error;

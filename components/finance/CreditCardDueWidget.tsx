@@ -5,6 +5,7 @@ import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
 import type { ObligationWithRelations } from '@/features/obligations/api';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 
 export interface CreditCardDueWidgetProps {
   obligation: ObligationWithRelations | null;
@@ -46,6 +47,7 @@ export function CreditCardDueWidget({ obligation }: CreditCardDueWidgetProps) {
           <Amount
             amountMinor={obligation.remaining_amount_minor}
             currencyCode={obligation.currency_code}
+            valueUnitType={obligation.value_unit_type as ValueUnitType}
             direction="payable"
             overdue={obligation.status === 'gecikti'}
             variant="body"

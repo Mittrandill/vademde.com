@@ -18,6 +18,7 @@ import { listObligations, type ObligationWithRelations } from '@/features/obliga
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 
 const PAGE_SIZE = 10;
 const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
@@ -422,6 +423,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, currentPeriodKey
                   <Amount
                     amountMinor={latestStatement.remaining_amount_minor}
                     currencyCode={latestStatement.currency_code}
+                    valueUnitType={latestStatement.value_unit_type as ValueUnitType}
                     variant="cardTitle"
                     numberOfLines={1}
                   />

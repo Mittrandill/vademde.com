@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import {
+  ActionSheet,
   Card,
   Divider,
   EmptyState,
@@ -37,6 +38,7 @@ import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
@@ -67,6 +69,7 @@ export default function AccountDetailScreen() {
   // Yalnızca kredi kartı hesabında kullanılır (bkz. aşağıdaki kredi kartı dalı) —
   // hook sırası bozulmasın diye diğer hesap türlerinde de koşulsuz çağrılır.
   const [tab, setTab] = useState<CreditCardTab>('genel');
+  const [addStatementSheetOpen, setAddStatementSheetOpen] = useState(false);
 
   const accountQuery = useQuery({
     queryKey: ['account', id],
@@ -197,6 +200,7 @@ export default function AccountDetailScreen() {
     ];
 
     return (
+      <>
       <DetailScaffold
         header={{
           title: account.name,
@@ -293,6 +297,7 @@ export default function AccountDetailScreen() {
                           <Amount
                             amountMinor={m.obligation.remaining_amount_minor}
                             currencyCode={m.obligation.currency_code}
+                            valueUnitType={m.obligation.value_unit_type as ValueUnitType}
                             variant="body"
                           />
                           <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -334,12 +339,7 @@ export default function AccountDetailScreen() {
             </Card>
             {mostRecentUnfulfilled ? (
               <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: '/obligations/new',
-                    params: { type: 'kredi_karti_ekstresi', accountId: account.id },
-                  })
-                }
+                onPress={() => setAddStatementSheetOpen(true)}
                 style={{
                   height: theme.controlHeight.segmented,
                   borderRadius: theme.radius.widget,
@@ -399,6 +399,39 @@ export default function AccountDetailScreen() {
           </Text>
         </Pressable>
       </DetailScaffold>
+
+      {mostRecentUnfulfilled ? (
+        <ActionSheet
+          visible={addStatementSheetOpen}
+          title={`${monthFormatter.format(mostRecentUnfulfilled.monthDate)} Ekstresi Ekle`}
+          onClose={() => setAddStatementSheetOpen(false)}
+          options={[
+            {
+              key: 'scan',
+              label: 'Kameradan/Galeriden Tara',
+              description: 'OCR belgeyi okur, hesap ve dönem otomatik eşlenir.',
+              icon: 'camera-outline',
+              onPress: () =>
+                router.push({
+                  pathname: '/(tabs)/tara',
+                  params: { accountId: account.id, documentType: 'kredi_karti_ekstresi' },
+                }),
+            },
+            {
+              key: 'manual',
+              label: 'Manuel Gir',
+              description: 'Tutar ve vadeyi elle girin.',
+              icon: 'create-outline',
+              onPress: () =>
+                router.push({
+                  pathname: '/obligations/new',
+                  params: { type: 'kredi_karti_ekstresi', accountId: account.id },
+                }),
+            },
+          ]}
+        />
+      ) : null}
+      </>
     );
   }
 

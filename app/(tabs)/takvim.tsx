@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
@@ -210,21 +211,49 @@ export default function TakvimScreen() {
           </>
         ) : (
           <>
-            <Row align="center">
-              <Pressable onPress={handlePrevMonth} hitSlop={12}>
-                <Text variant="body" color="textSecondary">
-                  ‹ Önceki Ay
+            {/* Ay grid'indeki üst gezinme başlığıyla aynı dil: dairesel ikon
+                butonları + Card yüzeyi (bkz. CalendarMonthGrid.tsx). Eskiden burada
+                çıplak metin linkleri vardı — tema token'larından kopuk, tasarım
+                sisteminin geri kalanıyla uyuşmuyordu. */}
+            <Card>
+              <Row align="center">
+                <Pressable
+                  onPress={handlePrevMonth}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Önceki ay"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: theme.radius.input,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.surfaceElevated,
+                  }}
+                >
+                  <Ionicons name="chevron-back" size={18} color={theme.colors.textPrimary} />
+                </Pressable>
+                <Text variant="sectionTitle" style={{ flex: 1, textAlign: 'center' }}>
+                  {monthLabelFormatter.format(monthDate)}
                 </Text>
-              </Pressable>
-              <Text variant="sectionTitle" style={{ flex: 1, textAlign: 'center' }}>
-                {monthLabelFormatter.format(monthDate)}
-              </Text>
-              <Pressable onPress={handleNextMonth} hitSlop={12}>
-                <Text variant="body" color="textSecondary">
-                  Sonraki Ay ›
-                </Text>
-              </Pressable>
-            </Row>
+                <Pressable
+                  onPress={handleNextMonth}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sonraki ay"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: theme.radius.input,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.surfaceElevated,
+                  }}
+                >
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textPrimary} />
+                </Pressable>
+              </Row>
+            </Card>
             <CalendarAgendaList workspaceId={activeWorkspaceId as string} obligations={obligations} />
           </>
         )}

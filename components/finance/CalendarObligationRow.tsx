@@ -10,7 +10,8 @@ import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
 import { getObligation, type ObligationDueItem } from '@/features/obligations/api';
 import { recordPayment } from '@/features/payments/api';
-import { formatMinorAmount } from '@/utils/money';
+import { formatValueUnitAmount } from '@/utils/money';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 import { syncObligationReminder } from '@/services/notifications';
 
 export interface CalendarObligationRowProps {
@@ -52,7 +53,7 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
   function handleMarkPaid() {
     Alert.alert(
       isPayable ? 'Ödendi Olarak İşaretle' : 'Tahsil Edildi Olarak İşaretle',
-      `${obligation.title}${isInstallment ? ` — ${obligation.installment_number}. taksit` : ''} için ${formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)} tutarında ${isPayable ? 'ödeme' : 'tahsilat'} kaydı oluşturulacak. Emin misiniz?`,
+      `${obligation.title}${isInstallment ? ` — ${obligation.installment_number}. taksit` : ''} için ${formatValueUnitAmount(obligation.remaining_amount_minor, obligation.currency_code)} tutarında ${isPayable ? 'ödeme' : 'tahsilat'} kaydı oluşturulacak. Emin misiniz?`,
       [
         { text: 'Vazgeç', style: 'cancel' },
         { text: 'Onayla', onPress: () => markPaidMutation.mutate() },
@@ -92,6 +93,7 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
           <Amount
             amountMinor={obligation.remaining_amount_minor}
             currencyCode={obligation.currency_code}
+            valueUnitType={obligation.value_unit_type as ValueUnitType}
             direction={obligation.direction as 'payable' | 'receivable'}
             overdue={obligation.status === 'gecikti'}
             variant="body"

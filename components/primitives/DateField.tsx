@@ -102,7 +102,13 @@ export function DateField({ label, value, onChangeText, placeholder = 'YYYY-AA-G
         style={style}
       />
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      {/* Modal yalnızca açıkken mount edilir. `visible={false}` ile ağaçta bırakmak tek
+          örnekte zararsız görünür ama bu alan listelerde tekrarlanıyor (ör. belge onay
+          ekranındaki 36 taksitlik kredi tablosu = 36 DateField); iOS'ta her Modal ayrı bir
+          UIViewController açtığından hepsi birden mount'luyken bellek şişip uygulama
+          çöküyordu. Aynı düzeltme SearchablePicker'da da var. */}
+      {open ? (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <Pressable
             accessibilityLabel="Kapat"
@@ -218,7 +224,8 @@ export function DateField({ label, value, onChangeText, placeholder = 'YYYY-AA-G
             </Pressable>
           </View>
         </View>
-      </Modal>
+        </Modal>
+      ) : null}
     </>
   );
 }

@@ -40,6 +40,13 @@ export const controlHeight = {
 
 // Floating TabBar tüm sekme kök ekranlarının içeriğini kapatmamalı; 100 = mevcut
 // tab ekranlarının çoğunda kullanılan pay, tek bir yerden yönetilir.
+//
+// tabBarHeight/tabBarBottomGap, TabBar.tsx'in kendi ölçüleridir ve burada durur ki
+// tam ekran sekme ekranları (ör. Tara'nın kamera modu) kendi kontrollerini bu yüzen
+// çubuğun üstüne yerleştirebilsin. Kamera deklanşörü, bu değerler sabit kodlu kaldığı
+// için TabBar'ın arkasında kalıyordu — ölçü tek kaynaktan okunmalı.
 export const layout = {
   tabBarClearance: 100,
+  tabBarHeight: 64,
+  tabBarBottomGap: 4,
 } as const;

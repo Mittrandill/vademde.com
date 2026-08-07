@@ -33,8 +33,10 @@ import { listPaymentsForObligation, recordPayment, type Payment } from '@/featur
 import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount, toMinorUnits } from '@/utils/money';
+import { formatMinorAmount, formatValueUnitAmount, parseValueUnitAmountToMinor } from '@/utils/money';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
+import { getValueUnit } from '@/features/valueUnits/units';
+import { listValueUnitRates, convertToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert } from '@/utils/alerts';
@@ -73,6 +75,16 @@ export default function ObligationDetailScreen() {
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
     queryFn: () => listAccounts(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
+  });
+
+  // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydının TL karşılığı
+  // kalıcı saklanmaz, her görüntülemede canlı fiyattan hesaplanır; yalnızca o tür
+  // kayıtlarda gerektiği için sorgu her ekranda değil burada, koşullu olarak açılır.
+  const isValueUnitFiat = getValueUnit(detailQuery.data?.obligation.currency_code).unitType === 'fiat';
+  const ratesQuery = useQuery({
+    queryKey: queryKeys.valueUnitRates(),
+    queryFn: listValueUnitRates,
+    enabled: !isValueUnitFiat,
   });
 
   function invalidateAll() {
@@ -191,7 +203,7 @@ export default function ObligationDetailScreen() {
             <DetailMetricRow
               key="metric"
               label={isPayable ? 'KALAN BORÇ' : 'KALAN ALACAK'}
-              value={formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)}
+              value={formatValueUnitAmount(obligation.remaining_amount_minor, obligation.currency_code)}
               valueStyle={{ color: heroAmountColor }}
               ring={
                 hasInstallments
@@ -215,7 +227,7 @@ export default function ObligationDetailScreen() {
                   label: hasInstallments ? 'SONRAKİ ÖDEME' : 'TOPLAM',
                   value: hasInstallments
                     ? formatMinorAmount(nextInstallment?.remaining_amount_minor ?? 0, obligation.currency_code)
-                    : formatMinorAmount(obligation.total_amount_minor, obligation.currency_code),
+                    : formatValueUnitAmount(obligation.total_amount_minor, obligation.currency_code),
                 },
                 {
                   label: hasInstallments ? `KALAN ${unitLabel.toLocaleUpperCase('tr-TR')}` : 'VADE',
@@ -230,6 +242,15 @@ export default function ObligationDetailScreen() {
             />,
           ]}
         />
+
+        {!isValueUnitFiat ? (
+          <ReferenceValueRow
+            amountMinor={obligation.remaining_amount_minor}
+            unitCode={obligation.currency_code}
+            rates={ratesQuery.data}
+            isLoading={ratesQuery.isLoading}
+          />
+        ) : null}
 
         {!isClosed && obligation.status !== 'iptal_edildi' && obligation.remaining_amount_minor > 0 ? (
           <Button label="Ödeme Ekle" onPress={() => setPayingInstallment('obligation')} />
@@ -247,7 +268,7 @@ export default function ObligationDetailScreen() {
               <Divider />
               <InfoRow
                 label={isSubscription ? 'Toplam Tutar' : 'Başlangıç Tutarı'}
-                value={formatMinorAmount(obligation.total_amount_minor, obligation.currency_code)}
+                value={formatValueUnitAmount(obligation.total_amount_minor, obligation.currency_code)}
               />
               {effectiveRatio !== null ? (
                 <InfoRow label="Faiz Oranı" value={`%${effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`} />
@@ -334,6 +355,50 @@ export default function ObligationDetailScreen() {
         ) : null}
       </Modal>
     </>
+  );
+}
+
+// docs/01-finansal-kayit-modeli.md §3.5/§9.4.2 — kıymetli maden/döviz kaydının TL
+// karşılığı kalıcı saklanmaz; her görüntülemede canlı fiyattan hesaplanan, açıkça
+// "≈" ve kur yaşıyla etiketlenmiş bir ikincil satırdır. Kur satırı bulunamazsa veya
+// value_unit_rates hiç güncellenmemişse (bkz. supabase/functions/sync-market-rates)
+// kaydın kendi tutarını etkilemeden şeffafça "kur bilgisi yok" gösterilir.
+const relativeTimeFormatter = new Intl.RelativeTimeFormat('tr-TR', { numeric: 'auto' });
+
+function formatCacheAge(cachedAt: string): string {
+  const hours = Math.round((Date.now() - new Date(cachedAt).getTime()) / (60 * 60 * 1000));
+  if (hours < 1) return 'az önce';
+  if (hours < 24) return relativeTimeFormatter.format(-hours, 'hour');
+  return relativeTimeFormatter.format(-Math.round(hours / 24), 'day');
+}
+
+function ReferenceValueRow({
+  amountMinor,
+  unitCode,
+  rates,
+  isLoading,
+}: {
+  amountMinor: number;
+  unitCode: string;
+  rates: ValueUnitRate[] | undefined;
+  isLoading: boolean;
+}) {
+  if (isLoading) return null;
+
+  const reference = rates ? convertToReferenceMinor(amountMinor, unitCode, rates) : null;
+  if (!reference) {
+    return (
+      <Text variant="caption" color="textSecondary">
+        Güncel TL karşılığı için kur bilgisi bulunamadı.
+      </Text>
+    );
+  }
+
+  return (
+    <Text variant="caption" color="textSecondary">
+      ≈ {formatMinorAmount(reference.amountMinor, 'TRY')} (güncel kur
+      {reference.isStale ? `, ${formatCacheAge(reference.cachedAt)} güncellendi` : ''})
+    </Text>
   );
 }
 
@@ -500,18 +565,23 @@ function PaymentForm({
   onSuccess,
 }: PaymentFormProps) {
   const theme = useTheme();
-  const [amount, setAmount] = useState((defaultAmountMinor / 100).toFixed(2).replace('.', ','));
+  const valueUnit = getValueUnit(obligation.currency_code);
+  const [amount, setAmount] = useState(
+    (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ',')
+  );
   const [accountId, setAccountId] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: () => {
       if (!workspaceId || !amount) throw new Error('Eksik alan var');
+      const amountMinor = parseValueUnitAmountToMinor(amount, obligation.currency_code);
+      if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
       return recordPayment({
         workspace_id: workspaceId,
         obligation_id: obligation.id,
         installment_id: installment?.id ?? null,
         account_id: accountId,
-        amount_minor: toMinorUnits(Number(amount.replace(',', '.'))),
+        amount_minor: amountMinor,
         obligationDirection: obligation.direction as 'payable' | 'receivable',
         obligationTitle: obligation.title,
         obligationCategoryId: obligation.category_id,
@@ -542,9 +612,14 @@ function PaymentForm({
 
         <Stack gap="sm">
           <Text variant="caption" color="textSecondary">
-            TUTAR
+            TUTAR ({valueUnit.quantityLabel})
           </Text>
-          <TextField placeholder="0,00" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+          <TextField
+            placeholder={valueUnit.precision === 0 ? '1' : '0,00'}
+            keyboardType={valueUnit.precision === 0 ? 'number-pad' : 'decimal-pad'}
+            value={amount}
+            onChangeText={setAmount}
+          />
         </Stack>
 
         {accounts.length > 0 ? (

@@ -21,7 +21,7 @@ import {
 } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSuccessAlert } from '@/utils/alerts';
-import { toMinorUnits } from '@/utils/money';
+import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
 type Direction = 'income' | 'expense' | 'transfer';
@@ -121,8 +121,12 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId || !accountId || !amount) throw new Error('Eksik alan var');
-      const amountMinor = toMinorUnits(Number(amount.replace(',', '.')));
-      const occurredAt = new Date(dateStr).toISOString();
+      const amountMinor = parseAmountToMinor(amount);
+      if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
+      // Geçersiz tarihte new Date(...).toISOString() RangeError fırlatıp kaydı düşürürdü.
+      const parsedDate = new Date(dateStr);
+      if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
+      const occurredAt = parsedDate.toISOString();
 
       if (isEditing) {
         if (direction === 'transfer' && !transferToAccountId) throw new Error('Hedef hesap seçin');

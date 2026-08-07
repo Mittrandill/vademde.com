@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,10 +13,13 @@ import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { ServicePicker } from '@/components/finance/ServicePicker';
+import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
 import { BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
 import { listCounterparties } from '@/features/counterparties/api';
+import { listMyWorkspaces } from '@/features/workspaces/api';
+import { getValueUnit, VALUE_UNIT_LABEL } from '@/features/valueUnits/units';
 import {
   createObligation,
   createInstallmentPlan,
@@ -26,7 +29,7 @@ import {
   type Obligation,
 } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { toMinorUnits, formatMinorAmount } from '@/utils/money';
+import { parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 import { buildAmortizedInstallments } from '@/utils/installmentPlan';
 import { queryKeys } from '@/services/queryKeys';
 import { cancelObligationReminder, syncObligationReminder } from '@/services/notifications';
@@ -97,9 +100,17 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? null);
   const [serviceCode, setServiceCode] = useState<string | null>(initial?.service_code ?? null);
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [totalAmount, setTotalAmount] = useState(
-    initial ? (initial.total_amount_minor / 100).toFixed(2).replace('.', ',') : ''
-  );
+  // docs/01-finansal-kayit-modeli.md §3.5 — birim, kayıt oluşturulduktan sonra
+  // değiştirilemez; edit modda initial.currency_code sabit kalır (aşağıda salt-okunur
+  // gösterilir). Yeni kayıtta workspace'in varsayılan birimi hazır olana kadar 'TRY' ile
+  // başlar, aşağıdaki efekt bir kez gerçek varsayımla günceller.
+  const [valueUnitCode, setValueUnitCode] = useState(initial?.currency_code ?? 'TRY');
+  const [valueUnitDefaulted, setValueUnitDefaulted] = useState(!!initial);
+  const [totalAmount, setTotalAmount] = useState(() => {
+    if (!initial) return '';
+    const precision = getValueUnit(initial.currency_code).precision;
+    return (initial.total_amount_minor / 10 ** precision).toFixed(precision).replace('.', ',');
+  });
   const [dueDate, setDueDate] = useState(initial?.due_date ?? new Date().toISOString().slice(0, 10));
   const [counterpartyId, setCounterpartyId] = useState<string | null>(initial?.counterparty_id ?? null);
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
@@ -127,6 +138,23 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
     enabled: !!activeWorkspaceId,
   });
 
+  // docs/05-veri-modeli.md §9.4.3 — yeni kayıtta önerilen varsayılan değer birimi
+  // workspace'in default_value_unit_code'udur; workspace listesi zaten uygulama genelinde
+  // (workspace switcher) çekildiği için burada aynı queryKey ile cache'ten gelir, ekstra
+  // ağ isteği yaratmaz.
+  const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces(), queryFn: listMyWorkspaces });
+
+  useEffect(() => {
+    if (valueUnitDefaulted) return;
+    const activeWorkspace = workspacesQuery.data?.find((w) => w.id === activeWorkspaceId);
+    if (!activeWorkspace) return;
+    setValueUnitCode(activeWorkspace.default_value_unit_code);
+    setValueUnitDefaulted(true);
+  }, [valueUnitDefaulted, workspacesQuery.data, activeWorkspaceId]);
+
+  const valueUnit = getValueUnit(valueUnitCode);
+  const isFiatUnit = valueUnit.unitType === 'fiat';
+
   // Kredi kayıtlarında borçlu taraf kişi/firma değil bankadır — KİŞİ/FİRMA alanı yerine
   // zorunlu BANKA seçimi gösterilir, karta banka logosuyla temsil edilir. Abonelik
   // kayıtlarında da borçlu taraf kişi/firma değil servistir (Netflix, YouTube vb.) —
@@ -134,8 +162,12 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   const isLoanType = documentType === 'kredi';
   const isSubscriptionType = documentType === 'abonelik';
 
-  const installmentCount = Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1));
-  const enteredAmountMinor = totalAmount ? toMinorUnits(Number(totalAmount.replace(',', '.'))) : 0;
+  // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydı P1 MVP kapsamında
+  // yalnızca tek seferlik borç/alacak olarak tutulur; taksitlendirme (buildAmortizedInstallments,
+  // bkz. utils/installmentPlan.ts) tam sayı kuruş varsayımıyla çalışıyor ve adet/gram bazlı
+  // kesirli birimler için genelleştirilmemiş. Taksit sayısı fiat dışında 1'e sabitlenir.
+  const installmentCount = isFiatUnit ? Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1)) : 1;
+  const enteredAmountMinor = parseValueUnitAmountToMinor(totalAmount, valueUnitCode) ?? 0;
   // Aboneliklerde TUTAR alanı aylık ödemeyi temsil eder; toplam, aylık × ay sayısıdır.
   // Diğer türlerde TUTAR zaten toplamın kendisidir (kredi'de anapara, taksitler ondan türer).
   const totalAmountMinor =
@@ -143,7 +175,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   // Faiz oranı yalnızca kredi eklerken ve birden fazla taksitte istenir; TUTAR alanı bu
   // durumda anaparayı temsil eder, taksitler azalan bakiye üzerinden hesaplanır ve
   // obligation'ın toplamı anapara+toplam faiz olur.
-  const showInterestField = !isEditing && documentType === 'kredi' && installmentCount > 1;
+  const showInterestField = !isEditing && isFiatUnit && documentType === 'kredi' && installmentCount > 1;
   const interestRatePercent =
     showInterestField && interestRateStr ? Number(interestRateStr.replace(',', '.')) || 0 : 0;
   const installmentPreview =
@@ -194,6 +226,8 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
         document_type: documentType,
         title: title.trim(),
         total_amount_minor: obligationTotalMinor,
+        currency_code: valueUnitCode,
+        value_unit_type: valueUnit.unitType,
         due_date: dueDate,
         counterparty_id: counterpartyIdForType,
         account_id: accountId,
@@ -299,16 +333,32 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                {isSubscriptionType ? 'AYLIK ÖDEME' : 'TUTAR'}
+                DEĞER BİRİMİ
+              </Text>
+              {isEditing ? (
+                // docs/01-finansal-kayit-modeli.md §3.5 — birim kayıt oluşturulduktan
+                // sonra değiştirilemez; burada yalnızca bilgi amaçlı gösterilir.
+                <Text variant="body" color="textSecondary">
+                  {VALUE_UNIT_LABEL[valueUnitCode] ?? valueUnitCode}
+                </Text>
+              ) : (
+                <ValueUnitPicker selectedId={valueUnitCode} onSelect={setValueUnitCode} />
+              )}
+            </Stack>
+
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                {isSubscriptionType ? `AYLIK ÖDEME (${valueUnit.quantityLabel})` : `TUTAR (${valueUnit.quantityLabel})`}
               </Text>
               {isEditing && hasInstallments ? (
                 <Text variant="body" color="textSecondary">
-                  {formatMinorAmount(totalAmountMinor)} — taksit planı olan kayıtlarda tutar düzenlenemez.
+                  {formatValueUnitAmount(totalAmountMinor, valueUnitCode)} — taksit planı olan kayıtlarda tutar
+                  düzenlenemez.
                 </Text>
               ) : (
                 <TextField
-                  placeholder="0,00"
-                  keyboardType="decimal-pad"
+                  placeholder={valueUnit.precision === 0 ? '1' : '0,00'}
+                  keyboardType={valueUnit.precision === 0 ? 'number-pad' : 'decimal-pad'}
                   value={totalAmount}
                   onChangeText={setTotalAmount}
                 />
@@ -395,7 +445,10 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               )}
             </Stack>
 
-            {isEditing ? null : (
+            {/* docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydı bu turda
+                yalnızca tek seferlik borç/alacak olarak tutulur (bkz. yukarıdaki
+                installmentCount hesaplaması); taksitlendirme yalnızca fiat'ta gösterilir. */}
+            {isEditing || !isFiatUnit ? null : (
               <TextField
                 label={isSubscriptionType ? 'KAÇ AY' : 'TAKSİT SAYISI'}
                 placeholder="1"

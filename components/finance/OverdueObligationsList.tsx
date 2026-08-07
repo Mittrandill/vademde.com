@@ -4,6 +4,7 @@ import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
 import type { ObligationDueItem } from '@/features/obligations/api';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 
 export interface OverdueObligationsListProps {
   obligations: ObligationDueItem[];
@@ -52,6 +53,7 @@ export function OverdueObligationsList({ obligations }: OverdueObligationsListPr
                   <Amount
                     amountMinor={o.remaining_amount_minor}
                     currencyCode={o.currency_code}
+                    valueUnitType={o.value_unit_type as ValueUnitType}
                     direction={o.direction as 'payable' | 'receivable'}
                     overdue
                     variant="body"
