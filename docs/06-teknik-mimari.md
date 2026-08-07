@@ -89,3 +89,24 @@ Gemini API anahtarı mobil uygulamada bulunmaz. Uygulama belgeyi güvenli storag
 - Mutation cache, `@tanstack/query-async-storage-persister` ile `AsyncStorage`'a yazılır; uygulama kapatılıp yeniden açılsa da bekleyen işlemler kaybolmaz.
 - Bağlantı durumu `@react-native-community/netinfo` ile izlenir (`onlineManager`); bağlantı geri geldiğinde bekleyen mutation'lar otomatik olarak yeniden denenir.
 - `db/` altındaki `sync_queue` tablosu bu genel mutation kuyruğuyla karışmaz — yalnızca OCR iş kuyruğu (Aşama 3) gibi sunucu tarafı arka plan işleri için ayrılmıştır. `drafts` tablosu OCR öncesi taslak belge/form verisi için kullanılmaya devam eder.
+
+### 10.6.5 Çoklu değer birimi toplamları
+
+> `docs/01-finansal-kayit-modeli.md` §8.2'deki kural bu katmanda şu şekilde uygulanır.
+
+- Dashboard ve rapor toplamları (`totalBalanceMinor`, `payableTotalMinor`, `receivableTotalMinor` ve `features/reports/api.ts` içindeki toplam fonksiyonları) **önce `value_unit_code`'a göre gruplanır**, ardından her grup kendi içinde toplanır. Farklı gruplar tek bir `reduce` ile birbirine eklenmez.
+- Bugün (yalnızca TRY varken) bu gruplama tek bir grup döndürdüğü için mevcut davranış görsel olarak değişmez — değişiklik P0 akışlarını bozmaz, geriye dönük uyumludur.
+- Birden fazla grup oluştuğunda (örn. TRY + USD + gram_altin), UI birincil olarak her grubu ayrı ayrı gösterir; `workspaces.default_value_unit_code`'a canlı `value_unit_rates` kuruyla çevrilmiş **ikincil ve açıkça etiketlenmiş** ("≈ yaklaşık TL karşılığı, güncel kur") bir toplam eklenebilir.
+- Bu kural yalnızca dashboard'a özel değildir; aynı gruplama mantığı raporlar, takvim günlük toplamları ve kişi/firma detay toplamları için de geçerlidir.
+
+## 10.7 Piyasa fiyatı senkronizasyonu (kur ve altın fiyat Edge Function'ı)
+
+- Yeni bir Supabase Edge Function (örnek ad: `sync-market-rates`) `process-document` ile **aynı mimari deseni** izler: dış servise giden hiçbir API anahtarı mobil istemciye gömülmez, tüm çağrı sunucu tarafında yapılır.
+- Fonksiyonun görevi:
+  1. TCMB günlük kur XML servisinden USD/EUR → TRY kurlarını çeker (resmi kaynak, API anahtarı gerekmez).
+  2. **altinapi.com**'dan (seçilen sağlayıcı — free tier: ayda 1.000 istek, tek istekte tüm semboller döner; planlanan saatlik/birkaç saatlik senkronizasyon bu limitin çok altında kalır) gram altın ve sikke türlerinin TL bazlı güncel fiyatını çeker. API anahtarı yalnızca bu Edge Function'ın Supabase ortam değişkeninde (secret) tutulur, koda veya istemciye asla gömülmez.
+     Sembol eşlemesi: `gram_altin` → `ALTIN`, `ceyrek_altin` → `CEYREK_YENI`, `yarim_altin` → `YARIM_YENI`, `tam_altin` (Cumhuriyet altını) → `TEK_YENI`. `ATA_YENI`/`ATA_ESKI` (Ata altını, Cumhuriyet altınından ayrı bir ürün) ve her sembolün `_ESKI` (eski basım) varyantı ileride ayrı değer birimleri olarak eklenebilir; P1 kapsamı `_YENI` (güncel basım) varyantlarıyla sınırlıdır. API `bid`/`ask` (alış/satış) çifti döner; `value_unit_rates.try_equivalent_minor` için `ask` (satış) fiyatı kullanılır — bir borcu kapatmak için altını piyasadan bu fiyattan almak gerekir.
+  3. Sonuçları normalize edip `value_unit_rates` tablosuna upsert eder (`docs/05-veri-modeli.md` §9.4.2).
+- Mobil uygulama bu Edge Function'ı **doğrudan çağırmaz ve dış API'lere hiçbir zaman erişmez**; yalnızca Supabase'teki `value_unit_rates` tablosunu okur (React Query ile, §10.6.1'deki genel önbellekleme desenine tabi).
+- Fonksiyonun tetiklenme sıklığı (zamanlanmış görev vs. istemciden tetiklenen on-demand çağrı) implementasyon aşamasında kararlaştırılır; önbellek yaşı (`cached_at`) her zaman kullanıcıya şeffaf gösterilir, gerçek zamanlı tik-tik akan bir fiyat akışı taahhüt edilmez.
+- Bu bölüm `docs/13-yol-haritasi.md`'deki Aşama 2 (finans çekirdeği TRY-only olarak sağlamlaştıktan) sonrasına, P1 kapsamına denk gelecek şekilde planlanır.

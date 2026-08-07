@@ -18,7 +18,7 @@
 - Üç kısa değer önerisi ekranı
 - Apple ile devam et ve e-posta ile giriş
 - "Kişisel / İşletme / Her ikisi" seçimi
-- Çalışma alanı adı, ana para birimi ve isteğe bağlı başlangıç bakiyesi
+- Çalışma alanı adı, ana para birimi ve isteğe bağlı başlangıç bakiyesi (ana para birimi = `workspaces.default_value_unit_code`; yalnızca varsayılan öneri ve rapor referans birimidir, tekil kayıtların kendi değer birimini kısıtlamaz — bkz. `docs/05-veri-modeli.md` §9.4.3)
 - İlk vadeli kayıt sonrasında bağlamsal bildirim izni
 
 ## 5.3 Ana sayfa

@@ -34,9 +34,14 @@
 - Paylaş menüsünden belge aktarma
 - Face ID kilidi
 - Ana ekran widget'ı
-- Birden fazla para birimi
+- Birden fazla değer birimi (para birimi ve kıymetli maden)
+  - Döviz cinsinden borç/alacak takibi (USD, EUR)
+  - Altın cinsinden borç/alacak takibi: gram altın, çeyrek altın, yarım altın, tam/ata altın, cumhuriyet altını
+  - Canlı kur/altın fiyatıyla güncel TL karşılığı gösterimi (referans değer, kayıt tutarının kendisi değil)
 - İşletme ekip üyeleri ve roller
 - Değişiklik günlüğü
+
+> Not: Altın/döviz kayıtları için OCR ile otomatik belge okuma (ör. bir altın alacak senedinin taranması) bu kapsamda yer almaz — P1'de kullanıcı bu kayıtları manuel girer veya mevcut belge türleri (senet, sözleşme/ödeme planı) üzerinden değer birimini seçerek OCR sonucunu düzenler. OCR şemasının kıymetli maden miktarlarını yapılandırılmış şekilde çıkarması ayrı bir P1/P2 iş kalemi olarak `docs/04-ocr-belge-isleme.md`'ye sonradan eklenecektir.
 
 ## 4.3 P2 - İleri sürümler
 

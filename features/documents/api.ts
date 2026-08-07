@@ -2,6 +2,7 @@ import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
 import { generateUuid } from '@/utils/uuid';
 import { hashArrayBuffer } from '@/utils/hash';
+import { sanitizeStorageFileName } from '@/utils/storagePath';
 
 export type FinancialDocument = Tables<'financial_documents'>;
 export type DocumentField = Tables<'document_fields'>;
@@ -47,7 +48,7 @@ export async function uploadAndCreateDocument({
   contentHash,
 }: UploadDocumentInput): Promise<FinancialDocument> {
   const documentId = generateUuid();
-  const storagePath = `${workspaceId}/${documentId}/${fileName}`;
+  const storagePath = `${workspaceId}/${documentId}/${sanitizeStorageFileName(fileName)}`;
 
   // React Native'in Blob polyfill'i yerel file:// URI'lerinde içerik türünü yanlış
   // algılayabildiği için (ör. "text/plain"), arrayBuffer + açık contentType kullanılır.

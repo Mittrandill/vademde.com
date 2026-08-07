@@ -19,6 +19,10 @@
 - Graphite Finance tasarım sistemi ve Figma kalite süreci bağlayıcıdır.
 - Koyu grafit yüzey, Saffron vurgu, geometrik vade çizgileri ve büyük finans rakamları ürünün görsel imzasıdır.
 - Güvenlik, RLS, private storage, kullanıcı silme kontrolü ve AI veri işleme şeffaflığı yayın ön koşuludur.
+- Altın ve döviz cinsinden borç/alacak kayıtları P1 kapsamındadır; P0'ın hiçbir akışını değiştirmez veya zorunlu kılmaz.
+- Bu kayıtlar kendi değer biriminde (TRY/USD/EUR veya gram_altin/ceyrek_altin/yarim_altin/tam_altin/cumhuriyet_altini) tutulur; TL karşılığı kayda kalıcı olarak yazılmaz, her görüntülemede canlı piyasa fiyatından hesaplanan ayrı bir referans değerdir.
+- Kur ve altın fiyatı çekme işi yalnızca sunucu tarafında (Supabase Edge Function) yapılır; hiçbir dış API anahtarı mobil istemciye gömülmez ve mobil uygulama dış fiyat API'lerine doğrudan erişmez.
+- Farklı değer birimindeki tutarlar hiçbir toplamda doğrudan birleştirilmez; tüm dashboard ve rapor toplamları önce değer birimine göre gruplanır.
 
 > Vademde; finansal belgeni anlayan, vadesini takip eden ve kaydını senin kontrolünle oluşturan akıllı finans asistanıdır.
 
@@ -34,6 +38,8 @@
 | Financial Document | OCR ile işlenen orijinal belge |
 | Review Required | Kritik alanı kullanıcı kontrolü isteyen OCR durumu |
 | Workspace | Kişisel veya işletme veri alanı |
+| Değer Birimi (Value Unit) | Bir kaydın tutulduğu birim; fiat (ISO 4217 kodu, örn. TRY/USD/EUR) veya kıymetli maden (Vademde'nin sabit kod listesi, örn. gram_altin/ceyrek_altin) olabilir |
+| Referans Değer | Bir kaydın canlı piyasa fiyatıyla hesaplanan, kalıcı olmayan TL (veya çalışma alanının varsayılan birimi) karşılığı gösterimi |
 
 ## Ek C - Ürün Tek Cümlesi
 

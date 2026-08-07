@@ -26,3 +26,11 @@
 
 > **Dikey dilim ilkesi**
 > İlk teknik demo yalnızca "kamera açılıyor" veya "AI JSON döndürüyor" olmamalıdır. Çek tarama → alan kontrolü → vadeli kayıt → takvim → bildirim zinciri uçtan uca çalışmalıdır.
+
+## 17.2 P0 sonrası: P1 ilk güncelleme dönemi
+
+Aşama 6 (Yayın) tamamlanıp MVP App Store'da yayınlandıktan sonra `docs/02-kapsam-ve-oncelikler.md` §4.2'deki P1 maddeleri sırayla ele alınır. Bunlardan biri — **altın ve döviz cinsinden borç/alacak takibi** — teknik olarak Aşama 2'de kurulan `obligations` finans çekirdeğinin üzerine eklemeli (additive) şekilde inşa edilir; P0 boyunca TRY-only akış hiç bozulmadan sağlamlaştırılır, bu özellik yalnızca P1'de üzerine eklenir:
+
+- Veri modeli ve kural: `docs/01-finansal-kayit-modeli.md` §3.5 (Değer birimi), §8.2 (çoklu birim toplama kuralı)
+- Şema: `docs/05-veri-modeli.md` §9.4 (`value_unit_rates`, `obligations.value_unit_type`, `workspaces.default_value_unit_code`)
+- Mimari: `docs/06-teknik-mimari.md` §10.6.5 (gruplu toplamlar), §10.7 (`sync-market-rates` Edge Function — TCMB döviz kuru + altinapi.com altın fiyatı)
