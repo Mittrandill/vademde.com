@@ -11,12 +11,15 @@ export interface BankLogoProps {
   fallbackName?: string | null;
   size?: number;
   fallbackIcon?: keyof typeof Ionicons.glyphMap;
+  /** Ne banka logosu ne fallbackName varsa (ör. ObligationIcon'un belge türü ikonu)
+   * kullanılacak zemin rengi — verilmezse eski tek renkli (accentViolet) davranış korunur. */
+  fallbackColor?: string;
 }
 
 // docs/08-tasarim-sistemi.md §12.9 — hesap/kredi/kredi kartı/çek kayıtlarında özel banka
 // logosu; eşleşen banka yoksa (fallbackName varsa) baş harfli avatara, yoksa çağıranın
 // verdiği belge/hesap türü ikonuna düşer, böylece kırık görsel yerine anlamlı bir şey kalır.
-export function BankLogo({ bankCode, fallbackName, size = 36, fallbackIcon = 'business-outline' }: BankLogoProps) {
+export function BankLogo({ bankCode, fallbackName, size = 36, fallbackIcon = 'business-outline', fallbackColor }: BankLogoProps) {
   const theme = useTheme();
   const source = bankCode ? BANK_LOGOS[bankCode] : undefined;
   const showInitials = !source && !!fallbackName?.trim();
@@ -27,7 +30,7 @@ export function BankLogo({ bankCode, fallbackName, size = 36, fallbackIcon = 'bu
         width: size,
         height: size,
         borderRadius: size * 0.28,
-        backgroundColor: showInitials ? getBankAvatarColor(fallbackName!.trim()) : theme.colors.accentViolet,
+        backgroundColor: showInitials ? getBankAvatarColor(fallbackName!.trim()) : (fallbackColor ?? theme.colors.accentViolet),
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',

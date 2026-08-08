@@ -205,22 +205,40 @@ export default function HomeScreen() {
                 </Row>
                 <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
               </Pressable>
-              <Pressable
-                onPress={() => router.push('/settings')}
-                hitSlop={12}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: theme.radius.input,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.surfaceElevated,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                }}
-              >
-                <Ionicons name="settings-outline" size={22} color={theme.colors.textSecondary} />
-              </Pressable>
+              <Row gap="xs">
+                <Pressable
+                  onPress={() => router.push('/notifications')}
+                  hitSlop={12}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: theme.radius.input,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.surfaceElevated,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Ionicons name="notifications-outline" size={22} color={theme.colors.textSecondary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push('/settings')}
+                  hitSlop={12}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: theme.radius.input,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.surfaceElevated,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Ionicons name="settings-outline" size={22} color={theme.colors.textSecondary} />
+                </Pressable>
+              </Row>
             </Row>
             {switcherOpen ? (
               <Stack

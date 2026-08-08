@@ -827,11 +827,13 @@ export type Database = {
         Row: {
           account_id: string | null
           created_at: string
+          dismissed_at: string | null
           id: string
           kind: string
           notification_identifier: string | null
           obligation_id: string | null
           period_key: string | null
+          read_at: string | null
           remind_at: string
           stage: string
           status: string
@@ -841,11 +843,13 @@ export type Database = {
         Insert: {
           account_id?: string | null
           created_at?: string
+          dismissed_at?: string | null
           id?: string
           kind?: string
           notification_identifier?: string | null
           obligation_id?: string | null
           period_key?: string | null
+          read_at?: string | null
           remind_at: string
           stage?: string
           status?: string
@@ -855,11 +859,13 @@ export type Database = {
         Update: {
           account_id?: string | null
           created_at?: string
+          dismissed_at?: string | null
           id?: string
           kind?: string
           notification_identifier?: string | null
           obligation_id?: string | null
           period_key?: string | null
+          read_at?: string | null
           remind_at?: string
           stage?: string
           status?: string

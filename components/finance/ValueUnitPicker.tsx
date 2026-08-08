@@ -1,10 +1,8 @@
 import { View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import { SearchablePicker } from '@/components/primitives';
-import { VALUE_UNITS, VALUE_UNIT_ICON, getValueUnit } from '@/features/valueUnits/units';
+import { VALUE_UNITS, getValueUnit } from '@/features/valueUnits/units';
 
 const VALUE_UNIT_ITEMS = VALUE_UNITS.map((unit) => ({ id: unit.code, name: unit.name }));
 
@@ -16,7 +14,8 @@ export interface ValueUnitPickerProps {
 }
 
 // BankPicker/ServicePicker ile aynı ince sarmalayıcı desen (bkz. o dosyalardaki yorum);
-// tek fark, logo asseti yerine fiat/kıymetli maden ayrımını gösteren bir rozet ikonu.
+// tek fark, logo asseti yerine her para birimi/altın türü için gerçek sembol/madalyon
+// ikonu taşıyan bir rozet (bkz. features/valueUnits/units.ts'teki icon/color alanları).
 export function ValueUnitPicker({ selectedId, onSelect, placeholder, title }: ValueUnitPickerProps) {
   return (
     <SearchablePicker
@@ -32,9 +31,7 @@ export function ValueUnitPicker({ selectedId, onSelect, placeholder, title }: Va
 }
 
 function ValueUnitBadge({ unitCode, size }: { unitCode: string; size: number }) {
-  const theme = useTheme();
   const unit = getValueUnit(unitCode);
-  const accent = unit.unitType === 'fiat' ? theme.colors.brandPrimary : theme.colors.accentViolet;
 
   return (
     <View
@@ -42,12 +39,12 @@ function ValueUnitBadge({ unitCode, size }: { unitCode: string; size: number }) 
         width: size,
         height: size,
         borderRadius: size * 0.28,
-        backgroundColor: withAlpha(accent, 0.16),
+        backgroundColor: unit.color,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Ionicons name={VALUE_UNIT_ICON[unit.unitType]} size={size * 0.55} color={accent} />
+      <MaterialCommunityIcons name={unit.icon} size={size * 0.55} color="#FFFFFF" />
     </View>
   );
 }

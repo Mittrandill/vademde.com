@@ -118,7 +118,7 @@ export default function TransactionDetailScreen() {
                 isObligationPayment ? (
                   <BankLogo bankCode={transaction.account?.bank_code} fallbackName={transaction.account?.name} size={44} />
                 ) : transaction.category?.icon ? (
-                  <CategoryIcon icon={transaction.category.icon} size={44} />
+                  <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} size={44} />
                 ) : transaction.counterparty ? (
                   <PersonAvatar name={transaction.counterparty.name} size={44} />
                 ) : (
@@ -150,7 +150,7 @@ export default function TransactionDetailScreen() {
           <Stack gap="md">
             {transaction.category ? (
               <Row gap="sm" align="center">
-                <CategoryIcon icon={transaction.category.icon} size={36} />
+                <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} size={36} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
                     KATEGORİ

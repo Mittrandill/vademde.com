@@ -59,7 +59,14 @@
       ],
       "expo-sharing",
       "expo-web-browser",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Borç/alacak vadelerinizi takviminize ekleyebilmek için takvime erişim gerekir.",
+          "remindersPermission": "Borç/alacak vadeleriniz için Hatırlatıcılar'da bir madde oluşturabilmek için erişim gerekir."
+        }
+      ]
     ],
     "extra": {
       "router": {},

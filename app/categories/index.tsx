@@ -129,7 +129,7 @@ export default function CategoriesScreen() {
             <Pressable onPress={() => router.push({ pathname: '/categories/new', params: { id: item.id } })}>
               <Card style={{ marginBottom: theme.spacing.sm }}>
                 <Row gap="sm">
-                  <CategoryIcon icon={item.icon} size={36} />
+                  <CategoryIcon icon={item.icon} color={item.color} size={36} />
                   <Text variant="body" style={{ flex: 1 }}>
                     {item.name}
                   </Text>

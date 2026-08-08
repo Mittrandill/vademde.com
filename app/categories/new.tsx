@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import {
   createCategory,
   deleteCategory,
@@ -15,9 +16,12 @@ import {
   updateCategory,
   type Category,
 } from '@/features/categories/api';
-import { CATEGORY_ICON_OPTIONS } from '@/features/categories/categoryIcons';
+import { CATEGORY_ICON_CHOICES, CATEGORY_COLOR_PALETTE, getSuggestedColorForIcon } from '@/features/categories/categoryIcons';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSuccessAlert } from '@/utils/alerts';
+import { matchesSearch, normalizeForSearch } from '@/utils/search';
+
+const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 type Kind = 'income' | 'expense';
 
@@ -62,7 +66,22 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
 
   const [name, setName] = useState(initial?.name ?? '');
   const [kind, setKind] = useState<Kind>((initial?.kind as Kind) ?? 'expense');
-  const [icon, setIcon] = useState<string>(initial?.icon ?? CATEGORY_ICON_OPTIONS[0].icon);
+  const [icon, setIcon] = useState<string>(initial?.icon ?? CATEGORY_ICON_CHOICES[0].icon);
+  const [color, setColor] = useState<string>(initial?.color ?? getSuggestedColorForIcon(initial?.icon ?? CATEGORY_ICON_CHOICES[0].icon));
+  const [hexInput, setHexInput] = useState(color);
+  const [iconSearch, setIconSearch] = useState('');
+
+  const filteredIcons = useMemo(() => {
+    const query = normalizeForSearch(iconSearch);
+    return CATEGORY_ICON_CHOICES.filter((option) => matchesSearch(option.label, query));
+  }, [iconSearch]);
+
+  function applyColor(next: string) {
+    setColor(next);
+    setHexInput(next);
+  }
+
+  const hexError = hexInput && !HEX_COLOR_PATTERN.test(hexInput) ? 'Geçerli bir hex renk kodu girin (ör. #3FB27F)' : undefined;
 
   function invalidate() {
     if (activeWorkspaceId) {
@@ -74,9 +93,9 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
     mutationFn: async () => {
       if (!activeWorkspaceId || !name.trim()) throw new Error('Kategori adı zorunlu');
       if (isEditing) {
-        return updateCategory(id, { name: name.trim(), kind, icon });
+        return updateCategory(id, { name: name.trim(), kind, icon, color });
       }
-      return createCategory({ workspace_id: activeWorkspaceId, name: name.trim(), kind, icon });
+      return createCategory({ workspace_id: activeWorkspaceId, name: name.trim(), kind, icon, color });
     },
     onSuccess: () => {
       invalidate();
@@ -129,12 +148,29 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
 
           <TextField label="AD" placeholder="Örn. Ulaşım" value={name} onChangeText={setName} />
 
+          <Row gap="sm" align="center">
+            <CategoryIcon icon={icon} color={color} size={56} />
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="cardTitle">{CATEGORY_ICON_CHOICES.find((o) => o.icon === icon)?.label ?? 'Simge'}</Text>
+              <Text variant="caption" color="textSecondary">
+                Aşağıdan simge ve rengi bağımsız olarak seçebilirsiniz.
+              </Text>
+            </Stack>
+          </Row>
+
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
-              SİMGE
+              SİMGE ({CATEGORY_ICON_CHOICES.length})
             </Text>
+            <TextField
+              placeholder="Simge ara (ör. market, spor, ev)"
+              value={iconSearch}
+              onChangeText={setIconSearch}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
             <Row gap="sm" style={{ flexWrap: 'wrap' }}>
-              {CATEGORY_ICON_OPTIONS.map((option) => {
+              {filteredIcons.map((option) => {
                 const selected = option.icon === icon;
                 return (
                   <Pressable
@@ -147,14 +183,64 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
                       borderRadius: theme.radius.input,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: selected ? option.color : withAlpha(option.color, 0.14),
+                      backgroundColor: selected ? color : theme.colors.surfaceElevated,
+                      borderWidth: selected ? 0 : 1,
+                      borderColor: theme.colors.border,
                     }}
                   >
-                    <Ionicons name={option.icon} size={20} color={selected ? '#FFFFFF' : option.color} />
+                    <Ionicons name={option.icon} size={20} color={selected ? '#FFFFFF' : theme.colors.textSecondary} />
+                  </Pressable>
+                );
+              })}
+              {filteredIcons.length === 0 ? (
+                <Text variant="caption" color="textSecondary">
+                  Eşleşen simge bulunamadı.
+                </Text>
+              ) : null}
+            </Row>
+          </Stack>
+
+          <Stack gap="sm">
+            <Text variant="caption" color="textSecondary">
+              RENK
+            </Text>
+            <Row gap="sm" style={{ flexWrap: 'wrap' }}>
+              {CATEGORY_COLOR_PALETTE.map((swatch) => {
+                const selected = swatch.toLowerCase() === color.toLowerCase();
+                return (
+                  <Pressable
+                    key={swatch}
+                    accessibilityLabel={swatch}
+                    onPress={() => applyColor(swatch)}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: theme.radius.pill,
+                      backgroundColor: swatch,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: selected ? 3 : 0,
+                      borderColor: withAlpha(theme.colors.textPrimary, 0.4),
+                    }}
+                  >
+                    {selected ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
                   </Pressable>
                 );
               })}
             </Row>
+            <TextField
+              label="ÖZEL RENK (HEX)"
+              placeholder="#3FB27F"
+              value={hexInput}
+              onChangeText={(value) => {
+                setHexInput(value);
+                if (HEX_COLOR_PATTERN.test(value)) setColor(value);
+              }}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={7}
+              error={hexError}
+            />
           </Stack>
 
           {saveMutation.error ? (

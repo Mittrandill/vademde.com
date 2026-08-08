@@ -15,7 +15,7 @@ export function CategoryPicker({ categories, selectedId, onSelect, placeholder }
       items={categories}
       selectedId={selectedId}
       onSelect={onSelect}
-      renderLeading={(item) => <CategoryIcon icon={item.icon} size={36} />}
+      renderLeading={(item) => <CategoryIcon icon={item.icon} color={item.color} size={36} />}
       placeholder={placeholder ?? 'Kategori seçin'}
       title="Kategori Seç"
       emptyLabel="Eşleşen kategori bulunamadı."

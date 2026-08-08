@@ -59,6 +59,7 @@ interface HareketRow {
   bankCode?: string | null;
   serviceCode?: string | null;
   categoryIcon?: string | null;
+  categoryColor?: string | null;
   installmentId?: string | null;
   // Yalnızca kind === 'transaction' satırlarında doldurulur — hesap kimliğini alt
   // başlıkta banka logolu, yapılandırılmış bir satır olarak göstermek için (bkz.
@@ -203,6 +204,7 @@ export default function HareketlerScreen() {
         direction: t.direction,
         bankCode: t.account?.bank_code ?? null,
         categoryIcon: t.category?.icon ?? null,
+        categoryColor: t.category?.color ?? null,
         counterpartyName: t.counterparty?.name ?? null,
         accountName: t.account?.name ?? null,
         accountType: t.account?.type ?? null,
@@ -404,7 +406,7 @@ export default function HareketlerScreen() {
                     size={36}
                   />
                 ) : item.categoryIcon ? (
-                  <CategoryIcon icon={item.categoryIcon} size={36} />
+                  <CategoryIcon icon={item.categoryIcon} color={item.categoryColor} size={36} />
                 ) : (
                   <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={36} />
                 )}

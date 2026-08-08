@@ -363,13 +363,11 @@ export default function ObligationDetailScreen() {
 // "≈" ve kur yaşıyla etiketlenmiş bir ikincil satırdır. Kur satırı bulunamazsa veya
 // value_unit_rates hiç güncellenmemişse (bkz. supabase/functions/sync-market-rates)
 // kaydın kendi tutarını etkilemeden şeffafça "kur bilgisi yok" gösterilir.
-const relativeTimeFormatter = new Intl.RelativeTimeFormat('tr-TR', { numeric: 'auto' });
-
 function formatCacheAge(cachedAt: string): string {
   const hours = Math.round((Date.now() - new Date(cachedAt).getTime()) / (60 * 60 * 1000));
   if (hours < 1) return 'az önce';
-  if (hours < 24) return relativeTimeFormatter.format(-hours, 'hour');
-  return relativeTimeFormatter.format(-Math.round(hours / 24), 'day');
+  if (hours < 24) return `${hours} saat önce`;
+  return `${Math.round(hours / 24)} gün önce`;
 }
 
 function ReferenceValueRow({

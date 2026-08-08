@@ -44,7 +44,7 @@ export function CategoryBreakdownList({ title, items, emptyLabel, limit = 6, hea
                 accessibilityLabel={`${item.name}: ${formatMinorAmount(item.amountMinor)}, toplamın yüzde ${Math.round(item.percentage * 100)}`}
               >
                 <Row gap="sm" align="center">
-                  <CategoryIcon icon={item.icon} size={28} />
+                  <CategoryIcon icon={item.icon} color={item.color} size={28} />
                   <Text variant="body" style={{ flex: 1 }}>
                     {item.name}
                   </Text>
@@ -63,7 +63,7 @@ export function CategoryBreakdownList({ title, items, emptyLabel, limit = 6, hea
                       height: '100%',
                       width: `${Math.max(2, item.percentage * 100)}%`,
                       borderRadius: 3,
-                      backgroundColor: getCategoryIconColor(item.icon),
+                      backgroundColor: item.color ?? getCategoryIconColor(item.icon),
                     }}
                   />
                 </View>

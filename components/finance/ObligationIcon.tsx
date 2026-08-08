@@ -1,4 +1,4 @@
-import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
+import { DOCUMENT_TYPE_ICON, getDocumentTypeColor } from '@/features/obligations/documentTypes';
 import { BankLogo } from './BankLogo';
 import { ServiceLogo } from './ServiceLogo';
 
@@ -22,7 +22,7 @@ export function ObligationIcon({ documentType, bankCode, serviceCode, fallbackNa
         serviceCode={serviceCode}
         fallbackName={fallbackName}
         size={size}
-        fallbackIcon={DOCUMENT_TYPE_ICON[documentType] ?? 'repeat-outline'}
+        fallbackIcon={DOCUMENT_TYPE_ICON[documentType] ?? 'repeat'}
       />
     );
   }
@@ -30,7 +30,8 @@ export function ObligationIcon({ documentType, bankCode, serviceCode, fallbackNa
     <BankLogo
       bankCode={bankCode}
       size={size}
-      fallbackIcon={DOCUMENT_TYPE_ICON[documentType] ?? 'document-text-outline'}
+      fallbackIcon={DOCUMENT_TYPE_ICON[documentType] ?? 'document-text'}
+      fallbackColor={getDocumentTypeColor(documentType)}
     />
   );
 }

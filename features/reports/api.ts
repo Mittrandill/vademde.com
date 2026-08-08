@@ -91,13 +91,14 @@ export interface CategoryBreakdownItem {
   categoryId: string | null;
   name: string;
   icon: string | null;
+  color: string | null;
   amountMinor: number;
   percentage: number;
 }
 
 type CategoryTransactionRow = {
   amount_minor: number;
-  category: { id: string; name: string; icon: string | null } | null;
+  category: { id: string; name: string; icon: string | null; color: string | null } | null;
 };
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Kategori bazlı harcamalar/gelirler.
@@ -108,7 +109,7 @@ export async function getCategoryBreakdown(
 ): Promise<CategoryBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, category:categories(id, name, icon)')
+    .select('amount_minor, category:categories(id, name, icon, color)')
     .eq('workspace_id', workspaceId)
     .eq('direction', direction);
   if (range.from) query = query.gte('occurred_at', range.from);
@@ -117,12 +118,13 @@ export async function getCategoryBreakdown(
   const { data, error } = await query;
   if (error) throw error;
 
-  const totals = new Map<string, { name: string; icon: string | null; amountMinor: number }>();
+  const totals = new Map<string, { name: string; icon: string | null; color: string | null; amountMinor: number }>();
   let grandTotal = 0;
   for (const row of data as unknown as CategoryTransactionRow[]) {
     const key = row.category?.id ?? 'uncategorized';
     const name = row.category?.name ?? 'Kategorisiz';
-    const existing = totals.get(key) ?? { name, icon: row.category?.icon ?? null, amountMinor: 0 };
+    const existing =
+      totals.get(key) ?? { name, icon: row.category?.icon ?? null, color: row.category?.color ?? null, amountMinor: 0 };
     existing.amountMinor += row.amount_minor;
     totals.set(key, existing);
     grandTotal += row.amount_minor;
@@ -133,6 +135,7 @@ export async function getCategoryBreakdown(
       categoryId: categoryId === 'uncategorized' ? null : categoryId,
       name: value.name,
       icon: value.icon,
+      color: value.color,
       amountMinor: value.amountMinor,
       percentage: grandTotal > 0 ? value.amountMinor / grandTotal : 0,
     }))

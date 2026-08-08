@@ -17,17 +17,21 @@ export interface ValueUnit {
   precision: 0 | 2;
   /** Miktar girişinde kullanıcıya gösterilecek birim adı (ör. "gram", "adet"). */
   quantityLabel: string;
+  /** MaterialCommunityIcons glyph adı — para birimleri için gerçek sembol (₺/$/€), altın
+   * türleri için külçe/madalyon ikonu (bkz. ValueUnitPicker'daki dolgu+beyaz ikon dili). */
+  icon: keyof typeof import('@expo/vector-icons').MaterialCommunityIcons.glyphMap;
+  color: string;
 }
 
 export const VALUE_UNITS: ValueUnit[] = [
-  { code: 'TRY', name: 'Türk Lirası', unitType: 'fiat', precision: 2, quantityLabel: 'TL' },
-  { code: 'USD', name: 'Amerikan Doları', unitType: 'fiat', precision: 2, quantityLabel: 'USD' },
-  { code: 'EUR', name: 'Euro', unitType: 'fiat', precision: 2, quantityLabel: 'EUR' },
-  { code: 'gram_altin', name: 'Gram Altın', unitType: 'kiymetli_maden', precision: 2, quantityLabel: 'gram' },
-  { code: 'ceyrek_altin', name: 'Çeyrek Altın', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet' },
-  { code: 'yarim_altin', name: 'Yarım Altın', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet' },
-  { code: 'tam_altin', name: 'Tam Altın', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet' },
-  { code: 'cumhuriyet_altini', name: 'Cumhuriyet Altını', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet' },
+  { code: 'TRY', name: 'Türk Lirası', unitType: 'fiat', precision: 2, quantityLabel: 'TL', icon: 'currency-try', color: '#3E8E5A' },
+  { code: 'USD', name: 'Amerikan Doları', unitType: 'fiat', precision: 2, quantityLabel: 'USD', icon: 'currency-usd', color: '#4C8DFF' },
+  { code: 'EUR', name: 'Euro', unitType: 'fiat', precision: 2, quantityLabel: 'EUR', icon: 'currency-eur', color: '#3457D5' },
+  { code: 'gram_altin', name: 'Gram Altın', unitType: 'kiymetli_maden', precision: 2, quantityLabel: 'gram', icon: 'gold', color: '#F0B429' },
+  { code: 'ceyrek_altin', name: 'Çeyrek Altın', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet', icon: 'medal', color: '#C97B4A' },
+  { code: 'yarim_altin', name: 'Yarım Altın', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet', icon: 'medal', color: '#B98450' },
+  { code: 'tam_altin', name: 'Tam Altın', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet', icon: 'medal', color: '#E8985E' },
+  { code: 'cumhuriyet_altini', name: 'Cumhuriyet Altını', unitType: 'kiymetli_maden', precision: 0, quantityLabel: 'adet', icon: 'medal', color: '#8B6BE0' },
 ];
 
 export const VALUE_UNIT_BY_CODE: Record<string, ValueUnit> = Object.fromEntries(
@@ -38,13 +42,18 @@ export const VALUE_UNIT_LABEL: Record<string, string> = Object.fromEntries(
   VALUE_UNITS.map((u) => [u.code, u.name])
 );
 
-export const VALUE_UNIT_ICON: Record<ValueUnitType, keyof typeof import('@expo/vector-icons').Ionicons.glyphMap> = {
-  fiat: 'cash-outline',
-  kiymetli_maden: 'diamond-outline',
-};
-
 /** Bilinmeyen/eski bir kod için güvenli varsayım: fiat, TRY davranışıyla aynı hassasiyet. */
 export function getValueUnit(code: string | null | undefined): ValueUnit {
   if (!code) return VALUE_UNIT_BY_CODE.TRY;
-  return VALUE_UNIT_BY_CODE[code] ?? { code, name: code, unitType: 'fiat', precision: 2, quantityLabel: code };
+  return (
+    VALUE_UNIT_BY_CODE[code] ?? {
+      code,
+      name: code,
+      unitType: 'fiat',
+      precision: 2,
+      quantityLabel: code,
+      icon: 'cash',
+      color: '#8B8D98',
+    }
+  );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { FlatList, Modal } from 'react-native';
+import { FlatList, Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -187,7 +187,24 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                   }}
                 >
                   {renderLeading ? (
-                    renderLeading(item)
+                    // Özel rozetin (bkz. BankLogo/CategoryIcon/ValueUnitPicker) kendi rengi
+                    // seçili satırın dolu brandPrimary zeminiyle yakın/aynı olduğunda ikon
+                    // görünmez oluyordu (bkz. kullanıcı geri bildirimi — Değer Birimi Seç'te
+                    // TRY rozeti kayboluyordu). Seçiliyken rozeti nötr bir zemine oturtmak,
+                    // rozetin kendi rengi ne olursa olsun kontrastı garanti eder.
+                    item.id === selectedId ? (
+                      <View
+                        style={{
+                          backgroundColor: theme.colors.surfaceElevated,
+                          borderRadius: theme.radius.input,
+                          padding: 3,
+                        }}
+                      >
+                        {renderLeading(item)}
+                      </View>
+                    ) : (
+                      renderLeading(item)
+                    )
                   ) : (
                     <Ionicons
                       name={iconFor(item)}

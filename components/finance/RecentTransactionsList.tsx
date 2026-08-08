@@ -77,7 +77,7 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
               size={36}
             />
           ) : t.category?.icon ? (
-            <CategoryIcon icon={t.category.icon} size={36} />
+            <CategoryIcon icon={t.category.icon} color={t.category.color} size={36} />
           ) : t.counterparty ? (
             <PersonAvatar name={t.counterparty.name} size={36} />
           ) : (

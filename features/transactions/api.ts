@@ -30,7 +30,7 @@ export type PaymentRef = {
 };
 
 export type TransactionWithRelations = Transaction & {
-  category: { name: string; icon: string | null } | null;
+  category: { name: string; icon: string | null; color: string | null } | null;
   counterparty: { name: string } | null;
   account: TransactionAccountRef | null;
   // Boş değilse bu hareket bir borç/alacak (kredi, kredi kartı, çek, senet, fatura)
@@ -71,7 +71,7 @@ export async function listTransactions({
   let query = supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
+      '*, category:categories(name, icon, color), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
     )
     .eq('workspace_id', workspaceId)
     .order('occurred_at', { ascending: false })
@@ -108,7 +108,7 @@ export async function getTransactionWithRelations(id: string): Promise<Transacti
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
+      '*, category:categories(name, icon, color), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
     )
     .eq('id', id)
     .single();
