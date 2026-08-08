@@ -59,12 +59,30 @@ export function formatMinorAmount(
   currencyCode: string = 'TRY',
   locale: string = 'tr-TR'
 ): string {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: currencyCode,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(fromMinorUnits(amountMinor));
+  const value = fromMinorUnits(Number.isFinite(amountMinor) ? amountMinor : 0);
+  // Intl.NumberFormat({style:'currency'}) geçersiz/desteklenmeyen bir ISO kodunda ya da
+  // tam Intl verisi olmayan bir ortamda (Hermes) RangeError fırlatabilir. Bu fonksiyon
+  // her liste/detay satırında çalıştığı için buradaki bir throw tüm ekranı çökertirdi;
+  // bu yüzden güvenli bir sayısal biçime düşülür ve kod tutar sonuna eklenir.
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    let numeric: string;
+    try {
+      numeric = new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+    } catch {
+      numeric = value.toFixed(2);
+    }
+    return `${numeric} ${currencyCode}`;
+  }
 }
 
 // docs/01-finansal-kayit-modeli.md §3.5/§8.1 — "değer birimi" fiat'ın ötesine (kıymetli

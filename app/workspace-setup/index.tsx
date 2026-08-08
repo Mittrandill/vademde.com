@@ -7,8 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { Button, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWorkspaceIllustration';
-import { createWorkspace, type Workspace } from '@/features/workspaces/api';
-import { createAccount } from '@/features/accounts/api';
+import { setupInitialWorkspaces } from '@/features/workspaces/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
@@ -44,34 +43,28 @@ export default function WorkspaceSetupScreen() {
 
   const setupMutation = useMutation({
     mutationFn: async () => {
-      if (isBoth) {
-        const [personal, business] = await Promise.all([
-          createWorkspace({ name: 'Kişisel', type: 'personal' }),
-          createWorkspace({ name: 'İşletme', type: 'business' }),
-        ]);
-        return { primary: personal, created: [personal, business] };
-      }
-
-      const workspace = await createWorkspace({ name: trimmedName, type: mode });
-
       const balance = openingBalance.trim();
-      if (balance) {
-        await createAccount({
-          workspace_id: workspace.id,
-          name: 'Kasa',
-          type: 'cash',
-          opening_balance_minor: parseAmountToMinor(balance) ?? 0,
-        });
-      }
-
-      return { primary: workspace, created: [workspace] };
+      // Tüm oluşturma tek atomik RPC'de yapılır (bkz. setupInitialWorkspaces); 'both'
+      // modunda yarım kalma riski yoktur.
+      return setupInitialWorkspaces({
+        mode,
+        name: isBoth ? null : trimmedName,
+        openingBalanceMinor: !isBoth && balance ? parseAmountToMinor(balance) ?? 0 : null,
+      });
     },
-    onSuccess: ({ primary }: { primary: Workspace; created: Workspace[] }) => {
-      setActiveWorkspaceId(primary.id);
+    onSuccess: (primaryWorkspaceId: string) => {
+      setActiveWorkspaceId(primaryWorkspaceId);
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
       router.replace('/(tabs)');
     },
   });
+
+  // Butonun aynı frame içinde iki kez tetiklenip (isPending henüz true olmadan) iki/dört
+  // kopya çalışma alanı oluşturmasını engelleyen ek koruma.
+  const handleSubmit = () => {
+    if (setupMutation.isPending) return;
+    setupMutation.mutate();
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -130,7 +123,7 @@ export default function WorkspaceSetupScreen() {
 
             <Button
               label="Çalışma Alanını Oluştur"
-              onPress={() => setupMutation.mutate()}
+              onPress={handleSubmit}
               loading={setupMutation.isPending}
               disabled={!canSubmit}
             />

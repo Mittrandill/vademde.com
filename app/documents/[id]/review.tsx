@@ -40,7 +40,7 @@ import {
 import { matchBankByName } from '@/features/banks/banks';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSuccessAlert, showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
@@ -524,15 +524,19 @@ export default function DocumentReviewScreen() {
         });
       }
     },
+    // Önceden onError yoktu: kayıt oluşturma (RLS/kısıt/tutar-tarih) hataları yalnızca sessiz
+    // isError state'ine düşüyor, kullanıcı "Kaydet"e bastıktan sonra ne olduğunu göremiyordu.
+    onError: (error) => showErrorAlert(error),
   });
 
   const discardMutation = useMutation({
     mutationFn: () => discardDocument(id as string),
     onSuccess: () => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
-      }
-      showSuccessAlert('Belge başarıyla silindi.', () => router.back());
+      showSaveSuccess('Belge başarıyla silindi.', () => router.back(), () => {
+        if (activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
+        }
+      });
     },
   });
 

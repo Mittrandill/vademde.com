@@ -15,7 +15,7 @@ import {
   type Counterparty,
 } from '@/features/counterparties/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 
 type PartyType = 'individual' | 'company';
 
@@ -86,18 +86,19 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
       return createCounterparty({ workspace_id: activeWorkspaceId, ...payload });
     },
     onSuccess: () => {
-      invalidate();
-      showSuccessAlert(isEditing ? 'Kişi/Firma başarıyla güncellendi.' : 'Kişi/Firma başarıyla oluşturuldu.', () =>
-        router.back()
+      showSaveSuccess(
+        isEditing ? 'Kişi/Firma başarıyla güncellendi.' : 'Kişi/Firma başarıyla oluşturuldu.',
+        () => router.back(),
+        invalidate
       );
     },
+    onError: (error) => showErrorAlert(error),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteCounterparty(id as string),
     onSuccess: () => {
-      invalidate();
-      showSuccessAlert('Kişi/Firma başarıyla silindi.', () => router.back());
+      showSaveSuccess('Kişi/Firma başarıyla silindi.', () => router.back(), invalidate);
     },
     onError: () => {
       Alert.alert(

@@ -36,25 +36,38 @@ export default function HomeScreen() {
 
   const workspacesQuery = useQuery({
     queryKey: queryKeys.workspaces(),
-    queryFn: async () => {
-      const data = await listMyWorkspaces();
-      if (!activeWorkspaceId && data.length > 0) {
-        setActiveWorkspaceId(data[0].id);
-      }
-      return data;
-    },
+    queryFn: listMyWorkspaces,
   });
 
   const workspaces = workspacesQuery.data ?? [];
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+  const firstWorkspaceId = workspaces[0]?.id ?? null;
 
-  // Oturum açmış ama hiç çalışma alanı olmayan kullanıcı (ör. yeni kayıt) burada boş bir
-  // form yerine doğrudan onboarding'in çalışma alanı kurulum ekranına yönlendirilir.
+  // Aktif çalışma alanı seçimi bir yan etkidir; queryFn'in içinde değil burada yapılır
+  // (queryFn saf kalır, fetch sırasında store mutasyonu olmaz). Henüz seçim yoksa ve veri
+  // geldiyse ilk çalışma alanı aktif edilir.
   useEffect(() => {
-    if (workspacesQuery.isSuccess && workspaces.length === 0) {
+    if (!activeWorkspaceId && firstWorkspaceId) {
+      setActiveWorkspaceId(firstWorkspaceId);
+    }
+  }, [activeWorkspaceId, firstWorkspaceId, setActiveWorkspaceId]);
+
+  // Oturum açmış ama hiç çalışma alanı olmayan kullanıcı (ör. yeni kayıt) buradan
+  // onboarding'e yönlendirilir. Koşul kritik: React Query, AsyncStorage'a persist edilmiş
+  // boş `[]` sonucunu ekran ilk mount olduğunda anında "success" olarak sunar; yalnızca
+  // `isSuccess && length===0`'a bakmak, çalışma alanı yeni oluşturulup /(tabs)'a dönüldüğü
+  // anda (henüz taze veri gelmeden) tekrar workspace-setup'a atıp sonsuz yönlendirme
+  // döngüsü/çökme kuruyordu. `isFetchedAfterMount` + `!isFetching` ile yalnızca ağdan
+  // gerçekten güncel ve boş sonuç geldiğinde yönlendirilir.
+  useEffect(() => {
+    if (
+      workspacesQuery.isFetchedAfterMount &&
+      !workspacesQuery.isFetching &&
+      workspaces.length === 0
+    ) {
       router.replace('/workspace-setup');
     }
-  }, [workspacesQuery.isSuccess, workspaces.length]);
+  }, [workspacesQuery.isFetchedAfterMount, workspacesQuery.isFetching, workspaces.length]);
 
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${now.getMonth()}`;

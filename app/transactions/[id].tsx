@@ -15,7 +15,7 @@ import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { deleteTransaction, getTransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -46,11 +46,13 @@ export default function TransactionDetailScreen() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteTransaction(id as string),
     onSuccess: () => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
-      }
-      showSuccessAlert('Hareket başarıyla silindi.', () => router.replace('/(tabs)/hareketler'));
+      showSaveSuccess('Hareket başarıyla silindi.', () => router.replace('/(tabs)/hareketler'), () => {
+        if (activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+        }
+      });
     },
+    onError: (error) => showErrorAlert(error),
   });
 
   function confirmDelete() {

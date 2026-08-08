@@ -77,6 +77,8 @@ function RootNavigator() {
         <Stack.Screen name="counterparties/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="counterparties/[id]" />
         <Stack.Screen name="banks/[code]" />
+        <Stack.Screen name="workspace/[id]/members" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="workspace/join" options={{ presentation: 'modal' }} />
       </Stack.Protected>
     </Stack>
   );

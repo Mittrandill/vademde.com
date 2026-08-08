@@ -20,7 +20,7 @@ import {
   type Transaction,
 } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
@@ -163,23 +163,29 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
       });
     },
     onSuccess: () => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
-      }
-      showSuccessAlert(isEditing ? 'Hareket başarıyla güncellendi.' : 'Hareket başarıyla oluşturuldu.', () =>
-        router.back()
+      showSaveSuccess(
+        isEditing ? 'Hareket başarıyla güncellendi.' : 'Hareket başarıyla oluşturuldu.',
+        () => router.back(),
+        () => {
+          if (activeWorkspaceId) {
+            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+          }
+        }
       );
     },
+    onError: (error) => showErrorAlert(error),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTransaction(id as string),
     onSuccess: () => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
-      }
-      showSuccessAlert('Hareket başarıyla silindi.', () => router.back());
+      showSaveSuccess('Hareket başarıyla silindi.', () => router.back(), () => {
+        if (activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+        }
+      });
     },
+    onError: (error) => showErrorAlert(error),
   });
 
   function confirmDelete() {

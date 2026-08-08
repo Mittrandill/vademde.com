@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { InteractionManager } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { supabase } from '@/services/supabase';
@@ -13,6 +14,7 @@ const WORKSPACE_TABLES = [
   'payments',
   'financial_documents',
   'document_processing_jobs',
+  'reminders',
 ] as const;
 
 // docs/06-teknik-mimari.md §10.6.3 — aktif çalışma alanına filtrelenmiş postgres_changes
@@ -23,8 +25,26 @@ export function useWorkspaceRealtime(workspaceId: string | null) {
   useEffect(() => {
     if (!workspaceId) return;
 
+    // Realtime olayı, cihazın kendi kaydettiği satırdan da geri döner; invalidation
+    // hemen çalışırsa, save ekranı hâlâ mount'tayken (başarı Alert'i / geri navigasyon
+    // sırasında) arka planda yeniden render tetikler ve Fabric çökme sınıfını (bkz.
+    // utils/alerts.ts) tüm kayıt türlerine yayardı. Bu yüzden invalidation, aktif
+    // etkileşim/animasyon bitene kadar InteractionManager ile ertelenir; ayrıca aynı
+    // entity için kısa aralıkta gelen olaylar tek bir ertelenmiş çağrıda birleştirilir.
+    const pending = new Set<string>();
+    let scheduled = false;
     const invalidate = (entity: string) => {
-      queryClient.invalidateQueries({ queryKey: [workspaceId, entity] });
+      pending.add(entity);
+      if (scheduled) return;
+      scheduled = true;
+      InteractionManager.runAfterInteractions(() => {
+        const entities = [...pending];
+        pending.clear();
+        scheduled = false;
+        for (const key of entities) {
+          queryClient.invalidateQueries({ queryKey: [workspaceId, key] });
+        }
+      });
     };
 
     let channel = supabase.channel(`workspace-${workspaceId}`);

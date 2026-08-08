@@ -283,6 +283,13 @@ export default function ProfileScreen() {
                     <Text variant="caption" color="textSecondary">
                       {w.type === 'business' ? 'İşletme' : 'Kişisel'}
                     </Text>
+                    <Pressable
+                      accessibilityLabel="Ekip"
+                      hitSlop={8}
+                      onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
+                    >
+                      <Ionicons name="people-outline" size={18} color={theme.colors.brandPrimary} />
+                    </Pressable>
                     {isOwner ? (
                       <>
                         <Pressable accessibilityLabel="Adını düzenle" hitSlop={8} onPress={() => startEditingWorkspace(w)}>
@@ -297,6 +304,12 @@ export default function ProfileScreen() {
                 </Row>
               );
             })}
+            <Button
+              label="Davet koduyla katıl"
+              variant="secondary"
+              icon="enter-outline"
+              onPress={() => router.push('/workspace/join')}
+            />
           </Stack>
         </Card>
 

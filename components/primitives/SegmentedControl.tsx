@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { LayoutAnimation, Platform, UIManager } from 'react-native';
 
 import { useTheme } from '@/theme';
@@ -29,7 +30,7 @@ export interface SegmentedControlProps<T extends string> {
 // grafit yüzey içinde kayan Saffron seçili segment olarak gösterilir (Apple segmented
 // control benzeri); ayrık kapsül grupları (bkz. filtre çipleri) burada kullanılmaz çünkü
 // bu bileşen içeriğine göre boyutlanan, sola hizalı ve münhasır (exclusive) bir seçimdir.
-export function SegmentedControl<T extends string>({
+function SegmentedControlInner<T extends string>({
   options,
   value,
   onChange,
@@ -95,3 +96,8 @@ export function SegmentedControl<T extends string>({
     </Row>
   );
 }
+
+// Aynı props ile gereksiz yeniden render'ı önler (ör. onboarding/filtre ekranlarında
+// options modül sabiti ve onChange bir state setter olduğundan referanslar sabittir).
+// memo, jenerik imzayı silmesin diye orijinal fonksiyon tipine cast edilir.
+export const SegmentedControl = memo(SegmentedControlInner) as typeof SegmentedControlInner;

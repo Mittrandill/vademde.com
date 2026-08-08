@@ -21,6 +21,7 @@ import {
 } from '@/features/documents/api';
 import { currentPeriodMonth, getCurrentOcrUsage } from '@/features/subscriptions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useMyWorkspaceRole } from '@/features/workspaces/useMyWorkspaceRole';
 import { queryKeys } from '@/services/queryKeys';
 import { hashArrayBuffer } from '@/utils/hash';
 
@@ -68,6 +69,7 @@ export default function TaraScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const { isViewer } = useMyWorkspaceRole();
   // Hesap detayından "X Ekstresi Ekle → Kameradan Tara" ile gelindiğinde taşınır (bkz.
   // app/accounts/[id].tsx); OCR sonucuna (review ekranına) aktarılır ki kullanıcı hangi
   // hesaba/türe taradığını tekrar seçmek zorunda kalmasın (bkz. B2/B3 notları).
@@ -245,6 +247,15 @@ export default function TaraScreen() {
   }
 
   async function requestScan(uri: string, fileName: string, mimeType: string) {
+    // Görüntüleyici rolü yazma yapamaz; tarama belge oluşturur (yazma) ve OCR kotası harcar.
+    // Kamera/galeri adımından sonra RLS hatasıyla karşılaşmak yerine baştan engellenir.
+    if (isViewer) {
+      Alert.alert(
+        'Yetki yok',
+        'Bu çalışma alanında yalnızca görüntüleme yetkiniz var. Belge taramak için çalışma alanı sahibinden düzenleyici rolü isteyin.'
+      );
+      return;
+    }
     if (quotaRemaining !== undefined && quotaRemaining <= 0) {
       showQuotaExceededAlert();
       return;

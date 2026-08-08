@@ -1073,6 +1073,56 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_invites: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          label: string | null
+          max_uses: number | null
+          revoked_at: string | null
+          role: string
+          used_count: number
+          workspace_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          max_uses?: number | null
+          revoked_at?: string | null
+          role?: string
+          used_count?: number
+          workspace_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          max_uses?: number | null
+          revoked_at?: string | null
+          role?: string
+          used_count?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           created_at: string
@@ -1143,6 +1193,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_edit_workspace: {
+        Args: { target_workspace_id: string }
+        Returns: boolean
+      }
+      create_workspace_invite: {
+        Args: {
+          p_expires_at?: string
+          p_label?: string
+          p_max_uses?: number
+          p_role?: string
+          p_workspace_id: string
+        }
+        Returns: {
+          code: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          label: string | null
+          max_uses: number | null
+          revoked_at: string | null
+          role: string
+          used_count: number
+          workspace_id: string
+        }
+      }
       increment_ocr_usage: {
         Args: { target_owner: string; target_period: string }
         Returns: undefined
@@ -1155,12 +1231,39 @@ export type Database = {
         Args: { target_workspace_id: string }
         Returns: boolean
       }
+      list_workspace_members: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          joined_at: string
+          role: string
+          user_id: string
+        }[]
+      }
       recompute_installment_progress: {
         Args: { target_installment_id: string }
         Returns: undefined
       }
       recompute_obligation_progress: {
         Args: { target_obligation_id: string }
+        Returns: undefined
+      }
+      redeem_workspace_invite: { Args: { p_code: string }; Returns: string }
+      remove_workspace_member: {
+        Args: { p_user_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
+      setup_initial_workspaces: {
+        Args: {
+          p_mode: string
+          p_name?: string
+          p_opening_balance_minor?: number
+        }
+        Returns: string
+      }
+      update_member_role: {
+        Args: { p_role: string; p_user_id: string; p_workspace_id: string }
         Returns: undefined
       }
     }

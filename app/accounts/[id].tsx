@@ -36,7 +36,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 
@@ -114,13 +114,15 @@ export default function AccountDetailScreen() {
   const archiveMutation = useMutation({
     mutationFn: () => archiveAccount(id as string),
     onSuccess: () => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
-      }
-      queryClient.removeQueries({ queryKey: ['account', id] });
-      showSuccessAlert('Hesap başarıyla arşivlendi.', () => router.back());
+      showSaveSuccess('Hesap başarıyla arşivlendi.', () => router.back(), () => {
+        if (activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
+        }
+        queryClient.removeQueries({ queryKey: ['account', id] });
+      });
     },
+    onError: (error) => showErrorAlert(error),
   });
 
   function confirmArchive() {

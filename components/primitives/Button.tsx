@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -18,7 +19,7 @@ export interface ButtonProps {
 
 // docs/08-tasarim-sistemi.md §12.16 — birincil buton Saffron, koyu metin, 54-56 pt;
 // yükleme sırasında buton boyutu değişmez.
-export function Button({ label, onPress, variant = 'primary', loading, disabled, icon }: ButtonProps) {
+function ButtonComponent({ label, onPress, variant = 'primary', loading, disabled, icon }: ButtonProps) {
   const theme = useTheme();
 
   const background =
@@ -60,3 +61,5 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
     </Pressable>
   );
 }
+
+export const Button = memo(ButtonComponent);

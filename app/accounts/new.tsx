@@ -12,7 +12,7 @@ import { createAccount, getAccount, updateAccount, type Account } from '@/featur
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseAmountToMinor } from '@/utils/money';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 
@@ -99,20 +99,24 @@ export default function NewAccountScreen() {
         : createAccount({ workspace_id: activeWorkspaceId as string, ...payload });
     },
     onSuccess: (account) => {
-      if (activeWorkspaceId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
-        if (isCreditCard) {
-          syncCreditCardStatementReminder(activeWorkspaceId, account).catch(() => {});
+      showSaveSuccess(
+        isEditing ? 'Hesap başarıyla güncellendi.' : 'Hesap başarıyla oluşturuldu.',
+        () => router.back(),
+        () => {
+          if (activeWorkspaceId) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
+            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
+            if (isCreditCard) {
+              syncCreditCardStatementReminder(activeWorkspaceId, account).catch(() => {});
+            }
+          }
+          if (isEditing) {
+            queryClient.invalidateQueries({ queryKey: ['account', id] });
+          }
         }
-      }
-      if (isEditing) {
-        queryClient.invalidateQueries({ queryKey: ['account', id] });
-      }
-      showSuccessAlert(isEditing ? 'Hesap başarıyla güncellendi.' : 'Hesap başarıyla oluşturuldu.', () =>
-        router.back()
       );
     },
+    onError: (error) => showErrorAlert(error),
   });
 
   const statementDayHasError = statementDay.length > 0 && !isValidDayOfMonth(statementDay);

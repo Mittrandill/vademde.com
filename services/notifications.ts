@@ -47,7 +47,20 @@ export type ReminderObligation = Pick<
 // docs/12-mvp-kabul-kriterleri.md — vade değişince bildirim yeniden planlanır, tamamlanınca iptal edilir.
 // Bu fonksiyon obligation her oluşturulduğunda/güncellendiğinde çağrılır; mevcut planlı
 // bildirimleri iptal edip gerekiyorsa üç kademeyi de yeniden planlar.
+// Dışa açık sarmalayıcı: hatırlatma senkronu bir kayıt (borç/alacak) oluşturulduktan/güncellendikten
+// SONRA save mutation'ının içinde await edilir. İçerideki ilk okumalar (getRemindersForObligation,
+// getNextPendingInstallment) ya da terminal-iptal upsert'i throw ederse, kayıt zaten yazılmışken
+// tüm save hataya düşüp kullanıcıya çökme/yanlış hata gösterirdi. Hatırlatma en iyi çaba bir yan
+// etkidir; bu dış katman onu tamamen yutar (kademe bazlı ince yalıtım için içerideki try/catch korunur).
 export async function syncObligationReminder(workspaceId: string, obligation: ReminderObligation): Promise<void> {
+  try {
+    await runSyncObligationReminder(workspaceId, obligation);
+  } catch (error) {
+    console.warn('[notifications] hatırlatma senkronu başarısız (kayıt etkilenmedi)', error);
+  }
+}
+
+async function runSyncObligationReminder(workspaceId: string, obligation: ReminderObligation): Promise<void> {
   const existingReminders = await getRemindersForObligation(obligation.id);
   const isTerminal = TERMINAL_STATUSES.has(obligation.status) || obligation.remaining_amount_minor <= 0;
 
@@ -90,23 +103,32 @@ export async function syncObligationReminder(workspaceId: string, obligation: Re
     const remindAt = buildRemindAt(effectiveDueDate, daysBefore, hour);
     if (!remindAt) continue;
 
-    const identifier = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `${stagePrefix}${label}`,
-        body: `${obligation.title} — ${formatMinorAmount(effectiveAmountMinor, obligation.currency_code)}`,
-        data: { obligationId: obligation.id, stage },
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: remindAt },
-    });
+    // Bu fonksiyon kayıt insert edildikten SONRA, save mutation'ının içinde await edilir.
+    // Bildirim planlama (izin/OS) veya reminders upsert'i (ağ/RLS) burada throw ederse,
+    // kayıt zaten oluşmuşken save mutation hataya düşer ve kullanıcı çökme/yanlış hata
+    // görürdü. Hatırlatma en iyi çaba bir yan etkidir: her kademe kendi içinde yalıtılır,
+    // biri patlasa da kayıt akışı bozulmaz (iptal çağrıları zaten .catch ile korunuyordu).
+    try {
+      const identifier = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `${stagePrefix}${label}`,
+          body: `${obligation.title} — ${formatMinorAmount(effectiveAmountMinor, obligation.currency_code)}`,
+          data: { obligationId: obligation.id, stage },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: remindAt },
+      });
 
-    await upsertReminder({
-      workspace_id: workspaceId,
-      obligation_id: obligation.id,
-      stage,
-      remind_at: remindAt.toISOString(),
-      notification_identifier: identifier,
-      status: 'scheduled',
-    });
+      await upsertReminder({
+        workspace_id: workspaceId,
+        obligation_id: obligation.id,
+        stage,
+        remind_at: remindAt.toISOString(),
+        notification_identifier: identifier,
+        status: 'scheduled',
+      });
+    } catch (error) {
+      console.warn('[notifications] hatırlatma planlanamadı', stage, error);
+    }
   }
 }
 

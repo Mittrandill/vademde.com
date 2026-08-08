@@ -18,7 +18,7 @@ import {
 } from '@/features/categories/api';
 import { CATEGORY_ICON_CHOICES, CATEGORY_COLOR_PALETTE, getSuggestedColorForIcon } from '@/features/categories/categoryIcons';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
@@ -98,18 +98,19 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
       return createCategory({ workspace_id: activeWorkspaceId, name: name.trim(), kind, icon, color });
     },
     onSuccess: () => {
-      invalidate();
-      showSuccessAlert(isEditing ? 'Kategori başarıyla güncellendi.' : 'Kategori başarıyla oluşturuldu.', () =>
-        router.back()
+      showSaveSuccess(
+        isEditing ? 'Kategori başarıyla güncellendi.' : 'Kategori başarıyla oluşturuldu.',
+        () => router.back(),
+        invalidate
       );
     },
+    onError: (error) => showErrorAlert(error),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteCategory(id as string),
     onSuccess: () => {
-      invalidate();
-      showSuccessAlert('Kategori başarıyla silindi.', () => router.back());
+      showSaveSuccess('Kategori başarıyla silindi.', () => router.back(), invalidate);
     },
     onError: () => {
       Alert.alert(

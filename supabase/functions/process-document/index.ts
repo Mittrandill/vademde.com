@@ -9,7 +9,23 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash';
+
+// Gemini inline_data ile gönderilen istek toplam ~20 MB ile sınırlıdır; base64 ham dosyayı
+// ~%33 şişirir, ayrıca prompt + şema da yer kaplar. Çok sayfalı ekstre bu sınırı aşınca
+// Gemini 4xx döndürüp belgeyi 'failed' yapıyordu; bunun yerine kullanıcıya net mesaj verilir.
+const MAX_INLINE_FILE_BYTES = 14 * 1024 * 1024;
+
+// Gemini çağrısı yanıtsız kalırsa arka plan görevi süresiz asılı kalmasın diye üst sınır.
+const GEMINI_TIMEOUT_MS = 170_000;
+
+// CORS: react-native-web istemcisi preflight (OPTIONS) gönderir; native istemci göndermez.
+// Bu başlıklar olmadan OPTIONS 405 dönüyordu (bkz. edge loglarında OPTIONS|405).
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 const DOCUMENT_TYPES = [
   'kredi', 'kredi_karti_ekstresi', 'cek', 'senet', 'fatura', 'abonelik', 'kira',
@@ -240,19 +256,27 @@ interface LineItemRow {
   remaining_minor: number | null;
 }
 
+const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' };
+
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders });
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'Yetkilendirme başlığı eksik' }), { status: 401 });
+    return new Response(JSON.stringify({ error: 'Yetkilendirme başlığı eksik' }), {
+      status: 401,
+      headers: jsonHeaders,
+    });
   }
 
   const { documentId } = (await req.json()) as ProcessRequest;
   if (!documentId) {
-    return new Response(JSON.stringify({ error: 'documentId zorunlu' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'documentId zorunlu' }), { status: 400, headers: jsonHeaders });
   }
 
   // Çağıranın bu belgeye erişimi olup olmadığını RLS ile doğrula (anon key + kullanıcı JWT).
@@ -267,7 +291,10 @@ Deno.serve(async (req: Request) => {
     .single();
 
   if (documentError || !document) {
-    return new Response(JSON.stringify({ error: 'Belge bulunamadı veya erişim yok' }), { status: 404 });
+    return new Response(JSON.stringify({ error: 'Belge bulunamadı veya erişim yok' }), {
+      status: 404,
+      headers: jsonHeaders,
+    });
   }
 
   // Depolama ve yazma işlemleri için service role (RLS'yi atlar, yalnızca sunucu tarafında).
@@ -281,7 +308,7 @@ Deno.serve(async (req: Request) => {
     .eq('id', document.workspace_id)
     .single();
   if (workspaceError || !workspace) {
-    return new Response(JSON.stringify({ error: 'Çalışma alanı bulunamadı' }), { status: 404 });
+    return new Response(JSON.stringify({ error: 'Çalışma alanı bulunamadı' }), { status: 404, headers: jsonHeaders });
   }
   const ownerId = workspace.owner_id;
   const periodMonth = new Date();
@@ -304,7 +331,7 @@ Deno.serve(async (req: Request) => {
     .eq('plan', plan)
     .single();
   if (planLimitsError || !planLimits) {
-    return new Response(JSON.stringify({ error: 'Plan limitleri okunamadı' }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'Plan limitleri okunamadı' }), { status: 500, headers: jsonHeaders });
   }
 
   const { data: usage } = await adminClient
@@ -318,7 +345,7 @@ Deno.serve(async (req: Request) => {
   if (usedCount >= planLimits.monthly_ocr_quota) {
     return new Response(
       JSON.stringify({ error: 'Aylık OCR kotanız doldu', quotaExceeded: true }),
-      { status: 402, headers: { 'Content-Type': 'application/json' } }
+      { status: 402, headers: jsonHeaders }
     );
   }
 
@@ -332,36 +359,62 @@ Deno.serve(async (req: Request) => {
     });
   await adminClient.from('financial_documents').update({ status: 'processing' }).eq('id', documentId);
 
-  try {
+  // İstemciyi 13-74 sn sürebilen Gemini çağrısından ayırıyoruz: ağır iş (indir → Gemini →
+  // ayrıştır → yaz) EdgeRuntime.waitUntil ile arka planda çalışır, handler hemen 202 döner.
+  // İstemci zaten belge status'ünü poll ediyor (app/(tabs)/tara.tsx documentQuery), bu yüzden
+  // fonksiyonun tam yanıtını beklemesine gerek yok — böylece mobil tarafta uzun bekleme/zaman
+  // aşımı kaynaklı "boş dönme/çökme" ortadan kalkar. Hata durumunda status='failed' + job
+  // last_error yazılır ve istemci bunu poll ile görür.
+  const runProcessing = async () => {
+   try {
     const { data: fileBlob, error: downloadError } = await adminClient.storage
       .from('financial-documents')
       .download(document.storage_path);
     if (downloadError || !fileBlob) throw new Error(`Belge indirilemedi: ${downloadError?.message}`);
 
     const arrayBuffer = await fileBlob.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
+      throw new Error(
+        'Belge çok büyük (14 MB üzeri). Lütfen daha düşük çözünürlükte tarayın veya çok sayfalı ekstreyi bölerek yükleyin.'
+      );
+    }
     const base64 = arrayBufferToBase64(arrayBuffer);
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: PROMPT },
-                { inline_data: { mime_type: document.mime_type, data: base64 } },
-              ],
+    // Gemini çağrısına açık zaman aşımı: yanıt gelmezse arka plan görevi süresiz asılı kalmaz.
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), GEMINI_TIMEOUT_MS);
+    let geminiResponse: Response;
+    try {
+      geminiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: abortController.signal,
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: PROMPT },
+                  { inline_data: { mime_type: document.mime_type, data: base64 } },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: RESPONSE_SCHEMA,
             },
-          ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA,
-          },
-        }),
+          }),
+        }
+      );
+    } catch (fetchError) {
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        throw new Error('Belge analizi zaman aşımına uğradı. Lütfen tekrar deneyin veya daha küçük bir belge yükleyin.');
       }
-    );
+      throw fetchError;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!geminiResponse.ok) {
       throw new Error(`Gemini API hatası: ${geminiResponse.status} ${await geminiResponse.text()}`);
@@ -371,7 +424,14 @@ Deno.serve(async (req: Request) => {
     const outputText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!outputText) throw new Error('Gemini yanıtı boş');
 
-    const parsed = JSON.parse(outputText);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(outputText);
+    } catch {
+      // Model bazen (özellikle uzun ekstrelerde MAX_TOKENS ile kesilince) geçersiz/yarım JSON
+      // döndürebiliyor; korumasız JSON.parse burada throw edip belgeyi genel 500 ile bozuyordu.
+      throw new Error('Belge okunamadı: analiz sonucu beklenen biçimde değil. Lütfen tekrar deneyin.');
+    }
 
     // Toplam tutar iki bağımsız yoldan elde edilir: modelin verdiği ondalık sayı ve
     // belgeden birebir kopyalanan ham metnin kod tarafından ayrıştırılması. İkisi
@@ -575,10 +635,9 @@ Deno.serve(async (req: Request) => {
       .eq('document_id', documentId)
       .eq('status', 'processing');
 
-    return new Response(JSON.stringify({ success: true, documentId }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
+    // Buraya ulaşıldıysa belge 'ready_for_review' ve job 'succeeded' olarak yazıldı; arka
+    // plan görevi başarıyla tamamlanır (istemci poll ile inceleme ekranına geçer).
+   } catch (error) {
     const message = error instanceof Error ? error.message : 'Bilinmeyen hata';
 
     await adminClient.from('financial_documents').update({ status: 'failed' }).eq('id', documentId);
@@ -587,10 +646,14 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'failed', last_error: message, completed_at: new Date().toISOString() })
       .eq('document_id', documentId)
       .eq('status', 'processing');
+   }
+  };
 
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  // @ts-ignore Deno edge runtime global — yanıt gönderildikten sonra işi arka planda sürdürür.
+  EdgeRuntime.waitUntil(runProcessing());
+
+  return new Response(JSON.stringify({ accepted: true, documentId }), {
+    status: 202,
+    headers: jsonHeaders,
+  });
 });

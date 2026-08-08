@@ -29,6 +29,24 @@ export async function createWorkspace(input: Pick<TablesInsert<'workspaces'>, 'n
   return data;
 }
 
+// Onboarding'in atomik kurulumu: 'both' modunda iki çalışma alanı, tekil modda çalışma
+// alanı + isteğe bağlı açılış bakiyeli "Kasa" hesabı tek transaction'da (bkz.
+// setup_initial_workspaces RPC). Birincil çalışma alanının id'sini döner.
+export async function setupInitialWorkspaces(input: {
+  mode: 'personal' | 'business' | 'both';
+  name?: string | null;
+  openingBalanceMinor?: number | null;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc('setup_initial_workspaces', {
+    p_mode: input.mode,
+    p_name: input.name ?? undefined,
+    p_opening_balance_minor: input.openingBalanceMinor ?? undefined,
+  });
+  if (error) throw error;
+  if (!data) throw new Error('Çalışma alanı oluşturulamadı');
+  return data as string;
+}
+
 // RLS (workspaces_update_owner) yalnızca sahibine izin verir — burada ekstra bir sahiplik
 // kontrolü yapılmaz, çağıran ekran (app/profile) düğmeyi zaten yalnızca sahibe gösterir.
 export async function updateWorkspaceName(id: string, name: string): Promise<Workspace> {
