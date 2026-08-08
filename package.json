@@ -45,6 +45,9 @@
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
+  "overrides": {
+    "react-native-worklets": "0.10.3"
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
