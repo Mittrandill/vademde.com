@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { LayoutAnimation, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
@@ -30,12 +29,13 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(theme.motion.stateChangeMs, 'easeInEaseOut', 'opacity')
-    );
-  }, [state.index, theme.motion.stateChangeMs]);
-
+  // Sekme değişiminde global LayoutAnimation.configureNext KULLANILMAZ: bu legacy API
+  // Fabric/New Architecture'da bir sonraki native layout commit'inin TAMAMINA uygulanır
+  // (yalnızca bu bileşene değil). Kaydet/Sil sonrası router.replace('/(tabs)/...') ile her
+  // sekme geçişinde bu tetiklenip, aynı anda çalışan başka bir shadow tree güncellemesiyle
+  // (liste yeniden render, ekran unmount) çakışınca Fabric segfault veriyordu (bkz. TestFlight
+  // crash raporları: "kayıt sonrası" ve "silme sonrası" çökmeler, ikisi de
+  // UIManager::animationTick / LayoutAnimationDelegateProxy içinde crash).
   return (
     <View
       style={{

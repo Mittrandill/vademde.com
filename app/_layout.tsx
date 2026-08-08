@@ -47,6 +47,9 @@ function RootNavigator() {
     >
       {/* docs/03-bilgi-mimarisi-ekranlar.md §5.2 — üç değer önerisi ekranı yalnızca ilk
           açılışta ve oturum yokken (auth) grubundan önce gösterilir. */}
+      {/* Oturum durumundan bağımsız her zaman erişilebilir — App Store gizlilik beyanı ve
+          tara.tsx'teki OCR izin ekranı buraya bağlantı verir (bkz. app/legal/privacy-policy.tsx). */}
+      <Stack.Screen name="legal/privacy-policy" options={{ presentation: 'modal' }} />
       <Stack.Protected guard={!session && !hasSeenWelcome}>
         <Stack.Screen name="(onboarding)" />
       </Stack.Protected>

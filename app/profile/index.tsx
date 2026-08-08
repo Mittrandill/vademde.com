@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
@@ -41,6 +44,10 @@ export default function ProfileScreen() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState('');
+  // docs/07-guvenlik-gizlilik.md §11.3 — taranan belgelerin onay/iptal sonrası ham dosyası
+  // Storage'da saklansın mı sorusu; yalnızca cihazda tutulur (workspace/hesap değil, kullanıcı
+  // tercihi). Anahtar hiç yazılmadıysa varsayılan "sakla" (true) — bkz. app/(tabs)/tara.tsx.
+  const [retainOriginalDefault, setRetainOriginalDefault] = useState(true);
 
   const profileQuery = useQuery({
     queryKey: queryKeys.profile(),
@@ -57,6 +64,17 @@ export default function ProfileScreen() {
       setFullName(profileQuery.data.full_name ?? '');
     }
   }, [profileQuery.data, isEditingName]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(RETAIN_ORIGINAL_DEFAULT_KEY).then((value) => {
+      if (value !== null) setRetainOriginalDefault(value !== 'false');
+    });
+  }, []);
+
+  function handleToggleRetainOriginal(value: boolean) {
+    setRetainOriginalDefault(value);
+    AsyncStorage.setItem(RETAIN_ORIGINAL_DEFAULT_KEY, value ? 'true' : 'false').catch(() => {});
+  }
 
   const updateNameMutation = useMutation({
     mutationFn: () => {
@@ -310,6 +328,34 @@ export default function ProfileScreen() {
               icon="enter-outline"
               onPress={() => router.push('/workspace/join')}
             />
+          </Stack>
+        </Card>
+
+        <Card>
+          <Stack gap="sm">
+            <Text variant="caption" color="textSecondary">
+              GİZLİLİK
+            </Text>
+            <Row align="center" style={{ justifyContent: 'space-between' }}>
+              <Stack gap="xxs" style={{ flex: 1, marginRight: theme.spacing.sm }}>
+                <Text variant="body">Belgeleri işlem sonrasında sakla</Text>
+                <Text variant="caption" color="textSecondary">
+                  Kapatırsan, taranan belge onaylandıktan/iptal edildikten sonra ham görüntü
+                  depolamadan silinir; oluşan kayıt etkilenmez.
+                </Text>
+              </Stack>
+              <Switch
+                value={retainOriginalDefault}
+                onValueChange={handleToggleRetainOriginal}
+                trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
+              />
+            </Row>
+            <Pressable onPress={() => router.push('/legal/privacy-policy')}>
+              <Row align="center" style={{ justifyContent: 'space-between', paddingTop: theme.spacing.xs }}>
+                <Text variant="body">Gizlilik Politikası ve KVKK Aydınlatma Metni</Text>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+              </Row>
+            </Pressable>
           </Stack>
         </Card>
 

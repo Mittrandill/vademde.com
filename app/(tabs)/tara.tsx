@@ -24,6 +24,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useMyWorkspaceRole } from '@/features/workspaces/useMyWorkspaceRole';
 import { queryKeys } from '@/services/queryKeys';
 import { hashArrayBuffer } from '@/utils/hash';
+import { RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — belge görüntüsü buluta gönderilmeden önce
 // kullanıcıdan açık onay alınır (App Store gizlilik gereksinimi).
@@ -180,12 +181,14 @@ export default function TaraScreen() {
   ) {
     if (!activeWorkspaceId) return;
     try {
+      const retainOriginalDefault = await AsyncStorage.getItem(RETAIN_ORIGINAL_DEFAULT_KEY);
       const document = await uploadAndCreateDocument({
         workspaceId: activeWorkspaceId,
         uri,
         fileName,
         mimeType,
         contentHash,
+        retainOriginal: retainOriginalDefault !== 'false',
       });
       setDocumentId(document.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.document(activeWorkspaceId, document.id) });
@@ -340,6 +343,11 @@ export default function TaraScreen() {
             <Text variant="body" color="textSecondary">
               {OCR_CONSENT_TEXT}
             </Text>
+            <Pressable onPress={() => router.push('/legal/privacy-policy')}>
+              <Text variant="caption" style={{ color: theme.colors.brandPrimary, textDecorationLine: 'underline' }}>
+                Gizlilik Politikası ve KVKK Aydınlatma Metnini oku
+              </Text>
+            </Pressable>
           </Stack>
           <Stack gap="sm">
             <Button label="Kabul Et ve Akıllı Tara" onPress={handleConsentAccept} />

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { InteractionManager, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,9 +53,14 @@ export default function WorkspaceSetupScreen() {
       });
     },
     onSuccess: (primaryWorkspaceId: string) => {
+      // review.tsx'teki aynı Fabric çakışması: invalidation ve navigasyon aynı anda/ters
+      // sırada tetiklenirse ekran hâlâ mount'tayken arkadaki view çöküyor. Navigasyon hemen
+      // (senkron), invalidation bir sonraki etkileşim turuna ertelenir.
       setActiveWorkspaceId(primaryWorkspaceId);
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
       router.replace('/(tabs)');
+      InteractionManager.runAfterInteractions(() => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
+      });
     },
   });
 

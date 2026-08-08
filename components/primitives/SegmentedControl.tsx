@@ -1,15 +1,10 @@
 import { memo } from 'react';
-import { LayoutAnimation, Platform, UIManager } from 'react-native';
 
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/colors';
 import { Pressable } from './Pressable';
 import { Row } from './Stack';
 import { Text } from './Text';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 export interface SegmentedControlOption<T extends string> {
   key: T;
@@ -43,7 +38,9 @@ function SegmentedControlInner<T extends string>({
 
   function handleSelect(key: T) {
     if (key === value) return;
-    LayoutAnimation.configureNext(LayoutAnimation.create(theme.motion.stateChangeMs, 'easeInEaseOut', 'opacity'));
+    // LayoutAnimation.configureNext KULLANILMAZ — bu bileşen liste/query invalidation
+    // içeren ekranlarda (hareketler, obligations vb.) da kullanılıyor; global legacy
+    // animasyon burada da aynı Fabric segfault sınıfına yol açabilir (bkz. TabBar.tsx).
     onChange(key);
   }
 

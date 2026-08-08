@@ -15,6 +15,7 @@ import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { BankLogo } from '@/components/finance/BankLogo';
 import {
+  deleteDocumentOriginal,
   discardDocument,
   getDocument,
   getDocumentFields,
@@ -23,7 +24,7 @@ import {
   getSignedUrl,
   markDocumentConfirmed,
 } from '@/features/documents/api';
-import { listAccounts } from '@/features/accounts/api';
+import { createAccount, listAccounts } from '@/features/accounts/api';
 import { listCategories, createCategory } from '@/features/categories/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
 import { createObligation, createInstallmentPlan, type Installment } from '@/features/obligations/api';
@@ -40,7 +41,8 @@ import {
 import { matchBankByName } from '@/features/banks/banks';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
-import { showSuccessAlert, showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
+import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
@@ -100,10 +102,16 @@ export default function DocumentReviewScreen() {
   // arasında otomatik eşleştirme (docs/04-ocr-belge-isleme.md §7.4). Eşleşme bulunamazsa
   // kullanıcı AccountPicker'dan elle seçer — form akışı bozulmaz.
   const [cardLastFourFromOcr, setCardLastFourFromOcr] = useState<string | null>(null);
+  // Kartın kesim tarihi (statement_day türetmek için) — yalnızca yeni kart hızlı-ekleme
+  // önerisinde kullanılır, forma yazılmaz.
+  const [cardStatementDateFromOcr, setCardStatementDateFromOcr] = useState<string | null>(null);
   // paramAccountId zaten accountId'yi doldurduysa aşağıdaki eşleştirme useEffect'i onu
   // hiç çalıştırmıyor (kontrolü !accountId); burada true başlatmak yalnızca niyeti
   // açık kılar, davranışı değiştirmez.
   const [cardAccountMatchAttempted, setCardAccountMatchAttempted] = useState(!!paramAccountId);
+  // Eşleşme bulunamayan (kayıtsız) kart için "kayıtlı kartlara eklensin mi?" sorusu
+  // kullanıcıya yalnızca bir kez sorulur.
+  const [cardQuickAddOffered, setCardQuickAddOffered] = useState(false);
   // "Sadece toplam borç" ile "harcamaları kategorilere ayır" arasındaki seçim — ikincisinde
   // her ekstre satırı için ayrı bir gider işlemi ve kategori seçimi gerekir.
   const [categorizeCardSpending, setCategorizeCardSpending] = useState(false);
@@ -184,13 +192,14 @@ export default function DocumentReviewScreen() {
           totalRepaymentMinor?: number | null;
           interestRatePercent?: number | null;
         };
-        card?: { bankName?: string | null; cardLastFourDigits?: string | null };
+        card?: { bankName?: string | null; cardLastFourDigits?: string | null; statementDate?: string | null };
       } | null;
       const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? null;
       setExtractedBankName(ocrBankName);
       const matchedBankCode = matchBankByName(ocrBankName);
       if (matchedBankCode) setBankCode(matchedBankCode);
       if (summary?.card?.cardLastFourDigits) setCardLastFourFromOcr(summary.card.cardLastFourDigits);
+      if (summary?.card?.statementDate) setCardStatementDateFromOcr(summary.card.statementDate);
 
       if (document.document_type === 'kredi') {
         if (summary?.loan?.interestRatePercent != null) {
@@ -260,6 +269,62 @@ export default function DocumentReviewScreen() {
     );
     if (match) setAccountId(match.id);
   }, [cardAccountMatchAttempted, cardLastFourFromOcr, accountsQuery.isSuccess, accountsQuery.data, accountId]);
+
+  // Eşleşme denendi ama kart kayıtlı hesaplarda yoktu: kullanıcıya kayıtlı kartlara
+  // eklemek isteyip istemediği sorulur (aksi halde HESAP alanında hiçbir seçenek
+  // görünmez, kullanıcı önce Hesaplar'a gidip kartı elle eklemek zorunda kalırdı).
+  // statement_day/payment_due_day OCR'dan türetilebiliyorsa doldurulur ki ekstre
+  // yükleme hatırlatması (syncCreditCardStatementReminder) da otomatik kurulsun;
+  // credit_limit gibi OCR'da olmayan alanlar kullanıcı tarafından Hesaplar'dan
+  // sonradan tamamlanır.
+  const quickAddCardMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspaceId || !cardLastFourFromOcr) throw new Error('Kart bilgisi eksik');
+      const statementDay = cardStatementDateFromOcr ? Number(cardStatementDateFromOcr.slice(8, 10)) : NaN;
+      const paymentDueDay = dueDate ? Number(dueDate.slice(8, 10)) : NaN;
+      const account = await createAccount({
+        workspace_id: activeWorkspaceId,
+        name: extractedBankName ? `${extractedBankName} Kredi Kartı` : `Kredi Kartı •••• ${cardLastFourFromOcr}`,
+        type: 'credit_card',
+        bank_code: bankCode,
+        card_last_four: cardLastFourFromOcr,
+        statement_day: statementDay >= 1 && statementDay <= 31 ? statementDay : null,
+        payment_due_day: paymentDueDay >= 1 && paymentDueDay <= 31 ? paymentDueDay : null,
+      });
+      syncCreditCardStatementReminder(activeWorkspaceId, account).catch(() => {});
+      return account;
+    },
+    onSuccess: (account) => {
+      if (activeWorkspaceId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
+      }
+      setAccountId(account.id);
+    },
+    onError: (error) => showErrorAlert(error),
+  });
+
+  useEffect(() => {
+    if (
+      cardQuickAddOffered ||
+      !cardAccountMatchAttempted ||
+      accountId ||
+      !cardLastFourFromOcr ||
+      documentType !== 'kredi_karti_ekstresi'
+    ) {
+      return;
+    }
+    setCardQuickAddOffered(true);
+    Alert.alert(
+      'Kart Kayıtlı Değil',
+      `•••• ${cardLastFourFromOcr}${extractedBankName ? ` (${extractedBankName})` : ''} numaralı kart kayıtlı hesaplarınızda bulunamadı. Kayıtlı kartlarınıza eklemek ister misiniz?`,
+      [
+        { text: 'Şimdi Değil', style: 'cancel' },
+        { text: 'Kartı Ekle', onPress: () => quickAddCardMutation.mutate() },
+      ]
+    );
+    // quickAddCardMutation kasıtlı olarak deps dışında bırakıldı (yukarıdaki not).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardQuickAddOffered, cardAccountMatchAttempted, accountId, cardLastFourFromOcr, documentType, extractedBankName]);
 
   // Kredi taksit tablosunu (vade + tutar) düzenlenebilir taslağa bir kez kopyalar;
   // sonraki her düzenleme yalnızca yerel taslağı günceller, OCR verisini değil. Vadesi
@@ -482,14 +547,20 @@ export default function DocumentReviewScreen() {
       // invalidation + ekran değişimi tetiklemek, Fabric henüz mount/unmount
       // transaction'ını bitirmeden view'ları söküp "componentViewDescriptorWithTag"
       // assertion'ıyla native çökmeye yol açabiliyor (bkz. obligations/[id].tsx'teki
-      // aynı düzeltme) — hem invalidation hem navigasyon Alert'in "Tamam" butonuna
-      // ve InteractionManager.runAfterInteractions'a ertelenir, aksi halde ekran hâlâ
-      // mount'luyken arka planda liste yeniden render olup çökmeye yol açabilir.
+      // aynı düzeltme). Bu yüzden navigasyon Alert'in "Tamam" butonunda hemen (senkron)
+      // tetiklenir, invalidation ise InteractionManager.runAfterInteractions ile bir
+      // sonraki tick'e ertelenir — ikisi aynı anda/ters sırada çalışırsa modal hâlâ
+      // mount'tayken arka planda liste yeniden render olup çökmeye yol açar.
       function invalidateAll() {
         if (!activeWorkspaceId) return;
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
+        // docs/07-guvenlik-gizlilik.md §11.3 — kullanıcı "işlem sonrası sakla"yı kapattıysa
+        // ham belge artık gerekmiyor; finansal kayıt zaten oluştu, yalnızca dosya silinir.
+        if (documentQuery.data?.retain_original === false) {
+          deleteDocumentOriginal(documentQuery.data.storage_path).catch(() => {});
+        }
       }
 
       // Kısmi başarılar sessizce geçilmez: ana kayıt oluştu ama yan kayıtlar
@@ -507,21 +578,19 @@ export default function DocumentReviewScreen() {
           [
             {
               text: 'Tamam',
-              onPress: () =>
-                InteractionManager.runAfterInteractions(() => {
-                  invalidateAll();
-                  router.replace('/(tabs)/hareketler');
-                }),
+              onPress: () => {
+                router.replace('/(tabs)/hareketler');
+                InteractionManager.runAfterInteractions(invalidateAll);
+              },
             },
           ]
         );
       } else {
-        showSuccessAlert('Belge başarıyla onaylandı ve kayıt oluşturuldu.', () => {
-          InteractionManager.runAfterInteractions(() => {
-            invalidateAll();
-            router.replace('/(tabs)/hareketler');
-          });
-        });
+        showSaveSuccess(
+          'Belge başarıyla onaylandı ve kayıt oluşturuldu.',
+          () => router.replace('/(tabs)/hareketler'),
+          invalidateAll
+        );
       }
     },
     // Önceden onError yoktu: kayıt oluşturma (RLS/kısıt/tutar-tarih) hataları yalnızca sessiz
@@ -535,6 +604,9 @@ export default function DocumentReviewScreen() {
       showSaveSuccess('Belge başarıyla silindi.', () => router.back(), () => {
         if (activeWorkspaceId) {
           queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
+        }
+        if (documentQuery.data?.retain_original === false) {
+          deleteDocumentOriginal(documentQuery.data.storage_path).catch(() => {});
         }
       });
     },

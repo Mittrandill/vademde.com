@@ -16,6 +16,9 @@ export interface UploadDocumentInput {
   fileName: string;
   mimeType: string;
   contentHash?: string;
+  // docs/07-guvenlik-gizlilik.md §11.3 — "orijinal belgeyi saklama veya işlem sonrası
+  // silme tercihi". Belirtilmezse (ör. eski çağrılar) varsayılan true — davranış değişmez.
+  retainOriginal?: boolean;
 }
 
 // docs/12-mvp-kabul-kriterleri.md — "Aynı belge tekrar yüklendiğinde mükerrer uyarısı gösterilir."
@@ -46,6 +49,7 @@ export async function uploadAndCreateDocument({
   fileName,
   mimeType,
   contentHash,
+  retainOriginal = true,
 }: UploadDocumentInput): Promise<FinancialDocument> {
   const documentId = generateUuid();
   const storagePath = `${workspaceId}/${documentId}/${sanitizeStorageFileName(fileName)}`;
@@ -72,6 +76,7 @@ export async function uploadAndCreateDocument({
       file_size_bytes: arrayBuffer.byteLength,
       content_hash: contentHash ?? hashArrayBuffer(arrayBuffer),
       status: 'uploaded',
+      retain_original: retainOriginal,
     })
     .select('*')
     .single();
@@ -154,6 +159,15 @@ export async function getSignedUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60 * 10);
   if (error) throw error;
   return data.signedUrl;
+}
+
+// docs/07-guvenlik-gizlilik.md §11.3 — kullanıcı "işlem sonrası sakla" tercihini kapattıysa
+// (retain_original=false), belge onaylanıp/iptal edilip artık gerekmediğinde ham görüntü
+// Storage'dan silinir. financial_documents satırı (ve varsa bağlı işlem/borç kaydı) kalır —
+// yalnızca ham dosya kaldırılır, kayıtlar arası bağ bozulmaz (bkz. CLAUDE.md kural #6).
+export async function deleteDocumentOriginal(storagePath: string): Promise<void> {
+  const { error } = await supabase.storage.from(BUCKET).remove([storagePath]);
+  if (error) throw error;
 }
 
 export async function markDocumentConfirmed(
