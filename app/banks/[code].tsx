@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -16,16 +17,33 @@ import { StatusBadge } from '@/components/finance/StatusBadge';
 import { getBankLoanLedger } from '@/features/banks/api';
 import { BANK_NAME } from '@/features/banks/banks';
 import { listObligations, ACTIVE_OBLIGATION_STATUSES, type ObligationWithRelations } from '@/features/obligations/api';
+import { listAccounts, type Account } from '@/features/accounts/api';
+import { getAccountBalances } from '@/features/reports/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
+import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
 
+const ACCOUNT_TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
+  cash: 'cash-outline',
+  bank: 'business-outline',
+  wallet: 'wallet-outline',
+  credit_card: 'card-outline',
+};
+
+const ACCOUNT_TYPE_LABEL: Record<Account['type'], string> = {
+  cash: 'Kasa',
+  bank: 'Banka',
+  wallet: 'Cüzdan',
+  credit_card: 'Kredi Kartı',
+};
+
 const TAB_PAGE_SIZE = 10;
-type DetailTab = 'genel' | 'krediler';
+type DetailTab = 'genel' | 'hesaplar' | 'krediler';
 
 // app/obligations/[id].tsx'teki kredi detayıyla aynı hero + sekme deseni (DetailScaffold/
 // DetailHeroCard üzerinden paylaşılıyor): kredi kayıtları kişi/firma değil banka bazlı
@@ -38,6 +56,7 @@ export default function BankDetailScreen() {
   const enabled = !!activeWorkspaceId && !!code;
   const [tab, setTab] = useState<DetailTab>('genel');
   const [obligationsPage, setObligationsPage] = useState(0);
+  const [accountsPage, setAccountsPage] = useState(0);
 
   const ledgerQuery = useQuery({
     queryKey: activeWorkspaceId
@@ -62,6 +81,23 @@ export default function BankDetailScreen() {
     enabled,
   });
 
+  // Hesaplar ve kredi kartları da (accounts.bank_code) bu bankaya bağlanır — hesap listesi
+  // workspace başına küçük olduğundan (Hesaplar ekranındaki aynı desen) tek seferde çekilip
+  // burada bank_code'a göre filtrelenir, ayrı bir filtreli endpoint gerekmez.
+  const accountsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
+    queryFn: () => listAccounts(activeWorkspaceId as string),
+    enabled,
+  });
+  // Hesaplar ekranıyla (app/accounts/index.tsx) aynı ad-hoc anahtar kullanılır — böylece
+  // iki ekran arasında geçişte bu sorgu yeniden çekilmez, cache paylaşılır.
+  const balancesQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
+    queryFn: () => getAccountBalances(activeWorkspaceId as string),
+    enabled,
+  });
+  const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
+
   const ledger = ledgerQuery.data;
   const bankName = BANK_NAME[code as string] ?? (code as string);
 
@@ -71,6 +107,14 @@ export default function BankDetailScreen() {
   const openObligations = allOpenObligations.slice(
     effectiveObligationsPage * TAB_PAGE_SIZE,
     effectiveObligationsPage * TAB_PAGE_SIZE + TAB_PAGE_SIZE
+  );
+
+  const allBankAccounts = (accountsQuery.data ?? []).filter((a) => a.bank_code === code);
+  const accountsTotalPages = Math.max(1, Math.ceil(allBankAccounts.length / TAB_PAGE_SIZE));
+  const effectiveAccountsPage = Math.min(accountsPage, accountsTotalPages - 1);
+  const bankAccounts = allBankAccounts.slice(
+    effectiveAccountsPage * TAB_PAGE_SIZE,
+    effectiveAccountsPage * TAB_PAGE_SIZE + TAB_PAGE_SIZE
   );
 
   const hasOverdue = (ledger?.overdueCount ?? 0) > 0;
@@ -84,6 +128,7 @@ export default function BankDetailScreen() {
 
   const tabOptions: { key: DetailTab; label: string }[] = [
     { key: 'genel', label: 'Genel' },
+    { key: 'hesaplar', label: `Hesaplar (${allBankAccounts.length})` },
     { key: 'krediler', label: `Krediler (${allOpenObligations.length})` },
   ];
 
@@ -121,6 +166,7 @@ export default function BankDetailScreen() {
           <StatColumns
             key="stats"
             columns={[
+              { label: 'HESAP', value: allBankAccounts.length },
               { label: 'AÇIK KREDİ', value: ledger?.openCount ?? 0 },
               {
                 label: 'EN YAKIN VADE',
@@ -142,6 +188,7 @@ export default function BankDetailScreen() {
               <Text variant="cardTitle">Banka Bilgileri</Text>
             </Row>
             <Divider />
+            <InfoRow label="Hesap Sayısı" value={String(allBankAccounts.length)} />
             <InfoRow label="Açık Kredi Sayısı" value={String(ledger?.openCount ?? 0)} />
             <InfoRow label="Kalan Borç" value={formatMinorAmount(ledger?.payableMinor ?? 0)} />
             {totalPayableMinor > 0 ? (
@@ -153,6 +200,25 @@ export default function BankDetailScreen() {
             ) : null}
           </Stack>
         </Card>
+      ) : tab === 'hesaplar' ? (
+        <Stack gap="md">
+          {bankAccounts.length === 0 ? (
+            <EmptyState icon="wallet-outline" message="Bu bankaya ait hesap veya kart yok." />
+          ) : (
+            <Stack gap="xs">
+              {bankAccounts.map((account) => (
+                <BankAccountRow
+                  key={account.id}
+                  account={account}
+                  balanceMinor={balanceByAccountId.get(account.id) ?? account.opening_balance_minor}
+                />
+              ))}
+            </Stack>
+          )}
+          {accountsTotalPages > 1 ? (
+            <Pagination page={effectiveAccountsPage} totalPages={accountsTotalPages} onChange={setAccountsPage} />
+          ) : null}
+        </Stack>
       ) : (
         <Stack gap="md">
           {openObligations.length === 0 ? (
@@ -210,6 +276,54 @@ function OpenLoanRow({ obligation }: { obligation: ObligationWithRelations }) {
             direction={obligation.direction as 'payable' | 'receivable'}
             overdue={obligation.status === 'gecikti'}
             variant="body"
+          />
+        </Row>
+      </Card>
+    </Pressable>
+  );
+}
+
+// Hesaplar ekranındaki (app/accounts/index.tsx) satırla aynı görsel dil — normal hesap ve
+// kredi kartı burada birlikte listelenir, tür rozetiyle ayrışır.
+function BankAccountRow({ account, balanceMinor }: { account: Account; balanceMinor: number }) {
+  const theme = useTheme();
+  const type = account.type as Account['type'];
+
+  return (
+    <Pressable onPress={() => router.push(`/accounts/${account.id}`)}>
+      <Card>
+        <Row gap="sm" align="center">
+          <BankLogo bankCode={account.bank_code} fallbackIcon={ACCOUNT_TYPE_ICON[type]} size={36} />
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="cardTitle" numberOfLines={1}>
+              {account.name}
+            </Text>
+            <Row gap="xs" align="center">
+              <View
+                style={{
+                  paddingHorizontal: theme.spacing.xs,
+                  paddingVertical: 2,
+                  borderRadius: 999,
+                  backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
+                }}
+              >
+                <Text variant="caption" color="textSecondary">
+                  {ACCOUNT_TYPE_LABEL[type]}
+                </Text>
+              </View>
+              {account.iban ? (
+                <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
+                  {maskIban(account.iban)}
+                </Text>
+              ) : null}
+            </Row>
+          </Stack>
+          <Amount
+            amountMinor={balanceMinor}
+            currencyCode={account.currency_code}
+            variant="cardTitle"
+            numberOfLines={1}
+            overdue={balanceMinor < 0}
           />
         </Row>
       </Card>

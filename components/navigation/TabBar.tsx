@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 
 import { useTheme } from '@/theme';
-import { Text } from '@/components/primitives';
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   index: 'home',
@@ -120,11 +119,9 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 
       {/* Tara, barın normal akışındaki bir sekme değil — barın tam ortasında, tepesinden
           taşarak yüzen ayrı bir dairesel aksiyon düğmesi (bkz. yukarıdaki TARA_CIRCLE_SIZE/
-          TARA_OVERLAP notu). Diğer sekmelerin odak durumuna göre genişleyip daralması
-          (flexShrink/paddingHorizontal, bkz. TabItem) barın toplam genişliğini değiştirip
-          ortadaki boşluğu kaydırabilir; bağımsız, tam genişlikte mutlak konumlu bir katman
-          olarak çizildiğinde bu kaymadan hiç etkilenmeden her zaman tam ortada kalır. Her
-          zaman marka rengiyle (seçili gibi) görünür — gerçek odak durumundan bağımsız,
+          TARA_OVERLAP notu). Bağımsız, tam genişlikte mutlak konumlu bir katman olarak
+          çizildiği için barın içindeki sekmelerden etkilenmeden her zaman tam ortada kalır.
+          Her zaman marka rengiyle (seçili gibi) görünür — gerçek odak durumundan bağımsız,
           çünkü bu sekme bir "hedef" değil sabit bir aksiyon (tarama) olarak tasarlandı.
           */}
       {taraRoute ? (
@@ -181,33 +178,31 @@ function TabItem({ focused, icon, label, onPress }: TabItemProps) {
     <Pressable
       onPress={onPress}
       hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: focused }}
       style={{
-        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: theme.spacing.xxs,
         paddingVertical: theme.spacing.xs,
-        // 5 sekme (+ ortada yüzen Tara) dar telefonlara sığsın diye yatay padding kısıldı;
-        // aktif sekme etiketiyle birlikte en dar cihazda (375pt) bile taşmıyor.
-        paddingHorizontal: focused ? theme.spacing.sm : theme.spacing.xs,
-        flexShrink: focused ? 1 : 0,
-        borderRadius: 999,
-        backgroundColor: focused ? theme.colors.brandPrimary : 'transparent',
+        paddingHorizontal: theme.spacing.sm,
       }}
     >
       <Ionicons
         name={icon}
-        size={20}
-        color={focused ? theme.colors.brandPrimaryText : theme.colors.textSecondary}
+        size={22}
+        color={focused ? theme.colors.brandPrimary : theme.colors.textSecondary}
       />
-      {focused ? (
-        <Text
-          variant="caption"
-          numberOfLines={1}
-          style={{ color: theme.colors.brandPrimaryText, fontWeight: '600' }}
-        >
-          {label}
-        </Text>
-      ) : null}
+      {/* Etiket yerine görsel referanstaki gibi odaklı sekmenin altında sade bir nokta gösterge. */}
+      <View
+        style={{
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: focused ? theme.colors.brandPrimary : 'transparent',
+        }}
+      />
     </Pressable>
   );
 }

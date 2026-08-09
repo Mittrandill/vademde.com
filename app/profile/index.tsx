@@ -44,10 +44,11 @@ export default function ProfileScreen() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState('');
-  // docs/07-guvenlik-gizlilik.md §11.3 — taranan belgelerin onay/iptal sonrası ham dosyası
+  // docs/07-guvenlik-gizlilik.md §11.3 — taranan belgelerin OCR analizi bittiğinde ham dosyası
   // Storage'da saklansın mı sorusu; yalnızca cihazda tutulur (workspace/hesap değil, kullanıcı
-  // tercihi). Anahtar hiç yazılmadıysa varsayılan "sakla" (true) — bkz. app/(tabs)/tara.tsx.
-  const [retainOriginalDefault, setRetainOriginalDefault] = useState(true);
+  // tercihi). Anahtar hiç yazılmadıysa varsayılan "saklama" (false) — hassas finansal belgeler
+  // kullanıcı açıkça istemedikçe bucket'ta kalmaz (bkz. app/(tabs)/tara.tsx).
+  const [retainOriginalDefault, setRetainOriginalDefault] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: queryKeys.profile(),
@@ -338,10 +339,11 @@ export default function ProfileScreen() {
             </Text>
             <Row align="center" style={{ justifyContent: 'space-between' }}>
               <Stack gap="xxs" style={{ flex: 1, marginRight: theme.spacing.sm }}>
-                <Text variant="body">Belgeleri işlem sonrasında sakla</Text>
+                <Text variant="body">Taranan belgeleri sakla</Text>
                 <Text variant="caption" color="textSecondary">
-                  Kapatırsan, taranan belge onaylandıktan/iptal edildikten sonra ham görüntü
-                  depolamadan silinir; oluşan kayıt etkilenmez.
+                  Kapalıyken (varsayılan), taranan belgenin ham görüntüsü OCR analizi biter
+                  bitmez depolamadan silinir; oluşan kayıt etkilenmez. Açarsan belge, onay
+                  ekranında karşılaştırma için depoda kalmaya devam eder.
                 </Text>
               </Stack>
               <Switch

@@ -365,6 +365,23 @@ Deno.serve(async (req: Request) => {
   // fonksiyonun tam yanıtını beklemesine gerek yok — böylece mobil tarafta uzun bekleme/zaman
   // aşımı kaynaklı "boş dönme/çökme" ortadan kalkar. Hata durumunda status='failed' + job
   // last_error yazılır ve istemci bunu poll ile görür.
+  // docs/07-guvenlik-gizlilik.md §11.3 — kullanıcı "işlem sonrası sakla"yı kapattıysa
+  // (retain_original=false) ham belge artık gerekmez; Gemini analizini bitirdiğimiz an
+  // (başarılı ya da başarısız fark etmez) siliniyor — kullanıcının onay ekranını
+  // bitirmesini beklemek gibi belirsiz bir süre boyunca (terk edilirse süresiz) hassas
+  // finansal belgeyi bucket'ta bekletmemek için. Silme başarısız olursa (ör. zaten
+  // silinmiş) durum güncellemesini engellememesi için ayrı try/catch içinde.
+  async function deleteOriginalIfNotRetained() {
+    if (document.retain_original !== false) return;
+    try {
+      await adminClient.storage.from('financial-documents').remove([document.storage_path]);
+    } catch {
+      // Sessizce yutulur — dosyanın silinmemiş olması kritik değil, kullanıcı zaten
+      // onu bir daha görmeyecek (review ekranı retain_original=false'ta imageUrl'i
+      // opsiyonel gösterir).
+    }
+  }
+
   const runProcessing = async () => {
    try {
     const { data: fileBlob, error: downloadError } = await adminClient.storage
@@ -637,6 +654,7 @@ Deno.serve(async (req: Request) => {
 
     // Buraya ulaşıldıysa belge 'ready_for_review' ve job 'succeeded' olarak yazıldı; arka
     // plan görevi başarıyla tamamlanır (istemci poll ile inceleme ekranına geçer).
+    await deleteOriginalIfNotRetained();
    } catch (error) {
     const message = error instanceof Error ? error.message : 'Bilinmeyen hata';
 
@@ -646,6 +664,7 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'failed', last_error: message, completed_at: new Date().toISOString() })
       .eq('document_id', documentId)
       .eq('status', 'processing');
+    await deleteOriginalIfNotRetained();
    }
   };
 

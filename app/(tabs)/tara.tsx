@@ -196,7 +196,7 @@ export default function TaraScreen() {
         fileName,
         mimeType,
         contentHash,
-        retainOriginal: retainOriginalDefault !== 'false',
+        retainOriginal: retainOriginalDefault === 'true',
       });
       setDocumentId(document.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.document(activeWorkspaceId, document.id) });
@@ -224,7 +224,14 @@ export default function TaraScreen() {
       const response = await fetch(uri);
       const arrayBuffer = await response.arrayBuffer();
       contentHash = hashArrayBuffer(arrayBuffer);
-      const duplicate = await findDuplicateDocument(activeWorkspaceId, contentHash);
+      // Bu bir "reddedilirse taramayı engelleme" korumasıydı, ama hiç sonuçlanmayan
+      // (ne başarılı ne reddedilen) bir istek try/catch'i hiç tetiklemez — ekran
+      // taramanın kendisi hiç başlamadan süresiz "%25"te asılı kalırdı. Zaman aşımı,
+      // "asılı kalma"yı da "başarısız" sayıp akışı devam ettirir.
+      const duplicate = await Promise.race([
+        findDuplicateDocument(activeWorkspaceId, contentHash),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+      ]);
       if (duplicate) {
         Alert.alert(
           'Mükerrer belge',

@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import type { ThemeColors } from '@/theme/colors';
 import { Card, Divider, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { listAccounts } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
@@ -24,18 +23,6 @@ import { queryKeys } from '@/services/queryKeys';
 // (hesap bazlı, kendi ekranı) elle en başa yerleştirildiği için burada değil; geri kalanlar
 // aynı sırayla map'lenir.
 const OTHER_DOCUMENT_TYPES = ['cek', 'senet', 'kira', 'abonelik'];
-
-// Kayıt türü kutuları tek düze mor yerine türe göre renk taşır — komşu iki kutu her
-// zaman farklı tonda olsun diye elle eşlenir (docs §12.9: her belge türü kendi kimliğini
-// taşır). Renkler yalnızca tema token'larından gelir, sabit hex yok.
-const RECORD_ACCENTS: Record<string, keyof ThemeColors> = {
-  kredi: 'accentViolet',
-  kredi_karti: 'brandPrimary',
-  cek: 'accentAqua',
-  senet: 'success',
-  kira: 'accentViolet',
-  abonelik: 'brandPrimary',
-};
 
 // docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad (Ayarlar ile aynı eşleme).
 const PLAN_LABELS: Record<string, string> = {
@@ -163,7 +150,6 @@ export default function MoreScreen() {
                   ? `${totalsByType.kredi.count} kayıt · ${formatMinorAmount(totalsByType.kredi.totalMinor)}`
                   : 'Kayıt yok'
               }
-              accent={theme.colors[RECORD_ACCENTS.kredi]}
               href={{ pathname: '/obligations', params: { type: 'kredi' } }}
             />
             {/* Kartlar artık obligation türü değil, hesap bazlı bir liste — kendi
@@ -176,19 +162,16 @@ export default function MoreScreen() {
                   ? `${creditCardAccounts.length} kart · ${formatMinorAmount(totalCardDebtMinor)}`
                   : 'Kart yok'
               }
-              accent={theme.colors[RECORD_ACCENTS.kredi_karti]}
               href="/accounts/credit-cards"
             />
             {OTHER_DOCUMENT_TYPES.map((type) => {
               const totals = totalsByType?.[type];
-              const accentKey = RECORD_ACCENTS[type] ?? 'accentViolet';
               return (
                 <HubTile
                   key={type}
                   icon={DOCUMENT_TYPE_ICON[type] ?? 'document-outline'}
                   label={DOCUMENT_TYPE_LABEL[type] ?? type}
                   detail={totals ? `${totals.count} kayıt · ${formatMinorAmount(totals.totalMinor)}` : 'Kayıt yok'}
-                  accent={theme.colors[accentKey]}
                   href={{ pathname: '/obligations', params: { type } }}
                 />
               );
@@ -203,15 +186,20 @@ export default function MoreScreen() {
               icon="wallet-outline"
               label="Hesaplar"
               detail={accounts.length > 0 ? `${accounts.length} hesap` : 'Hesap yok'}
-              accent={theme.colors.success}
               href="/accounts"
+            />
+            <RowDivider />
+            <ListRow
+              icon="business-outline"
+              label="Bankalar"
+              detail="Hesap, kart ve kredileri bankaya göre gör"
+              href="/banks"
             />
             <RowDivider />
             <ListRow
               icon="people-outline"
               label="Kişiler"
               detail="Kişi ve firmalar"
-              accent={theme.colors.accentAqua}
               href="/counterparties"
             />
             <RowDivider />
@@ -219,7 +207,6 @@ export default function MoreScreen() {
               icon="pricetags-outline"
               label="Kategoriler"
               detail="Gelir ve gider"
-              accent={theme.colors.accentViolet}
               href="/categories"
             />
             <RowDivider />
@@ -229,7 +216,6 @@ export default function MoreScreen() {
               icon="bar-chart-outline"
               label="Raporlar"
               detail="Gelir, gider ve borç/alacak özeti"
-              accent={theme.colors.brandPrimary}
               href="/reports"
             />
           </Card>
@@ -242,7 +228,6 @@ export default function MoreScreen() {
               icon="settings-outline"
               label="Ayarlar"
               detail="Hesap, görünüm ve abonelik"
-              accent={theme.colors.textSecondary}
               href="/settings"
             />
           </Card>
@@ -275,7 +260,9 @@ interface HubTileProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   detail: string;
-  accent: string;
+  /** Yalnızca gerçekten anlamlı olduğunda verilir (docs §12.4: ekran başına en fazla üç
+   * vurgu rengi) — çoğu kutu bu prop olmadan nötr (graphite) ikon kullanır. */
+  accent?: string;
   href: Href;
 }
 
@@ -288,18 +275,7 @@ function HubTile({ icon, label, detail, accent, href }: HubTileProps) {
     <Pressable onPress={() => router.push(href)} style={{ flex: 1, minWidth: 140 }}>
       <Card>
         <Stack gap="sm">
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: theme.radius.input,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: withAlpha(accent, 0.14),
-            }}
-          >
-            <Ionicons name={icon} size={20} color={accent} />
-          </View>
+          <IconChip icon={icon} accent={accent} />
           <Stack gap="xxs">
             <Text variant="cardTitle" numberOfLines={1}>
               {label}
@@ -318,7 +294,8 @@ interface ListRowProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   detail: string;
-  accent: string;
+  /** Yalnızca gerçekten anlamlı olduğunda verilir (docs §12.4) — bkz. HubTileProps.accent. */
+  accent?: string;
   href: Href;
 }
 
@@ -331,18 +308,7 @@ function ListRow({ icon, label, detail, accent, href }: ListRowProps) {
   return (
     <Pressable onPress={() => router.push(href)}>
       <Row gap="sm" style={{ padding: theme.spacing.md }}>
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: withAlpha(accent, 0.14),
-          }}
-        >
-          <Ionicons name={icon} size={20} color={accent} />
-        </View>
+        <IconChip icon={icon} accent={accent} />
         <Stack gap="xxs" style={{ flex: 1 }}>
           <Text variant="cardTitle" numberOfLines={1}>
             {label}
@@ -354,6 +320,30 @@ function ListRow({ icon, label, detail, accent, href }: ListRowProps) {
         <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
       </Row>
     </Pressable>
+  );
+}
+
+// Kutu/satır ikon kabı — varsayılan nötr (graphite) görünüm: tüm ikonlar aynı sakin
+// yüzeyde durur, kimlik renk yerine ikon şekli ve etiketten gelir (docs §12.9). `accent`
+// bilinçli olarak hiçbir satırda kullanılmıyor — bu ekranda tam tutarlılık tercih edildi.
+function IconChip({ icon, accent }: { icon: keyof typeof Ionicons.glyphMap; accent?: string }) {
+  const theme = useTheme();
+
+  return (
+    <View
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: theme.radius.input,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: accent ? withAlpha(accent, 0.14) : theme.colors.surfaceElevated,
+        borderWidth: accent ? 0 : 1,
+        borderColor: theme.colors.border,
+      }}
+    >
+      <Ionicons name={icon} size={20} color={accent ?? theme.colors.textSecondary} />
+    </View>
   );
 }
 

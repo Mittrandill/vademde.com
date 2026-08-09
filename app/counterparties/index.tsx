@@ -24,11 +24,8 @@ import {
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
-import { BankLogo } from '@/components/finance/BankLogo';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { getCounterpartyBalances, listCounterparties } from '@/features/counterparties/api';
-import { listBanksWithLoans, type BankWithLoans } from '@/features/banks/api';
-import { BANK_NAME } from '@/features/banks/banks';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -64,15 +61,6 @@ export default function CounterpartiesScreen() {
     enabled: !!activeWorkspaceId,
   });
   const balances = balancesQuery.data;
-
-  // Krediler kişi/firma değil banka bazlı tutulur (bkz. app/obligations/new.tsx) —
-  // bu yüzden Kişi/Firmalar'da carilerin yanında açık kredisi olan bankalar da listelenir.
-  const banksQuery = useQuery({
-    queryKey: activeWorkspaceId ? queryKeys.banksWithLoans(activeWorkspaceId) : ['banks-with-loans', 'disabled'],
-    queryFn: () => listBanksWithLoans(activeWorkspaceId as string),
-    enabled: !!activeWorkspaceId,
-  });
-  const banks = banksQuery.data ?? [];
 
   const filtered = useMemo(() => {
     const counterparties = counterpartiesQuery.data ?? [];
@@ -197,17 +185,6 @@ export default function CounterpartiesScreen() {
           stretch
         />
       </Stack>
-
-      {banks.length > 0 ? (
-        <Stack gap="sm">
-          <SectionHeader title="Bankalar" />
-          <Stack gap="xs">
-            {banks.map((bank) => (
-              <BankRow key={bank.bankCode} bank={bank} />
-            ))}
-          </Stack>
-        </Stack>
-      ) : null}
     </Stack>
   );
 
@@ -287,30 +264,6 @@ export default function CounterpartiesScreen() {
         }
       />
     </SafeAreaView>
-  );
-}
-
-// Banka satırı, cari satırıyla aynı görsel dili paylaşır (avatar yerine logo) — açık
-// kredi sayısı ve net bakiye (neredeyse her zaman borç) tek satırda özetlenir.
-function BankRow({ bank }: { bank: BankWithLoans }) {
-  const bankName = BANK_NAME[bank.bankCode] ?? bank.bankCode;
-  return (
-    <Pressable onPress={() => router.push(`/banks/${bank.bankCode}`)}>
-      <Card>
-        <Row gap="sm" align="center">
-          <BankLogo bankCode={bank.bankCode} fallbackName={bankName} size={36} />
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {bankName}
-            </Text>
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {bank.count} kredi{bank.overdueCount > 0 ? ` · ${bank.overdueCount} gecikmiş` : ''}
-            </Text>
-          </Stack>
-          <CounterpartyBalance netMinor={bank.netMinor} />
-        </Row>
-      </Card>
-    </Pressable>
   );
 }
 

@@ -15,7 +15,6 @@ import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { BankLogo } from '@/components/finance/BankLogo';
 import {
-  deleteDocumentOriginal,
   discardDocument,
   getDocument,
   getDocumentFields,
@@ -570,11 +569,6 @@ export default function DocumentReviewScreen() {
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
-        // docs/07-guvenlik-gizlilik.md §11.3 — kullanıcı "işlem sonrası sakla"yı kapattıysa
-        // ham belge artık gerekmiyor; finansal kayıt zaten oluştu, yalnızca dosya silinir.
-        if (documentQuery.data?.retain_original === false) {
-          deleteDocumentOriginal(documentQuery.data.storage_path).catch(() => {});
-        }
       }
 
       // Kısmi başarılar sessizce geçilmez: ana kayıt oluştu ama yan kayıtlar
@@ -618,9 +612,6 @@ export default function DocumentReviewScreen() {
       showSaveSuccess('Belge başarıyla silindi.', () => router.back(), () => {
         if (activeWorkspaceId) {
           queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
-        }
-        if (documentQuery.data?.retain_original === false) {
-          deleteDocumentOriginal(documentQuery.data.storage_path).catch(() => {});
         }
       });
     },

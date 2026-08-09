@@ -1,12 +1,77 @@
 import { supabase } from '@/services/supabase';
 import { ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import { BANK_NAME } from '@/features/banks/banks';
 
 // Kredi (kredi belge türü) kayıtları kişi/firma değil banka bazlı tutulur — bkz.
 // app/obligations/new.tsx (kredi'de KİŞİ/FİRMA seçimi yerine zorunlu BANKA seçimi).
-// Bu yüzden Kişi/Firmalar ekranında cari listesine paralel bir "banka + krediler"
-// görünümü buradan beslenir (features/counterparties/api.ts'teki cari fonksiyonlarının
-// bire bir aynısı, counterparty_id yerine bank_code + document_type='kredi' ile).
+// Hesaplar ve kredi kartları da (accounts.bank_code) aynı şekilde bankaya bağlanır.
+// Banka detay ekranı (app/banks/[code].tsx) buradan beslenir; oraya giriş noktaları
+// Krediler listesindeki banka satırları (bkz. app/obligations/index.tsx) ve Daha
+// Fazla > Yönetim > Bankalar listesidir (app/banks/index.tsx).
 const LOAN_DOCUMENT_TYPE = 'kredi';
+
+export interface BankSummary {
+  bankCode: string;
+  accountCount: number;
+  cardCount: number;
+  loanCount: number;
+  overdueLoanCount: number;
+  /** Yalnızca kredilerin kalan borcu — hesap/kart bakiyeleri işaret kuralı türe göre
+   * değiştiğinden (normal hesap varlık, kredi kartı borç) burada karıştırılmaz; her ikisi
+   * de zaten kendi ekranlarında (Hesaplar, Kredi Kartlarım) doğru işaretle gösteriliyor. */
+  loanDebtMinor: number;
+}
+
+// Daha Fazla > Yönetim > Bankalar listesi ve banka detayındaki "Genel" özeti için: en az
+// bir hesabı, kredi kartı veya kredisi olan bankaların özeti. getCounterpartyBalances'ın
+// banka karşılığı — tek sorguyla, banka başına ayrı istek atmadan.
+export async function listBankSummaries(workspaceId: string): Promise<BankSummary[]> {
+  const [{ data: accounts, error: accountsError }, { data: loans, error: loansError }] = await Promise.all([
+    supabase
+      .from('accounts')
+      .select('bank_code, type')
+      .eq('workspace_id', workspaceId)
+      .eq('is_archived', false)
+      .not('bank_code', 'is', null),
+    supabase
+      .from('obligations')
+      .select('bank_code, remaining_amount_minor, status')
+      .eq('workspace_id', workspaceId)
+      .eq('document_type', LOAN_DOCUMENT_TYPE)
+      .not('bank_code', 'is', null)
+      .in('status', ACTIVE_OBLIGATION_STATUSES),
+  ]);
+  if (accountsError) throw accountsError;
+  if (loansError) throw loansError;
+
+  const byBank = new Map<string, BankSummary>();
+  function entryFor(bankCode: string): BankSummary {
+    let entry = byBank.get(bankCode);
+    if (!entry) {
+      entry = { bankCode, accountCount: 0, cardCount: 0, loanCount: 0, overdueLoanCount: 0, loanDebtMinor: 0 };
+      byBank.set(bankCode, entry);
+    }
+    return entry;
+  }
+
+  for (const account of accounts ?? []) {
+    if (!account.bank_code) continue;
+    const entry = entryFor(account.bank_code);
+    if (account.type === 'credit_card') entry.cardCount += 1;
+    else entry.accountCount += 1;
+  }
+  for (const loan of loans ?? []) {
+    if (!loan.bank_code) continue;
+    const entry = entryFor(loan.bank_code);
+    entry.loanCount += 1;
+    entry.loanDebtMinor += loan.remaining_amount_minor;
+    if (loan.status === 'gecikti') entry.overdueLoanCount += 1;
+  }
+
+  return Array.from(byBank.values()).sort((a, b) =>
+    (BANK_NAME[a.bankCode] ?? a.bankCode).localeCompare(BANK_NAME[b.bankCode] ?? b.bankCode, 'tr')
+  );
+}
 
 export interface BankLoanLedger {
   receivableMinor: number;
@@ -56,45 +121,3 @@ export async function getBankLoanLedger(workspaceId: string, bankCode: string): 
   };
 }
 
-export interface BankWithLoans {
-  bankCode: string;
-  count: number;
-  netMinor: number;
-  overdueCount: number;
-  nearestDueDate: string | null;
-}
-
-// Kişi/Firmalar ekranındaki "Bankalar" bölümü için: workspace'te en az bir açık kredisi
-// olan bankaların özeti. getCounterpartyBalances'ın banka karşılığı — tek sorguyla,
-// banka başına ayrı istek atmadan.
-export async function listBanksWithLoans(workspaceId: string): Promise<BankWithLoans[]> {
-  const { data, error } = await supabase
-    .from('obligations')
-    .select('bank_code, direction, remaining_amount_minor, status, due_date')
-    .eq('workspace_id', workspaceId)
-    .eq('document_type', LOAN_DOCUMENT_TYPE)
-    .not('bank_code', 'is', null)
-    .in('status', ACTIVE_OBLIGATION_STATUSES);
-  if (error) throw error;
-
-  const byBank = new Map<string, BankWithLoans>();
-  for (const row of data ?? []) {
-    if (!row.bank_code) continue;
-    const current = byBank.get(row.bank_code) ?? {
-      bankCode: row.bank_code,
-      count: 0,
-      netMinor: 0,
-      overdueCount: 0,
-      nearestDueDate: null,
-    };
-    current.count += 1;
-    const sign = row.direction === 'receivable' ? 1 : -1;
-    current.netMinor += sign * row.remaining_amount_minor;
-    if (row.status === 'gecikti') current.overdueCount += 1;
-    if (row.due_date && (!current.nearestDueDate || row.due_date < current.nearestDueDate)) {
-      current.nearestDueDate = row.due_date;
-    }
-    byBank.set(row.bank_code, current);
-  }
-  return Array.from(byBank.values());
-}

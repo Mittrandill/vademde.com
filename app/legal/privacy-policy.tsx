@@ -67,8 +67,8 @@ const SECTIONS: Section[] = [
     body:
       'Finansal kayıtlarınız (tutar, tarih, taraf bilgisi gibi yapılandırılmış veriler) çalışma ' +
       'alanınızı veya ilgili kaydı silmediğiniz sürece saklanır. Taradığınız belgenin ham görüntüsü ' +
-      'ise Profil > Gizlilik bölümündeki tercihinize göre: "Belgeleri işlem sonrasında sakla" ' +
-      'açıksa siz silene kadar, kapalıysa belge onaylandıktan/iptal edildikten kısa süre sonra ' +
+      'ise Profil > Gizlilik bölümündeki tercihinize göre: "Taranan belgeleri sakla" açıksa siz ' +
+      'silene kadar saklanır; kapalıysa (varsayılan) yapay zekâ analizi tamamlanır tamamlanmaz ' +
       'otomatik olarak silinir. Hesabınızı sildiğinizde tüm veriler (belgeler dahil) kalıcı olarak ' +
       'silinir.',
   },

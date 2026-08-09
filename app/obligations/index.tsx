@@ -559,22 +559,34 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
         <Card style={{ opacity: deleting ? 0.5 : 1 }}>
           <Stack gap="sm">
             <Row gap="sm" align="center">
-              <ObligationIcon
-                documentType={item.document_type}
-                bankCode={item.bank_code}
-                serviceCode={item.service_code}
-                fallbackName={item.title}
-                size={36}
-              />
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="cardTitle" numberOfLines={1}>
-                  {bankName ?? serviceName ?? item.title}
-                </Text>
-                <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                  {DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type}
-                  {bankName || serviceName ? ` · ${item.title}` : ''}
-                </Text>
-              </Stack>
+              {/* Banka logosu/adı ayrı bir dokunma alanı: banka detayına götürür (ilerleme
+                  halkası, o bankaya ait tüm hesap/kart/kredi özeti). bank_code yoksa (kredi
+                  dışı belge türleri) disabled kalır, dokunuş kartın geneline (obligation
+                  detayına) düşer — bkz. app/banks/[code].tsx. */}
+              <Pressable
+                onPress={() => item.bank_code && router.push(`/banks/${item.bank_code}`)}
+                disabled={!item.bank_code}
+                accessibilityRole="button"
+                accessibilityLabel={item.bank_code ? `${bankName ?? 'Banka'} sayfasına git` : undefined}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, flex: 1 }}
+              >
+                <ObligationIcon
+                  documentType={item.document_type}
+                  bankCode={item.bank_code}
+                  serviceCode={item.service_code}
+                  fallbackName={item.title}
+                  size={36}
+                />
+                <Stack gap="xxs" style={{ flex: 1 }}>
+                  <Text variant="cardTitle" numberOfLines={1}>
+                    {bankName ?? serviceName ?? item.title}
+                  </Text>
+                  <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                    {DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type}
+                    {bankName || serviceName ? ` · ${item.title}` : ''}
+                  </Text>
+                </Stack>
+              </Pressable>
               <StatusBadge status={item.status} />
               {deleting ? (
                 <ActivityIndicator color={theme.colors.textSecondary} />
