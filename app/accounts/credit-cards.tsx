@@ -18,15 +18,11 @@ import { listObligations, type ObligationWithRelations } from '@/features/obliga
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
+import { computeStatementPeriod, periodKeyForDueDate } from '@/utils/creditCardPeriod';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 
 const PAGE_SIZE = 10;
 const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
-
-function periodKeyOf(dateString: string): string {
-  const d = new Date(dateString);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 // Ekran web'de doğrudan bu URL'e gidilerek (sayfa yenileme, deep link) açılırsa stack'te
 // geri gidilecek bir geçmiş olmayabilir — router.back() bu durumda "GO_BACK was not
@@ -95,10 +91,15 @@ export default function CreditCardsScreen() {
     return map;
   }, [statementsQuery.data]);
 
-  const currentPeriodKey = periodKeyOf(new Date().toISOString());
+  // Her kartın kendi kesim/son ödeme gününe göre "bu dönem" farklıdır — tek bir global
+  // ay anahtarıyla kıyaslamak yanlıştı (bkz. utils/creditCardPeriod.ts: son ödeme tarihi
+  // sıklıkla bir sonraki aya sarkar, bu yüzden dönem due_date'in kendi ayı değildir).
+  const now = new Date();
   const cardsAwaitingStatement = allCards.filter((a) => {
+    const currentPeriod = computeStatementPeriod(a, now);
+    if (!currentPeriod) return false;
     const statements = statementsByAccount.get(a.id) ?? [];
-    return !statements.some((o) => o.due_date && periodKeyOf(o.due_date) === currentPeriodKey);
+    return !statements.some((o) => o.due_date && periodKeyForDueDate(a, o.due_date) === currentPeriod.periodKey);
   }).length;
 
   const cards = useMemo(() => {
@@ -289,7 +290,6 @@ export default function CreditCardsScreen() {
             account={item}
             balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
             statements={statementsByAccount.get(item.id) ?? []}
-            currentPeriodKey={currentPeriodKey}
           />
         )}
         ListEmptyComponent={
@@ -359,15 +359,17 @@ interface CreditCardRowCardProps {
   account: Account;
   balanceMinor: number;
   statements: ObligationWithRelations[];
-  currentPeriodKey: string;
 }
 
 // Kredilerim'deki ObligationRowCard ile aynı yoğunluk: kimlik + büyük tutar + alt bilgi
 // satırı — ama kaynak bir obligation değil, hesap + o hesaba bağlı ekstreler.
-function CreditCardRowCard({ account, balanceMinor, statements, currentPeriodKey }: CreditCardRowCardProps) {
+function CreditCardRowCard({ account, balanceMinor, statements }: CreditCardRowCardProps) {
   const theme = useTheme();
   const latestStatement = statements[0] ?? null;
-  const hasCurrentStatement = statements.some((o) => o.due_date && periodKeyOf(o.due_date) === currentPeriodKey);
+  const currentPeriod = computeStatementPeriod(account, new Date());
+  const hasCurrentStatement =
+    !!currentPeriod &&
+    statements.some((o) => o.due_date && periodKeyForDueDate(account, o.due_date) === currentPeriod.periodKey);
 
   return (
     <Pressable onPress={() => router.push(`/accounts/${account.id}`)}>

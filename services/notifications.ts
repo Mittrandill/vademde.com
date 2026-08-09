@@ -1,8 +1,22 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 import { getRemindersForObligation, upsertReminder } from '@/features/reminders/api';
 import { getNextPendingInstallment, type Obligation } from '@/features/obligations/api';
 import { formatMinorAmount } from '@/utils/money';
+import { reconcileReminders, type ReminderTarget } from '@/services/reminderSync';
+
+// docs/08-tasarim-sistemi.md ile ilgisiz, salt platform notu: Android 8+ açık bir kanal
+// olmadan varsayılan önem/ses davranışı kullanır — bu, cihazlar arası tutarsız görünüme
+// yol açabilir. app.json'da hiç kanal tanımı yoktu; burada bir kere, uygulama açılışında kurulur.
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('obligation-reminders', {
+    name: 'Borç/alacak hatırlatmaları',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+  }).catch(() => {});
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -17,12 +31,16 @@ Notifications.setNotificationHandler({
 // docs/01-finansal-kayit-modeli.md §3.4 — bu üç durum terminaldir; bildirim gerekmez.
 const TERMINAL_STATUSES = new Set(['odendi', 'tahsil_edildi', 'iptal_edildi']);
 
-// Vade öncesi 7 gün / 3 gün / vade günü olmak üzere üç kademeli hatırlatma; bu tüm
-// obligation türleri (kredi, çek, senet, fatura vb.) için ortak, kredi'ye özel değildir.
+// Vade öncesi 7 gün / 3 gün / vade günü / (hâlâ ödenmemişse) vadeden 1 gün sonra olmak
+// üzere dört sabit kademeli hatırlatma — başka hiçbir tetikleyici yok. Bu tüm obligation
+// türleri (kredi, çek, senet, fatura vb.) için ortak, kredi'ye özel değildir.
 const REMINDER_STAGES: { stage: string; daysBefore: number; hour: number; label: string }[] = [
   { stage: '7_days_before', daysBefore: 7, hour: 10, label: '7 gün kaldı — ' },
   { stage: '3_days_before', daysBefore: 3, hour: 18, label: '3 gün kaldı — ' },
   { stage: 'due_day', daysBefore: 0, hour: 9, label: '' },
+  // daysBefore negatif: buildRemindAt "day - daysBefore" hesapladığı için day+1 çıkar —
+  // ay sonu taşması JS Date tarafından otomatik normalize edilir, ayrı tarih matematiği gerekmez.
+  { stage: 'overdue_1_day', daysBefore: -1, hour: 9, label: 'Gecikti — ' },
 ];
 
 export async function ensureNotificationPermission(): Promise<boolean> {
@@ -72,64 +90,45 @@ async function runSyncObligationReminder(workspaceId: string, obligation: Remind
   const effectiveDueDate = nextInstallment?.dueDate ?? obligation.due_date;
   const effectiveAmountMinor = nextInstallment?.remainingAmountMinor ?? obligation.remaining_amount_minor;
 
-  for (const existing of existingReminders) {
-    if (existing.notification_identifier) {
-      await Notifications.cancelScheduledNotificationAsync(existing.notification_identifier).catch(() => {});
-    }
-  }
+  const buildTarget = (stage: string, remindAt: Date | null, content?: ReminderTarget['content']): ReminderTarget => ({
+    key: stage,
+    remindAt,
+    content,
+    extra: { obligation_id: obligation.id, stage },
+  });
 
   if (isTerminal || !effectiveDueDate) {
-    for (const existing of existingReminders) {
-      if (existing.status !== 'cancelled') {
-        await upsertReminder({
-          workspace_id: workspaceId,
-          obligation_id: obligation.id,
-          stage: existing.stage,
-          remind_at: existing.remind_at,
-          notification_identifier: null,
-          status: 'cancelled',
-        });
-      }
-    }
+    await reconcileReminders({
+      workspaceId,
+      existing: existingReminders,
+      keyOf: (r) => r.stage,
+      targets: REMINDER_STAGES.map(({ stage }) => buildTarget(stage, null)),
+      ensurePermission: ensureNotificationPermission,
+      upsert: upsertReminder,
+    });
     return;
   }
 
-  const granted = await ensureNotificationPermission();
-  if (!granted) return;
-
   const label = obligation.direction === 'payable' ? 'Ödeme vadesi' : 'Tahsilat vadesi';
+  const amountLabel = formatMinorAmount(effectiveAmountMinor, obligation.currency_code);
 
-  for (const { stage, daysBefore, hour, label: stagePrefix } of REMINDER_STAGES) {
-    const remindAt = buildRemindAt(effectiveDueDate, daysBefore, hour);
-    if (!remindAt) continue;
+  const targets = REMINDER_STAGES.map(({ stage, daysBefore, hour, label: prefix }) =>
+    buildTarget(stage, buildRemindAt(effectiveDueDate, daysBefore, hour), {
+      title: `${prefix}${label}`,
+      body: `${obligation.title} — ${amountLabel}`,
+      data: { obligationId: obligation.id, stage },
+    })
+  );
 
-    // Bu fonksiyon kayıt insert edildikten SONRA, save mutation'ının içinde await edilir.
-    // Bildirim planlama (izin/OS) veya reminders upsert'i (ağ/RLS) burada throw ederse,
-    // kayıt zaten oluşmuşken save mutation hataya düşer ve kullanıcı çökme/yanlış hata
-    // görürdü. Hatırlatma en iyi çaba bir yan etkidir: her kademe kendi içinde yalıtılır,
-    // biri patlasa da kayıt akışı bozulmaz (iptal çağrıları zaten .catch ile korunuyordu).
-    try {
-      const identifier = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `${stagePrefix}${label}`,
-          body: `${obligation.title} — ${formatMinorAmount(effectiveAmountMinor, obligation.currency_code)}`,
-          data: { obligationId: obligation.id, stage },
-        },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: remindAt },
-      });
-
-      await upsertReminder({
-        workspace_id: workspaceId,
-        obligation_id: obligation.id,
-        stage,
-        remind_at: remindAt.toISOString(),
-        notification_identifier: identifier,
-        status: 'scheduled',
-      });
-    } catch (error) {
-      console.warn('[notifications] hatırlatma planlanamadı', stage, error);
-    }
-  }
+  await reconcileReminders({
+    workspaceId,
+    existing: existingReminders,
+    keyOf: (r) => r.stage,
+    targets,
+    ensurePermission: ensureNotificationPermission,
+    upsert: upsertReminder,
+    channelId: 'obligation-reminders',
+  });
 }
 
 // obligations tablosunda ON DELETE CASCADE reminders satırlarını siler; bu fonksiyon

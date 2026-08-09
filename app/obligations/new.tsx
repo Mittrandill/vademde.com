@@ -44,7 +44,12 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 
 export default function NewObligationScreen() {
   const theme = useTheme();
-  const { id, type, accountId } = useLocalSearchParams<{ id?: string; type?: string; accountId?: string }>();
+  const { id, type, accountId, dueDate } = useLocalSearchParams<{
+    id?: string;
+    type?: string;
+    accountId?: string;
+    dueDate?: string;
+  }>();
   const isEditing = !!id;
 
   const existingQuery = useQuery({
@@ -74,6 +79,7 @@ export default function NewObligationScreen() {
       hasInstallments={(existingQuery.data?.installments.length ?? 0) > 0}
       initialDocumentType={typeof type === 'string' ? type : undefined}
       initialAccountId={typeof accountId === 'string' ? accountId : undefined}
+      initialDueDate={typeof dueDate === 'string' ? dueDate : undefined}
     />
   );
 }
@@ -85,9 +91,13 @@ interface ObligationFormProps {
   initialDocumentType?: string;
   /** Hesap detayından "Ekstre Ekle" gibi kısayollarla gelindiğinde hesabı önceden doldurur. */
   initialAccountId?: string;
+  /** Ekstre tablosunda belirli bir geçmiş ayın "Yüklenmedi" satırından gelindiğinde o ayın
+   * beklenen son ödeme tarihini önceden doldurur (bkz. app/accounts/[id].tsx) — kullanıcı
+   * her zaman elle değiştirebilir. */
+  initialDueDate?: string;
 }
 
-function ObligationForm({ id, initial, hasInstallments, initialDocumentType, initialAccountId }: ObligationFormProps) {
+function ObligationForm({ id, initial, hasInstallments, initialDocumentType, initialAccountId, initialDueDate }: ObligationFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -111,7 +121,9 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
     const precision = getValueUnit(initial.currency_code).precision;
     return (initial.total_amount_minor / 10 ** precision).toFixed(precision).replace('.', ',');
   });
-  const [dueDate, setDueDate] = useState(initial?.due_date ?? new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState(
+    initial?.due_date ?? initialDueDate ?? new Date().toISOString().slice(0, 10)
+  );
   const [counterpartyId, setCounterpartyId] = useState<string | null>(initial?.counterparty_id ?? null);
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);

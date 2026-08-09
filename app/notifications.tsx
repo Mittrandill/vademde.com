@@ -33,6 +33,7 @@ const STAGE_PREFIX: Record<string, string> = {
   '7_days_before': '7 gün kaldı — ',
   '3_days_before': '3 gün kaldı — ',
   due_day: '',
+  overdue_1_day: 'Gecikti — ',
 };
 
 const timeFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });

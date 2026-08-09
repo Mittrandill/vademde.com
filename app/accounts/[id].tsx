@@ -30,7 +30,7 @@ import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { HeroStatCard } from '@/components/finance/HeroStatCard';
 import { archiveAccount, getAccount, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
-import { listObligations } from '@/features/obligations/api';
+import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
@@ -38,6 +38,7 @@ import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
+import { computeStatementPeriod, periodKeyFor, periodKeyForDueDate } from '@/utils/creditCardPeriod';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
@@ -58,7 +59,20 @@ const PAGE_SIZE = 10;
 
 const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
 
+function toIsoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 type CreditCardTab = 'genel' | 'ekstreler' | 'hareketler';
+
+interface StatementMonth {
+  periodKey: string;
+  monthDate: Date;
+  /** Bu dönem için beklenen son ödeme tarihi (statement_day/payment_due_day'den hesaplanır) —
+   * yeni bir ekstre eklenirken tarih alanını akıllıca doldurmak için kullanılır. */
+  dueDate: Date | null;
+  obligation: ObligationWithRelations | null;
+}
 
 export default function AccountDetailScreen() {
   const theme = useTheme();
@@ -69,7 +83,7 @@ export default function AccountDetailScreen() {
   // Yalnızca kredi kartı hesabında kullanılır (bkz. aşağıdaki kredi kartı dalı) —
   // hook sırası bozulmasın diye diğer hesap türlerinde de koşulsuz çağrılır.
   const [tab, setTab] = useState<CreditCardTab>('genel');
-  const [addStatementSheetOpen, setAddStatementSheetOpen] = useState(false);
+  const [statementSheetMonth, setStatementSheetMonth] = useState<StatementMonth | null>(null);
 
   const accountQuery = useQuery({
     queryKey: ['account', id],
@@ -152,20 +166,22 @@ export default function AccountDetailScreen() {
   const overdraftLimitMinor = account.overdraft_limit_minor ?? 0;
   const hasOverdraft = type === 'bank' && overdraftLimitMinor > 0;
 
-  // Son 6 ay (bu ay dahil): her biri için aynı ay içinde vadesi olan bir ekstre
-  // (obligation) var mı diye bakılır — varsa borç tutarıyla birlikte gösterilir ve
-  // dokununca o ekstrenin detayına (obligations/[id]) gidilir, yoksa "Yüklenmedi" rozeti.
-  const statementMonths = isCreditCardAccount
+  // Son 6 ay (bu ay dahil): her biri için o KESİM ayına ait bir ekstre (obligation) var
+  // mı diye bakılır — varsa borç tutarıyla birlikte gösterilir ve dokununca o ekstrenin
+  // detayına (obligations/[id]) gidilir, yoksa "Yüklenmedi" rozeti (artık dokunulabilir).
+  // Dönem, obligation'ın due_date'inin kendi ayı DEĞİL, o due_date'in periodKeyForDueDate
+  // ile geriye doğru eşlendiği kesim ayıdır — son ödeme tarihi sıklıkla bir sonraki aya
+  // sarktığı için (bkz. utils/creditCardPeriod.ts) ham due_date ayına bakmak yanlış olurdu.
+  const statementMonths: StatementMonth[] = isCreditCardAccount
     ? Array.from({ length: 6 }, (_, i) => {
         const now = new Date();
         const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const periodKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
-        const obligation = (statementsQuery.data ?? []).find((o) => {
-          if (!o.due_date) return false;
-          const d = new Date(o.due_date);
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === periodKey;
-        });
-        return { periodKey, monthDate, obligation: obligation ?? null };
+        const period = computeStatementPeriod(account, monthDate);
+        const periodKey = period?.periodKey ?? periodKeyFor(monthDate);
+        const obligation =
+          (statementsQuery.data ?? []).find((o) => o.due_date && periodKeyForDueDate(account, o.due_date) === periodKey) ??
+          null;
+        return { periodKey, monthDate, dueDate: period?.dueDate ?? null, obligation };
       })
     : [];
   const mostRecentUnfulfilled = statementMonths.find((m) => !m.obligation);
@@ -329,7 +345,9 @@ export default function AccountDetailScreen() {
                       {m.obligation ? (
                         <Pressable onPress={() => router.push(`/obligations/${m.obligation!.id}`)}>{row}</Pressable>
                       ) : (
-                        row
+                        // Herhangi bir geçmiş "Yüklenmedi" ayına dokunarak o ayın ekstresini
+                        // eklemeye başlanabilir — artık yalnızca en son boşluk için değil.
+                        <Pressable onPress={() => setStatementSheetMonth(m)}>{row}</Pressable>
                       )}
                       {index < statementMonths.length - 1 ? (
                         <Divider style={{ marginTop: theme.spacing.sm }} />
@@ -341,7 +359,7 @@ export default function AccountDetailScreen() {
             </Card>
             {mostRecentUnfulfilled ? (
               <Pressable
-                onPress={() => setAddStatementSheetOpen(true)}
+                onPress={() => setStatementSheetMonth(mostRecentUnfulfilled)}
                 style={{
                   height: theme.controlHeight.segmented,
                   borderRadius: theme.radius.widget,
@@ -402,21 +420,25 @@ export default function AccountDetailScreen() {
         </Pressable>
       </DetailScaffold>
 
-      {mostRecentUnfulfilled ? (
+      {statementSheetMonth ? (
         <ActionSheet
-          visible={addStatementSheetOpen}
-          title={`${monthFormatter.format(mostRecentUnfulfilled.monthDate)} Ekstresi Ekle`}
-          onClose={() => setAddStatementSheetOpen(false)}
+          visible
+          title={`${monthFormatter.format(statementSheetMonth.monthDate)} Ekstresi Ekle`}
+          onClose={() => setStatementSheetMonth(null)}
           options={[
             {
               key: 'scan',
               label: 'Kameradan/Galeriden Tara',
-              description: 'OCR belgeyi okur, hesap ve dönem otomatik eşlenir.',
+              description: 'OCR belgeyi okur; hesap ve dönem otomatik eşlenir.',
               icon: 'camera-outline',
               onPress: () =>
                 router.push({
                   pathname: '/(tabs)/tara',
-                  params: { accountId: account.id, documentType: 'kredi_karti_ekstresi' },
+                  params: {
+                    accountId: account.id,
+                    documentType: 'kredi_karti_ekstresi',
+                    ...(statementSheetMonth.dueDate ? { expectedDueDate: toIsoDate(statementSheetMonth.dueDate) } : {}),
+                  },
                 }),
             },
             {
@@ -427,7 +449,11 @@ export default function AccountDetailScreen() {
               onPress: () =>
                 router.push({
                   pathname: '/obligations/new',
-                  params: { type: 'kredi_karti_ekstresi', accountId: account.id },
+                  params: {
+                    type: 'kredi_karti_ekstresi',
+                    accountId: account.id,
+                    ...(statementSheetMonth.dueDate ? { dueDate: toIsoDate(statementSheetMonth.dueDate) } : {}),
+                  },
                 }),
             },
           ]}

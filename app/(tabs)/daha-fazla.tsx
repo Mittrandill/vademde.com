@@ -222,6 +222,16 @@ export default function MoreScreen() {
               accent={theme.colors.accentViolet}
               href="/categories"
             />
+            <RowDivider />
+            {/* Eskiden alt sekmede ayrı bir "Raporlar" sekmesiydi — kayan tab bar
+                yalnızca en sık kullanılan beş akışa ayrıldığından buraya taşındı. */}
+            <ListRow
+              icon="bar-chart-outline"
+              label="Raporlar"
+              detail="Gelir, gider ve borç/alacak özeti"
+              accent={theme.colors.brandPrimary}
+              href="/reports"
+            />
           </Card>
         </Stack>
 

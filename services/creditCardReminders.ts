@@ -1,13 +1,13 @@
-import * as Notifications from 'expo-notifications';
-
 import { supabase } from '@/services/supabase';
 import { getStatementUploadReminders, upsertAccountReminder } from '@/features/reminders/api';
 import { ensureNotificationPermission } from '@/services/notifications';
+import { reconcileReminders, type ReminderTarget } from '@/services/reminderSync';
+import { periodKeyForDueDate, type CreditCardPeriodAccount } from '@/utils/creditCardPeriod';
 import type { Account } from '@/features/accounts/api';
 
-// notifications.ts'teki syncObligationReminder ile aynı desen: mevcut planlı bildirimler
-// iptal edilip her senkronizasyonda yeniden planlanır. Buradaki fark, hatırlatmanın bir
-// obligation'a değil bir hesaba ve döneme (period_key) bağlı olması — çünkü o dönemin
+// notifications.ts'teki reconcileReminders ile aynı paylaşılan mekanizma: hedef hatırlatma
+// kümesi hesaplanır, mevcutla aynıysa OS/DB'ye hiç dokunulmaz. Buradaki fark, hatırlatmanın
+// bir obligation'a değil bir hesaba ve döneme (period_key) bağlı olması — çünkü o dönemin
 // ekstresi henüz oluşturulmamış olabilir; hatırlatmanın amacı zaten onu oluşturmak.
 const CYCLES_AHEAD = 3;
 
@@ -24,17 +24,22 @@ function periodKeyFor(date: Date): string {
 
 // docs/01-finansal-kayit-modeli.md §3.2 — kredi kartı ekstresi bir obligation'dır;
 // bu dönem için zaten bir tane varsa hatırlatmaya gerek yok.
-async function getFulfilledPeriods(accountId: string): Promise<Set<string>> {
+// ÖNEMLİ: dönem burada obligation'ın due_date'inin kendi ayı DEĞİL, o due_date'in
+// hangi KESİM ayına ait olduğu (periodKeyForDueDate) ile belirlenir — son ödeme tarihi
+// sıklıkla bir sonraki aya sarktığı için (ör. kesim 15, ödeme ayın 5'i) ham due_date
+// ayına bakmak "Ağustos kesimi"ni yanlışlıkla Eylül'e sayardı ve o dönem hiç
+// karşılanmamış görünüp gereksiz hatırlatmalar planlanırdı (bkz. utils/creditCardPeriod.ts).
+async function getFulfilledPeriods(account: CreditCardPeriodAccount & { id: string }): Promise<Set<string>> {
   const { data, error } = await supabase
     .from('obligations')
     .select('due_date')
-    .eq('account_id', accountId)
+    .eq('account_id', account.id)
     .eq('document_type', 'kredi_karti_ekstresi');
   if (error) throw error;
 
   const periods = new Set<string>();
   for (const row of data ?? []) {
-    if (row.due_date) periods.add(periodKeyFor(new Date(row.due_date)));
+    if (row.due_date) periods.add(periodKeyForDueDate(account, row.due_date));
   }
   return periods;
 }
@@ -47,12 +52,12 @@ export async function syncCreditCardStatementReminder(
 
   const [existingReminders, fulfilledPeriods] = await Promise.all([
     getStatementUploadReminders(account.id),
-    getFulfilledPeriods(account.id),
+    getFulfilledPeriods(account),
   ]);
-  const remindersByKey = new Map(existingReminders.map((r) => [`${r.period_key}|${r.stage}`, r]));
 
   const now = new Date();
   const dueDay = account.payment_due_day ?? account.statement_day;
+  const targets: ReminderTarget[] = [];
 
   for (let i = -1; i < CYCLES_AHEAD; i++) {
     const cycleDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -67,51 +72,29 @@ export async function syncCreditCardStatementReminder(
 
     for (const stage of ['statement_day', 'mid_period'] as const) {
       const remindAt = stage === 'statement_day' ? statementDate : midDate;
-      const key = `${periodKey}|${stage}`;
-      const existing = remindersByKey.get(key);
+      const shouldSchedule = !isFulfilled && remindAt.getTime() > now.getTime();
 
-      if (existing?.notification_identifier) {
-        await Notifications.cancelScheduledNotificationAsync(existing.notification_identifier).catch(() => {});
-      }
-
-      if (isFulfilled || remindAt.getTime() <= now.getTime()) {
-        if (existing && existing.status !== 'cancelled') {
-          await upsertAccountReminder({
-            workspace_id: workspaceId,
-            account_id: account.id,
-            kind: 'statement_upload',
-            period_key: periodKey,
-            stage,
-            remind_at: existing.remind_at,
-            notification_identifier: null,
-            status: 'cancelled',
-          });
-        }
-        continue;
-      }
-
-      const granted = await ensureNotificationPermission();
-      if (!granted) continue;
-
-      const identifier = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Ekstre yüklemeyi unutmayın',
-          body: `${account.name} — bu ayki ekstrenizi tarayın veya kart borcunu elle girin.`,
-          data: { accountId: account.id, periodKey, stage },
-        },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: remindAt },
-      });
-
-      await upsertAccountReminder({
-        workspace_id: workspaceId,
-        account_id: account.id,
-        kind: 'statement_upload',
-        period_key: periodKey,
-        stage,
-        remind_at: remindAt.toISOString(),
-        notification_identifier: identifier,
-        status: 'scheduled',
+      targets.push({
+        key: `${periodKey}|${stage}`,
+        remindAt: shouldSchedule ? remindAt : null,
+        content: shouldSchedule
+          ? {
+              title: 'Ekstre yüklemeyi unutmayın',
+              body: `${account.name} — bu ayki ekstrenizi tarayın veya kart borcunu elle girin.`,
+              data: { accountId: account.id, periodKey, stage },
+            }
+          : undefined,
+        extra: { account_id: account.id, kind: 'statement_upload', period_key: periodKey, stage },
       });
     }
   }
+
+  await reconcileReminders({
+    workspaceId,
+    existing: existingReminders,
+    keyOf: (r) => `${r.period_key}|${r.stage}`,
+    targets,
+    ensurePermission: ensureNotificationPermission,
+    upsert: upsertAccountReminder,
+  });
 }

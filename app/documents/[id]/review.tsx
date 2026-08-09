@@ -70,10 +70,21 @@ export default function DocumentReviewScreen() {
   // gelindiğinde tara.tsx üzerinden taşınır (bkz. B2 notu). Kullanıcının açık niyeti
   // olduğu için aşağıdaki OCR tabanlı otomatik eşleştirmelerden (cardLastFourFromOcr)
   // önceliklidir.
-  const { id, accountId: paramAccountId, documentType: paramDocumentType } = useLocalSearchParams<{
+  // expectedDueDate: kullanıcı hesap detayındaki ekstre tablosunda belirli bir geçmiş ayı
+  // seçip oradan taradıysa (bkz. app/accounts/[id].tsx), o ayın beklenen son ödeme tarihi.
+  // OCR hiç tarih bulamazsa yedek değer olarak kullanılır; OCR bir tarih bulduysa OCR'ın
+  // okuduğu tarih önceliklidir (belge gerçek kaynaktır) — burası yalnızca ay uyuşmazsa
+  // kullanıcıyı uyarmak için kıyaslanır (bkz. aşağıdaki dueDatePeriodMismatch).
+  const {
+    id,
+    accountId: paramAccountId,
+    documentType: paramDocumentType,
+    expectedDueDate: paramExpectedDueDate,
+  } = useLocalSearchParams<{
     id: string;
     accountId?: string;
     documentType?: string;
+    expectedDueDate?: string;
   }>();
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -179,7 +190,10 @@ export default function DocumentReviewScreen() {
     // Kullanıcı yine de DocumentTypePicker'dan değiştirebilir.
     setDocumentType(paramDocumentType ?? document.document_type);
     setAmount(document.total_amount_minor ? (document.total_amount_minor / 100).toFixed(2).replace('.', ',') : '');
-    setDueDate(document.due_date ?? document.issue_date ?? '');
+    // OCR bir tarih bulduysa (belge gerçek kaynaktır) o kullanılır; hiç bulamadıysa
+    // kullanıcının ekstre tablosundan seçtiği ayın beklenen tarihine düşülür — böylece
+    // alan hiç boş/bugünün tarihi kalmaz (bkz. yukarıdaki paramExpectedDueDate notu).
+    setDueDate(document.due_date ?? document.issue_date ?? paramExpectedDueDate ?? '');
     setDocumentNumber(document.document_number ?? '');
 
     // Kredi/kredi kartı ekstresi için Gemini'nin çıkardığı banka adını statik banka
@@ -657,6 +671,14 @@ export default function DocumentReviewScreen() {
     (documentType !== 'kredi_karti_ekstresi' || !categorizeCardSpending || !!accountId);
 
   const isLoanDocument = documentType === 'kredi';
+  // OCR bir tarih okuduysa ve kullanıcı belirli bir ekstre dönemi seçerek buraya geldiyse
+  // (bkz. paramExpectedDueDate notu yukarıda), ikisi farklı aylara düşüyorsa yumuşak bir
+  // uyarı gösterilir — kaydı engellemez, sadece yanlış belge/ay taranmış olabileceğini işaret eder.
+  const dueDatePeriodMismatch =
+    !!paramExpectedDueDate && !!dueDate && dueDate.slice(0, 7) !== paramExpectedDueDate.slice(0, 7);
+  const expectedDueDateMonthLabel = paramExpectedDueDate
+    ? new Date(paramExpectedDueDate).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })
+    : '';
   const principalMinor = parseAmountToMinor(amount) ?? 0;
   const totalRepaymentMinor =
     installmentDrafts.length > 0
@@ -806,6 +828,12 @@ export default function DocumentReviewScreen() {
                   <LowConfidenceHint fieldName="dueDate" />
                 </Row>
                 <DateField value={dueDate} onChangeText={setDueDate} />
+                {dueDatePeriodMismatch ? (
+                  <Text variant="caption" color="danger">
+                    Bu tarih, {expectedDueDateMonthLabel} dönemi için seçtiğiniz ekstreyle uyuşmuyor gibi görünüyor —
+                    doğru olduğundan emin olun.
+                  </Text>
+                ) : null}
               </Stack>
             ) : null}
 

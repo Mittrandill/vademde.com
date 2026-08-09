@@ -74,9 +74,17 @@ export default function TaraScreen() {
   // Hesap detayından "X Ekstresi Ekle → Kameradan Tara" ile gelindiğinde taşınır (bkz.
   // app/accounts/[id].tsx); OCR sonucuna (review ekranına) aktarılır ki kullanıcı hangi
   // hesaba/türe taradığını tekrar seçmek zorunda kalmasın (bkz. B2/B3 notları).
-  const { accountId: incomingAccountId, documentType: incomingDocumentType } = useLocalSearchParams<{
+  // expectedDueDate: kullanıcı ekstre tablosunda belirli bir geçmiş ayı seçtiyse o ayın
+  // beklenen son ödeme tarihi — OCR hiç tarih bulamazsa yedek, buluyorsa yalnızca uyumsuzluk
+  // uyarısı için kullanılır (bkz. review.tsx).
+  const {
+    accountId: incomingAccountId,
+    documentType: incomingDocumentType,
+    expectedDueDate: incomingExpectedDueDate,
+  } = useLocalSearchParams<{
     accountId?: string;
     documentType?: string;
+    expectedDueDate?: string;
   }>();
   // Tara bir sekme ekranı; kamera ve tarama katmanları tam ekran olsa da yüzen TabBar
   // onların üzerinde çizilir. Bu katmanlardaki kontroller çubuğun kapladığı yüksekliği
@@ -157,12 +165,12 @@ export default function TaraScreen() {
             id: documentId,
             ...(incomingAccountId ? { accountId: incomingAccountId } : {}),
             ...(incomingDocumentType ? { documentType: incomingDocumentType } : {}),
+            ...(incomingExpectedDueDate ? { expectedDueDate: incomingExpectedDueDate } : {}),
           },
         });
         reset();
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [documentQuery.data?.status, documentId, incomingAccountId, incomingDocumentType])
+    }, [documentQuery.data?.status, documentId, incomingAccountId, incomingDocumentType, incomingExpectedDueDate])
   );
 
   function reset() {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,8 +6,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
+import { Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { BankPicker } from '@/components/finance/BankPicker';
+import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseAmountToMinor } from '@/utils/money';
@@ -29,6 +31,30 @@ const TYPES: Array<{ value: Account['type']; label: string }> = [
 function isValidDayOfMonth(value: string): boolean {
   const n = Number(value);
   return Number.isInteger(n) && n >= 1 && n <= 31;
+}
+
+function FormSection({
+  icon,
+  title,
+  children,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  children: ReactNode;
+}) {
+  const theme = useTheme();
+  return (
+    <Card>
+      <Stack gap="md">
+        <Row gap="sm" align="center">
+          <Ionicons name={icon} size={18} color={theme.colors.brandPrimary} />
+          <Text variant="cardTitle">{title}</Text>
+        </Row>
+        <Divider />
+        <Stack gap="md">{children}</Stack>
+      </Stack>
+    </Card>
+  );
 }
 
 export default function NewAccountScreen() {
@@ -121,6 +147,17 @@ export default function NewAccountScreen() {
 
   const statementDayHasError = statementDay.length > 0 && !isValidDayOfMonth(statementDay);
   const paymentDueDayHasError = paymentDueDay.length > 0 && !isValidDayOfMonth(paymentDueDay);
+  // İki gün alanı yan yana durur; her biri kendi hata mesajını basarsa satırlar farklı
+  // yükseklikte kalıp hizası kayardı (bkz. TextField'daki invalid notu) — bu yüzden
+  // border kırmızıya döner ama mesaj satırın altında ortak, tek bir yerde toplanır.
+  const dayErrorMessage =
+    statementDayHasError && paymentDueDayHasError
+      ? 'Kesim ve son ödeme günü 1-31 arası olmalı.'
+      : statementDayHasError
+        ? 'Hesap kesim günü 1-31 arası olmalı.'
+        : paymentDueDayHasError
+          ? 'Son ödeme günü 1-31 arası olmalı.'
+          : null;
   const cardLastFourHasError = cardLastFour.length > 0 && !/^\d{4}$/.test(cardLastFour);
   const canSubmit =
     !!name.trim() &&
@@ -134,6 +171,28 @@ export default function NewAccountScreen() {
     if (!isEditing && !activeWorkspaceId) return;
     saveMutation.mutate();
   }
+
+  const openingBalanceIsNegative = openingBalance.trim().startsWith('-');
+  function toggleOpeningBalanceSign() {
+    setOpeningBalance((prev) => {
+      const trimmed = prev.trim();
+      if (trimmed.startsWith('-')) return trimmed.slice(1);
+      return trimmed ? `-${trimmed}` : '-';
+    });
+  }
+
+  // Kredi kartı türü seçiliyken formun üstünde canlı güncellenen bir kart önizlemesi
+  // gösterilir (Revolut/N26 tarzı "kartını oluştururken gör" hissi) — CreditCardVisual
+  // zaten hesap detayında kullanılan gerçek bileşen, burada yalnızca taslak veriyle
+  // besleniyor. Önizleme amaçlı olduğundan Account tipinin kullanılmayan alanları
+  // (id, workspace_id vb.) kasıtlı olarak atlanır.
+  const previewAccount = {
+    name: name.trim() || 'Kart Sahibi',
+    bank_code: bankCode,
+    card_last_four: cardLastFour || null,
+    statement_day: statementDay ? Number(statementDay) : null,
+    payment_due_day: paymentDueDay ? Number(paymentDueDay) : null,
+  } as Account;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -155,133 +214,209 @@ export default function NewAccountScreen() {
             </Text>
           </Row>
 
-          <TextField label="HESAP ADI" placeholder="Örn. Nakit Kasa" value={name} onChangeText={setName} />
+          <SegmentedControl
+            options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
+            value={type}
+            onChange={setType}
+            stretch
+          />
 
-          <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              HESAP TÜRÜ
-            </Text>
-            <SegmentedControl
-              options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
-              value={type}
-              onChange={setType}
-              stretch
-            />
-          </Stack>
+          {isCreditCard ? <CreditCardVisual account={previewAccount} /> : null}
 
-          {type === 'bank' || isCreditCard ? (
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                BANKA (İSTEĞE BAĞLI)
-              </Text>
-              <BankPicker selectedId={bankCode} onSelect={setBankCode} />
-            </Stack>
-          ) : null}
-
-          {type === 'bank' ? (
-            <TextField
-              label="IBAN (İSTEĞE BAĞLI)"
-              placeholder="TR00 0000 0000 0000 0000 0000 00"
-              value={iban}
-              onChangeText={(value) => setIban(formatIbanInput(value))}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={32}
-              error={ibanHasError ? 'IBAN "TR" ile başlamalı ve 26 karakter olmalı.' : undefined}
-            />
-          ) : null}
-
-          {isBank ? (
-            <Stack gap="sm">
-              <TextField
-                label="EK HESAP (KMH) LİMİTİ (İSTEĞE BAĞLI)"
-                placeholder="0,00"
-                keyboardType="decimal-pad"
-                value={overdraftLimit}
-                onChangeText={setOverdraftLimit}
-              />
-              <Text variant="caption" color="textSecondary">
-                Girilirse bakiyeniz bu tutara kadar sıfırın altına inebilir; hesap detayında ek hesap kullanımınız
-                gösterilir. Aylık ek hesap faizini bildiğinizde hesap detayından gider olarak ekleyebilirsiniz.
-              </Text>
-            </Stack>
-          ) : null}
+          <TextField
+            label={isCreditCard ? 'KART ADI' : 'HESAP ADI'}
+            placeholder={isCreditCard ? 'Örn. Bonus Kartım' : 'Örn. Nakit Kasa'}
+            value={name}
+            onChangeText={setName}
+          />
 
           {isCreditCard ? (
             <>
-              <Row gap="sm">
-                <Stack style={{ flex: 1 }}>
-                  <TextField
-                    label="HESAP KESİM GÜNÜ"
-                    placeholder="Örn. 15"
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={statementDay}
-                    onChangeText={setStatementDay}
-                    error={statementDayHasError ? '1-31 arası bir gün girin.' : undefined}
-                  />
+              <FormSection icon="card-outline" title="Kart Bilgileri">
+                <Stack gap="sm">
+                  <Text variant="caption" color="textSecondary">
+                    BANKA (İSTEĞE BAĞLI)
+                  </Text>
+                  <BankPicker selectedId={bankCode} onSelect={setBankCode} />
                 </Stack>
-                <Stack style={{ flex: 1 }}>
-                  <TextField
-                    label="SON ÖDEME GÜNÜ (İSTEĞE BAĞLI)"
-                    placeholder="Örn. 5"
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={paymentDueDay}
-                    onChangeText={setPaymentDueDay}
-                    error={paymentDueDayHasError ? '1-31 arası bir gün girin.' : undefined}
-                  />
-                </Stack>
-              </Row>
-              <Text variant="caption" color="textSecondary">
-                Hesap kesiminden son ödeme gününe kadar ekstre yükleme hatırlatması gönderilir.
-              </Text>
 
-              <Stack gap="sm">
+                <Stack gap="xs">
+                  <TextField
+                    label="KART SON 4 HANE (İSTEĞE BAĞLI)"
+                    placeholder="0000"
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    value={cardLastFour}
+                    onChangeText={(value) => setCardLastFour(value.replace(/[^0-9]/g, ''))}
+                    error={cardLastFourHasError ? '4 haneli rakam girin.' : undefined}
+                  />
+                  <Text variant="caption" color="textSecondary">
+                    Güvenlik nedeniyle yalnızca son 4 hane saklanır, tam kart numarası hiçbir zaman istenmez.
+                  </Text>
+                </Stack>
+              </FormSection>
+
+              <FormSection icon="calendar-outline" title="Kesim ve Ödeme">
+                <Stack gap="xs">
+                  <Row gap="sm">
+                    <Stack style={{ flex: 1 }}>
+                      <TextField
+                        label="HESAP KESİM GÜNÜ"
+                        placeholder="Örn. 15"
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        value={statementDay}
+                        onChangeText={setStatementDay}
+                        invalid={statementDayHasError}
+                      />
+                    </Stack>
+                    <Stack style={{ flex: 1 }}>
+                      <TextField
+                        label="SON ÖDEME GÜNÜ"
+                        placeholder="Örn. 5"
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        value={paymentDueDay}
+                        onChangeText={setPaymentDueDay}
+                        invalid={paymentDueDayHasError}
+                      />
+                    </Stack>
+                  </Row>
+                  <Text variant="caption" color={dayErrorMessage ? 'danger' : 'textSecondary'}>
+                    {dayErrorMessage ??
+                      'Son ödeme günü isteğe bağlıdır. Hesap kesiminden son ödeme gününe kadar ekstre yükleme hatırlatması gönderilir.'}
+                  </Text>
+                </Stack>
+              </FormSection>
+
+              <FormSection icon="wallet-outline" title="Limit ve Bakiye">
+                <Stack gap="xs">
+                  <TextField
+                    label="KREDİ LİMİTİ (İSTEĞE BAĞLI)"
+                    placeholder="0,00"
+                    keyboardType="decimal-pad"
+                    value={creditLimit}
+                    onChangeText={setCreditLimit}
+                  />
+                  <Text variant="caption" color="textSecondary">
+                    Girilirse kart detayında kullanılabilir limit ve limit kullanım oranı gösterilir.
+                  </Text>
+                </Stack>
+
+                <Stack gap="xs">
+                  <TextField
+                    label="GÜNCEL KART BORCU (İSTEĞE BAĞLI)"
+                    placeholder="0,00"
+                    keyboardType="decimal-pad"
+                    value={openingBalance}
+                    onChangeText={setOpeningBalance}
+                  />
+                  <Text variant="caption" color="textSecondary">
+                    Kartta şu an borcunuz varsa buraya girin (ör. 2.500,00). Bu tutar diğer hesapların toplam
+                    bakiyesine dahil edilmez, yalnızca bilgi amaçlıdır.
+                  </Text>
+                </Stack>
+              </FormSection>
+            </>
+          ) : (
+            <>
+              {type === 'bank' ? (
+                <Stack gap="sm">
+                  <Text variant="caption" color="textSecondary">
+                    BANKA (İSTEĞE BAĞLI)
+                  </Text>
+                  <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+                </Stack>
+              ) : null}
+
+              {type === 'bank' ? (
                 <TextField
-                  label="KART SON 4 HANE (İSTEĞE BAĞLI)"
-                  placeholder="0000"
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  value={cardLastFour}
-                  onChangeText={(value) => setCardLastFour(value.replace(/[^0-9]/g, ''))}
-                  error={cardLastFourHasError ? '4 haneli rakam girin.' : undefined}
+                  label="IBAN (İSTEĞE BAĞLI)"
+                  placeholder="TR00 0000 0000 0000 0000 0000 00"
+                  value={iban}
+                  onChangeText={(value) => setIban(formatIbanInput(value))}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={32}
+                  error={ibanHasError ? 'IBAN "TR" ile başlamalı ve 26 karakter olmalı.' : undefined}
                 />
-                <Text variant="caption" color="textSecondary">
-                  Güvenlik nedeniyle yalnızca son 4 hane saklanır, tam kart numarası hiçbir zaman istenmez.
-                </Text>
-              </Stack>
+              ) : null}
 
-              <Stack gap="sm">
+              {isBank ? (
+                <Stack gap="sm">
+                  <TextField
+                    label="EK HESAP (KMH) LİMİTİ (İSTEĞE BAĞLI)"
+                    placeholder="0,00"
+                    keyboardType="decimal-pad"
+                    value={overdraftLimit}
+                    onChangeText={setOverdraftLimit}
+                  />
+                  <Text variant="caption" color="textSecondary">
+                    Girilirse bakiyeniz bu tutara kadar sıfırın altına inebilir; hesap detayında ek hesap
+                    kullanımınız gösterilir. Aylık ek hesap faizini bildiğinizde hesap detayından gider olarak
+                    ekleyebilirsiniz.
+                  </Text>
+                </Stack>
+              ) : null}
+
+              {isBank ? (
+                <Stack gap="sm">
+                  <Text variant="caption" color="textSecondary">
+                    AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)
+                  </Text>
+                  <Row gap="sm" align="center">
+                    <Stack style={{ flex: 1 }}>
+                      <TextField
+                        placeholder="0,00"
+                        keyboardType="decimal-pad"
+                        value={openingBalance}
+                        onChangeText={setOpeningBalance}
+                      />
+                    </Stack>
+                    {/* Sayısal klavyede eksi tuşu yok (iOS/Android decimal-pad'de bulunmaz) —
+                        KMH kullanan bir hesabın gerçek başlangıç bakiyesi eksi olabildiği için
+                        işareti klavyeden bağımsız bu düğmeyle değiştiriyoruz. */}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={openingBalanceIsNegative ? 'Bakiyeyi pozitif yap' : 'Bakiyeyi negatif yap'}
+                      onPress={toggleOpeningBalanceSign}
+                      style={{
+                        width: theme.buttonHeight.primary,
+                        height: theme.buttonHeight.primary,
+                        borderRadius: theme.radius.input,
+                        borderWidth: 1,
+                        borderColor: openingBalanceIsNegative ? theme.colors.danger : theme.colors.border,
+                        backgroundColor: openingBalanceIsNegative
+                          ? withAlpha(theme.colors.danger, 0.12)
+                          : theme.colors.surfacePrimary,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text
+                        variant="cardTitle"
+                        style={{ color: openingBalanceIsNegative ? theme.colors.danger : theme.colors.textPrimary }}
+                      >
+                        {openingBalanceIsNegative ? '−' : '+'}
+                      </Text>
+                    </Pressable>
+                  </Row>
+                  <Text variant="caption" color="textSecondary">
+                    Hesap zaten ek hesabı (KMH) kullanılmış durumda açılıyorsa, gerçek bakiyeyi yansıtmak için
+                    işareti eksiye çevirin.
+                  </Text>
+                </Stack>
+              ) : (
                 <TextField
-                  label="KREDİ LİMİTİ (İSTEĞE BAĞLI)"
+                  label="AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)"
                   placeholder="0,00"
                   keyboardType="decimal-pad"
-                  value={creditLimit}
-                  onChangeText={setCreditLimit}
+                  value={openingBalance}
+                  onChangeText={setOpeningBalance}
                 />
-                <Text variant="caption" color="textSecondary">
-                  Girilirse kart detayında kullanılabilir limit ve limit kullanım oranı gösterilir.
-                </Text>
-              </Stack>
+              )}
             </>
-          ) : null}
-
-          <Stack gap="sm">
-            <TextField
-              label={isCreditCard ? 'GÜNCEL KART BORCU (İSTEĞE BAĞLI)' : 'AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)'}
-              placeholder="0,00"
-              keyboardType="decimal-pad"
-              value={openingBalance}
-              onChangeText={setOpeningBalance}
-            />
-            {isCreditCard ? (
-              <Text variant="caption" color="textSecondary">
-                Kartta şu an borcunuz varsa buraya girin (ör. 2.500,00). Bu tutar diğer hesapların toplam
-                bakiyesine dahil edilmez, yalnızca bilgi amaçlıdır.
-              </Text>
-            ) : null}
-          </Stack>
+          )}
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">

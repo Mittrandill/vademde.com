@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, InteractionManager, Modal, View } from 'react-native';
+import { ActivityIndicator, Alert, InteractionManager, Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -10,6 +10,7 @@ import { withAlpha } from '@/theme/colors';
 import {
   Button,
   Card,
+  DateField,
   Divider,
   EmptyState,
   Pagination,
@@ -29,7 +30,7 @@ import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { getObligation, getObligationWithInstallments, type Installment, type Obligation } from '@/features/obligations/api';
 import { listAccounts, type Account } from '@/features/accounts/api';
-import { listPaymentsForObligation, recordPayment, type Payment } from '@/features/payments/api';
+import { deletePayment, listPaymentsForObligation, recordPayment, updatePayment, type Payment } from '@/features/payments/api';
 import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -39,7 +40,7 @@ import { getValueUnit } from '@/features/valueUnits/units';
 import { listValueUnitRates, convertToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSuccessAlert, showErrorAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
@@ -53,6 +54,7 @@ export default function ObligationDetailScreen() {
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [payingInstallment, setPayingInstallment] = useState<Installment | 'obligation' | null>(null);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [tab, setTab] = useState<DetailTab>('genel');
   // null = kullanıcı henüz sayfa değiştirmedi; bu durumda sıradaki taksidin bulunduğu
   // sayfa akıllı varsayılan olarak gösterilir (aşağıda hesaplanır).
@@ -92,6 +94,35 @@ export default function ObligationDetailScreen() {
     if (activeWorkspaceId) {
       queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
     }
+  }
+
+  function afterPaymentChange() {
+    // bkz. üstteki PaymentForm onSuccess notu: modal/alert kapanış animasyonuyla arkadaki
+    // listenin yeniden mount'u aynı ana denk gelmesin diye önbellek geçersizleştirme bir
+    // sonraki etkileşim turuna ertelenir.
+    InteractionManager.runAfterInteractions(async () => {
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ['obligation', id, 'payments'] });
+      if (activeWorkspaceId) {
+        const fresh = await getObligation(id as string);
+        await syncObligationReminder(activeWorkspaceId, fresh);
+      }
+    });
+  }
+
+  const deletePaymentMutation = useMutation({
+    mutationFn: (payment: Payment) => deletePayment(payment),
+    onSuccess: () => {
+      showSuccessAlert('Ödeme kaydı silindi.', afterPaymentChange);
+    },
+    onError: (error) => showErrorAlert(error),
+  });
+
+  function confirmDeletePayment(payment: Payment) {
+    Alert.alert('Ödemeyi Sil', 'Bu ödeme kaydı kalıcı olarak silinecek. Emin misiniz?', [
+      { text: 'Vazgeç', style: 'cancel' },
+      { text: 'Sil', style: 'destructive', onPress: () => deletePaymentMutation.mutate(payment) },
+    ]);
   }
 
   if (detailQuery.isLoading || !detailQuery.data) {
@@ -306,7 +337,13 @@ export default function ObligationDetailScreen() {
             ) : (
               <Stack gap="xs">
                 {visiblePayments.map((payment) => (
-                  <PaymentRow key={payment.id} payment={payment} currencyCode={obligation.currency_code} />
+                  <PaymentRow
+                    key={payment.id}
+                    payment={payment}
+                    currencyCode={obligation.currency_code}
+                    onEdit={() => setEditingPayment(payment)}
+                    onDelete={() => confirmDeletePayment(payment)}
+                  />
                 ))}
               </Stack>
             )}
@@ -316,39 +353,42 @@ export default function ObligationDetailScreen() {
       </DetailScaffold>
 
       <Modal
-        visible={payingInstallment !== null}
+        visible={payingInstallment !== null || editingPayment !== null}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setPayingInstallment(null)}
+        onRequestClose={() => {
+          setPayingInstallment(null);
+          setEditingPayment(null);
+        }}
       >
-        {payingInstallment ? (
+        {payingInstallment || editingPayment ? (
           <PaymentForm
             workspaceId={activeWorkspaceId}
             obligation={obligation}
-            installment={payingInstallment === 'obligation' ? null : payingInstallment}
+            installment={payingInstallment === 'obligation' || !payingInstallment ? null : payingInstallment}
             defaultAmountMinor={
-              payingInstallment === 'obligation'
-                ? obligation.remaining_amount_minor
-                : payingInstallment.remaining_amount_minor
+              editingPayment
+                ? editingPayment.amount_minor
+                : payingInstallment === 'obligation'
+                  ? obligation.remaining_amount_minor
+                  : (payingInstallment as Installment).remaining_amount_minor
             }
             accounts={accountsQuery.data ?? []}
-            onClose={() => setPayingInstallment(null)}
+            editingPayment={editingPayment}
+            onClose={() => {
+              setPayingInstallment(null);
+              setEditingPayment(null);
+            }}
             onSuccess={() => {
               // Modal'ı Alert'in "Tamam"ına kadar açık tutuyoruz; kapatma ve önbellek
               // geçersizleştirme/yeniden render gibi ağır iş bir sonraki etkileşim turuna
               // ertelenir — aksi halde Fabric, modal dismiss animasyonuyla aynı anda arkadaki
               // listeyi (taksitler vb.) yeniden mount etmeye çalışıp çöküyor (bkz.
               // review.tsx'teki InteractionManager.runAfterInteractions ile aynı düzeltme).
-              showSuccessAlert('Ödeme başarıyla kaydedildi.', () => {
+              showSuccessAlert(editingPayment ? 'Ödeme başarıyla güncellendi.' : 'Ödeme başarıyla kaydedildi.', () => {
                 setPayingInstallment(null);
-                InteractionManager.runAfterInteractions(async () => {
-                  invalidateAll();
-                  queryClient.invalidateQueries({ queryKey: ['obligation', id, 'payments'] });
-                  if (activeWorkspaceId) {
-                    const fresh = await getObligation(id as string);
-                    await syncObligationReminder(activeWorkspaceId, fresh);
-                  }
-                });
+                setEditingPayment(null);
+                afterPaymentChange();
               });
             }}
           />
@@ -516,7 +556,17 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
   );
 }
 
-function PaymentRow({ payment, currencyCode }: { payment: Payment; currencyCode: string }) {
+function PaymentRow({
+  payment,
+  currencyCode,
+  onEdit,
+  onDelete,
+}: {
+  payment: Payment;
+  currencyCode: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const theme = useTheme();
 
   return (
@@ -538,6 +588,12 @@ function PaymentRow({ payment, currencyCode }: { payment: Payment; currencyCode:
           {dateFormatter.format(new Date(payment.paid_at))}
         </Text>
         <Amount amountMinor={payment.amount_minor} currencyCode={currencyCode} variant="body" />
+        <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi düzenle" onPress={onEdit} hitSlop={8}>
+          <Ionicons name="create-outline" size={18} color={theme.colors.textSecondary} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi sil" onPress={onDelete} hitSlop={8}>
+          <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />
+        </Pressable>
       </Row>
     </Card>
   );
@@ -549,6 +605,8 @@ interface PaymentFormProps {
   installment: Installment | null;
   defaultAmountMinor: number;
   accounts: Account[];
+  /** Doluysa form düzenleme modunda açılır: mevcut ödeme güncellenir, yeni kayıt oluşturulmaz. */
+  editingPayment?: Payment | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -559,27 +617,52 @@ function PaymentForm({
   installment,
   defaultAmountMinor,
   accounts,
+  editingPayment,
   onClose,
   onSuccess,
 }: PaymentFormProps) {
   const theme = useTheme();
+  const isEditing = !!editingPayment;
   const valueUnit = getValueUnit(obligation.currency_code);
   const [amount, setAmount] = useState(
     (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ',')
   );
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(editingPayment?.account_id ?? null);
+  // Ödeme varsayılan olarak işlem yapıldığı anın tarihiyle (DB varsayılanı) kaydedilir,
+  // ama geçmiş/ileri tarihli ödemeler için kullanıcı bunu elle değiştirebilir.
+  const [dateStr, setDateStr] = useState(
+    editingPayment ? editingPayment.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+  );
 
   const mutation = useMutation({
     mutationFn: () => {
       if (!workspaceId || !amount) throw new Error('Eksik alan var');
       const amountMinor = parseValueUnitAmountToMinor(amount, obligation.currency_code);
       if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
+      const parsedDate = new Date(dateStr);
+      if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
+      const paidAt = parsedDate.toISOString();
+
+      if (editingPayment) {
+        return updatePayment(editingPayment, {
+          amount_minor: amountMinor,
+          paid_at: paidAt,
+          account_id: accountId,
+          obligationDirection: obligation.direction as 'payable' | 'receivable',
+          obligationTitle: obligation.title,
+          obligationCategoryId: obligation.category_id,
+          obligationCounterpartyId: obligation.counterparty_id,
+          obligationCurrencyCode: obligation.currency_code,
+        });
+      }
+
       return recordPayment({
         workspace_id: workspaceId,
         obligation_id: obligation.id,
         installment_id: installment?.id ?? null,
         account_id: accountId,
         amount_minor: amountMinor,
+        paid_at: paidAt,
         obligationDirection: obligation.direction as 'payable' | 'receivable',
         obligationTitle: obligation.title,
         obligationCategoryId: obligation.category_id,
@@ -595,7 +678,7 @@ function PaymentForm({
       <Stack gap="lg" style={{ flex: 1, padding: theme.screenEdge.standard }}>
         <Row align="center">
           <Text variant="pageTitle" style={{ flex: 1 }}>
-            Ödeme Ekle
+            {isEditing ? 'Ödemeyi Düzenle' : 'Ödeme Ekle'}
           </Text>
           <Pressable onPress={onClose} hitSlop={12}>
             <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
@@ -620,6 +703,8 @@ function PaymentForm({
           />
         </Stack>
 
+        <DateField label="ÖDEME TARİHİ" value={dateStr} onChangeText={setDateStr} />
+
         {accounts.length > 0 ? (
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
@@ -637,7 +722,12 @@ function PaymentForm({
 
         <View style={{ flex: 1 }} />
 
-        <Button label="Kaydet" onPress={() => mutation.mutate()} loading={mutation.isPending} disabled={!amount} />
+        <Button
+          label={isEditing ? 'Güncelle' : 'Kaydet'}
+          onPress={() => mutation.mutate()}
+          loading={mutation.isPending}
+          disabled={!amount}
+        />
       </Stack>
     </SafeAreaView>
   );

@@ -47,9 +47,6 @@ function RootNavigator() {
     >
       {/* docs/03-bilgi-mimarisi-ekranlar.md §5.2 — üç değer önerisi ekranı yalnızca ilk
           açılışta ve oturum yokken (auth) grubundan önce gösterilir. */}
-      {/* Oturum durumundan bağımsız her zaman erişilebilir — App Store gizlilik beyanı ve
-          tara.tsx'teki OCR izin ekranı buraya bağlantı verir (bkz. app/legal/privacy-policy.tsx). */}
-      <Stack.Screen name="legal/privacy-policy" options={{ presentation: 'modal' }} />
       <Stack.Protected guard={!session && !hasSeenWelcome}>
         <Stack.Screen name="(onboarding)" />
       </Stack.Protected>
@@ -79,10 +76,19 @@ function RootNavigator() {
         <Stack.Screen name="counterparties/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="counterparties/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="counterparties/[id]" />
+        <Stack.Screen name="reports/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="banks/[code]" />
         <Stack.Screen name="workspace/[id]/members" options={{ presentation: 'modal' }} />
         <Stack.Screen name="workspace/join" options={{ presentation: 'modal' }} />
       </Stack.Protected>
+
+      {/* Oturum durumundan bağımsız her zaman erişilebilir — App Store gizlilik beyanı ve
+          tara.tsx'teki OCR izin ekranı buraya bağlantı verir (bkz. app/legal/privacy-policy.tsx).
+          Stack'in en başında değil sonunda tanımlanır: React Navigation, `initialRouteName`
+          verilmediğinde ilk sıradaki Screen'i örtük varsayılan/initial route sayıyor — bu
+          bilgilendirme ekranı en başta olunca web'de "/" ve diğer tüm derin bağlantılar önce
+          yanlışlıkla buraya mount oluyordu (bkz. git geçmişi — kaydedilmiş bir teşhis notu). */}
+      <Stack.Screen name="legal/privacy-policy" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

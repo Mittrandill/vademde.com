@@ -92,6 +92,71 @@ export interface RecordPastInstallmentPaymentInput {
 // tarihlidir ve mevcut hesap bakiyelerini etkilememelidir — bu yüzden recordPayment'ın
 // transaction oluşturan dalına hiç girilmez ve tüm taksitler tek insert'te yazılabilir.
 // Taksit başına ayrı çağrı, uzun kredi planlarında onay ekranını kilitliyordu.
+export interface UpdatePaymentInput {
+  amount_minor: number;
+  paid_at: string;
+  notes?: string | null;
+  account_id?: string | null;
+  obligationDirection: 'payable' | 'receivable';
+  obligationTitle: string;
+  obligationCategoryId?: string | null;
+  obligationCounterpartyId?: string | null;
+  obligationCurrencyCode: string;
+}
+
+// Bir ödeme düzenlendiğinde (tutar/tarih/hesap değişebilir) recordPayment'la aynı hesap
+// bakiyesi tutarlılığı korunur: hesap seçiliyse ilişkili transaction da güncellenir,
+// hesap kaldırılırsa eski transaction silinir, hesap yeni eklenirse yeni bir transaction
+// oluşturulur — aksi halde ödeme kaydı ile hesap bakiyesi birbirinden sapar.
+export async function updatePayment(payment: Payment, input: UpdatePaymentInput): Promise<Payment> {
+  let transactionId = payment.transaction_id;
+
+  if (input.account_id) {
+    const transactionFields = {
+      account_id: input.account_id,
+      direction: input.obligationDirection === 'payable' ? 'expense' : 'income',
+      category_id: input.obligationCategoryId ?? null,
+      counterparty_id: input.obligationCounterpartyId ?? null,
+      amount_minor: input.amount_minor,
+      currency_code: input.obligationCurrencyCode,
+      occurred_at: input.paid_at,
+      description: input.obligationTitle,
+    };
+
+    if (transactionId) {
+      const { error } = await supabase.from('transactions').update(transactionFields).eq('id', transactionId);
+      if (error) throw error;
+    } else {
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert({ workspace_id: payment.workspace_id, ...transactionFields })
+        .select('id')
+        .single();
+      if (error) throw error;
+      transactionId = data.id;
+    }
+  } else if (transactionId) {
+    const { error } = await supabase.from('transactions').delete().eq('id', transactionId);
+    if (error) throw error;
+    transactionId = null;
+  }
+
+  const { data, error } = await supabase
+    .from('payments')
+    .update({
+      amount_minor: input.amount_minor,
+      paid_at: input.paid_at,
+      notes: input.notes ?? null,
+      account_id: input.account_id ?? null,
+      transaction_id: transactionId,
+    })
+    .eq('id', payment.id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function recordPastInstallmentPayments(
   rows: RecordPastInstallmentPaymentInput[]
 ): Promise<Payment[]> {
@@ -104,7 +169,15 @@ export async function recordPastInstallmentPayments(
   return data;
 }
 
-export async function deletePayment(id: string): Promise<void> {
-  const { error } = await supabase.from('payments').delete().eq('id', id);
+// payments.transaction_id → transactions ON DELETE SET NULL'dır (cascade değil), yani
+// yalnızca ödeme satırı silinirse ilişkili transaction öksüz kalır ve hesap bakiyesini
+// etkilemeye devam eder. Bu yüzden hesap bağlantılı bir ödeme silinirken transaction da
+// birlikte silinir.
+export async function deletePayment(payment: Payment): Promise<void> {
+  if (payment.transaction_id) {
+    const { error: transactionError } = await supabase.from('transactions').delete().eq('id', payment.transaction_id);
+    if (transactionError) throw transactionError;
+  }
+  const { error } = await supabase.from('payments').delete().eq('id', payment.id);
   if (error) throw error;
 }

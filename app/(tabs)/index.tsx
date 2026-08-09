@@ -8,8 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import { BalanceHero } from '@/components/finance/BalanceHero';
-import { ObligationSummaryCard } from '@/components/finance/ObligationSummaryCard';
-import { IncomeExpenseAnalysis } from '@/components/finance/IncomeExpenseAnalysis';
+import { QuickActions } from '@/components/finance/QuickActions';
 import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
 import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
@@ -176,7 +175,6 @@ export default function HomeScreen() {
     () => receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
     [receivableObligations]
   );
-  const directionalTotalMinor = payableTotalMinor + receivableTotalMinor;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -276,36 +274,20 @@ export default function HomeScreen() {
             ) : null}
           </Stack>
 
+          {/* Borç/Alacak özeti ile Bu Ay Gelir-Gider artık ayrı kartlarda tekrarlanmıyor —
+              hero'nun kendi iki sayfası (sağa kaydırarak geçilir) bu ikisini gösteriyor. */}
           <BalanceHero
             totalBalanceMinor={totalBalanceMinor}
             monthNetMinor={monthNetMinor}
+            monthIncomeMinor={monthTotalsQuery.data?.incomeMinor ?? 0}
+            monthExpenseMinor={monthTotalsQuery.data?.expenseMinor ?? 0}
             receivableMinor={receivableTotalMinor}
             payableMinor={payableTotalMinor}
             hidden={balanceHidden}
             onToggleHidden={toggleBalanceHidden}
           />
 
-          <Row gap="sm" align="stretch">
-            <ObligationSummaryCard
-              direction="payable"
-              totalMinor={payableTotalMinor}
-              count={payableObligations.length}
-              nearestDueDate={payableObligations.find((o) => o.due_date)?.due_date ?? null}
-              share={directionalTotalMinor > 0 ? payableTotalMinor / directionalTotalMinor : 0}
-            />
-            <ObligationSummaryCard
-              direction="receivable"
-              totalMinor={receivableTotalMinor}
-              count={receivableObligations.length}
-              nearestDueDate={receivableObligations.find((o) => o.due_date)?.due_date ?? null}
-              share={directionalTotalMinor > 0 ? receivableTotalMinor / directionalTotalMinor : 0}
-            />
-          </Row>
-
-          <IncomeExpenseAnalysis
-            incomeMinor={monthTotalsQuery.data?.incomeMinor ?? 0}
-            expenseMinor={monthTotalsQuery.data?.expenseMinor ?? 0}
-          />
+          <QuickActions />
 
           <UpcomingDueList obligations={activeObligations} />
 

@@ -12,6 +12,10 @@ export interface TextFieldProps extends TextInputProps {
   label?: string;
   /** Verilirse input kırmızı border alır ve altında kısa hata mesajı gösterilir. */
   error?: string;
+  /** Mesajsız kırmızı border: birden fazla alanın ortak tek bir hata satırını paylaştığı
+   * yan yana düzenlerde (ör. iki günlük alan), her alan kendi mesajını basarsa satırlar
+   * farklı yükseklikte kalıp hizası kayardı — bu, metni bastırıp sadece border'ı işaretler. */
+  invalid?: boolean;
   /** Şifre göster/gizle gibi tek bir sağ ikon aksiyonu (bkz. sign-in ekranı). */
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
@@ -22,6 +26,7 @@ export function TextField({
   placeholderTextColor,
   label,
   error,
+  invalid,
   rightIcon,
   onRightIconPress,
   onFocus,
@@ -31,7 +36,7 @@ export function TextField({
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
 
-  const borderColor = error
+  const borderColor = error || invalid
     ? theme.colors.danger
     : focused
       ? theme.colors.brandPrimary

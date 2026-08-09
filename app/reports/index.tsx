@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { IncomeExpenseAnalysis } from '@/components/finance/IncomeExpenseAnalysis';
 import { ObligationSummaryCard } from '@/components/finance/ObligationSummaryCard';
 import { CategoryBreakdownList } from '@/components/finance/CategoryBreakdownList';
@@ -78,7 +79,10 @@ const CATEGORY_DIRECTION_OPTIONS: { key: CategoryDirection; label: string }[] = 
   { key: 'income', label: 'Gelir' },
 ];
 
-export default function RaporlarScreen() {
+// Daha Fazla > Yönetim'den açılan modal bir ekran (bkz. app/(tabs)/daha-fazla.tsx) —
+// önceden yüzen tab bar'ın bir sekmesiydi; kayan alt bar artık yalnızca en sık kullanılan
+// beş akışa (Ana Sayfa/Hareketler/Tara/Takvim/Daha Fazla) ayrılmış olduğundan buraya taşındı.
+export default function ReportsScreen() {
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [period, setPeriod] = useState<Period>('month');
@@ -216,6 +220,17 @@ export default function RaporlarScreen() {
     ]);
   }
 
+  // Ekran web'de doğrudan bu URL'e gidilerek (sayfa yenileme, deep link) açılırsa
+  // stack'te geri gidilecek bir geçmiş olmayabilir (bkz. accounts/credit-cards.tsx'teki
+  // aynı koruma) — o durumda Daha Fazla'ya (bu ekranın giriş noktası) düşülür.
+  function closeScreen() {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/daha-fazla');
+    }
+  }
+
   if (!activeWorkspaceId) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -231,24 +246,21 @@ export default function RaporlarScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <Stack gap="lg" style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.md }}>
+        <ScreenHeader
+          title="Raporlar"
+          left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: closeScreen }}
+          right={{ icon: 'share-outline', accessibilityLabel: 'Dışa aktar', onPress: handleExportPress }}
+        />
+      </Stack>
+
       <ScrollView
         contentContainerStyle={{
           padding: theme.screenEdge.standard,
-          // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
-          // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
-          paddingBottom: theme.layout.tabBarClearance,
+          paddingBottom: theme.spacing.huge,
           gap: theme.spacing.lg,
         }}
       >
-        <Row align="center">
-          <Text variant="pageTitle" style={{ flex: 1 }}>
-            Raporlar
-          </Text>
-          <Pressable onPress={handleExportPress} disabled={isExporting} hitSlop={12}>
-            <Ionicons name="share-outline" size={26} color={theme.colors.textPrimary} />
-          </Pressable>
-        </Row>
-
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
           <SegmentedControl options={PERIODS} value={period} onChange={setPeriod} />
         </ScrollView>

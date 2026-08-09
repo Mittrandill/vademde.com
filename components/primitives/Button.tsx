@@ -37,6 +37,7 @@ function ButtonComponent({ label, onPress, variant = 'primary', loading, disable
       disabled={disabled || loading}
       style={{
         height: theme.buttonHeight.primary,
+        paddingHorizontal: theme.spacing.lg,
         borderRadius: theme.radius.input,
         backgroundColor: background,
         alignItems: 'center',
