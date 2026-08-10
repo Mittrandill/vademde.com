@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // aksiyon kimlikleri saklanır — ikon/etiket/hedef gibi görünüm bilgisi sabit bir
 // havuzdan (QUICK_ACTION_POOL) gelir; havuzda artık bulunmayan bir kimlik kalırsa
 // (ör. bir güncellemede kaldırıldıysa) render sırasında sessizce atlanır.
-export const DEFAULT_QUICK_ACTION_IDS = ['yeni-hareket', 'raporlar', 'hesaplar'];
+export const DEFAULT_QUICK_ACTION_IDS = ['yeni-hareket', 'transfer', 'raporlar', 'hesaplar'];
 
 interface QuickActionsState {
   actionIds: string[];

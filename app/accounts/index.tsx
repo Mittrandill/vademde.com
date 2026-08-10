@@ -22,9 +22,11 @@ import {
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
 import { HeroStatCard } from '@/components/finance/HeroStatCard';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
+import { getValueUnit } from '@/features/valueUnits/units';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
@@ -35,6 +37,7 @@ const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   bank: 'business-outline',
   wallet: 'wallet-outline',
   credit_card: 'card-outline',
+  pos: 'storefront-outline',
 };
 
 const TYPE_LABEL: Record<Account['type'], string> = {
@@ -42,6 +45,7 @@ const TYPE_LABEL: Record<Account['type'], string> = {
   bank: 'Banka',
   wallet: 'Cüzdan',
   credit_card: 'Kredi Kartı',
+  pos: 'POS',
 };
 
 const PAGE_SIZE = 10;
@@ -54,6 +58,7 @@ const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
   { key: 'bank', label: 'Banka' },
   { key: 'wallet', label: 'Cüzdan' },
   { key: 'credit_card', label: 'Kredi Kartı' },
+  { key: 'pos', label: 'POS' },
 ];
 
 export default function AccountsScreen() {
@@ -132,6 +137,27 @@ export default function AccountsScreen() {
         />
       ) : null}
 
+      {allAccounts.length > 1 ? (
+        <Pressable
+          onPress={() => router.push('/transactions/new?direction=transfer')}
+          style={{
+            height: theme.controlHeight.segmented,
+            borderRadius: theme.radius.widget,
+            borderWidth: 1,
+            borderColor: theme.colors.brandPrimary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: theme.spacing.xxs,
+          }}
+        >
+          <Ionicons name="swap-horizontal-outline" size={16} color={theme.colors.brandPrimary} />
+          <Text variant="body" color="brandPrimary">
+            Hesaplar Arası Transfer
+          </Text>
+        </Pressable>
+      ) : null}
+
       <Stack gap="sm">
         <TextField
           placeholder="Hesap adı veya IBAN'da ara"
@@ -173,7 +199,11 @@ export default function AccountsScreen() {
             <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
               <Card>
                 <Row gap="sm" align="center">
-                  <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={36} />
+                  {type === 'cash' ? (
+                    <ValueUnitBadge unitCode={item.currency_code} size={36} />
+                  ) : (
+                    <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={36} />
+                  )}
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle" numberOfLines={1}>
                       {item.name}
@@ -201,6 +231,7 @@ export default function AccountsScreen() {
                   <Amount
                     amountMinor={balanceMinor}
                     currencyCode={item.currency_code}
+                    valueUnitType={type === 'cash' ? getValueUnit(item.currency_code).unitType : undefined}
                     variant="cardTitle"
                     numberOfLines={1}
                     overdue={balanceMinor < 0}

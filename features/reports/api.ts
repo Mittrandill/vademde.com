@@ -191,6 +191,7 @@ export async function getCounterpartyBreakdown(
 export interface AccountBalanceReportItem {
   accountId: string;
   name: string;
+  type: string;
   bankCode: string | null;
   currencyCode: string;
   balanceMinor: number;
@@ -204,7 +205,7 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
     await Promise.all([
       supabase
         .from('accounts')
-        .select('id, name, bank_code, currency_code, opening_balance_minor')
+        .select('id, name, type, bank_code, currency_code, opening_balance_minor')
         .eq('workspace_id', workspaceId)
         .eq('is_archived', false)
         .order('created_at', { ascending: true }),
@@ -232,6 +233,7 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
   return accounts.map((account) => ({
     accountId: account.id,
     name: account.name,
+    type: account.type,
     bankCode: account.bank_code,
     currencyCode: account.currency_code,
     balanceMinor: account.opening_balance_minor + (deltas.get(account.id) ?? 0),

@@ -21,7 +21,7 @@ import {
 } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
-import { parseAmountToMinor } from '@/utils/money';
+import { formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
 type Direction = 'income' | 'expense' | 'transfer';
@@ -108,6 +108,10 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
     enabled: !!activeWorkspaceId,
   });
   const accounts = accountsQuery.data ?? [];
+  // Kredi kartı hesapları arasında/kredi kartından "hesaplar arası transfer" anlamsız —
+  // kart borcu buradan değil harcama/ekstre akışından değişir (bkz. app/accounts/[id].tsx
+  // ekstre/ödeme akışı). Transfer yönünde kart hesapları seçilemez hale getirilir.
+  const transferableAccounts = accounts.filter((a) => a.type !== 'credit_card');
 
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId
@@ -200,6 +204,19 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
     !!amount &&
     (direction !== 'transfer' || (!!transferToAccountId && transferToAccountId !== accountId));
 
+  // POS hesabına girilen tahsilattan otomatik düşülecek komisyonun önizlemesi — gerçek
+  // kesinti Supabase'teki maintain_pos_commission trigger'ında olur (bkz. o migration'ın
+  // yorumu), burası yalnızca kullanıcıya bilgi verir, hiçbir girdi/onay istemez.
+  const selectedAccount = accounts.find((a) => a.id === accountId);
+  const posCommissionRate = selectedAccount?.type === 'pos' ? selectedAccount.pos_commission_rate : null;
+  const amountMinorPreview = parseAmountToMinor(amount);
+  const showPosCommissionPreview =
+    direction === 'income' && !!posCommissionRate && amountMinorPreview !== null && amountMinorPreview > 0;
+  const posCommissionFeeMinor = showPosCommissionPreview
+    ? Math.round((amountMinorPreview as number) * (posCommissionRate as number) / 100)
+    : 0;
+  const posCommissionNetMinor = showPosCommissionPreview ? (amountMinorPreview as number) - posCommissionFeeMinor : 0;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -221,6 +238,9 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
                 setDirection(value);
                 setCategoryId(null);
                 setTransferToAccountId(null);
+                if (value === 'transfer' && accounts.find((a) => a.id === accountId)?.type === 'credit_card') {
+                  setAccountId(null);
+                }
               }}
               stretch
             />
@@ -231,13 +251,15 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
               <Text variant="caption" color="textSecondary">
                 {direction === 'transfer' ? 'KAYNAK HESAP' : 'HESAP'}
               </Text>
-              {accounts.length === 0 ? (
+              {(direction === 'transfer' ? transferableAccounts : accounts).length === 0 ? (
                 <Text variant="body" color="textSecondary">
-                  Önce Hesaplar&apos;dan bir hesap ekleyin.
+                  {direction === 'transfer'
+                    ? 'Transfer için kredi kartı dışında en az bir hesap gerekir.'
+                    : "Önce Hesaplar'dan bir hesap ekleyin."}
                 </Text>
               ) : (
                 <AccountPicker
-                  accounts={accounts}
+                  accounts={direction === 'transfer' ? transferableAccounts : accounts}
                   selectedId={accountId}
                   onSelect={setAccountId}
                   title="Kaynak Hesap Seç"
@@ -246,13 +268,21 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
               )}
             </Stack>
 
+            {showPosCommissionPreview ? (
+              <Text variant="caption" color="textSecondary">
+                Bu tahsilattan %{posCommissionRate} POS komisyonu (
+                {formatMinorAmount(posCommissionFeeMinor, selectedAccount!.currency_code)}) otomatik düşülecek,
+                kasaya net {formatMinorAmount(posCommissionNetMinor, selectedAccount!.currency_code)} geçecek.
+              </Text>
+            ) : null}
+
             {direction === 'transfer' ? (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
                   HEDEF HESAP
                 </Text>
                 <AccountPicker
-                  accounts={accounts.filter((a) => a.id !== accountId)}
+                  accounts={transferableAccounts.filter((a) => a.id !== accountId)}
                   selectedId={transferToAccountId}
                   onSelect={setTransferToAccountId}
                   title="Hedef Hesap Seç"

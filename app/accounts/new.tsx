@@ -10,9 +10,10 @@ import { withAlpha } from '@/theme/colors';
 import { Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
+import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
 import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { parseAmountToMinor } from '@/utils/money';
+import { parseAmount, parseAmountToMinor } from '@/utils/money';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
@@ -23,6 +24,7 @@ const TYPES: Array<{ value: Account['type']; label: string }> = [
   { value: 'bank', label: 'Banka' },
   { value: 'wallet', label: 'Cüzdan' },
   { value: 'credit_card', label: 'Kredi Kartı' },
+  { value: 'pos', label: 'POS' },
 ];
 
 // Ayın gerçek gün sayısını aşan (ör. 30 Şubat) bir kesim/ödeme günü girilmesin —
@@ -75,9 +77,13 @@ export default function NewAccountScreen() {
   const [cardLastFour, setCardLastFour] = useState('');
   const [creditLimit, setCreditLimit] = useState('');
   const [overdraftLimit, setOverdraftLimit] = useState('');
+  const [valueUnitCode, setValueUnitCode] = useState('TRY');
+  const [commissionRate, setCommissionRate] = useState('');
   const [initialized, setInitialized] = useState(false);
   const isCreditCard = type === 'credit_card';
   const isBank = type === 'bank';
+  const isCash = type === 'cash';
+  const isPos = type === 'pos';
 
   const accountQuery = useQuery({
     queryKey: ['account', id, 'edit'],
@@ -100,6 +106,10 @@ export default function NewAccountScreen() {
     setOverdraftLimit(
       account.overdraft_limit_minor != null ? (account.overdraft_limit_minor / 100).toFixed(2).replace('.', ',') : ''
     );
+    setValueUnitCode(account.currency_code);
+    setCommissionRate(
+      account.pos_commission_rate != null ? String(account.pos_commission_rate).replace('.', ',') : ''
+    );
     setInitialized(true);
   }, [accountQuery.data, initialized]);
 
@@ -111,7 +121,7 @@ export default function NewAccountScreen() {
       const payload = {
         name: name.trim(),
         type,
-        bank_code: type === 'bank' || isCreditCard ? bankCode : null,
+        bank_code: type === 'bank' || isCreditCard || isPos ? bankCode : null,
         iban: type === 'bank' && normalizedIban ? normalizedIban : null,
         opening_balance_minor: parseAmountToMinor(openingBalance) ?? 0,
         statement_day: isCreditCard && statementDay ? Number(statementDay) : null,
@@ -119,6 +129,8 @@ export default function NewAccountScreen() {
         card_last_four: isCreditCard && cardLastFour ? cardLastFour : null,
         credit_limit_minor: isCreditCard ? parseAmountToMinor(creditLimit) : null,
         overdraft_limit_minor: isBank ? parseAmountToMinor(overdraftLimit) : null,
+        currency_code: isCash ? valueUnitCode : 'TRY',
+        pos_commission_rate: isPos ? parseAmount(commissionRate) : null,
       };
       return isEditing
         ? updateAccount(id as string, payload)
@@ -159,11 +171,15 @@ export default function NewAccountScreen() {
           ? 'Son ödeme günü 1-31 arası olmalı.'
           : null;
   const cardLastFourHasError = cardLastFour.length > 0 && !/^\d{4}$/.test(cardLastFour);
+  const parsedCommissionRate = commissionRate.trim() ? parseAmount(commissionRate) : null;
+  const commissionRateHasError =
+    commissionRate.trim().length > 0 && (parsedCommissionRate === null || parsedCommissionRate < 0 || parsedCommissionRate > 100);
   const canSubmit =
     !!name.trim() &&
     !statementDayHasError &&
     !paymentDueDayHasError &&
     !cardLastFourHasError &&
+    !commissionRateHasError &&
     (!isCreditCard || isValidDayOfMonth(statementDay));
 
   function handleSubmit() {
@@ -225,7 +241,7 @@ export default function NewAccountScreen() {
 
           <TextField
             label={isCreditCard ? 'KART ADI' : 'HESAP ADI'}
-            placeholder={isCreditCard ? 'Örn. Bonus Kartım' : 'Örn. Nakit Kasa'}
+            placeholder={isCreditCard ? 'Örn. Bonus Kartım' : isPos ? 'Örn. Garanti POS' : 'Örn. Nakit Kasa'}
             value={name}
             onChangeText={setName}
           />
@@ -320,6 +336,45 @@ export default function NewAccountScreen() {
             </>
           ) : (
             <>
+              {isCash ? (
+                <Stack gap="sm">
+                  <Text variant="caption" color="textSecondary">
+                    DEĞER BİRİMİ
+                  </Text>
+                  <ValueUnitPicker selectedId={valueUnitCode} onSelect={setValueUnitCode} />
+                  <Text variant="caption" color="textSecondary">
+                    Bu kasada TL dışında döviz veya altın tutuyorsanız birimini seçin — bakiye ve hareketler bu
+                    birimde gösterilir.
+                  </Text>
+                </Stack>
+              ) : null}
+
+              {isPos ? (
+                <FormSection icon="card-outline" title="POS Bilgileri">
+                  <Stack gap="sm">
+                    <Text variant="caption" color="textSecondary">
+                      BANKA (İSTEĞE BAĞLI)
+                    </Text>
+                    <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+                  </Stack>
+
+                  <Stack gap="xs">
+                    <TextField
+                      label="KOMİSYON ORANI (%)"
+                      placeholder="Örn. 2,75"
+                      keyboardType="decimal-pad"
+                      value={commissionRate}
+                      onChangeText={setCommissionRate}
+                      error={commissionRateHasError ? '0 ile 100 arasında bir oran girin.' : undefined}
+                    />
+                    <Text variant="caption" color="textSecondary">
+                      Bu POS&apos;a girilen her tahsilattan bu oranda komisyon otomatik düşülür; kasaya net tutar
+                      geçer. Oranı istediğiniz zaman buradan güncelleyebilirsiniz.
+                    </Text>
+                  </Stack>
+                </FormSection>
+              ) : null}
+
               {type === 'bank' ? (
                 <Stack gap="sm">
                   <Text variant="caption" color="textSecondary">

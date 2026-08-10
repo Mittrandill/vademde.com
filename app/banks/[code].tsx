@@ -33,6 +33,7 @@ const ACCOUNT_TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap>
   bank: 'business-outline',
   wallet: 'wallet-outline',
   credit_card: 'card-outline',
+  pos: 'storefront-outline',
 };
 
 const ACCOUNT_TYPE_LABEL: Record<Account['type'], string> = {
@@ -40,6 +41,7 @@ const ACCOUNT_TYPE_LABEL: Record<Account['type'], string> = {
   bank: 'Banka',
   wallet: 'Cüzdan',
   credit_card: 'Kredi Kartı',
+  pos: 'POS',
 };
 
 const TAB_PAGE_SIZE = 10;

@@ -15,6 +15,7 @@ export interface DocumentTypeOption {
 export const DOCUMENT_TYPES: DocumentTypeOption[] = [
   { id: 'kredi', name: 'Kredi', icon: 'cash', color: '#3E8E5A' },
   { id: 'kredi_karti_ekstresi', name: 'Kredi Kartı Ekstresi', icon: 'card', color: '#4C8DFF' },
+  { id: 'nakit_avans', name: 'Nakit Avans', icon: 'cash-outline', color: '#FF7A59' },
   { id: 'cek', name: 'Çek', icon: 'document-text', color: '#2FA9C9' },
   { id: 'senet', name: 'Senet', icon: 'reader', color: '#7C6FF0' },
   { id: 'fatura', name: 'Fatura', icon: 'receipt', color: '#F0B429' },
@@ -49,6 +50,7 @@ export const DOCUMENT_TYPE_LABEL: Record<string, string> = Object.fromEntries(
 export const DOCUMENT_TYPE_LABEL_PLURAL: Record<string, string> = {
   kredi: 'Kredilerim',
   kredi_karti_ekstresi: 'Kredi Kartı Ekstrelerim',
+  nakit_avans: 'Nakit Avanslarım',
   cek: 'Çeklerim',
   senet: 'Senetlerim',
   fatura: 'Faturalarım',
@@ -73,5 +75,7 @@ export const BANK_DOCUMENT_TYPES = new Set(['kredi', 'kredi_karti_ekstresi', 'ce
 // Bu belge türlerinde karşı taraf gerçekten bankadır (banka kimliği bank_code/logo üzerinden
 // temsil edilir) — kişi/firma alanı bu ikisinde anlamsızdır. Çek/senet'te ise durum farklı:
 // çekte hem düzenleyen bankası hem de ayrı bir lehtar/karşı taraf vardır (docs/04-ocr-belge-isleme.md
-// §7.1) — bu yüzden BANK_DOCUMENT_TYPES'tan (banka alanı görünürlüğü) ayrı tutulur.
-export const COUNTERPARTY_LESS_DOCUMENT_TYPES = new Set(['kredi', 'kredi_karti_ekstresi']);
+// §7.1) — bu yüzden BANK_DOCUMENT_TYPES'tan (banka alanı görünürlüğü) ayrı tutulur. Nakit avans'ta
+// da karşı taraf yoktur ama bankası ayrıca seçilmez — zaten seçilen HESAP (kredi kartı) kendi
+// bank_code'unu taşır, bu yüzden BANK_DOCUMENT_TYPES'a değil yalnızca buraya eklenir.
+export const COUNTERPARTY_LESS_DOCUMENT_TYPES = new Set(['kredi', 'kredi_karti_ekstresi', 'nakit_avans']);

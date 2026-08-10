@@ -29,6 +29,7 @@ export type Database = {
           opening_balance_minor: number
           overdraft_limit_minor: number | null
           payment_due_day: number | null
+          pos_commission_rate: number | null
           statement_day: number | null
           type: string
           updated_at: string
@@ -47,6 +48,7 @@ export type Database = {
           opening_balance_minor?: number
           overdraft_limit_minor?: number | null
           payment_due_day?: number | null
+          pos_commission_rate?: number | null
           statement_day?: number | null
           type: string
           updated_at?: string
@@ -65,6 +67,7 @@ export type Database = {
           opening_balance_minor?: number
           overdraft_limit_minor?: number | null
           payment_due_day?: number | null
+          pos_commission_rate?: number | null
           statement_day?: number | null
           type?: string
           updated_at?: string
@@ -977,6 +980,7 @@ export type Database = {
           direction: string
           id: string
           occurred_at: string
+          related_transaction_id: string | null
           transfer_to_account_id: string | null
           updated_at: string
           workspace_id: string
@@ -992,6 +996,7 @@ export type Database = {
           direction: string
           id?: string
           occurred_at?: string
+          related_transaction_id?: string | null
           transfer_to_account_id?: string | null
           updated_at?: string
           workspace_id: string
@@ -1007,6 +1012,7 @@ export type Database = {
           direction?: string
           id?: string
           occurred_at?: string
+          related_transaction_id?: string | null
           transfer_to_account_id?: string | null
           updated_at?: string
           workspace_id?: string
@@ -1031,6 +1037,13 @@ export type Database = {
             columns: ["counterparty_id"]
             isOneToOne: false
             referencedRelation: "counterparties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_related_transaction_id_fkey"
+            columns: ["related_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
           {

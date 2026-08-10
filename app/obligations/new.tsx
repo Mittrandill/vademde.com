@@ -28,6 +28,7 @@ import {
   updateObligation,
   type Obligation,
 } from '@/features/obligations/api';
+import { createTransaction } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 import { buildAmortizedInstallments } from '@/utils/installmentPlan';
@@ -129,6 +130,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
   const [interestRateStr, setInterestRateStr] = useState('');
+  const [depositAccountId, setDepositAccountId] = useState<string | null>(null);
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
 
@@ -137,6 +139,10 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
     queryFn: () => listAccounts(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
+  // Nakit avans yalnızca bir kredi kartından çekilir; çekilen nakit ise kart dışında
+  // herhangi bir hesaba (kasa/banka/cüzdan/POS) yatırılabilir.
+  const creditCardAccounts = (accountsQuery.data ?? []).filter((a) => a.type === 'credit_card');
+  const depositTargetAccounts = (accountsQuery.data ?? []).filter((a) => a.type !== 'credit_card');
 
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.categories(activeWorkspaceId, categoryKind) : ['categories', 'disabled'],
@@ -173,6 +179,10 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   // aynı gerekçeyle KİŞİ/FİRMA yerine isteğe bağlı SERVİS seçimi gösterilir.
   const isLoanType = documentType === 'kredi';
   const isSubscriptionType = documentType === 'abonelik';
+  // Nakit avans: borçlu taraf kart hesabıdır (kişi/firma alanı anlamsız, kredi/abonelik ile
+  // aynı gerekçe — bkz. COUNTERPARTY_LESS_DOCUMENT_TYPES), HESAP zorunludur ve yalnızca kredi
+  // kartı hesapları arasından seçilir; ayrıca çekilen nakit gerçekten bir hesaba yatırılabilir.
+  const isCashAdvanceType = documentType === 'nakit_avans';
 
   // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydı P1 MVP kapsamında
   // yalnızca tek seferlik borç/alacak olarak tutulur; taksitlendirme (buildAmortizedInstallments,
@@ -181,13 +191,17 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   const installmentCount = isFiatUnit ? Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1)) : 1;
   const enteredAmountMinor = parseValueUnitAmountToMinor(totalAmount, valueUnitCode) ?? 0;
   // Aboneliklerde TUTAR alanı aylık ödemeyi temsil eder; toplam, aylık × ay sayısıdır.
-  // Diğer türlerde TUTAR zaten toplamın kendisidir (kredi'de anapara, taksitler ondan türer).
+  // Diğer türlerde (nakit avans dahil) TUTAR zaten çekilen/anapara tutarın kendisidir —
+  // taksitliyse ödenecek toplam faizle birlikte aşağıdaki installments'tan türer, TUTAR
+  // alanının kendisi değişmez (bkz. showInterestField/obligationTotalMinor).
   const totalAmountMinor =
     isSubscriptionType && installmentCount > 1 ? enteredAmountMinor * installmentCount : enteredAmountMinor;
-  // Faiz oranı yalnızca kredi eklerken ve birden fazla taksitte istenir; TUTAR alanı bu
-  // durumda anaparayı temsil eder, taksitler azalan bakiye üzerinden hesaplanır ve
-  // obligation'ın toplamı anapara+toplam faiz olur.
-  const showInterestField = !isEditing && isFiatUnit && documentType === 'kredi' && installmentCount > 1;
+  // Faiz oranı kredi VE nakit avansta, birden fazla taksitte istenir — TUTAR alanı bu
+  // durumda anaparayı (nakit avansta çekilen tutarı) temsil eder, taksitler azalan bakiye
+  // üzerinden hesaplanır ve obligation'ın toplamı anapara+toplam faiz olur (banka kredisi/nakit
+  // avans faizi gibi). Tek taksitte (peşin) faiz uygulanmaz, TUTAR = toplam borç kalır.
+  const showInterestField =
+    !isEditing && isFiatUnit && (documentType === 'kredi' || isCashAdvanceType) && installmentCount > 1;
   const interestRatePercent =
     showInterestField && interestRateStr ? Number(interestRateStr.replace(',', '.')) || 0 : 0;
   const installmentPreview =
@@ -203,7 +217,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
 
       const bankCodeForType = BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null;
       const serviceCodeForType = isSubscriptionType ? serviceCode : null;
-      const counterpartyIdForType = isLoanType || isSubscriptionType ? null : counterpartyId;
+      const counterpartyIdForType = isLoanType || isSubscriptionType || isCashAdvanceType ? null : counterpartyId;
 
       if (isEditing) {
         const obligation = await updateObligation(id, {
@@ -254,6 +268,22 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
           obligationId: obligation.id,
           totalAmountMinor: obligationTotalMinor,
           installments,
+        });
+      }
+
+      // Nakit avans gerçekten çekilen nakittir — kesinti tutarı kart borcuna (yukarıdaki
+      // obligation) eklenir ama kullanıcının eline geçen net tutar isteğe bağlı olarak bir
+      // hesaba (kasa/banka) gelir kaydı olarak yatırılır. Borç tarafı ile hesap tarafı bu
+      // yüzden ayrı kalemlerdir: fee kartın borcunu artırır, burada hiç görünmez.
+      if (isCashAdvanceType && depositAccountId && enteredAmountMinor > 0) {
+        await createTransaction({
+          workspace_id: activeWorkspaceId,
+          account_id: depositAccountId,
+          direction: 'income',
+          amount_minor: enteredAmountMinor,
+          currency_code: valueUnitCode,
+          occurred_at: new Date().toISOString(),
+          description: `Nakit avans — ${title.trim()}`,
         });
       }
 
@@ -314,7 +344,11 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   }
 
   const canSubmit =
-    !!title.trim() && totalAmountMinor > 0 && !!documentType && (!isLoanType || !!bankCode);
+    !!title.trim() &&
+    totalAmountMinor > 0 &&
+    !!documentType &&
+    (!isLoanType || !!bankCode) &&
+    (!isCashAdvanceType || !!accountId);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -382,7 +416,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               onChangeText={setDueDate}
             />
 
-            {isLoanType || isSubscriptionType ? null : (
+            {isLoanType || isSubscriptionType || isCashAdvanceType ? null : (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
                   KİŞİ / FİRMA
@@ -405,7 +439,17 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               <Text variant="caption" color="textSecondary">
                 BELGE TÜRÜ
               </Text>
-              <DocumentTypePicker selectedId={documentType} onSelect={setDocumentType} />
+              <DocumentTypePicker
+                selectedId={documentType}
+                onSelect={(value) => {
+                  setDocumentType(value);
+                  // Nakit avansta HESAP yalnızca kredi kartı olabilir — önceden seçilmiş bir
+                  // kart-dışı hesap varsa (veya tersi yönde geçilirken) geçersiz kalmasın diye temizlenir.
+                  if (value === 'nakit_avans' && !creditCardAccounts.some((a) => a.id === accountId)) {
+                    setAccountId(null);
+                  }
+                }}
+              />
             </Stack>
 
             {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
@@ -445,16 +489,47 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                HESAP (İSTEĞE BAĞLI)
+                {isCashAdvanceType ? 'KREDİ KARTI' : 'HESAP (İSTEĞE BAĞLI)'}
               </Text>
-              {(accountsQuery.data ?? []).length === 0 ? (
+              {(isCashAdvanceType ? creditCardAccounts : accountsQuery.data ?? []).length === 0 ? (
                 <Text variant="body" color="textSecondary">
-                  Önce Hesaplar&apos;dan bir hesap ekleyin.
+                  {isCashAdvanceType
+                    ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
+                    : "Önce Hesaplar'dan bir hesap ekleyin."}
                 </Text>
               ) : (
-                <AccountPicker accounts={accountsQuery.data ?? []} selectedId={accountId} onSelect={setAccountId} />
+                <AccountPicker
+                  accounts={isCashAdvanceType ? creditCardAccounts : accountsQuery.data ?? []}
+                  selectedId={accountId}
+                  onSelect={setAccountId}
+                />
               )}
             </Stack>
+
+            {isCashAdvanceType && !isEditing ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  NAKİT NEREYE YATIRILDI? (İSTEĞE BAĞLI)
+                </Text>
+                {depositTargetAccounts.length === 0 ? (
+                  <Text variant="body" color="textSecondary">
+                    Nakdi bir kasa/banka hesabına yatırdıysanız önce o hesabı ekleyin.
+                  </Text>
+                ) : (
+                  <AccountPicker
+                    accounts={depositTargetAccounts}
+                    selectedId={depositAccountId}
+                    onSelect={setDepositAccountId}
+                    title="Hesap Seç"
+                    placeholder="Hesap seçin"
+                  />
+                )}
+                <Text variant="caption" color="textSecondary">
+                  Seçilirse çekilen tutar (TUTAR alanı, faizden etkilenmez) o hesaba gelir olarak
+                  otomatik işlenir.
+                </Text>
+              </Stack>
+            ) : null}
 
             {/* docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydı bu turda
                 yalnızca tek seferlik borç/alacak olarak tutulur (bkz. yukarıdaki
@@ -481,7 +556,9 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
                   onChangeText={setInterestRateStr}
                 />
                 <Text variant="caption" color="textSecondary">
-                  TUTAR alanı anaparadır; taksitler azalan bakiye üzerinden hesaplanır (banka kredisi gibi).
+                  {isCashAdvanceType
+                    ? 'TUTAR alanı çekilen nakittir; taksitler azalan bakiye üzerinden hesaplanır — çekilen tutar değişmez, yalnızca toplam ödemeye faiz eklenir.'
+                    : 'TUTAR alanı anaparadır; taksitler azalan bakiye üzerinden hesaplanır (banka kredisi gibi).'}
                 </Text>
               </Stack>
             ) : null}

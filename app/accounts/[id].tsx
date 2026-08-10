@@ -26,6 +26,7 @@ import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import { DetailHeroCard, DetailMetricRow } from '@/components/finance/DetailHero';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
 import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { HeroStatCard } from '@/components/finance/HeroStatCard';
 import { archiveAccount, getAccount, type Account } from '@/features/accounts/api';
@@ -39,13 +40,14 @@ import { queryKeys } from '@/services/queryKeys';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
 import { computeStatementPeriod, periodKeyFor, periodKeyForDueDate } from '@/utils/creditCardPeriod';
-import type { ValueUnitType } from '@/features/valueUnits/units';
+import { getValueUnit, type ValueUnitType } from '@/features/valueUnits/units';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
   bank: 'business-outline',
   wallet: 'wallet-outline',
   credit_card: 'card-outline',
+  pos: 'storefront-outline',
 };
 
 const TYPE_LABEL: Record<Account['type'], string> = {
@@ -53,6 +55,7 @@ const TYPE_LABEL: Record<Account['type'], string> = {
   bank: 'Banka',
   wallet: 'Cüzdan',
   credit_card: 'Kredi Kartı',
+  pos: 'POS',
 };
 
 const PAGE_SIZE = 10;
@@ -493,10 +496,15 @@ export default function AccountDetailScreen() {
               label="GÜNCEL BAKİYE"
               amountMinor={balanceMinor}
               currencyCode={account.currency_code}
+              valueUnitType={type === 'cash' ? getValueUnit(account.currency_code).unitType : undefined}
               danger={balanceMinor < 0}
               above={
                 <Row gap="sm" align="center">
-                  <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={44} />
+                  {type === 'cash' ? (
+                    <ValueUnitBadge unitCode={account.currency_code} size={44} />
+                  ) : (
+                    <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={44} />
+                  )}
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Row gap="xs" align="center">
                       <View
@@ -525,6 +533,8 @@ export default function AccountDetailScreen() {
             {hasOverdraft ? (
               <OverdraftCard accountId={account.id} balanceMinor={balanceMinor} limitMinor={overdraftLimitMinor} currencyCode={account.currency_code} />
             ) : null}
+
+            {type === 'pos' ? <PosCommissionCard account={account} /> : null}
 
             <Text variant="sectionTitle">Hareketler</Text>
           </Stack>
@@ -613,6 +623,32 @@ function OverdraftCard({ accountId, balanceMinor, limitMinor, currencyCode }: Ov
             Ek Hesap Faizi Ekle
           </Text>
         </Pressable>
+      </Stack>
+    </Card>
+  );
+}
+
+// POS hesabına girilen her tahsilat (income) gelirinden komisyon oranı kadar bir gider
+// otomatik oluşur (bkz. Supabase'teki maintain_pos_commission trigger'ı) — burada yalnızca
+// oran gösterilir/değiştirilir, kesinti mantığı burada tekrarlanmaz.
+function PosCommissionCard({ account }: { account: Account }) {
+  const theme = useTheme();
+  const rate = account.pos_commission_rate;
+
+  return (
+    <Card>
+      <Stack gap="md">
+        <Row gap="sm" align="center">
+          <Ionicons name="cut-outline" size={18} color={theme.colors.brandPrimary} />
+          <Text variant="cardTitle">POS Komisyonu</Text>
+        </Row>
+        <Divider />
+        <InfoRow label="Komisyon Oranı" value={rate != null ? `%${rate}` : 'Girilmedi'} />
+        <Text variant="caption" color="textSecondary">
+          Bu POS&apos;a girilen her tahsilattan bu oranda komisyon otomatik düşülür ve &quot;POS
+          Komisyonu&quot; kategorisiyle ayrı bir gider olarak kaydedilir. Oranı değiştirmek için hesabı
+          düzenleyin.
+        </Text>
       </Stack>
     </Card>
   );

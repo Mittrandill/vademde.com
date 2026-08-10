@@ -30,7 +30,7 @@ export function ValueUnitPicker({ selectedId, onSelect, placeholder, title }: Va
   );
 }
 
-function ValueUnitBadge({ unitCode, size }: { unitCode: string; size: number }) {
+export function ValueUnitBadge({ unitCode, size }: { unitCode: string; size: number }) {
   const unit = getValueUnit(unitCode);
 
   return (

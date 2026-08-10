@@ -23,6 +23,7 @@ interface QuickActionDef {
 // kullanıcı geri bildirimi: renk renk rozetler "hazır AI şablonu" gibi duruyordu.
 const QUICK_ACTION_POOL: QuickActionDef[] = [
   { id: 'yeni-hareket', icon: 'add-circle-outline', label: 'Yeni Hareket', href: '/transactions/new' },
+  { id: 'transfer', icon: 'swap-horizontal-outline', label: 'Transfer', href: '/transactions/new?direction=transfer' },
   { id: 'yeni-borc-alacak', icon: 'document-text-outline', label: 'Yeni Borç/Alacak', href: '/obligations/new' },
   { id: 'raporlar', icon: 'bar-chart-outline', label: 'Raporlar', href: '/reports' },
   { id: 'hesaplar', icon: 'wallet-outline', label: 'Hesaplar', href: '/accounts' },

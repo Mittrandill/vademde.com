@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { SearchablePicker } from '@/components/primitives';
 import { BankLogo } from './BankLogo';
+import { ValueUnitBadge } from './ValueUnitPicker';
 import type { Account } from '@/features/accounts/api';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
@@ -9,6 +10,7 @@ const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   bank: 'business-outline',
   wallet: 'wallet-outline',
   credit_card: 'card-outline',
+  pos: 'storefront-outline',
 };
 
 export interface AccountPickerProps {
@@ -25,9 +27,13 @@ export function AccountPicker({ accounts, selectedId, onSelect, placeholder, tit
       items={accounts}
       selectedId={selectedId}
       onSelect={onSelect}
-      renderLeading={(item) => (
-        <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={36} />
-      )}
+      renderLeading={(item) =>
+        item.type === 'cash' ? (
+          <ValueUnitBadge unitCode={item.currency_code} size={36} />
+        ) : (
+          <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[item.type as Account['type']]} size={36} />
+        )
+      }
       placeholder={placeholder ?? 'Hesap seçin'}
       title={title ?? 'Hesap Seç'}
       emptyLabel="Eşleşen hesap bulunamadı."
