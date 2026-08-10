@@ -8,6 +8,7 @@ import { useSession } from '@/features/auth/useSession';
 import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
 import { configurePurchases, logOutPurchases } from '@/services/purchases';
+import { registerPushToken, unregisterCurrentPushToken } from '@/services/pushToken';
 import { useWorkspaceRealtime } from '@/services/realtime';
 import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -31,8 +32,10 @@ function RootNavigator() {
     const userId = session?.user?.id;
     if (userId) {
       configurePurchases(userId);
+      registerPushToken(userId);
     } else {
       logOutPurchases();
+      unregisterCurrentPushToken();
     }
   }, [session?.user?.id]);
 

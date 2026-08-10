@@ -3,7 +3,6 @@ import * as Notifications from 'expo-notifications';
 
 import { getRemindersForObligation, upsertReminder } from '@/features/reminders/api';
 import { getNextPendingInstallment, type Obligation } from '@/features/obligations/api';
-import { formatMinorAmount } from '@/utils/money';
 import { reconcileReminders, type ReminderTarget } from '@/services/reminderSync';
 
 // docs/08-tasarim-sistemi.md ile ilgisiz, salt platform notu: Android 8+ açık bir kanal
@@ -33,14 +32,16 @@ const TERMINAL_STATUSES = new Set(['odendi', 'tahsil_edildi', 'iptal_edildi']);
 
 // Vade öncesi 7 gün / 3 gün / vade günü / (hâlâ ödenmemişse) vadeden 1 gün sonra olmak
 // üzere dört sabit kademeli hatırlatma — başka hiçbir tetikleyici yok. Bu tüm obligation
-// türleri (kredi, çek, senet, fatura vb.) için ortak, kredi'ye özel değildir.
-const REMINDER_STAGES: { stage: string; daysBefore: number; hour: number; label: string }[] = [
-  { stage: '7_days_before', daysBefore: 7, hour: 10, label: '7 gün kaldı — ' },
-  { stage: '3_days_before', daysBefore: 3, hour: 18, label: '3 gün kaldı — ' },
-  { stage: 'due_day', daysBefore: 0, hour: 9, label: '' },
+// türleri (kredi, çek, senet, fatura vb.) için ortak, kredi'ye özel değildir. Bildirim
+// başlığı/gövdesi burada değil supabase/functions/send-reminders'ta (STAGE_PREFIX) ve
+// app/notifications.tsx'te (uygulama içi liste) üretilir — aynı stage değerini kullanırlar.
+const REMINDER_STAGES: { stage: string; daysBefore: number; hour: number }[] = [
+  { stage: '7_days_before', daysBefore: 7, hour: 10 },
+  { stage: '3_days_before', daysBefore: 3, hour: 18 },
+  { stage: 'due_day', daysBefore: 0, hour: 9 },
   // daysBefore negatif: buildRemindAt "day - daysBefore" hesapladığı için day+1 çıkar —
   // ay sonu taşması JS Date tarafından otomatik normalize edilir, ayrı tarih matematiği gerekmez.
-  { stage: 'overdue_1_day', daysBefore: -1, hour: 9, label: 'Gecikti — ' },
+  { stage: 'overdue_1_day', daysBefore: -1, hour: 9 },
 ];
 
 export async function ensureNotificationPermission(): Promise<boolean> {
@@ -84,16 +85,12 @@ async function runSyncObligationReminder(workspaceId: string, obligation: Remind
 
   // Taksitli borçlarda vade, sabit obligation.due_date değil bir sonraki bekleyen
   // taksitin tarihidir; taksitsiz kayıtlarda (çek/senet/fatura) null döner ve obligation.due_date kullanılır.
-  // Bildirimde gösterilen tutar da aynı mantıkla o taksidin kendi tutarıdır — kredinin
-  // toplam bakiyesi değil (o yalnızca /obligations/[id] detay sayfasında gösterilir).
   const nextInstallment = isTerminal ? null : await getNextPendingInstallment(obligation.id);
   const effectiveDueDate = nextInstallment?.dueDate ?? obligation.due_date;
-  const effectiveAmountMinor = nextInstallment?.remainingAmountMinor ?? obligation.remaining_amount_minor;
 
-  const buildTarget = (stage: string, remindAt: Date | null, content?: ReminderTarget['content']): ReminderTarget => ({
+  const buildTarget = (stage: string, remindAt: Date | null): ReminderTarget => ({
     key: stage,
     remindAt,
-    content,
     extra: { obligation_id: obligation.id, stage },
   });
 
@@ -103,21 +100,13 @@ async function runSyncObligationReminder(workspaceId: string, obligation: Remind
       existing: existingReminders,
       keyOf: (r) => r.stage,
       targets: REMINDER_STAGES.map(({ stage }) => buildTarget(stage, null)),
-      ensurePermission: ensureNotificationPermission,
       upsert: upsertReminder,
     });
     return;
   }
 
-  const label = obligation.direction === 'payable' ? 'Ödeme vadesi' : 'Tahsilat vadesi';
-  const amountLabel = formatMinorAmount(effectiveAmountMinor, obligation.currency_code);
-
-  const targets = REMINDER_STAGES.map(({ stage, daysBefore, hour, label: prefix }) =>
-    buildTarget(stage, buildRemindAt(effectiveDueDate, daysBefore, hour), {
-      title: `${prefix}${label}`,
-      body: `${obligation.title} — ${amountLabel}`,
-      data: { obligationId: obligation.id, stage },
-    })
+  const targets = REMINDER_STAGES.map(({ stage, daysBefore, hour }) =>
+    buildTarget(stage, buildRemindAt(effectiveDueDate, daysBefore, hour))
   );
 
   await reconcileReminders({
@@ -125,20 +114,6 @@ async function runSyncObligationReminder(workspaceId: string, obligation: Remind
     existing: existingReminders,
     keyOf: (r) => r.stage,
     targets,
-    ensurePermission: ensureNotificationPermission,
     upsert: upsertReminder,
-    channelId: 'obligation-reminders',
   });
-}
-
-// obligations tablosunda ON DELETE CASCADE reminders satırlarını siler; bu fonksiyon
-// yalnızca cihazda zaten planlanmış OS bildirimlerini iptal etmek için obligation
-// silinmeden önce çağrılır.
-export async function cancelObligationReminder(obligationId: string): Promise<void> {
-  const existingReminders = await getRemindersForObligation(obligationId);
-  for (const existing of existingReminders) {
-    if (existing.notification_identifier) {
-      await Notifications.cancelScheduledNotificationAsync(existing.notification_identifier).catch(() => {});
-    }
-  }
 }

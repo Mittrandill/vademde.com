@@ -1,6 +1,5 @@
 import { supabase } from '@/services/supabase';
 import { getStatementUploadReminders, upsertAccountReminder } from '@/features/reminders/api';
-import { ensureNotificationPermission } from '@/services/notifications';
 import { reconcileReminders, type ReminderTarget } from '@/services/reminderSync';
 import { periodKeyForDueDate, type CreditCardPeriodAccount } from '@/utils/creditCardPeriod';
 import type { Account } from '@/features/accounts/api';
@@ -77,13 +76,6 @@ export async function syncCreditCardStatementReminder(
       targets.push({
         key: `${periodKey}|${stage}`,
         remindAt: shouldSchedule ? remindAt : null,
-        content: shouldSchedule
-          ? {
-              title: 'Ekstre yüklemeyi unutmayın',
-              body: `${account.name} — bu ayki ekstrenizi tarayın veya kart borcunu elle girin.`,
-              data: { accountId: account.id, periodKey, stage },
-            }
-          : undefined,
         extra: { account_id: account.id, kind: 'statement_upload', period_key: periodKey, stage },
       });
     }
@@ -94,7 +86,6 @@ export async function syncCreditCardStatementReminder(
     existing: existingReminders,
     keyOf: (r) => `${r.period_key}|${r.stage}`,
     targets,
-    ensurePermission: ensureNotificationPermission,
     upsert: upsertAccountReminder,
   });
 }

@@ -40,7 +40,8 @@ export function ServiceLogo({ serviceCode, fallbackName, size = 36, fallbackIcon
           <Path d={glyph.path} fill="#FFFFFF" />
         </Svg>
       ) : showInitials ? (
-        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.36 }}>
+        // Dekoratif baş harf rozeti — sabit çaplı daire içinde, Dynamic Type'tan kasıtlı muaf.
+        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.36 }} allowFontScaling={false}>
           {getInitials(fallbackName!.trim())}
         </Text>
       ) : (

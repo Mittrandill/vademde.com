@@ -39,7 +39,8 @@ export function BankLogo({ bankCode, fallbackName, size = 36, fallbackIcon = 'bu
       {source ? (
         <Image source={source} style={{ width: size, height: size }} resizeMode="contain" />
       ) : showInitials ? (
-        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.36 }}>
+        // Dekoratif baş harf rozeti — sabit çaplı daire içinde, Dynamic Type'tan kasıtlı muaf.
+        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.36 }} allowFontScaling={false}>
           {getBankInitials(fallbackName!.trim())}
         </Text>
       ) : (

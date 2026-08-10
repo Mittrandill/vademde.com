@@ -3,6 +3,7 @@ import { TextInput, View, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
+import { MAX_FONT_SCALE } from '@/theme/typography';
 import { Pressable } from './Pressable';
 import { Stack } from './Stack';
 import { Text } from './Text';
@@ -31,6 +32,7 @@ export function TextField({
   onRightIconPress,
   onFocus,
   onBlur,
+  maxFontSizeMultiplier = MAX_FONT_SCALE,
   ...rest
 }: TextFieldProps) {
   const theme = useTheme();
@@ -45,6 +47,7 @@ export function TextField({
   const input = (
     <TextInput
       placeholderTextColor={placeholderTextColor ?? theme.colors.textSecondary}
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
       onFocus={(event) => {
         setFocused(true);
         onFocus?.(event);

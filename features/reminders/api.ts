@@ -43,7 +43,7 @@ export async function upsertAccountReminder(input: TablesInsert<'reminders'>): P
   return data;
 }
 
-export interface UpcomingReminder extends Reminder {
+export interface DeliveredReminder extends Reminder {
   obligation: {
     id: string;
     title: string;
@@ -64,45 +64,52 @@ export interface UpcomingReminder extends Reminder {
 
 export const REMINDERS_PAGE_SIZE = 10;
 
-const UPCOMING_REMINDERS_SELECT =
+const RECENT_REMINDERS_SELECT =
   '*, obligation:obligations(id, title, direction, document_type, bank_code, service_code, remaining_amount_minor, currency_code, due_date), account:accounts(id, name, bank_code)';
 
-export interface ListUpcomingRemindersFilter {
+export interface ListRecentRemindersFilter {
   workspaceId: string;
   page?: number;
   pageSize?: number;
 }
 
-// Bildirimler ekranı — henüz vadesi geçmemiş (remind_at gelecekte kalan), temizlenmemiş
-// tüm hatırlatmaları kronolojik sırayla, sayfa başına 10 kayıt döner. syncObligationReminder/
-// syncCreditCardStatementReminder zaten OS bildirimini planlarken bu satırları yazıyor;
-// burada sadece görüntüleme için obligation/hesap bilgisiyle join'leniyor.
-export async function listUpcomingReminders({
+// supabase/functions/send-reminders push'u gerçekten attıktan sonra satırı 'delivered'
+// yapıyor. Bildirimler ekranı bu fonksiyonla yalnızca 'delivered' satırları gösterir —
+// henüz zamanı gelmemiş 'scheduled' satırlar (kayıt oluşturulur oluşturulmaz ileri tarihli
+// kademeler için hemen yazılır) burada BİLEREK dışlanır; aksi halde ekran, kullanıcının
+// henüz gelmemiş bir bildirimi "gelmiş" sanmasına yol açan bir önizleme listesi olurdu
+// (bkz. kullanıcı geri bildirimi). Süre sınırsız olursa hiç temizlenmeyen (dismiss
+// edilmeyen) eski bildirimler listeyi sonsuza dek büyütürdü, bu yüzden son birkaç günle sınırlanır.
+const DELIVERED_LOOKBACK_DAYS = 3;
+
+export async function listRecentReminders({
   workspaceId,
   page = 0,
   pageSize = REMINDERS_PAGE_SIZE,
-}: ListUpcomingRemindersFilter): Promise<UpcomingReminder[]> {
+}: ListRecentRemindersFilter): Promise<DeliveredReminder[]> {
+  const lookbackStart = new Date(Date.now() - DELIVERED_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from('reminders')
-    .select(UPCOMING_REMINDERS_SELECT)
+    .select(RECENT_REMINDERS_SELECT)
     .eq('workspace_id', workspaceId)
-    .eq('status', 'scheduled')
+    .eq('status', 'delivered')
     .is('dismissed_at', null)
-    .gte('remind_at', new Date().toISOString())
-    .order('remind_at', { ascending: true })
+    .gte('remind_at', lookbackStart)
+    .order('remind_at', { ascending: false })
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
-  return data as unknown as UpcomingReminder[];
+  return data as unknown as DeliveredReminder[];
 }
 
-export async function countUpcomingReminders(workspaceId: string): Promise<number> {
+export async function countRecentReminders(workspaceId: string): Promise<number> {
+  const lookbackStart = new Date(Date.now() - DELIVERED_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { count, error } = await supabase
     .from('reminders')
     .select('id', { count: 'exact', head: true })
     .eq('workspace_id', workspaceId)
-    .eq('status', 'scheduled')
+    .eq('status', 'delivered')
     .is('dismissed_at', null)
-    .gte('remind_at', new Date().toISOString());
+    .gte('remind_at', lookbackStart);
   if (error) throw error;
   return count ?? 0;
 }
@@ -136,5 +143,17 @@ export async function dismissAllReminders(workspaceId: string): Promise<void> {
     .update({ dismissed_at: new Date().toISOString() })
     .eq('workspace_id', workspaceId)
     .is('dismissed_at', null);
+  if (error) throw error;
+}
+
+// supabase/functions/send-reminders (pg_cron ile 15 dakikada bir) bu token'lara Expo Push
+// API üzerinden gönderir — bkz. services/pushToken.ts.
+export async function upsertPushToken(input: TablesInsert<'push_tokens'>): Promise<void> {
+  const { error } = await supabase.from('push_tokens').upsert(input, { onConflict: 'token' });
+  if (error) throw error;
+}
+
+export async function deletePushToken(token: string): Promise<void> {
+  const { error } = await supabase.from('push_tokens').delete().eq('token', token);
   if (error) throw error;
 }

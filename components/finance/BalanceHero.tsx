@@ -175,12 +175,16 @@ function BalancePage({
               minimumFontScale={0.6}
             />
           )}
-          <Row gap="xs">
-            <Text variant="caption" color="textSecondary">
+          {/* Büyük Dynamic Type ölçeklerinde bu satır, sağdaki sabit 112pt ProgressRing'in
+              üzerine görsel olarak taşabiliyordu (Row/Stack varsayılan olarak flexWrap
+              tanımlamaz, View'lar overflow:'visible'dır) — flexShrink + numberOfLines
+              taşmayı "…" kırpmasına çevirir. */}
+          <Row gap="xs" style={{ flexShrink: 1 }}>
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
               Bu ay:
             </Text>
             {hidden ? (
-              <Text variant="caption" color="textSecondary">
+              <Text variant="caption" color="textSecondary" numberOfLines={1}>
                 {HIDDEN_MASK}
               </Text>
             ) : (
@@ -188,6 +192,7 @@ function BalancePage({
                 amountMinor={Math.abs(monthNetMinor)}
                 direction={monthNetMinor >= 0 ? 'income' : 'expense'}
                 variant="caption"
+                numberOfLines={1}
               />
             )}
           </Row>
@@ -203,7 +208,7 @@ function BalancePage({
         >
           <Stack gap="xxs" align="center">
             <Ionicons name="wallet-outline" size={24} color={theme.colors.textSecondary} />
-            <Text variant="caption" color="textSecondary">
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
               Bakiye
             </Text>
           </Stack>
@@ -301,7 +306,7 @@ function MonthPage({ incomeMinor, expenseMinor, netMinor, share, hidden }: Month
         >
           <Stack gap="xxs" align="center">
             <Ionicons name="swap-vertical-outline" size={24} color={theme.colors.textSecondary} />
-            <Text variant="caption" color="textSecondary">
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
               Dağılım
             </Text>
           </Stack>

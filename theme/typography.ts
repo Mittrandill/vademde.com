@@ -11,6 +11,12 @@ export type TypographyToken =
   | 'body'
   | 'caption';
 
+// docs/08-tasarim-sistemi.md §12.19 — Dynamic Type desteklenir ama sabit boyutlu
+// öğelerde (ProgressRing, TextField) taşmayı önlemek için üst sınır konur. iOS
+// "Metin Boyutu" kaydırıcısının standart (accessibility olmayan) tepe noktası ~1.35x'tir;
+// 1.3 bu aralığın neredeyse tamamını onurlandırırken dar layout'larda güvenlik payı bırakır.
+export const MAX_FONT_SCALE = 1.3;
+
 export const typography: Record<TypographyToken, TextStyle> = {
   displayBalance: { fontSize: 44, lineHeight: 52, fontWeight: '700' },
   displayAmount: { fontSize: 34, lineHeight: 40, fontWeight: '700' },

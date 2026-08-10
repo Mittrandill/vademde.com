@@ -24,7 +24,10 @@ export function PersonAvatar({ name, size = 36 }: PersonAvatarProps) {
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.36 }}>{getInitials(name)}</Text>
+      {/* Dekoratif baş harf rozeti — sabit çaplı daire içinde, Dynamic Type'tan kasıtlı muaf. */}
+      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.36 }} allowFontScaling={false}>
+        {getInitials(name)}
+      </Text>
     </View>
   );
 }

@@ -12,14 +12,14 @@ import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
 import {
-  countUpcomingReminders,
+  countRecentReminders,
   dismissAllReminders,
   dismissReminder,
-  listUpcomingReminders,
+  listRecentReminders,
   markAllRemindersRead,
   markReminderRead,
   REMINDERS_PAGE_SIZE,
-  type UpcomingReminder,
+  type DeliveredReminder,
 } from '@/features/reminders/api';
 import { addObligationToCalendar, createObligationReminder, type CalendarExportObligation } from '@/services/calendarReminders';
 import { formatMinorAmount } from '@/utils/money';
@@ -42,12 +42,12 @@ function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// listRecentReminders yalnızca 'delivered' (push'u gerçekten gönderilmiş) satırları döner,
+// bunların remind_at'i her zaman bugün ya da geçmiştir — "YARIN"/"BU HAFTA"/"DAHA SONRA"
+// hiçbir zaman oluşmaz, bu yüzden yalnızca iki başlık yeterli.
 function sectionTitleFor(remindAt: Date, today: Date): string {
   const diffDays = Math.round((startOfDay(remindAt).getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
-  if (diffDays === 0) return 'BUGÜN';
-  if (diffDays === 1) return 'YARIN';
-  if (diffDays > 1 && diffDays < 7) return 'BU HAFTA';
-  return 'DAHA SONRA';
+  return diffDays === 0 ? 'BUGÜN' : 'GEÇMİŞ';
 }
 
 interface ReminderContent {
@@ -56,7 +56,7 @@ interface ReminderContent {
   onPress: () => void;
 }
 
-function contentFor(reminder: UpcomingReminder): ReminderContent | null {
+function contentFor(reminder: DeliveredReminder): ReminderContent | null {
   if (reminder.kind === 'statement_upload' && reminder.account) {
     return {
       title: 'Ekstre yüklemeyi unutmayın',
@@ -91,7 +91,7 @@ export default function NotificationsScreen() {
 
   const countQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.remindersCount(activeWorkspaceId) : ['reminders-count', 'disabled'],
-    queryFn: () => countUpcomingReminders(activeWorkspaceId as string),
+    queryFn: () => countRecentReminders(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
     placeholderData: keepPreviousData,
   });
@@ -103,7 +103,7 @@ export default function NotificationsScreen() {
   const remindersQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.reminders(activeWorkspaceId, effectivePage) : ['reminders', 'disabled'],
     queryFn: () =>
-      listUpcomingReminders({ workspaceId: activeWorkspaceId as string, page: effectivePage, pageSize: REMINDERS_PAGE_SIZE }),
+      listRecentReminders({ workspaceId: activeWorkspaceId as string, page: effectivePage, pageSize: REMINDERS_PAGE_SIZE }),
     enabled: !!activeWorkspaceId,
     placeholderData: keepPreviousData,
   });
@@ -149,13 +149,13 @@ export default function NotificationsScreen() {
 
   const reminders = remindersQuery.data ?? [];
   const today = startOfDay(new Date());
-  const groups = new Map<string, UpcomingReminder[]>();
+  const groups = new Map<string, DeliveredReminder[]>();
   for (const reminder of reminders) {
     const title = sectionTitleFor(new Date(reminder.remind_at), today);
     if (!groups.has(title)) groups.set(title, []);
     groups.get(title)!.push(reminder);
   }
-  const sections = ['BUGÜN', 'YARIN', 'BU HAFTA', 'DAHA SONRA']
+  const sections = ['BUGÜN', 'GEÇMİŞ']
     .filter((title) => groups.has(title))
     .map((title) => ({ title, data: groups.get(title)! }));
 
@@ -222,7 +222,7 @@ export default function NotificationsScreen() {
               <EmptyState
                 icon="notifications-outline"
                 title="Henüz bildirim yok"
-                message="Vadesi yaklaşan bir kayıt olduğunda burada görünecek."
+                message="Bir hatırlatma gönderildiğinde burada görünecek."
               />
             ) : null
           }
@@ -254,7 +254,7 @@ export default function NotificationsScreen() {
 }
 
 interface NotificationRowProps {
-  item: UpcomingReminder;
+  item: DeliveredReminder;
   onMarkRead: (id: string) => void;
   onDismiss: (id: string) => void;
   onAddToCalendar: (obligation: CalendarExportObligation) => void;

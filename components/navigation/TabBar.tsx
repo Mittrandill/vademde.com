@@ -63,7 +63,10 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         position: 'absolute',
         left: theme.spacing.lg,
         right: theme.spacing.lg,
-        bottom: insets.bottom + theme.layout.tabBarBottomGap,
+        // Alt güvenli alanın (ev göstergesi) tamamı kadar boşluk bırakmak, barı gereğinden
+        // yukarıda gösteriyordu — yarısı kadarını kullanmak barı ekranın alt kenarına
+        // belirgin şekilde yaklaştırırken ev göstergesiyle çakışmayı da önlüyor.
+        bottom: insets.bottom * 0.5 + theme.layout.tabBarBottomGap,
       }}
     >
       <View

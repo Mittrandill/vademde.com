@@ -46,7 +46,6 @@ import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
-import { cancelObligationReminder } from '@/services/notifications';
 import { showSuccessAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -198,7 +197,6 @@ export default function ObligationsByTypeScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (obligationId: string) => {
-      await cancelObligationReminder(obligationId);
       await deleteObligation(obligationId);
     },
     onSuccess: (_data, obligationId) => {

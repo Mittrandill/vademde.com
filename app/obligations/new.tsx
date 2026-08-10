@@ -32,7 +32,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 import { buildAmortizedInstallments } from '@/utils/installmentPlan';
 import { queryKeys } from '@/services/queryKeys';
-import { cancelObligationReminder, syncObligationReminder } from '@/services/notifications';
+import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert } from '@/utils/alerts';
 
 type Direction = 'payable' | 'receivable';
@@ -279,7 +279,6 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      await cancelObligationReminder(id as string);
       await deleteObligation(id as string);
     },
     onSuccess: () => {

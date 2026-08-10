@@ -823,6 +823,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       reminders: {
         Row: {
           account_id: string | null
@@ -1217,6 +1244,12 @@ export type Database = {
           role: string
           used_count: number
           workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workspace_invites"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       increment_ocr_usage: {
