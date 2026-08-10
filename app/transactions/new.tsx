@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { listAccounts } from '@/features/accounts/api';
@@ -21,7 +21,7 @@ import {
 } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
-import { formatMinorAmount, parseAmountToMinor } from '@/utils/money';
+import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
 type Direction = 'income' | 'expense' | 'transfer';
@@ -96,7 +96,9 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
     initial?.transfer_to_account_id ?? null
   );
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
-  const [amount, setAmount] = useState(initial ? (initial.amount_minor / 100).toFixed(2).replace('.', ',') : '');
+  const [amount, setAmount] = useState(
+    initial ? formatAmountInput((initial.amount_minor / 100).toFixed(2).replace('.', ',')) : ''
+  );
   const [dateStr, setDateStr] = useState(
     initial ? initial.occurred_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
@@ -245,7 +247,7 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
               stretch
             />
 
-            <TextField label="TUTAR" placeholder="0,00" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+            <AmountField label="TUTAR" placeholder="0,00" value={amount} onChangeText={setAmount} />
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">

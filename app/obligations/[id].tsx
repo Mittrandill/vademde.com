@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import {
+  AmountField,
   Button,
   Card,
   DateField,
@@ -19,7 +20,6 @@ import {
   SegmentedControl,
   Stack,
   Text,
-  TextField,
 } from '@/components/primitives';
 import { StatColumns } from '@/components/primitives/StatColumns';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
@@ -34,7 +34,7 @@ import { deletePayment, listPaymentsForObligation, recordPayment, updatePayment,
 import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount, formatValueUnitAmount, parseValueUnitAmountToMinor } from '@/utils/money';
+import { formatAmountInput, formatMinorAmount, formatValueUnitAmount, parseValueUnitAmountToMinor } from '@/utils/money';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { listValueUnitRates, convertToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
@@ -93,6 +93,12 @@ export default function ObligationDetailScreen() {
     queryClient.invalidateQueries({ queryKey: ['obligation', id] });
     if (activeWorkspaceId) {
       queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+      // Hesap seçilen bir ödeme yeni bir transaction oluşturur/günceller (bkz.
+      // features/payments/api.ts recordPayment/updatePayment) — bu prefix Son Hareketler
+      // (dashboard), Hareketler sekmesi ve hesap bakiyelerini besleyen tüm sorguları kapsar;
+      // aksi halde bu ekranlar 30sn'lik staleTime dolana kadar eski veriyi göstermeye devam eder.
+      queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+      queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
     }
   }
 
@@ -625,7 +631,10 @@ function PaymentForm({
   const isEditing = !!editingPayment;
   const valueUnit = getValueUnit(obligation.currency_code);
   const [amount, setAmount] = useState(
-    (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ',')
+    formatAmountInput(
+      (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+      valueUnit.precision
+    )
   );
   const [accountId, setAccountId] = useState<string | null>(editingPayment?.account_id ?? null);
   // Ödeme varsayılan olarak işlem yapıldığı anın tarihiyle (DB varsayılanı) kaydedilir,
@@ -695,9 +704,9 @@ function PaymentForm({
           <Text variant="caption" color="textSecondary">
             TUTAR ({valueUnit.quantityLabel})
           </Text>
-          <TextField
+          <AmountField
             placeholder={valueUnit.precision === 0 ? '1' : '0,00'}
-            keyboardType={valueUnit.precision === 0 ? 'number-pad' : 'decimal-pad'}
+            precision={valueUnit.precision}
             value={amount}
             onChangeText={setAmount}
           />

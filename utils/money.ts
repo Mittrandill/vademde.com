@@ -50,6 +50,29 @@ export function parseAmountToMinor(value: string): number | null {
   return parsed === null ? null : toMinorUnits(parsed);
 }
 
+// Kullanıcı tutar alanına yazarken binlik ayıracı ekler (ör. "1000" -> "1.000",
+// "1000000,5" -> "1.000.000,5") — büyük tutarlar, özellikle milyon seviyesinde, ayraçsız
+// okunması zor olduğu için her tuş vuruşunda canlı biçimlendirilir (bkz. AmountField).
+// Yalnızca rakam, tek bir ondalık virgül ve baştaki tek bir eksi işaretine izin verilir;
+// kullanıcının elle yazdığı nokta atılır çünkü binlik ayıracı zaten otomatik ekleniyor.
+// maxDecimals=0 olan birimlerde (adet bazlı sikkeler, bkz. ValueUnit.precision) virgül
+// tamamen engellenir.
+export function formatAmountInput(value: string, maxDecimals: 0 | 2 = 2): string {
+  const isNegative = value.trim().startsWith('-');
+  let cleaned = value.replace(/[^\d,]/g, '');
+  if (maxDecimals === 0) cleaned = cleaned.replace(/,/g, '');
+
+  const firstComma = cleaned.indexOf(',');
+  const rawIntPart = firstComma === -1 ? cleaned : cleaned.slice(0, firstComma);
+  const intPart = rawIntPart.replace(/^0+(?=\d)/, '');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const sign = isNegative ? '-' : '';
+
+  if (firstComma === -1) return `${sign}${grouped}`;
+  const decimalPart = cleaned.slice(firstComma + 1).replace(/,/g, '').slice(0, maxDecimals);
+  return `${sign}${grouped},${decimalPart}`;
+}
+
 export function fromMinorUnits(amountMinor: number): number {
   return amountMinor / 100;
 }

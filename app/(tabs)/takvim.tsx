@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
-import { Amount } from '@/components/finance/Amount';
+import { withAlpha } from '@/theme/colors';
+import { Card, Divider, Pressable, ProgressRing, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Amount, type AmountDirection } from '@/components/finance/Amount';
 import { CalendarMonthGrid } from '@/components/finance/CalendarMonthGrid';
 import { CalendarAgendaList } from '@/components/finance/CalendarAgendaList';
 import { CalendarObligationRow } from '@/components/finance/CalendarObligationRow';
@@ -163,32 +164,7 @@ export default function TakvimScreen() {
             <Stack gap="sm">
               <Text variant="sectionTitle">{dayTitleFormatter.format(selectedDate)}</Text>
 
-              <Card>
-                <Row>
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary">
-                      ÖDENECEK
-                    </Text>
-                    <Amount amountMinor={payableTotal} direction="payable" variant="cardTitle" />
-                  </Stack>
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary">
-                      TAHSİL EDİLECEK
-                    </Text>
-                    <Amount amountMinor={receivableTotal} direction="receivable" variant="cardTitle" />
-                  </Stack>
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary">
-                      NET
-                    </Text>
-                    <Amount
-                      amountMinor={Math.abs(netTotal)}
-                      direction={netTotal >= 0 ? 'receivable' : 'payable'}
-                      variant="cardTitle"
-                    />
-                  </Stack>
-                </Row>
-              </Card>
+              <DaySummaryCard payableMinor={payableTotal} receivableMinor={receivableTotal} netMinor={netTotal} />
 
               {selectedDayItems.length === 0 ? (
                 <Card>
@@ -259,5 +235,103 @@ export default function TakvimScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+const DAY_SUMMARY_RING_SIZE = 52;
+const DAY_SUMMARY_RING_STROKE = 6;
+
+interface DaySummaryCardProps {
+  payableMinor: number;
+  receivableMinor: number;
+  netMinor: number;
+}
+
+// components/finance/IncomeExpenseAnalysis.tsx'teki halka+ikon+tutar üçlüsüyle aynı görsel
+// dil (docs/08-tasarim-sistemi.md — tek bir düz metin satırı yerine, uygulama genelinde
+// zaten kurulu olan bu desen tekrar kullanılır). Borç kırmızı değildir — kırmızı yalnızca
+// gecikme anlamı taşır (bkz. ObligationSummaryCard'daki aynı not); bu yüzden ÖDENECEK nötr,
+// TAHSİL EDİLECEK yeşil renktedir.
+function DaySummaryCard({ payableMinor, receivableMinor, netMinor }: DaySummaryCardProps) {
+  const theme = useTheme();
+  const volume = payableMinor + receivableMinor;
+  const share = (value: number) => (volume > 0 ? Math.abs(value) / volume : 0);
+
+  return (
+    <Card>
+      <Row align="stretch">
+        <DayMetricColumn
+          label="ÖDENECEK"
+          amountMinor={payableMinor}
+          direction="payable"
+          progress={share(payableMinor)}
+          color={theme.colors.textSecondary}
+          icon="arrow-down-circle"
+        />
+        <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.xs }} />
+        <DayMetricColumn
+          label="TAHSİL EDİLECEK"
+          amountMinor={receivableMinor}
+          direction="receivable"
+          progress={share(receivableMinor)}
+          color={theme.colors.success}
+          icon="arrow-up-circle"
+        />
+        <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.xs }} />
+        <DayMetricColumn
+          label="NET"
+          amountMinor={Math.abs(netMinor)}
+          direction={netMinor >= 0 ? 'receivable' : 'payable'}
+          progress={share(netMinor)}
+          color={netMinor >= 0 ? theme.colors.success : theme.colors.textSecondary}
+          icon={netMinor >= 0 ? 'trending-up' : 'trending-down'}
+        />
+      </Row>
+    </Card>
+  );
+}
+
+interface DayMetricColumnProps {
+  label: string;
+  amountMinor: number;
+  direction: AmountDirection;
+  progress: number;
+  color: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
+
+function DayMetricColumn({ label, amountMinor, direction, progress, color, icon }: DayMetricColumnProps) {
+  const theme = useTheme();
+  // "TAHSİL EDİLECEK" iki satıra sarıyor, "ÖDENECEK"/"NET" tek satır kalıyor — sabit
+  // yükseklikli (2 satırlık) bir kutuya ortalanmadan halkalar sütunlar arasında kayıyordu.
+  const labelHeight = (theme.typography.caption.lineHeight ?? 18) * 2;
+
+  return (
+    <Stack gap="xs" align="center" style={{ flex: 1 }}>
+      <View style={{ height: labelHeight, justifyContent: 'center' }}>
+        <Text variant="caption" color="textSecondary" numberOfLines={2} style={{ textAlign: 'center' }}>
+          {label}
+        </Text>
+      </View>
+      <ProgressRing
+        size={DAY_SUMMARY_RING_SIZE}
+        strokeWidth={DAY_SUMMARY_RING_STROKE}
+        progress={progress}
+        color={color}
+        trackColor={withAlpha(color, 0.18)}
+        cap
+      >
+        <Ionicons name={icon} size={18} color={color} />
+      </ProgressRing>
+      <Amount
+        amountMinor={amountMinor}
+        direction={direction}
+        variant="cardTitle"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+        style={{ alignSelf: 'stretch', textAlign: 'center' }}
+      />
+    </Stack>
   );
 }

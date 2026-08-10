@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -30,8 +30,8 @@ import {
 } from '@/features/obligations/api';
 import { createTransaction } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
-import { buildAmortizedInstallments } from '@/utils/installmentPlan';
+import { formatAmountInput, parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
+import { buildAmortizedInstallments, type InstallmentPlanItem } from '@/utils/installmentPlan';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert } from '@/utils/alerts';
@@ -42,6 +42,8 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
   { value: 'payable', label: 'Borç' },
   { value: 'receivable', label: 'Alacak' },
 ];
+
+const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
 
 export default function NewObligationScreen() {
   const theme = useTheme();
@@ -120,7 +122,10 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   const [totalAmount, setTotalAmount] = useState(() => {
     if (!initial) return '';
     const precision = getValueUnit(initial.currency_code).precision;
-    return (initial.total_amount_minor / 10 ** precision).toFixed(precision).replace('.', ',');
+    return formatAmountInput(
+      (initial.total_amount_minor / 10 ** precision).toFixed(precision).replace('.', ','),
+      precision
+    );
   });
   const [dueDate, setDueDate] = useState(
     initial?.due_date ?? initialDueDate ?? new Date().toISOString().slice(0, 10)
@@ -401,9 +406,9 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
                   düzenlenemez.
                 </Text>
               ) : (
-                <TextField
+                <AmountField
                   placeholder={valueUnit.precision === 0 ? '1' : '0,00'}
-                  keyboardType={valueUnit.precision === 0 ? 'number-pad' : 'decimal-pad'}
+                  precision={valueUnit.precision}
                   value={totalAmount}
                   onChangeText={setTotalAmount}
                 />
@@ -564,22 +569,19 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
             ) : null}
 
             {installmentPreview.length > 0 ? (
-              <Stack gap="xs">
-                <Text variant="caption" color="textSecondary">
-                  {isSubscriptionType ? 'AY ÖNİZLEME' : 'TAKSİT ÖNİZLEME'}
-                </Text>
-                <Stack gap="xxs" style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.widget, padding: theme.spacing.md }}>
-                  {installmentPreview.map((item) => (
-                    <Row key={item.installmentNumber} align="center">
-                      <Text variant="body" color="textSecondary" style={{ flex: 1 }}>
-                        {item.installmentNumber}. {isSubscriptionType ? 'ay' : 'taksit'} — {item.dueDate}
-                      </Text>
-                      <Text variant="body" tabular>
-                        {formatMinorAmount(item.amountMinor)}
-                      </Text>
-                    </Row>
-                  ))}
-                </Stack>
+              <Stack gap="sm">
+                <Row align="center">
+                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
+                    {isSubscriptionType ? 'AY ÖNİZLEME' : 'TAKSİT ÖNİZLEME'}
+                  </Text>
+                  <Text variant="caption" color="textSecondary">
+                    Toplam {formatMinorAmount(installmentPreview.reduce((sum, i) => sum + i.amountMinor, 0))}
+                  </Text>
+                </Row>
+                <InstallmentPreviewTimeline
+                  items={installmentPreview}
+                  unitLabel={isSubscriptionType ? 'ay' : 'taksit'}
+                />
               </Stack>
             ) : null}
 
@@ -609,5 +611,77 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+// app/obligations/[id].tsx'teki gerçek taksit listesinin ("taksit zaman çizgisi",
+// docs/08-tasarim-sistemi.md §12.15) önizleme karşılığı — numaralı işaretçiler + bağlayan
+// dikey çizgi + kart satırları aynı görsel dilde, ama bunlar henüz kaydedilmemiş taslak
+// veri olduğu için ödendi/sıradaki durumu yok: yalnızca ilk taksit vurgulanır (bir sonraki
+// ödeme olacağı için), diğerleri nötr anahat kalır.
+function InstallmentPreviewTimeline({ items, unitLabel }: { items: InstallmentPlanItem[]; unitLabel: string }) {
+  const theme = useTheme();
+
+  return (
+    <Stack gap="xxs">
+      {items.map((item, index) => {
+        const isFirst = index === 0;
+        const isLast = index === items.length - 1;
+        const markerBg = isFirst ? theme.colors.brandPrimary : 'transparent';
+        const markerBorder = isFirst ? theme.colors.brandPrimary : theme.colors.border;
+        const markerTextColor = isFirst ? theme.colors.brandPrimaryText : theme.colors.textSecondary;
+
+        return (
+          <Row
+            key={item.installmentNumber}
+            gap="sm"
+            align="stretch"
+            style={{ marginBottom: isLast ? 0 : theme.spacing.sm }}
+          >
+            <Stack gap="xs" align="center" style={{ width: 32 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  borderWidth: isFirst ? 0 : 1.5,
+                  borderColor: markerBorder,
+                  backgroundColor: markerBg,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text variant="caption" style={{ color: markerTextColor, fontWeight: '700' }}>
+                  {item.installmentNumber}
+                </Text>
+              </View>
+              {!isLast ? (
+                <View style={{ flex: 1, width: 2, borderRadius: 1, backgroundColor: theme.colors.border }} />
+              ) : null}
+            </Stack>
+
+            <View style={{ flex: 1 }}>
+              <Card elevated={isFirst}>
+                <Row gap="sm" align="center">
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="cardTitle" numberOfLines={1}>
+                      {item.installmentNumber}. {unitLabel} — {shortDateFormatter.format(new Date(item.dueDate))}
+                    </Text>
+                    {item.interestMinor > 0 ? (
+                      <Text variant="caption" color="textSecondary">
+                        Anapara {formatMinorAmount(item.principalMinor)} · Faiz {formatMinorAmount(item.interestMinor)}
+                      </Text>
+                    ) : null}
+                  </Stack>
+                  <Text variant="body" tabular>
+                    {formatMinorAmount(item.amountMinor)}
+                  </Text>
+                </Row>
+              </Card>
+            </View>
+          </Row>
+        );
+      })}
+    </Stack>
   );
 }

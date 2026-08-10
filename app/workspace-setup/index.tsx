@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Button, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWorkspaceIllustration';
 import { setupInitialWorkspaces } from '@/features/workspaces/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -110,10 +110,9 @@ export default function WorkspaceSetupScreen() {
                   value={name}
                   onChangeText={setName}
                 />
-                <TextField
+                <AmountField
                   label="BAŞLANGIÇ BAKİYESİ (İSTEĞE BAĞLI)"
                   placeholder="0,00"
-                  keyboardType="decimal-pad"
                   value={openingBalance}
                   onChangeText={setOpeningBalance}
                 />

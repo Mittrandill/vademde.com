@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -30,7 +30,7 @@ import { createObligation, createInstallmentPlan, type Installment } from '@/fea
 import { recordPastInstallmentPayments } from '@/features/payments/api';
 import { createTransaction, createTransactions } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount, parseAmountToMinor } from '@/utils/money';
+import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import {
   DOCUMENT_TYPE_LABEL,
   DOCUMENT_TYPE_ICON,
@@ -188,7 +188,9 @@ export default function DocumentReviewScreen() {
     // sınıflandırsa bile (ör. "banka_dekontu" tahmin etse) paramDocumentType kazanır.
     // Kullanıcı yine de DocumentTypePicker'dan değiştirebilir.
     setDocumentType(paramDocumentType ?? document.document_type);
-    setAmount(document.total_amount_minor ? (document.total_amount_minor / 100).toFixed(2).replace('.', ',') : '');
+    setAmount(
+      document.total_amount_minor ? formatAmountInput((document.total_amount_minor / 100).toFixed(2).replace('.', ',')) : ''
+    );
     // OCR bir tarih bulduysa (belge gerçek kaynaktır) o kullanılır; hiç bulamadıysa
     // kullanıcının ekstre tablosundan seçtiği ayın beklenen tarihine düşülür — böylece
     // alan hiç boş/bugünün tarihi kalmaz (bkz. yukarıdaki paramExpectedDueDate notu).
@@ -354,7 +356,7 @@ export default function DocumentReviewScreen() {
         id: item.id,
         sortOrder: item.sort_order || index + 1,
         dueDate: item.occurred_at ?? '',
-        amount: (item.amount_minor / 100).toFixed(2).replace('.', ','),
+        amount: formatAmountInput((item.amount_minor / 100).toFixed(2).replace('.', ',')),
         paid: !!item.occurred_at && item.occurred_at < todayStr,
       }))
     );
@@ -771,7 +773,7 @@ export default function DocumentReviewScreen() {
                 </Text>
                 <LowConfidenceHint fieldName="totalAmount" />
               </Row>
-              <TextField keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+              <AmountField value={amount} onChangeText={setAmount} />
             </Stack>
 
             {isLoanDocument ? (
@@ -861,8 +863,7 @@ export default function DocumentReviewScreen() {
                         }
                         style={{ flex: 1 }}
                       />
-                      <TextField
-                        keyboardType="decimal-pad"
+                      <AmountField
                         value={draft.amount}
                         onChangeText={(value) =>
                           setInstallmentDrafts((prev) =>

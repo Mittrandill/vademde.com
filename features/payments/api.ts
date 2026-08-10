@@ -59,6 +59,11 @@ export async function recordPayment({
       amount_minor: input.amount_minor,
       currency_code: obligationCurrencyCode,
       description: obligationTitle,
+      // payments.paid_at ile aynı tarih — verilmezse (ör. OCR'ın geçmiş taksitleri otomatik
+      // "ödendi" işaretlemesi) DB varsayılanı (şimdi) kullanılır. Bu satır eksikti: transaction
+      // her zaman "şimdi" tarihiyle oluşuyordu, payments.paid_at ise seçilen tarihi taşıyordu —
+      // ikisi birbirinden sapıyor, Son Hareketler (occurred_at okur) yanlış tarih gösteriyordu.
+      ...(input.paid_at ? { occurred_at: input.paid_at } : {}),
     };
     const { data: transaction, error: transactionError } = await supabase
       .from('transactions')

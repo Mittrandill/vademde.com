@@ -224,7 +224,11 @@ export default function HareketlerScreen() {
               kind: 'obligation',
               title: o.title,
               subtitle: o.counterparty?.name || o.category?.name || '',
-              date: o.due_date ?? o.created_at,
+              // Ödendiyse gerçekte ödendiği tarih (bağlı transaction'ın occurred_at'i, bkz.
+              // recordPayment/updatePayment) gösterilir — vade tarihi değil. Aksi halde bir
+              // ödemenin tarihini düzenlemek Hareketler'de hiç yansımazdı (dashboard'da
+              // yansıyordu çünkü o doğrudan transactions.occurred_at okur).
+              date: paymentTx?.occurred_at ?? o.due_date ?? o.created_at,
               amountMinor: o.total_amount_minor,
               currencyCode: o.currency_code,
               valueUnitType: o.value_unit_type,
@@ -255,7 +259,9 @@ export default function HareketlerScreen() {
         kind: 'obligation',
         title: `${o.title} — ${o.installment_number}. Taksit`,
         subtitle: o.counterparty?.name || o.category?.name || '',
-        date: o.due_date ?? o.created_at,
+        // bkz. yukarıdaki obligationRows'taki aynı not — bu satırlar zaten yalnızca ödenmiş
+        // taksitler (paidInstallmentItems), gerçek ödeme tarihi vade tarihinden farklı olabilir.
+        date: paymentTx?.occurred_at ?? o.due_date ?? o.created_at,
         amountMinor: o.total_amount_minor,
         currencyCode: o.currency_code,
         valueUnitType: o.value_unit_type,
@@ -304,8 +310,25 @@ export default function HareketlerScreen() {
         <Text variant="pageTitle" style={{ flex: 1 }}>
           Hareketler
         </Text>
-        <Pressable onPress={() => setAddSheetOpen(true)} hitSlop={12}>
-          <Ionicons name="add-circle" size={30} color={theme.colors.brandPrimary} />
+        <Pressable
+          onPress={() => setAddSheetOpen(true)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Yeni hareket"
+          // Hesaplar/Kredilerim ekranlarındaki ScreenHeader'ın accent "+" düğmesiyle aynı
+          // görsel dil (bkz. components/navigation/ScreenHeader.tsx HeaderButton) — önceki
+          // çıplak add-circle ikonu uygulamanın geri kalanında hiç kullanılmayan, kopuk bir
+          // buton gibi duruyordu.
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: theme.radius.input,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.brandPrimary,
+          }}
+        >
+          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
         </Pressable>
       </Row>
 
@@ -459,7 +482,10 @@ export default function HareketlerScreen() {
               <Skeleton height={64} borderRadius={theme.radius.widget} />
             </Stack>
           ) : (
-            <View style={{ flex: 1, justifyContent: 'center' }}>
+            // Liste boşken flex:1+justifyContent:'center' mesajı ekranın tam ortasına
+            // düşürüyordu, filtrelerden kopuk duruyordu — bunun yerine header'ın hemen
+            // altında, üstte küçük bir boşlukla oturur.
+            <View style={{ paddingTop: theme.spacing.xl }}>
               <EmptyState
                 icon="receipt-outline"
                 title={search ? 'Sonuç bulunamadı' : 'Henüz hareket yok'}

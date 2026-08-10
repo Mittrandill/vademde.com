@@ -7,13 +7,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
 import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { parseAmount, parseAmountToMinor } from '@/utils/money';
+import { formatAmountInput, parseAmount, parseAmountToMinor } from '@/utils/money';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
@@ -98,13 +98,19 @@ export default function NewAccountScreen() {
     setType(account.type as Account['type']);
     setBankCode(account.bank_code);
     setIban(account.iban ?? '');
-    setOpeningBalance((account.opening_balance_minor / 100).toFixed(2).replace('.', ','));
+    setOpeningBalance(formatAmountInput((account.opening_balance_minor / 100).toFixed(2).replace('.', ',')));
     setStatementDay(account.statement_day != null ? String(account.statement_day) : '');
     setPaymentDueDay(account.payment_due_day != null ? String(account.payment_due_day) : '');
     setCardLastFour(account.card_last_four ?? '');
-    setCreditLimit(account.credit_limit_minor != null ? (account.credit_limit_minor / 100).toFixed(2).replace('.', ',') : '');
+    setCreditLimit(
+      account.credit_limit_minor != null
+        ? formatAmountInput((account.credit_limit_minor / 100).toFixed(2).replace('.', ','))
+        : ''
+    );
     setOverdraftLimit(
-      account.overdraft_limit_minor != null ? (account.overdraft_limit_minor / 100).toFixed(2).replace('.', ',') : ''
+      account.overdraft_limit_minor != null
+        ? formatAmountInput((account.overdraft_limit_minor / 100).toFixed(2).replace('.', ','))
+        : ''
     );
     setValueUnitCode(account.currency_code);
     setCommissionRate(
@@ -307,10 +313,9 @@ export default function NewAccountScreen() {
 
               <FormSection icon="wallet-outline" title="Limit ve Bakiye">
                 <Stack gap="xs">
-                  <TextField
+                  <AmountField
                     label="KREDİ LİMİTİ (İSTEĞE BAĞLI)"
                     placeholder="0,00"
-                    keyboardType="decimal-pad"
                     value={creditLimit}
                     onChangeText={setCreditLimit}
                   />
@@ -320,10 +325,9 @@ export default function NewAccountScreen() {
                 </Stack>
 
                 <Stack gap="xs">
-                  <TextField
+                  <AmountField
                     label="GÜNCEL KART BORCU (İSTEĞE BAĞLI)"
                     placeholder="0,00"
-                    keyboardType="decimal-pad"
                     value={openingBalance}
                     onChangeText={setOpeningBalance}
                   />
@@ -399,10 +403,9 @@ export default function NewAccountScreen() {
 
               {isBank ? (
                 <Stack gap="sm">
-                  <TextField
+                  <AmountField
                     label="EK HESAP (KMH) LİMİTİ (İSTEĞE BAĞLI)"
                     placeholder="0,00"
-                    keyboardType="decimal-pad"
                     value={overdraftLimit}
                     onChangeText={setOverdraftLimit}
                   />
@@ -421,9 +424,8 @@ export default function NewAccountScreen() {
                   </Text>
                   <Row gap="sm" align="center">
                     <Stack style={{ flex: 1 }}>
-                      <TextField
+                      <AmountField
                         placeholder="0,00"
-                        keyboardType="decimal-pad"
                         value={openingBalance}
                         onChangeText={setOpeningBalance}
                       />
@@ -462,10 +464,9 @@ export default function NewAccountScreen() {
                   </Text>
                 </Stack>
               ) : (
-                <TextField
+                <AmountField
                   label="AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)"
                   placeholder="0,00"
-                  keyboardType="decimal-pad"
                   value={openingBalance}
                   onChangeText={setOpeningBalance}
                 />
