@@ -47,7 +47,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Fatura, çek veya senet gibi belgelerinizi taramak için fotoğraflarınıza erişim gerekir.",
+          "photosPermission": "Belgelerinizi taramak veya profil fotoğrafı seçmek için fotoğraflarınıza erişim gerekir.",
           "cameraPermission": "Belgelerinizi doğrudan kamerayla taramak için kameraya erişim gerekir."
         }
       ],

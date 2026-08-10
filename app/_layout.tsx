@@ -24,6 +24,7 @@ function RootNavigator() {
   const { session, isLoading } = useSession();
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
   const hasSeenWelcome = useOnboardingStore((s) => s.hasSeenWelcome);
 
   useWorkspaceRealtime(session ? activeWorkspaceId : null);
@@ -36,8 +37,16 @@ function RootNavigator() {
     } else {
       logOutPurchases();
       unregisterCurrentPushToken();
+      // activeWorkspaceId, cihazda hesaptan bağımsız (global) bir AsyncStorage anahtarında
+      // kalıcı — çıkış yapılıp başka bir hesapla giriş yapıldığında temizlenmezse, önceki
+      // hesabın çalışma alanı ID'si yeni hesaba uygulanmaya devam ediyordu: o ID artık
+      // listMyWorkspaces()'te olmadığından ad "—" görünüyor, yazma denemeleri de RLS'e
+      // takılıp yanlışlıkla "viewer" rol mesajı gösteriyordu (asıl sorun rol değil, yanlış
+      // çalışma alanı). Oturum kapanınca sıfırlanır; app/(tabs)/index.tsx'teki mevcut efekt
+      // yeni hesabın kendi ilk çalışma alanını otomatik seçer.
+      setActiveWorkspaceId(null);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, setActiveWorkspaceId]);
 
   if (isLoading) return <Splash />;
 
@@ -60,29 +69,29 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workspace-setup" />
         <Stack.Screen name="reset-password" />
-        <Stack.Screen name="accounts" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="accounts/new" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="accounts" />
+        <Stack.Screen name="accounts/new" />
         <Stack.Screen name="accounts/[id]" />
-        <Stack.Screen name="accounts/credit-cards" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="transactions/new" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="accounts/credit-cards" />
+        <Stack.Screen name="transactions/new" />
         <Stack.Screen name="transactions/[id]" />
-        <Stack.Screen name="obligations/new" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="obligations/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="obligations/new" />
+        <Stack.Screen name="obligations/index" />
         <Stack.Screen name="obligations/[id]" />
-        <Stack.Screen name="documents/[id]/review" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="profile/index" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="subscription/index" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="paywall/index" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="categories/index" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="categories/new" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="counterparties/index" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="counterparties/new" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="documents/[id]/review" />
+        <Stack.Screen name="settings/index" />
+        <Stack.Screen name="profile/index" />
+        <Stack.Screen name="subscription/index" />
+        <Stack.Screen name="paywall/index" />
+        <Stack.Screen name="categories/index" />
+        <Stack.Screen name="categories/new" />
+        <Stack.Screen name="counterparties/index" />
+        <Stack.Screen name="counterparties/new" />
         <Stack.Screen name="counterparties/[id]" />
-        <Stack.Screen name="reports/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="reports/index" />
         <Stack.Screen name="banks/[code]" />
-        <Stack.Screen name="workspace/[id]/members" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="workspace/join" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="workspace/[id]/members" />
+        <Stack.Screen name="workspace/join" />
       </Stack.Protected>
 
       {/* Oturum durumundan bağımsız her zaman erişilebilir — App Store gizlilik beyanı ve
@@ -91,7 +100,7 @@ function RootNavigator() {
           verilmediğinde ilk sıradaki Screen'i örtük varsayılan/initial route sayıyor — bu
           bilgilendirme ekranı en başta olunca web'de "/" ve diğer tüm derin bağlantılar önce
           yanlışlıkla buraya mount oluyordu (bkz. git geçmişi — kaydedilmiş bir teşhis notu). */}
-      <Stack.Screen name="legal/privacy-policy" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="legal/privacy-policy" />
     </Stack>
   );
 }

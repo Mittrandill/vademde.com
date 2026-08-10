@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,10 +13,11 @@ import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { deleteAccount, signOut } from '@/features/auth/api';
+import { deleteAccount, signOut, updatePassword } from '@/features/auth/api';
+import { translateAuthError } from '@/features/auth/errors';
 import { useSession } from '@/features/auth/useSession';
 import { listMyWorkspaces, updateWorkspaceName, deleteWorkspace, type Workspace } from '@/features/workspaces/api';
-import { getMyProfile, updateMyProfile } from '@/features/profile/api';
+import { getMyProfile, updateMyProfile, uploadAvatar } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert } from '@/utils/alerts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -44,6 +46,10 @@ export default function ProfileScreen() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   // docs/07-guvenlik-gizlilik.md §11.3 — taranan belgelerin OCR analizi bittiğinde ham dosyası
   // Storage'da saklansın mı sorusu; yalnızca cihazda tutulur (workspace/hesap değil, kullanıcı
   // tercihi). Anahtar hiç yazılmadıysa varsayılan "saklama" (false) — hassas finansal belgeler
@@ -90,6 +96,45 @@ export default function ProfileScreen() {
 
   const email = session?.user?.email ?? null;
   const displayName = profileQuery.data?.full_name ?? null;
+
+  const passwordMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+  const canSubmitPassword = newPassword.length >= 6 && !passwordMismatch;
+
+  function resetPasswordForm() {
+    setIsChangingPassword(false);
+    setNewPassword('');
+    setConfirmPassword('');
+  }
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () => updatePassword(newPassword),
+    onSuccess: () => showSuccessAlert('Şifreniz güncellendi.', resetPasswordForm),
+  });
+
+  const avatarMutation = useMutation({
+    mutationFn: (asset: ImagePicker.ImagePickerAsset) => {
+      if (!session?.user?.id) throw new Error('Oturum bulunamadı');
+      return uploadAvatar(session.user.id, asset.uri, asset.mimeType ?? 'image/jpeg');
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profile() }),
+    onError: (error) => Alert.alert('Fotoğraf yüklenemedi', error instanceof Error ? error.message : 'Bir hata oluştu'),
+  });
+
+  async function handlePickAvatar() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('İzin gerekli', 'Profil fotoğrafı seçmek için fotoğraflarınıza erişim izni verin.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    avatarMutation.mutate(result.assets[0]);
+  }
 
   const renameWorkspaceMutation = useMutation({
     mutationFn: (vars: { id: string; name: string }) => updateWorkspaceName(vars.id, vars.name),
@@ -194,20 +239,58 @@ export default function ProfileScreen() {
         }}
       >
         <Stack align="center" gap="sm" style={{ paddingVertical: theme.spacing.sm }}>
-          <View
-            style={{
-              width: 88,
-              height: 88,
-              borderRadius: theme.radius.pill,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-            }}
-          >
-            <Text variant="pageTitle" style={{ color: theme.colors.brandPrimary }}>
-              {initialsFrom(displayName, email)}
-            </Text>
-          </View>
+          <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending}>
+            <View
+              style={{
+                width: 88,
+                height: 88,
+                borderRadius: theme.radius.pill,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
+                overflow: 'hidden',
+              }}
+            >
+              {profileQuery.data?.avatar_url ? (
+                <Image source={{ uri: profileQuery.data.avatar_url }} style={{ width: 88, height: 88 }} />
+              ) : (
+                <Text variant="pageTitle" style={{ color: theme.colors.brandPrimary }}>
+                  {initialsFrom(displayName, email)}
+                </Text>
+              )}
+              {avatarMutation.isPending ? (
+                <View
+                  style={{
+                    position: 'absolute',
+                    width: 88,
+                    height: 88,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: withAlpha('#000000', 0.4),
+                  }}
+                >
+                  <ActivityIndicator color="#FFFFFF" />
+                </View>
+              ) : null}
+            </View>
+            <View
+              style={{
+                position: 'absolute',
+                right: -2,
+                bottom: -2,
+                width: 30,
+                height: 30,
+                borderRadius: 15,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.colors.brandPrimary,
+                borderWidth: 2,
+                borderColor: theme.colors.backgroundPrimary,
+              }}
+            >
+              <Ionicons name="camera" size={14} color={theme.colors.brandPrimaryText} />
+            </View>
+          </Pressable>
           <Stack align="center" gap="xxs">
             <Text variant="sectionTitle" numberOfLines={1}>
               {displayName || 'Profilini tamamla'}
@@ -257,6 +340,59 @@ export default function ProfileScreen() {
               <Pressable onPress={() => setIsEditingName(true)}>
                 <Row style={{ justifyContent: 'space-between' }}>
                   <Text variant="body">{displayName || 'Ad Soyad ekle'}</Text>
+                  <Ionicons name="pencil" size={16} color={theme.colors.textSecondary} />
+                </Row>
+              </Pressable>
+            )}
+          </Stack>
+        </Card>
+
+        <Card>
+          <Stack gap="sm">
+            <Text variant="caption" color="textSecondary">
+              ŞİFRE
+            </Text>
+            {isChangingPassword ? (
+              <Stack gap="sm">
+                <TextField
+                  placeholder="Yeni şifre"
+                  secureTextEntry={!passwordVisible}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+                  onRightIconPress={() => setPasswordVisible((v) => !v)}
+                  autoFocus
+                />
+                <TextField
+                  placeholder="Yeni şifre (tekrar)"
+                  secureTextEntry={!passwordVisible}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  error={passwordMismatch ? 'Şifreler eşleşmiyor.' : undefined}
+                />
+                {changePasswordMutation.error ? (
+                  <Text variant="caption" color="danger">
+                    {translateAuthError(changePasswordMutation.error, 'Şifre güncellenemedi')}
+                  </Text>
+                ) : null}
+                <Row gap="sm">
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Kaydet"
+                      onPress={() => changePasswordMutation.mutate()}
+                      loading={changePasswordMutation.isPending}
+                      disabled={!canSubmitPassword}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button label="Vazgeç" variant="secondary" onPress={resetPasswordForm} />
+                  </View>
+                </Row>
+              </Stack>
+            ) : (
+              <Pressable onPress={() => setIsChangingPassword(true)}>
+                <Row style={{ justifyContent: 'space-between' }}>
+                  <Text variant="body">••••••••</Text>
                   <Ionicons name="pencil" size={16} color={theme.colors.textSecondary} />
                 </Row>
               </Pressable>

@@ -13,6 +13,7 @@ import {
   signInWithGoogle,
   signInWithPassword,
 } from '@/features/auth/api';
+import { translateAuthError } from '@/features/auth/errors';
 
 export default function SignInScreen() {
   const theme = useTheme();
@@ -32,7 +33,7 @@ export default function SignInScreen() {
     try {
       await signInWithPassword(email.trim(), password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Giriş yapılamadı');
+      setError(translateAuthError(err, 'Giriş yapılamadı'));
     } finally {
       setLoading(false);
     }
@@ -47,7 +48,7 @@ export default function SignInScreen() {
     } catch (err) {
       const code = (err as { code?: string })?.code;
       if (code !== 'ERR_REQUEST_CANCELED') {
-        setError(err instanceof Error ? err.message : 'Apple ile giriş yapılamadı');
+        setError(translateAuthError(err, 'Apple ile giriş yapılamadı'));
       }
     } finally {
       setAppleLoading(false);
@@ -61,7 +62,7 @@ export default function SignInScreen() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google ile giriş yapılamadı');
+      setError(translateAuthError(err, 'Google ile giriş yapılamadı'));
     } finally {
       setGoogleLoading(false);
     }
@@ -78,7 +79,7 @@ export default function SignInScreen() {
       await resetPasswordForEmail(email.trim());
       setInfo('Şifre sıfırlama bağlantısı gönderildi. Gelen kutunuzu kontrol edin.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bağlantı gönderilemedi');
+      setError(translateAuthError(err, 'Bağlantı gönderilemedi'));
     }
   }
 

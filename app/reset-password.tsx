@@ -5,7 +5,8 @@ import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { Button, Stack, Text, TextField } from '@/components/primitives';
-import { supabase } from '@/services/supabase';
+import { updatePassword } from '@/features/auth/api';
+import { translateAuthError } from '@/features/auth/errors';
 
 // services/authDeepLinks.ts, şifre sıfırlama e-postasındaki bağlantıyı yakalayıp oturumu
 // kurduktan sonra buraya yönlendirir; kullanıcı burada yeni şifresini belirler.
@@ -25,11 +26,10 @@ export default function ResetPasswordScreen() {
     setError(null);
     setLoading(true);
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) throw updateError;
+      await updatePassword(password);
       router.replace('/(tabs)');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Şifre güncellenemedi');
+      setError(translateAuthError(err, 'Şifre güncellenemedi'));
     } finally {
       setLoading(false);
     }

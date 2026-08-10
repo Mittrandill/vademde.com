@@ -7,7 +7,19 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, Divider, Pagination, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import {
+  Button,
+  Card,
+  Divider,
+  EmptyState,
+  Pagination,
+  Pressable,
+  Row,
+  SegmentedControl,
+  Stack,
+  Text,
+  TextField,
+} from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -23,6 +35,17 @@ import type { ValueUnitType } from '@/features/valueUnits/units';
 
 const PAGE_SIZE = 10;
 const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+
+// obligations/index.tsx'teki durum filtresinin (Aktif/Gecikmiş/Kapalı) kredi kartı
+// karşılığı: kart bir obligation olmadığı için "durumu" yok, ama bu ekranda zaten
+// hesaplanan "bu döneme ait ekstre yüklendi mi" bilgisi aynı rolü oynuyor.
+type CardStatusKey = 'all' | 'awaiting' | 'uploaded';
+
+const CARD_STATUS_OPTIONS: { key: CardStatusKey; label: string }[] = [
+  { key: 'all', label: 'Tümü' },
+  { key: 'awaiting', label: 'Ekstre Bekleyen' },
+  { key: 'uploaded', label: 'Ekstre Yüklendi' },
+];
 
 // Ekran web'de doğrudan bu URL'e gidilerek (sayfa yenileme, deep link) açılırsa stack'te
 // geri gidilecek bir geçmiş olmayabilir — router.back() bu durumda "GO_BACK was not
@@ -42,6 +65,8 @@ export default function CreditCardsScreen() {
   const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [searchInput, setSearchInput] = useState('');
+  const [statusKey, setStatusKey] = useState<CardStatusKey>('all');
+  const [sortAscending, setSortAscending] = useState(true);
   const [page, setPage] = useState(0);
 
   const accountsQuery = useQuery({
@@ -94,20 +119,48 @@ export default function CreditCardsScreen() {
   // Her kartın kendi kesim/son ödeme gününe göre "bu dönem" farklıdır — tek bir global
   // ay anahtarıyla kıyaslamak yanlıştı (bkz. utils/creditCardPeriod.ts: son ödeme tarihi
   // sıklıkla bir sonraki aya sarkar, bu yüzden dönem due_date'in kendi ayı değildir).
-  const now = new Date();
-  const cardsAwaitingStatement = allCards.filter((a) => {
-    const currentPeriod = computeStatementPeriod(a, now);
-    if (!currentPeriod) return false;
-    const statements = statementsByAccount.get(a.id) ?? [];
-    return !statements.some((o) => o.due_date && periodKeyForDueDate(a, o.due_date) === currentPeriod.periodKey);
-  }).length;
+  // Bu bilgi hem hero'daki sayaç hem de durum filtresi/sıralama için tek yerde hesaplanır
+  // ve satır kartına prop olarak geçilir — CreditCardRowCard'da tekrar hesaplanmaz.
+  const cardInfoById = useMemo(() => {
+    const now = new Date();
+    const map = new Map<string, { hasCurrentStatement: boolean; nextDueDate: Date | null }>();
+    for (const a of allCards) {
+      const currentPeriod = computeStatementPeriod(a, now);
+      const statements = statementsByAccount.get(a.id) ?? [];
+      const hasCurrentStatement =
+        !!currentPeriod &&
+        statements.some((o) => o.due_date && periodKeyForDueDate(a, o.due_date) === currentPeriod.periodKey);
+      map.set(a.id, { hasCurrentStatement, nextDueDate: currentPeriod?.dueDate ?? null });
+    }
+    return map;
+  }, [allCards, statementsByAccount]);
+
+  const cardsAwaitingStatement = allCards.filter((a) => !cardInfoById.get(a.id)?.hasCurrentStatement).length;
 
   const cards = useMemo(() => {
     const query = normalizeForSearch(searchInput);
-    return allCards.filter((a) => matchesSearch(a.name, query) || matchesSearch(a.card_last_four ?? '', query));
-  }, [allCards, searchInput]);
+    const filtered = allCards.filter((a) => {
+      const matchesText = matchesSearch(a.name, query) || matchesSearch(a.card_last_four ?? '', query);
+      if (!matchesText) return false;
+      const hasCurrentStatement = cardInfoById.get(a.id)?.hasCurrentStatement ?? false;
+      if (statusKey === 'awaiting') return !hasCurrentStatement;
+      if (statusKey === 'uploaded') return hasCurrentStatement;
+      return true;
+    });
 
-  const resetKey = searchInput;
+    // Vadesi en yakın (ya da en uzak) kart en üstte — dönem bilgisi olmayan kartlar
+    // (statement_day girilmemiş) her zaman en sonda kalır.
+    return [...filtered].sort((a, b) => {
+      const dueA = cardInfoById.get(a.id)?.nextDueDate ?? null;
+      const dueB = cardInfoById.get(b.id)?.nextDueDate ?? null;
+      if (!dueA && !dueB) return 0;
+      if (!dueA) return 1;
+      if (!dueB) return -1;
+      return sortAscending ? dueA.getTime() - dueB.getTime() : dueB.getTime() - dueA.getTime();
+    });
+  }, [allCards, searchInput, statusKey, sortAscending, cardInfoById]);
+
+  const resetKey = `${searchInput}|${statusKey}|${sortAscending ? 'asc' : 'desc'}`;
   const [lastResetKey, setLastResetKey] = useState(resetKey);
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey);
@@ -122,7 +175,7 @@ export default function CreditCardsScreen() {
     (sum, a) => sum + (balanceByAccountId.get(a.id) ?? a.opening_balance_minor),
     0
   );
-  const isFiltered = searchInput.trim().length > 0;
+  const isFiltered = searchInput.trim().length > 0 || statusKey !== 'all';
 
   const listHeader = (
     <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
@@ -244,8 +297,10 @@ export default function CreditCardsScreen() {
         </Stack>
       </Card>
 
-      {allCards.length > 0 ? (
-        <View style={{ position: 'relative', justifyContent: 'center' }}>
+      <SegmentedControl options={CARD_STATUS_OPTIONS} value={statusKey} onChange={setStatusKey} size="compact" stretch />
+
+      <Row gap="xs">
+        <View style={{ flex: 1, position: 'relative', justifyContent: 'center' }}>
           <Ionicons
             name="search"
             size={18}
@@ -261,7 +316,27 @@ export default function CreditCardsScreen() {
             style={{ paddingLeft: theme.spacing.xxl }}
           />
         </View>
-      ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Tarihe göre sırala"
+          onPress={() => setSortAscending((v) => !v)}
+          style={{
+            height: theme.buttonHeight.primary,
+            paddingHorizontal: theme.spacing.sm,
+            borderRadius: theme.radius.input,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.xxs,
+          }}
+        >
+          <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
+          <Text variant="body" color="textSecondary">
+            Tarih
+          </Text>
+        </Pressable>
+      </Row>
 
       {accountsQuery.error ? (
         <Text variant="body" color="danger">
@@ -290,51 +365,28 @@ export default function CreditCardsScreen() {
             account={item}
             balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
             statements={statementsByAccount.get(item.id) ?? []}
+            hasCurrentStatement={cardInfoById.get(item.id)?.hasCurrentStatement ?? false}
           />
         )}
         ListEmptyComponent={
           accountsQuery.isSuccess ? (
-            <Stack gap="md" align="center" style={{ flex: 1, justifyContent: 'center' }}>
-              <View
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 32,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
-                }}
-              >
-                <Ionicons name={isFiltered ? 'search-outline' : 'card-outline'} size={28} color={theme.colors.brandPrimary} />
-              </View>
-              <Stack gap="xxs" align="center">
-                <Text variant="cardTitle" style={{ textAlign: 'center' }}>
-                  {isFiltered ? 'Sonuç bulunamadı' : 'Henüz kredi kartı yok'}
-                </Text>
-                <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-                  {isFiltered
-                    ? 'Arama terimini değiştirin.'
-                    : 'Kredi kartı ekleyerek borcunuzu ve ekstrelerinizi takip etmeye başlayın.'}
-                </Text>
-              </Stack>
-              {!isFiltered ? (
-                <Pressable
-                  onPress={() => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } })}
-                  style={{
-                    paddingHorizontal: theme.spacing.lg,
-                    height: theme.controlHeight.segmented,
-                    borderRadius: 999,
-                    backgroundColor: theme.colors.brandPrimary,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text variant="body" style={{ color: theme.colors.brandPrimaryText, fontWeight: '600' }}>
-                    Yeni Kredi Kartı Ekle
-                  </Text>
-                </Pressable>
-              ) : null}
-            </Stack>
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <EmptyState
+                icon={isFiltered ? 'search-outline' : 'card-outline'}
+                title={isFiltered ? 'Sonuç bulunamadı' : 'Henüz kredi kartı yok'}
+                message={
+                  isFiltered
+                    ? 'Arama terimini veya filtreleri değiştirin.'
+                    : 'Kredi kartı ekleyerek borcunuzu ve ekstrelerinizi takip etmeye başlayın.'
+                }
+                actionLabel={isFiltered ? undefined : 'Yeni Kredi Kartı Ekle'}
+                onActionPress={
+                  isFiltered
+                    ? undefined
+                    : () => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } })
+                }
+              />
+            </View>
           ) : null
         }
         ListFooterComponent={
@@ -359,17 +411,14 @@ interface CreditCardRowCardProps {
   account: Account;
   balanceMinor: number;
   statements: ObligationWithRelations[];
+  hasCurrentStatement: boolean;
 }
 
 // Kredilerim'deki ObligationRowCard ile aynı yoğunluk: kimlik + büyük tutar + alt bilgi
 // satırı — ama kaynak bir obligation değil, hesap + o hesaba bağlı ekstreler.
-function CreditCardRowCard({ account, balanceMinor, statements }: CreditCardRowCardProps) {
+function CreditCardRowCard({ account, balanceMinor, statements, hasCurrentStatement }: CreditCardRowCardProps) {
   const theme = useTheme();
   const latestStatement = statements[0] ?? null;
-  const currentPeriod = computeStatementPeriod(account, new Date());
-  const hasCurrentStatement =
-    !!currentPeriod &&
-    statements.some((o) => o.due_date && periodKeyForDueDate(account, o.due_date) === currentPeriod.periodKey);
 
   return (
     <Pressable onPress={() => router.push(`/accounts/${account.id}`)}>

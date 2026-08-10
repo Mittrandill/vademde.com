@@ -8,6 +8,7 @@ import { Button, Divider, Row, Stack, Text, TextField } from '@/components/primi
 import { AuthHeader } from '@/components/brand/AuthHeader';
 import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
 import { signInWithApple, signInWithGoogle, signUpWithPassword } from '@/features/auth/api';
+import { translateAuthError } from '@/features/auth/errors';
 
 export default function SignUpScreen() {
   const theme = useTheme();
@@ -27,7 +28,7 @@ export default function SignUpScreen() {
       await signUpWithPassword(email.trim(), password);
       setConfirmationSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kayıt oluşturulamadı');
+      setError(translateAuthError(err, 'Kayıt oluşturulamadı'));
     } finally {
       setLoading(false);
     }
@@ -41,7 +42,7 @@ export default function SignUpScreen() {
     } catch (err) {
       const code = (err as { code?: string })?.code;
       if (code !== 'ERR_REQUEST_CANCELED') {
-        setError(err instanceof Error ? err.message : 'Apple ile kayıt olunamadı');
+        setError(translateAuthError(err, 'Apple ile kayıt olunamadı'));
       }
     } finally {
       setAppleLoading(false);
@@ -54,7 +55,7 @@ export default function SignUpScreen() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google ile kayıt olunamadı');
+      setError(translateAuthError(err, 'Google ile kayıt olunamadı'));
     } finally {
       setGoogleLoading(false);
     }

@@ -25,6 +25,14 @@ export async function resetPasswordForEmail(email: string) {
   if (error) throw error;
 }
 
+// app/reset-password.tsx (e-postadaki bağlantıdan gelen akış) ve app/profile/index.tsx
+// (oturum açıkken Profil'den değiştirme) aynı çağrıyı paylaşır — Supabase mevcut
+// şifreyi doğrulamayı gerektirmez, yalnızca geçerli bir oturum yeterlidir.
+export async function updatePassword(password: string) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
+
 // Supabase, hem Google OAuth dönüşünde hem de şifre sıfırlama bağlantısında oturum
 // belirteçlerini yönlendirme URL'sinin hash parçasında döner (#access_token=...); bu
 // yüzden iki akış da aynı manuel ayrıştırmayı paylaşır (bkz. services/authDeepLinks.ts).

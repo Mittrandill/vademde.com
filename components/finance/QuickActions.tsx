@@ -68,30 +68,36 @@ export function QuickActions() {
           </Row>
         </Pressable>
       ) : (
-        // Renkli rozet ızgarası yerine tek bir marka rengiyle çizilmiş, sade kapsül
-        // satırı — ikon+etiket yan yana, tek düzey yüzey. Hepsi aynı tonda olduğu
-        // için göz her seferinde yeniden "renk okuma" yapmıyor, tek bir bileşen ailesi
-        // gibi okunuyor.
+        // Daha Fazla'daki "Kayıt Türleri" kutularıyla (HubTile/IconChip) birebir aynı
+        // iskelet VE renk: nötr/gri kenarlıklı kutu — marka renginin (Saffron) transparan
+        // tonu yerine (bkz. kullanıcı geri bildirimi: "sarı değil beyaz tonlarda olsun").
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <Row gap="sm">
+          {/* align="flex-start": Row'un varsayılanı (center) etiketi 2 satıra taşan
+              kutuları, tek satırlık komşularına göre daha uzun yaptığı için ikon
+              kutularını farklı yükseklikte ortalayıp kaydırıyordu — üstten hizalamak
+              tüm ikonları aynı y konumunda sabitler. */}
+          <Row gap="md" align="flex-start">
             {actions.map((action) => (
               <Pressable
                 key={action.id}
                 onPress={() => router.push(action.href)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: theme.spacing.xs,
-                  height: 44,
-                  paddingHorizontal: theme.spacing.md,
-                  borderRadius: theme.radius.pill,
-                  backgroundColor: theme.colors.surfacePrimary,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                }}
+                style={{ width: 76, alignItems: 'center', gap: theme.spacing.xs }}
               >
-                <Ionicons name={action.icon} size={18} color={theme.colors.brandPrimary} />
-                <Text variant="body" numberOfLines={1}>
+                <View
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: theme.radius.input,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.surfaceElevated,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Ionicons name={action.icon} size={24} color={theme.colors.textSecondary} />
+                </View>
+                <Text variant="caption" numberOfLines={2} style={{ textAlign: 'center' }}>
                   {action.label}
                 </Text>
               </Pressable>

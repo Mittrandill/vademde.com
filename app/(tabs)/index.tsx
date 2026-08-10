@@ -44,12 +44,19 @@ export default function HomeScreen() {
 
   // Aktif çalışma alanı seçimi bir yan etkidir; queryFn'in içinde değil burada yapılır
   // (queryFn saf kalır, fetch sırasında store mutasyonu olmaz). Henüz seçim yoksa ve veri
-  // geldiyse ilk çalışma alanı aktif edilir.
+  // geldiyse ilk çalışma alanı aktif edilir. `activeWorkspaceId` dolu ama bu hesabın
+  // listesinde karşılığı yoksa (activeWorkspace null) da aynı şekilde düzeltilir — bu,
+  // AsyncStorage'da başka bir hesaptan kalmış bir ID olduğu anlamına gelir (bkz.
+  // app/_layout.tsx'teki sign-out temizliği notu); isim "—" görünmesi ve yazma denemelerinin
+  // yanlışlıkla "viewer" rol mesajıyla reddedilmesi bu durumun belirtileriydi. `workspacesQuery
+  // .isSuccess` şartı, veri henüz gelmeden (workspaces geçici olarak boşken) geçerli bir ID'nin
+  // yanlışlıkla "geçersiz" sayılıp sıfırlanmasını önler.
   useEffect(() => {
-    if (!activeWorkspaceId && firstWorkspaceId) {
+    if (!workspacesQuery.isSuccess) return;
+    if ((!activeWorkspaceId || !activeWorkspace) && firstWorkspaceId) {
       setActiveWorkspaceId(firstWorkspaceId);
     }
-  }, [activeWorkspaceId, firstWorkspaceId, setActiveWorkspaceId]);
+  }, [activeWorkspaceId, activeWorkspace, firstWorkspaceId, workspacesQuery.isSuccess, setActiveWorkspaceId]);
 
   // Oturum açmış ama hiç çalışma alanı olmayan kullanıcı (ör. yeni kayıt) buradan
   // onboarding'e yönlendirilir. Koşul kritik: React Query, AsyncStorage'a persist edilmiş
