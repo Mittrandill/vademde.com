@@ -3,8 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
-import { Card, Stack, Text } from '@/components/primitives';
+import { Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 
 interface Section {
@@ -12,111 +11,145 @@ interface Section {
   body: string;
 }
 
-// TASLAK METİN — taraf bilgileri (Turgut Akın Kaya, gerçek kişi — "DoTa Medya") dolduruldu,
-// ancak bu ekran bir avukat tarafından incelenmeden yayına alınmamalıdır (bkz. app/legal/
-// privacy-policy.tsx'teki aynı uyarı). App Store Review Guideline 3.1.2 — otomatik yenilenen
-// abonelik satan her ekran (bkz. app/paywall/index.tsx) Kullanım Koşulları'na işlevsel bir
-// bağlantı içermek zorundadır; bu sayfa o gereksinimi karşılar.
+// Bu metin, www.vademde.com/kullanim-sartlari ile birebir aynı tutulur (bkz. vademdeapp
+// reposundaki src/routes/kullanim-sartlari.tsx). App Store Review Guideline 3.1.2 — otomatik
+// yenilenen abonelik satan her ekran (bkz. app/paywall/index.tsx) Kullanım Koşulları'na
+// işlevsel bir bağlantı içermek zorundadır; bu sayfa o gereksinimi karşılar. İki tarafta bir
+// değişiklik yapılırsa diğerine de yansıtılmalıdır.
 const SECTIONS: Section[] = [
   {
     title: '1. Taraflar ve Kabul',
     body:
       'Bu Kullanım Koşulları ("Koşullar"), Turgut Akın Kaya (gerçek kişi — "DoTa Medya" markası ' +
-      'altında faaliyet göstermektedir; "Vademde", "biz") ile Vademde uygulamasını ("Uygulama") ' +
-      'indiren, kaydolan veya kullanan kişi ("Kullanıcı", "siz") ' +
-      'arasındaki ilişkiyi düzenler. Uygulamayı kullanarak bu Koşulları ve Gizlilik Politikası ve ' +
-      'KVKK Aydınlatma Metnini kabul etmiş olursunuz; kabul etmiyorsanız Uygulamayı kullanmayın.',
+      'altında faaliyet göstermektedir; "Vademde", "biz") tarafından sunulan Vademde mobil ' +
+      'uygulaması ve www.vademde.com internet sitesinin ("Hizmet") kullanımını düzenler. ' +
+      'Hizmeti indirerek, hesap oluşturarak veya kullanarak bu Koşulları ve Gizlilik Politikası ' +
+      've KVKK Aydınlatma Metnini kabul etmiş sayılırsınız.',
   },
   {
     title: '2. Hizmetin Tanımı',
     body:
       'Vademde; çek, senet, fatura, kredi ödeme planı ve diğer finansal belgeleri kullanıcı ' +
-      'onayıyla borç, alacak, gelir, gider ve vade kaydına dönüştüren bir kişisel/işletme finans ' +
-      'takip uygulamasıdır. Vademde bir banka, ödeme kuruluşu, yatırım danışmanı veya muhasebe ' +
-      'firması değildir; hiçbir ödemeyi taraflar adına yürütmez, saklamaz veya garanti etmez — ' +
-      'yalnızca sizin girdiğiniz veya onayladığınız kayıtları takip eden bir araçtır.',
+      'onayıyla borç, alacak, gelir, gider ve vade kaydına dönüştüren bir kişisel/işletme ' +
+      'finans takip uygulamasıdır. Vademde bir yatırım danışmanlığı, muhasebe, hukuk, vergi ' +
+      'danışmanlığı veya bankacılık/ödeme hizmeti değildir; hiçbir ödemeyi taraflar adına ' +
+      'yürütmez, saklamaz veya garanti etmez. Uygulama tarafından sunulan raporlar ve özetler ' +
+      'yalnızca bilgilendirme amaçlıdır; finansal, hukuki veya vergisel kararlarınızı almadan ' +
+      'önce yetkili bir uzmana danışmanız önerilir.',
   },
   {
-    title: '3. Hesap ve Kullanıcı Sorumlulukları',
+    title: '3. Hesap Oluşturma ve Güvenlik',
     body:
-      'Hesabınızın ve çalışma alanınızın güvenliğinden (Apple/Google ile giriş veya e-posta/şifre) ' +
-      'siz sorumlusunuz. Girdiğiniz veya belge taramasıyla onayladığınız finansal bilgilerin ' +
-      'doğruluğundan siz sorumlusunuz — Uygulama, oluşturduğunuz kayıtları sizin onayınız olmadan ' +
-      'değiştirmez veya üçüncü kişilerle paylaşmaz (çalışma alanı üyeleriniz hariç). Bir çalışma ' +
-      'alanına başka kullanıcıları davet ederseniz, onlarla paylaştığınız verilerin sorumluluğu size ' +
-      'aittir.',
+      'Hizmeti kullanmak için Apple ile giriş veya e-posta ile hesap oluşturmanız gerekir. ' +
+      'Hesap bilgilerinizin gizliliğinden ve hesabınız üzerinden gerçekleşen işlemlerden siz ' +
+      'sorumlusunuz. Hesabınızda yetkisiz bir erişim şüphesi durumunda bizi info@vademde.com ' +
+      'adresinden bilgilendirmelisiniz. Hizmeti yalnızca 18 yaşından büyükseniz ' +
+      'kullanabilirsiniz. Bir çalışma alanına başka kullanıcıları davet ederseniz, onlarla ' +
+      'paylaştığınız verilerin sorumluluğu size aittir.',
   },
   {
-    title: '4. Abonelik, Ücretlendirme ve Otomatik Yenileme',
+    title: '4. Belge Tarama, OCR ve Kullanıcı Onayı',
     body:
-      'Premium özellikler yalnızca Apple App Store uygulama içi satın alma sistemiyle sunulur. ' +
-      'Abonelik ücreti, Uygulama içinde satın alma ekranında gösterilen süre ve fiyat üzerinden, ' +
-      'geçerli dönemin bitiminden en az 24 saat önce iptal etmediğiniz sürece otomatik olarak ' +
-      'yenilenir ve Apple hesabınızdan tahsil edilir. Ödeme, yenileme onayı için Apple ID hesabınıza ' +
-      'işlem tamamlandığında yansıtılır. Aboneliği Ayarlar uygulamasındaki Apple ID abonelik ' +
-      'yönetiminden istediğiniz zaman iptal edebilirsiniz; iptal, mevcut dönemin sonunda geçerli olur.',
+      'Taradığınız belgelerden yapay zekâ ile çıkarılan tutar, tarih, taraf ve benzeri alanlar, ' +
+      'siz onaylamadan hiçbir zaman kesin bir finansal kayda dönüşmez. Düşük güvenle okunan ' +
+      'alanlar uygulama içinde açıkça işaretlenir; bu alanları onaylamadan veya düzeltmeden ' +
+      'önce doğruluğunu kontrol etmek sizin sorumluluğunuzdadır. Onayladığınız kayıtların ' +
+      'doğruluğundan ve eksiksizliğinden siz sorumlusunuz; Vademde, OCR sonuçlarının veya sizin ' +
+      'onayladığınız verilerin doğruluğunu garanti etmez ve OCR/yapay zekâ çıktısındaki ' +
+      'hatalardan kaynaklanan yanlış kayıt, kaçırılan ödeme veya benzeri sonuçlardan sorumlu ' +
+      'tutulamaz.',
   },
   {
-    title: '5. İptal ve İade',
+    title: '5. Çalışma Alanları',
+    body:
+      'Kişisel ve işletme çalışma alanları birbirinden tamamen izoledir. Bir işletme çalışma ' +
+      'alanına ekip üyesi olarak eklendiğinizde, o çalışma alanının verilerine erişebilirsiniz; ' +
+      'bu erişimin sorumluluğu çalışma alanı sahibine aittir.',
+  },
+  {
+    title: '6. Abonelik Planları ve Ödeme',
+    body:
+      'Vademde; Ücretsiz, Vademde Plus ve Vademde İşletme olmak üzere farklı abonelik planları ' +
+      'sunar. Ücretli planlar yalnızca Apple App Store üzerinden uygulama içi satın alma (IAP) ' +
+      'yoluyla satılır; fiyat ve süre bilgisi satın alma ekranında ve App Store listelemesinde ' +
+      'gösterilir. Otomatik yenilenen abonelikler için aşağıdaki koşullar geçerlidir: ödeme, ' +
+      'satın alma onayı verdiğinizde Apple ID hesabınıza yansıtılır; abonelik, mevcut dönem ' +
+      'bitmeden en az 24 saat önce otomatik yenilemeyi kapatmadığınız sürece otomatik olarak ' +
+      'yenilenir; yenileme ücreti mevcut dönemin bitiminden 24 saat önce hesabınızdan tahsil ' +
+      'edilir; aboneliğinizi cihazınızdaki Ayarlar > Apple ID > Abonelikler bölümünden ' +
+      'istediğiniz zaman yönetebilir ve otomatik yenilemeyi kapatabilirsiniz; ücretsiz deneme ' +
+      'süresi sunulması hâlinde, deneme süresinin kullanılmayan kısmı ücretli bir abonelik ' +
+      'satın aldığınızda geçersiz olur. Ödeme bilgileriniz (kart numarası vb.) Vademde ' +
+      'tarafından saklanmaz; bu bilgiler doğrudan Apple tarafından işlenir.',
+  },
+  {
+    title: '7. İptal ve İade',
     body:
       'Tüm satın alma ve iade işlemleri Apple App Store üzerinden yürütülür; iade talepleri ' +
       'Apple’ın kendi politikalarına ve https://reportaproblem.apple.com adresine tabidir. ' +
       'Vademde, App Store dışında doğrudan iade işlemi gerçekleştiremez.',
   },
   {
-    title: '6. Yapay Zekâ / OCR Sonuçlarının Doğruluğu',
+    title: '8. Kullanım Kuralları',
     body:
-      'Belge tarama (OCR) ve yapay zekâ destekli alan çıkarımı bir yardımcı araçtır; sonuçlar hiçbir ' +
-      'zaman kesin doğru kabul edilmez ve siz onaylamadan finansal kayda dönüşmez (bkz. Gizlilik ' +
-      'Politikası madde 3-4). Düşük güvenilirlikli alanlar işaretlenir, ancak nihai doğruluk ' +
-      'kontrolü ve onay sorumluluğu size aittir. Vademde, OCR/yapay zekâ çıktısındaki hatalardan ' +
-      'kaynaklanan yanlış kayıt, kaçırılan ödeme veya benzeri sonuçlardan sorumlu tutulamaz.',
+      'Hizmeti kullanırken şunları yapmamayı kabul edersiniz: hizmeti yasa dışı bir amaçla veya ' +
+      'başkalarının haklarını ihlal edecek şekilde kullanmak; başkasına ait belge veya kimlik ' +
+      'bilgilerini izinsiz yüklemek; hizmetin güvenliğini aşmaya, tersine mühendislik yapmaya ' +
+      'veya kaynak koda erişmeye çalışmak; hizmeti otomatik araçlarla kötüye kullanmak veya ' +
+      'aşırı yüklemek.',
   },
   {
-    title: '7. Yasaklı Kullanım',
+    title: '9. Fikri Mülkiyet',
     body:
-      'Uygulamayı yasa dışı amaçlarla, başkasına ait finansal belgeleri izinsiz işlemek için, ' +
-      'Uygulamanın güvenliğini aşmaya/tersine mühendislik yapmaya çalışarak veya hizmetin normal ' +
-      'işleyişini bozacak şekilde (aşırı otomatik istek, kötü amaçlı dosya yükleme vb.) ' +
-      'kullanamazsınız.',
+      'Vademde adı, logosu, tasarımı, yazılımı ve uygulama içeriği (kullanıcı tarafından ' +
+      'yüklenen belgeler hariç) Turgut Akın Kaya’ya (DoTa Medya) aittir ve telif hakkı ile ' +
+      'korunur. Hizmeti yalnızca kişisel veya işletmenizin meşru ihtiyaçları için, bu Koşullara ' +
+      'uygun şekilde kullanabilirsiniz. Yüklediğiniz belgeler ve girdiğiniz finansal veriler ' +
+      'size aittir; bunları dilediğiniz zaman silebilirsiniz (bkz. Gizlilik Politikası). ' +
+      'Hizmeti size sunabilmemiz için gerekli ölçüde (işleme, depolama, OCR analizi) bu ' +
+      'verileri kullanmamıza izin verirsiniz.',
   },
   {
-    title: '8. Fikri Mülkiyet',
+    title: '10. Hizmetin Değiştirilmesi ve Kesintiler',
     body:
-      'Uygulamanın tasarımı, yazılımı, marka ve logosu Turgut Akın Kaya’ya (DoTa Medya) aittir. ' +
-      'Girdiğiniz finansal veriler ve yüklediğiniz belgeler size aittir; bunları dilediğiniz zaman ' +
-      'silebilirsiniz (bkz. Gizlilik Politikası madde 6-7).',
+      'Hizmeti geliştirmek, güvenliğini sağlamak veya yasal gerekliliklere uymak amacıyla ' +
+      'özelliklerde değişiklik yapabilir, bazı özellikleri askıya alabilir veya sonlandırabiliriz. ' +
+      'Planlı bakım dışındaki kesintiler için makul ölçüde önceden bilgilendirme yapmaya ' +
+      'çalışırız.',
   },
   {
-    title: '9. Sorumluluğun Sınırlandırılması',
+    title: '11. Sorumluluğun Sınırlandırılması',
     body:
-      'Uygulama "olduğu gibi" sunulur. Yürürlükteki mevzuatın izin verdiği azami ölçüde, Vademde; ' +
-      'veri kaybı, kaçırılan ödeme/vade, kâr kaybı veya dolaylı zararlardan sorumlu tutulamaz. Bu ' +
-      'sınırlama, kastın veya ağır kusurun kanunen sorumluluk doğurduğu hâllerde uygulanmaz.',
+      'Hizmet "olduğu gibi" sunulur. Yürürlükteki mevzuatın izin verdiği azami ölçüde; OCR ' +
+      'sonuçlarının hatalı olmasından, hizmetin kesintiye uğramasından, veri kaybından veya ' +
+      'kullanıcı tarafından onaylanan verilere dayanarak alınan finansal kararlardan doğan ' +
+      'dolaylı, arızi veya sonuç niteliğindeki zararlardan sorumlu değiliz. Bu sınırlama, ' +
+      'kastın veya ağır kusurun kanunen sorumluluk doğurduğu hâllerde uygulanmaz.',
   },
   {
-    title: '10. Hizmetin Sona Ermesi',
+    title: '12. Hesap Feshi',
     body:
-      'Hesabınızı ve tüm verilerinizi Uygulama içinden dilediğiniz an kalıcı olarak silebilirsiniz ' +
-      '(Profil > Hesabımı ve Verilerimi Sil). Bu Koşulları ihlal ettiğinizi tespit etmemiz hâlinde ' +
-      'hesabınızı askıya alabilir veya sonlandırabiliriz; bu durumda sizi bilgilendiririz.',
+      'Hesabınızı istediğiniz zaman uygulama içinden (Profil > Hesabımı ve Verilerimi Sil) ' +
+      'doğrudan silebilirsiniz. Bu Koşulları ihlal etmeniz hâlinde hesabınızı askıya alma veya ' +
+      'sonlandırma hakkımız saklıdır; bu durumda sizi bilgilendiririz.',
   },
   {
-    title: '11. Değişiklikler',
+    title: '13. Uygulanacak Hukuk ve Yetki',
     body:
-      'Bu Koşulları güncelleyebiliriz; önemli değişikliklerde Uygulama içinde bilgilendirme ' +
-      'yapılır. Güncellemeden sonra Uygulamayı kullanmaya devam etmeniz, güncel Koşulları kabul ' +
-      'ettiğiniz anlamına gelir.',
+      'Bu Koşullar Türkiye Cumhuriyeti kanunlarına tabidir. Bu Koşullardan doğabilecek ' +
+      'uyuşmazlıklarda İzmir mahkemeleri ve icra daireleri ile tüketici işlemlerinde ilgili ' +
+      'tüketici hakem heyetleri ve tüketici mahkemeleri yetkilidir.',
   },
   {
-    title: '12. Uygulanacak Hukuk ve Yetki',
+    title: '14. Değişiklikler',
     body:
-      'Bu Koşullar Türkiye Cumhuriyeti kanunlarına tabidir; uyuşmazlıklarda İzmir Mahkemeleri ve ' +
-      'İcra Daireleri yetkilidir.',
+      'Bu Koşulları zaman zaman güncelleyebiliriz. Önemli değişiklikleri uygulama içi bildirim ' +
+      've e-posta yoluyla duyururuz. Güncel sürüm her zaman uygulama içinde ve ' +
+      'www.vademde.com/kullanim-sartlari adresinde yayınlanır.',
   },
   {
-    title: '13. İletişim',
-    body: 'Sorularınız için info@vademde.com adresinden veya 0543 203 53 09 numaralı telefondan bize ulaşabilirsiniz.',
+    title: '15. İletişim',
+    body: 'Sorularınız için: info@vademde.com veya 0543 203 53 09.',
   },
 ];
 
@@ -138,20 +171,6 @@ export default function TermsOfServiceScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <Card style={{ backgroundColor: withAlpha(theme.colors.danger, 0.1) }}>
-          <Stack gap="xs">
-            <Text variant="body" style={{ color: theme.colors.danger, fontWeight: '700' }}>
-              Taslak — hukuki inceleme gerektirir
-            </Text>
-            <Text variant="caption" color="textSecondary">
-              Bu metin, uygulamanın mevcut abonelik/OCR akışını yansıtacak şekilde hazırlanmış bir
-              başlangıç taslağıdır. Taraf gerçek kişi (Turgut Akın Kaya, &quot;DoTa Medya&quot; markası)
-              olarak dolduruldu — vergi mükellefiyeti/kayıt durumu netleşince (mali müşavir onayı) bu
-              bölüm gerekirse güncellenmelidir. Yayına almadan önce bir avukata onaylatılmalıdır.
-            </Text>
-          </Stack>
-        </Card>
-
         <Stack gap="xxs">
           <Text variant="pageTitle">Kullanım Koşulları</Text>
           <Text variant="caption" color="textSecondary">

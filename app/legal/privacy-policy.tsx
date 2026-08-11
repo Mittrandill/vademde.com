@@ -3,8 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
-import { Card, Stack, Text } from '@/components/primitives';
+import { Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 
 interface Section {
@@ -12,85 +11,132 @@ interface Section {
   body: string;
 }
 
-// TASLAK METİN — veri sorumlusu bilgileri (Turgut Akın Kaya, gerçek kişi — "DoTa Medya")
-// dolduruldu, ancak bu ekran bir avukat tarafından incelenmeden yayına alınmamalıdır.
-// docs/07-guvenlik-gizlilik.md §11.2/§11.3'te tanımlanan OCR izni ve saklama tercihinin KVKK
-// karşılığı olarak hazırlanmıştır; App Store Connect'in "Gizlilik Politikası URL'si" alanı
-// için ayrıca bu metnin bir web sayfasında da yayınlanması gerekir (bu ekran yalnızca
-// uygulama içi erişim sağlar).
+// Bu metin, www.vademde.com/gizlilik ile birebir aynı tutulur (bkz. vademdeapp reposundaki
+// src/routes/gizlilik.tsx) — App Store Connect'in "Gizlilik Politikası URL'si" alanı için o
+// sayfa referans gösterilir, bu ekran uygulama içi erişimi sağlar. İki tarafta bir değişiklik
+// yapılırsa diğerine de yansıtılmalıdır.
 const SECTIONS: Section[] = [
   {
     title: '1. Veri Sorumlusu',
     body:
       '6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca kişisel verileriniz; ' +
-      'veri sorumlusu sıfatıyla Turgut Akın Kaya (gerçek kişi — "DoTa Medya" markası/ticari ' +
-      'unvanı altında faaliyet göstermektedir), Germiyan Mah. 27166 Sok. No: 26, Çeşme/İzmir ' +
-      'adresinde mukim, tarafından, aşağıda açıklanan kapsamda işlenmektedir. İletişim: ' +
-      'info@vademde.com, 0543 203 53 09.',
+      'veri sorumlusu sıfatıyla Turgut Akın Kaya (gerçek kişi — "DoTa Medya" markası altında ' +
+      'faaliyet göstermektedir), Çeşme, İzmir, Türkiye adresinde (tam tebligat adresi talep ' +
+      'üzerine paylaşılır) mukim, tarafından aşağıda açıklanan kapsamda işlenmektedir. ' +
+      'İletişim: info@vademde.com, 0543 203 53 09.',
   },
   {
-    title: '2. İşlenen Kişisel Veri Kategorileri',
+    title: '2. Toplanan Kişisel Veri Kategorileri',
     body:
-      '• Kimlik ve iletişim verisi: ad soyad, e-posta (Apple/Google ile giriş veya e-posta ile kayıt).\n' +
-      '• Finansal veri: hesap, işlem, borç/alacak, çek/senet/fatura/kredi kartı ekstresi kayıtları ve tutarları.\n' +
-      '• Belge görüntüsü: taradığınız veya yüklediğiniz çek, senet, fatura, kredi/kredi kartı ekstresi gibi belgelerin fotoğraf/PDF görüntüsü.\n' +
-      '• Kullanım verisi: uygulama içi işlem kayıtları, hata/çökme raporları (Apple TestFlight/App Store üzerinden, e-posta adresiniz dahil).',
+      '• Hesap verileri: ad, e-posta adresi; Apple ile giriş kullanıyorsanız Apple tarafından ' +
+      'paylaşılan kimlik bilgileri.\n' +
+      '• Finansal belge verileri: taradığınız çek, senet, fatura, kredi ödeme planı, kredi kartı ' +
+      'ekstresi ve benzeri belgelerin görüntüleri ile bu belgelerden okunan tutar, tarih, taraf, ' +
+      'IBAN ve belge numarası gibi alanlar.\n' +
+      '• Manuel girdiğiniz finansal kayıtlar: gelir, gider, borç, alacak, hesap, kategori ve ' +
+      'kişi/firma bilgileri.\n' +
+      '• Abonelik ve satın alma verileri: plan tercihiniz ve abonelik durumunuz. Kart numarası ' +
+      'gibi ödeme bilgileriniz bizde saklanmaz; ödemeler doğrudan Apple App Store üzerinden ' +
+      'işlenir.\n' +
+      '• Cihaz ve kullanım verileri: uygulama sürümü, işletim sistemi, hata kayıtları ve bildirim ' +
+      'izin durumu.',
   },
   {
     title: '3. İşleme Amaçları',
     body:
-      'Belge görüntüsünden tarih, tutar ve ödeme bilgilerini yapay zekâ destekli optik karakter ' +
-      'tanıma (OCR) ile çıkarmak; bu bilgileri siz onaylamadan hiçbir finansal kayda dönüştürmeden ' +
-      'önizlemenizi sağlamak; oluşturduğunuz finansal kayıtları saklamak, size vade/ödeme ' +
-      'hatırlatmaları göndermek; hesabınızı ve çalışma alanınızı yönetmek; abonelik/satın alma ' +
-      'işlemlerini yürütmek; uygulama güvenliğini ve hata giderimini sağlamak.',
+      'Hesabınızı oluşturmak, kimliğinizi doğrulamak ve oturumunuzu yönetmek; taradığınız ' +
+      'belgeleri sınıflandırmak, belge üzerindeki tutar/tarih/taraf gibi alanları yapay zekâ ' +
+      'destekli optik karakter tanıma (OCR) ile çıkarmak ve onayınıza sunmak; onayladığınız ' +
+      'verilerden borç, alacak, gelir, gider ve vade kayıtları oluşturmak, vade takvimini ve ' +
+      'hatırlatma bildirimlerini yönetmek; abonelik planınızı ve OCR kotanızı yönetmek, satın ' +
+      'alma işlemlerini doğrulamak; hizmeti güvenli tutmak, hataları tespit etmek ve teknik ' +
+      'destek sağlamak; yasal yükümlülüklerimizi yerine getirmek. Belgeleriniz üzerinde çalışan ' +
+      'yapay zekâ hiçbir zaman kesin bir finansal kayıt oluşturmaz; her OCR sonucu, kayda ' +
+      'dönüşmeden önce sizin gözden geçirmenize ve onayınıza sunulur.',
   },
   {
     title: '4. Hukuki Sebep',
     body:
-      'Kişisel verileriniz KVKK m.5/2 kapsamında "bir sözleşmenin kurulması veya ifasıyla doğrudan ' +
-      'ilgili olması" ve "veri sorumlusunun meşru menfaati" hukuki sebeplerine dayanılarak; belge ' +
-      'görüntüsünün yurt dışında yerleşik yapay zekâ hizmetine (bkz. madde 5) aktarımı ise KVKK ' +
-      'm.9 uyarınca uygulama içinde ayrıca alınan açık rızanıza dayanılarak işlenmektedir.',
+      'Kişisel verileriniz KVKK m.5/2 kapsamında "bir sözleşmenin kurulması veya ifasıyla ' +
+      'doğrudan ilgili olması" ve "veri sorumlusunun meşru menfaati" hukuki sebeplerine ' +
+      'dayanılarak; belge görüntüsünün yurt dışında yerleşik yapay zekâ hizmetine (bkz. madde 5) ' +
+      'aktarımı ise KVKK m.9 uyarınca uygulama içinde ayrıca alınan açık rızanıza dayanılarak ' +
+      'işlenmektedir.',
   },
   {
-    title: '5. Aktarılan Taraflar ve Yurt Dışı Aktarım',
+    title: '5. Verilerinizi Kimlerle Paylaşıyoruz',
     body:
-      '• Supabase Inc. — veritabanı, kimlik doğrulama ve belge depolama altyapısı (bulut barındırma).\n' +
-      '• Google (Gemini API) — belge görüntüsünün OCR/yapay zekâ ile analizi; yalnızca uygulama içi ' +
-      'onayınızdan sonra, belge görüntüsü gönderilir.\n' +
-      '• RevenueCat / Apple App Store — abonelik ve satın alma işlemlerinin yürütülmesi.\n' +
+      'Verilerinizi pazarlama amacıyla üçüncü taraflara satmayız. Hizmeti sunabilmek için ' +
+      'aşağıdaki hizmet sağlayıcılarla sınırlı ve amacına uygun veri paylaşımı yapılır:\n' +
+      '• Supabase Inc. — veritabanı, kimlik doğrulama ve dosya depolama altyapısı; hesap ve ' +
+      'finansal kayıt verileriniz, çalışma alanınıza özel erişim politikalarıyla (satır bazlı ' +
+      'güvenlik) izole şekilde saklanır.\n' +
+      '• Google (Gemini API) — belge görüntüleriniz, yalnızca alan çıkarımı amacıyla ve sizin ' +
+      'onayınızdan sonra sunucu tarafından bu servise iletilir; erişim anahtarı hiçbir zaman ' +
+      'mobil uygulamaya gömülmez.\n' +
+      '• RevenueCat ve Apple App Store — abonelik durumunuzu doğrulamak ve yönetmek için ' +
+      'kullanılır.\n' +
+      '• Apple (Sign in with Apple, bildirimler) — giriş yapmayı ve size bildirim göndermeyi ' +
+      'sağlar.\n' +
       'Bu hizmet sağlayıcılar Türkiye dışında sunucu barındırabilir; bu durumda aktarım KVKK m.9 ' +
-      'kapsamındaki açık rızanıza dayanır.',
+      'kapsamındaki açık rızanıza dayanır. Yasal bir zorunluluk olmadıkça verileriniz bu ' +
+      'listenin dışında üçüncü kişilerle paylaşılmaz.',
   },
   {
-    title: '6. Saklama Süresi',
+    title: '6. Veri Güvenliği',
     body:
-      'Finansal kayıtlarınız (tutar, tarih, taraf bilgisi gibi yapılandırılmış veriler) çalışma ' +
-      'alanınızı veya ilgili kaydı silmediğiniz sürece saklanır. Taradığınız belgenin ham görüntüsü ' +
-      'ise Profil > Gizlilik bölümündeki tercihinize göre: "Taranan belgeleri sakla" açıksa siz ' +
-      'silene kadar saklanır; kapalıysa (varsayılan) yapay zekâ analizi tamamlanır tamamlanmaz ' +
-      'otomatik olarak silinir. Hesabınızı sildiğinizde tüm veriler (belgeler dahil) kalıcı olarak ' +
-      'silinir.',
+      '• Her çalışma alanının verisi, satır bazlı güvenlik (RLS) politikalarıyla diğer çalışma ' +
+      'alanlarından tamamen izole edilir.\n' +
+      '• Belgeleriniz herkese açık olmayan, özel bir depolama alanında tutulur; erişim yalnızca ' +
+      'kısa süreli, imzalı bağlantılarla sağlanır.\n' +
+      '• Oturum bilgileriniz cihazınızda şifreli bir güvenli depoda (Keychain/Keystore) tutulur.\n' +
+      '• Servis anahtarları ve model API anahtarları istemci uygulamasına hiçbir zaman ' +
+      'gömülmez; belge analizi yalnızca sunucu tarafında yürütülür.\n' +
+      '• Veriler aktarım sırasında şifrelenir (TLS).',
   },
   {
-    title: '7. Haklarınız (KVKK m.11)',
+    title: '7. Veri Saklama Süresi',
     body:
-      'KVKK m.11 uyarınca; kişisel verinizin işlenip işlenmediğini öğrenme, işlenmişse buna ilişkin ' +
-      'bilgi talep etme, işlenme amacını ve amacına uygun kullanılıp kullanılmadığını öğrenme, yurt ' +
-      'içinde/yurt dışında aktarıldığı üçüncü kişileri bilme, eksik/yanlış işlenmişse düzeltilmesini ' +
-      'isteme, KVKK m.7 şartları oluştuğunda silinmesini/yok edilmesini isteme, yapılan işlemlerin ' +
-      'aktarıldığı üçüncü kişilere bildirilmesini isteme, münhasıran otomatik sistemlerle analiz ' +
-      'edilmesi suretiyle aleyhinize bir sonuç ortaya çıkmasına itiraz etme ve zarara uğramanız ' +
-      'hâlinde tazminat talep etme haklarına sahipsiniz. Uygulama içinden hesabınızı ve tüm ' +
-      'verilerinizi dilediğiniz an kalıcı olarak silebilirsiniz (Profil > Hesabımı ve Verilerimi Sil).',
+      'Finansal kayıtlarınız (tutar, tarih, taraf bilgisi gibi yapılandırılmış veriler), ilgili ' +
+      'kaydı veya çalışma alanınızı silmediğiniz sürece saklanır. Taradığınız belgenin ham ' +
+      'görüntüsü ise Profil > Gizlilik bölümündeki tercihinize göre saklanır: "Taranan ' +
+      'belgeleri sakla" açıksa siz silene kadar; kapalıysa (varsayılan) yapay zekâ analizi ' +
+      'tamamlanır tamamlanmaz otomatik olarak silinir. Hesabınızı sildiğinizde tüm veriler ' +
+      '(belgeler dahil) kalıcı olarak silinir; yasal olarak saklanması zorunlu kayıtlar ' +
+      'hariçtir.',
   },
   {
-    title: '8. Başvuru Yöntemi',
+    title: '8. Haklarınız (KVKK m.11)',
     body:
-      'Yukarıdaki haklarınızı kullanmak için info@vademde.com adresine kimliğinizi ' +
-      'tevsik edici bilgilerle yazılı olarak başvurabilirsiniz. Başvurunuz en geç 30 gün içinde ' +
-      'sonuçlandırılır.',
+      'KVKK m.11 uyarınca; kişisel verinizin işlenip işlenmediğini öğrenme, işlenmişse buna ' +
+      'ilişkin bilgi talep etme, işlenme amacını ve amacına uygun kullanılıp kullanılmadığını ' +
+      'öğrenme, yurt içinde/yurt dışında aktarıldığı üçüncü kişileri bilme, eksik/yanlış ' +
+      'işlenmişse düzeltilmesini isteme, KVKK m.7 şartları oluştuğunda silinmesini/yok ' +
+      'edilmesini isteme, yapılan işlemlerin aktarıldığı üçüncü kişilere bildirilmesini isteme, ' +
+      'münhasıran otomatik sistemlerle analiz edilmesi suretiyle aleyhinize bir sonuç ortaya ' +
+      'çıkmasına itiraz etme ve zarara uğramanız hâlinde tazminat talep etme haklarına ' +
+      'sahipsiniz. Bu haklarınızı kullanmak için info@vademde.com adresine kimliğinizi tevsik ' +
+      'edici bilgilerle yazılı olarak başvurabilirsiniz; başvurunuz en geç 30 gün içinde ' +
+      'sonuçlandırılır. Ayrıca hesabınızı ve tüm verilerinizi uygulama içinden (Profil > ' +
+      'Hesabımı ve Verilerimi Sil) dilediğiniz an doğrudan silebilirsiniz.',
+  },
+  {
+    title: '9. Çocukların Gizliliği',
+    body:
+      'Hizmet, 18 yaş altındaki kişilere yönelik değildir ve bilerek çocuklardan kişisel veri ' +
+      'toplamayız. 18 yaşından küçük bir kullanıcının verilerini topladığımızı fark edersek bu ' +
+      'veriyi sileriz.',
+  },
+  {
+    title: '10. Politika Değişiklikleri',
+    body:
+      'Bu politikayı zaman zaman güncelleyebiliriz. Önemli değişiklikleri uygulama içi bildirim ' +
+      'veya e-posta yoluyla duyururuz. Güncel sürüm her zaman uygulama içinde ve ' +
+      'www.vademde.com/gizlilik adresinde yayınlanır.',
+  },
+  {
+    title: '11. İletişim',
+    body: 'Gizlilikle ilgili sorularınız için: info@vademde.com veya 0543 203 53 09.',
   },
 ];
 
@@ -112,21 +158,6 @@ export default function PrivacyPolicyScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <Card style={{ backgroundColor: withAlpha(theme.colors.danger, 0.1) }}>
-          <Stack gap="xs">
-            <Text variant="body" style={{ color: theme.colors.danger, fontWeight: '700' }}>
-              Taslak — hukuki inceleme gerektirir
-            </Text>
-            <Text variant="caption" color="textSecondary">
-              Bu metin, koddaki mevcut veri işleme akışını (OCR, depolama, saklama tercihi) yansıtacak
-              şekilde hazırlanmış bir başlangıç taslağıdır. Veri sorumlusu gerçek kişi (Turgut Akın
-              Kaya, &quot;DoTa Medya&quot; markası) olarak dolduruldu — vergi mükellefiyeti/kayıt durumu
-              netleşince (mali müşavir onayı) bu bölüm gerekirse güncellenmelidir. Yayına almadan önce
-              bir KVKK/kişisel verilerin korunması alanında uzman avukata onaylatılmalıdır.
-            </Text>
-          </Stack>
-        </Card>
-
         <Stack gap="xxs">
           <Text variant="pageTitle">Gizlilik Politikası ve KVKK Aydınlatma Metni</Text>
           <Text variant="caption" color="textSecondary">
