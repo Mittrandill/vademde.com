@@ -66,7 +66,8 @@
           "calendarPermission": "Borç/alacak vadelerinizi takviminize ekleyebilmek için takvime erişim gerekir.",
           "remindersPermission": "Borç/alacak vadeleriniz için Hatırlatıcılar'da bir madde oluşturabilmek için erişim gerekir."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "router": {},

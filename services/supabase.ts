@@ -5,6 +5,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
 import type { Database } from '@/db/database.types';
+import { largeSecureStore } from '@/services/secureStorage';
+
+// docs/07-guvenlik-gizlilik.md §11.1 — oturum SecureStore (Keychain/Keystore) destekli
+// şifreli depoda tutulur (bkz. secureStorage.ts). SecureStore yalnızca native'de var; web'de
+// (bu proje Expo web'i de destekliyor) supabase-js zaten kendi localStorage tabanlı
+// davranışına düşer, o yüzden web'de eski AsyncStorage adaptörü korunur.
+const authStorage = Platform.OS === 'web' ? AsyncStorage : largeSecureStore;
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -17,7 +24,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

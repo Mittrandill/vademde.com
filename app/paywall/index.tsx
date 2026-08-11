@@ -366,6 +366,20 @@ export default function PaywallScreen() {
                 ? 'Mağaza fiyatları şu anda alınamıyor.'
                 : 'App Store üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.'}
             </Text>
+            {/* App Store Review Guideline 3.1.2 — otomatik yenilenen abonelik satan ekranda
+                Gizlilik Politikası ve Kullanım Koşulları'na işlevsel bağlantı zorunludur. */}
+            <Row gap="md" style={{ justifyContent: 'center' }}>
+              <Pressable onPress={() => router.push('/legal/terms-of-service')} hitSlop={8}>
+                <Text variant="caption" style={{ textDecorationLine: 'underline' }} color="textSecondary">
+                  Kullanım Koşulları
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => router.push('/legal/privacy-policy')} hitSlop={8}>
+                <Text variant="caption" style={{ textDecorationLine: 'underline' }} color="textSecondary">
+                  Gizlilik Politikası
+                </Text>
+              </Pressable>
+            </Row>
           </Stack>
         </>
       )}

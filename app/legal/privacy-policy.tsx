@@ -12,8 +12,8 @@ interface Section {
   body: string;
 }
 
-// TASLAK METİN — bu ekran bir avukat tarafından incelenmeden ve aşağıdaki [DOLDURULACAK]
-// alanları gerçek şirket bilgileriyle doldurulmadan yayına alınmamalıdır. Bkz. sohbet geçmişi:
+// TASLAK METİN — veri sorumlusu bilgileri (Turgut Akın Kaya, gerçek kişi — "DoTa Medya")
+// dolduruldu, ancak bu ekran bir avukat tarafından incelenmeden yayına alınmamalıdır.
 // docs/07-guvenlik-gizlilik.md §11.2/§11.3'te tanımlanan OCR izni ve saklama tercihinin KVKK
 // karşılığı olarak hazırlanmıştır; App Store Connect'in "Gizlilik Politikası URL'si" alanı
 // için ayrıca bu metnin bir web sayfasında da yayınlanması gerekir (bu ekran yalnızca
@@ -23,9 +23,10 @@ const SECTIONS: Section[] = [
     title: '1. Veri Sorumlusu',
     body:
       '6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca kişisel verileriniz; ' +
-      'veri sorumlusu sıfatıyla [DOLDURULACAK: Şirket Unvanı], [DOLDURULACAK: Adres], ' +
-      'MERSİL/Ticaret Sicil No: [DOLDURULACAK], KEP adresi: [DOLDURULACAK] tarafından, ' +
-      'aşağıda açıklanan kapsamda işlenmektedir.',
+      'veri sorumlusu sıfatıyla Turgut Akın Kaya (gerçek kişi — "DoTa Medya" markası/ticari ' +
+      'unvanı altında faaliyet göstermektedir), Germiyan Mah. 27166 Sok. No: 26, Çeşme/İzmir ' +
+      'adresinde mukim, tarafından, aşağıda açıklanan kapsamda işlenmektedir. İletişim: ' +
+      'info@vademde.com, 0543 203 53 09.',
   },
   {
     title: '2. İşlenen Kişisel Veri Kategorileri',
@@ -87,7 +88,7 @@ const SECTIONS: Section[] = [
   {
     title: '8. Başvuru Yöntemi',
     body:
-      'Yukarıdaki haklarınızı kullanmak için [DOLDURULACAK: başvuru e-postası] adresine kimliğinizi ' +
+      'Yukarıdaki haklarınızı kullanmak için info@vademde.com adresine kimliğinizi ' +
       'tevsik edici bilgilerle yazılı olarak başvurabilirsiniz. Başvurunuz en geç 30 gün içinde ' +
       'sonuçlandırılır.',
   },
@@ -118,9 +119,10 @@ export default function PrivacyPolicyScreen() {
             </Text>
             <Text variant="caption" color="textSecondary">
               Bu metin, koddaki mevcut veri işleme akışını (OCR, depolama, saklama tercihi) yansıtacak
-              şekilde hazırlanmış bir başlangıç taslağıdır. Yayına almadan önce [DOLDURULACAK] ile
-              işaretli alanlar gerçek şirket bilgileriyle doldurulmalı ve bir KVKK/kişisel verilerin
-              korunması alanında uzman avukata onaylatılmalıdır.
+              şekilde hazırlanmış bir başlangıç taslağıdır. Veri sorumlusu gerçek kişi (Turgut Akın
+              Kaya, &quot;DoTa Medya&quot; markası) olarak dolduruldu — vergi mükellefiyeti/kayıt durumu
+              netleşince (mali müşavir onayı) bu bölüm gerekirse güncellenmelidir. Yayına almadan önce
+              bir KVKK/kişisel verilerin korunması alanında uzman avukata onaylatılmalıdır.
             </Text>
           </Stack>
         </Card>
@@ -128,7 +130,7 @@ export default function PrivacyPolicyScreen() {
         <Stack gap="xxs">
           <Text variant="pageTitle">Gizlilik Politikası ve KVKK Aydınlatma Metni</Text>
           <Text variant="caption" color="textSecondary">
-            Son güncelleme: [DOLDURULACAK: tarih]
+            Son güncelleme: 11 Ağustos 2026
           </Text>
         </Stack>
 

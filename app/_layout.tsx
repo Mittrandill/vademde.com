@@ -101,6 +101,7 @@ function RootNavigator() {
           bilgilendirme ekranı en başta olunca web'de "/" ve diğer tüm derin bağlantılar önce
           yanlışlıkla buraya mount oluyordu (bkz. git geçmişi — kaydedilmiş bir teşhis notu). */}
       <Stack.Screen name="legal/privacy-policy" />
+      <Stack.Screen name="legal/terms-of-service" />
     </Stack>
   );
 }
