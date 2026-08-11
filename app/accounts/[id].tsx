@@ -25,6 +25,7 @@ import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import { DetailHeroCard, DetailMetricRow } from '@/components/finance/DetailHero';
 import { Amount } from '@/components/finance/Amount';
+import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
 import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
@@ -41,6 +42,7 @@ import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
 import { computeStatementPeriod, periodKeyFor, periodKeyForDueDate } from '@/utils/creditCardPeriod';
 import { getValueUnit, type ValueUnitType } from '@/features/valueUnits/units';
+import { listValueUnitRates } from '@/features/valueUnits/api';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
@@ -98,6 +100,17 @@ export default function AccountDetailScreen() {
     queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
     queryFn: () => getAccountBalances(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
+  });
+
+  // docs/01-finansal-kayit-modeli.md §3.5 — yalnızca kasa hesapları TRY dışı bir değer
+  // biriminde tutulabilir (bkz. app/accounts/new.tsx isCash koşulu); diğer hesap türleri
+  // her zaman TRY olduğundan kur sorgusu yalnızca gerektiğinde açılır (bkz. obligations/[id]
+  // ile aynı desen — components/finance/ReferenceValueRow.tsx).
+  const isNonTryCash = accountQuery.data?.type === 'cash' && accountQuery.data.currency_code !== 'TRY';
+  const ratesQuery = useQuery({
+    queryKey: queryKeys.valueUnitRates(),
+    queryFn: listValueUnitRates,
+    enabled: isNonTryCash,
   });
 
   const transactionsQuery = useQuery({
@@ -529,6 +542,15 @@ export default function AccountDetailScreen() {
                 </Row>
               }
             />
+
+            {type === 'cash' && account.currency_code !== 'TRY' ? (
+              <ReferenceValueRow
+                amountMinor={balanceMinor}
+                unitCode={account.currency_code}
+                rates={ratesQuery.data}
+                isLoading={ratesQuery.isLoading}
+              />
+            ) : null}
 
             {hasOverdraft ? (
               <OverdraftCard accountId={account.id} balanceMinor={balanceMinor} limitMinor={overdraftLimitMinor} currencyCode={account.currency_code} />

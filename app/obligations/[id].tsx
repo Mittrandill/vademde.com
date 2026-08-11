@@ -25,6 +25,7 @@ import { StatColumns } from '@/components/primitives/StatColumns';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import { DetailHeroCard, DetailIdentityRow, DetailMetricRow } from '@/components/finance/DetailHero';
 import { Amount } from '@/components/finance/Amount';
+import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { OBLIGATION_STATUS_LABEL, StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { AccountPicker } from '@/components/finance/AccountPicker';
@@ -37,8 +38,8 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, formatMinorAmount, formatValueUnitAmount, parseValueUnitAmountToMinor } from '@/utils/money';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { getValueUnit } from '@/features/valueUnits/units';
-import { listValueUnitRates, convertToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
-import { queryKeys } from '@/services/queryKeys';
+import { listValueUnitRates } from '@/features/valueUnits/api';
+import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert, showErrorAlert } from '@/utils/alerts';
 
@@ -80,25 +81,19 @@ export default function ObligationDetailScreen() {
   });
 
   // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydının TL karşılığı
-  // kalıcı saklanmaz, her görüntülemede canlı fiyattan hesaplanır; yalnızca o tür
+  // kalıcı saklanmaz, her görüntülemede canlı fiyattan hesaplanır; yalnızca TRY dışı
   // kayıtlarda gerektiği için sorgu her ekranda değil burada, koşullu olarak açılır.
-  const isValueUnitFiat = getValueUnit(detailQuery.data?.obligation.currency_code).unitType === 'fiat';
+  const isTry = (detailQuery.data?.obligation.currency_code ?? 'TRY') === 'TRY';
   const ratesQuery = useQuery({
     queryKey: queryKeys.valueUnitRates(),
     queryFn: listValueUnitRates,
-    enabled: !isValueUnitFiat,
+    enabled: !isTry,
   });
 
   function invalidateAll() {
     queryClient.invalidateQueries({ queryKey: ['obligation', id] });
     if (activeWorkspaceId) {
-      queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
-      // Hesap seçilen bir ödeme yeni bir transaction oluşturur/günceller (bkz.
-      // features/payments/api.ts recordPayment/updatePayment) — bu prefix Son Hareketler
-      // (dashboard), Hareketler sekmesi ve hesap bakiyelerini besleyen tüm sorguları kapsar;
-      // aksi halde bu ekranlar 30sn'lik staleTime dolana kadar eski veriyi göstermeye devam eder.
-      queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
-      queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
+      invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
     }
   }
 
@@ -280,7 +275,7 @@ export default function ObligationDetailScreen() {
           ]}
         />
 
-        {!isValueUnitFiat ? (
+        {!isTry ? (
           <ReferenceValueRow
             amountMinor={obligation.remaining_amount_minor}
             unitCode={obligation.currency_code}
@@ -409,43 +404,6 @@ export default function ObligationDetailScreen() {
 // "≈" ve kur yaşıyla etiketlenmiş bir ikincil satırdır. Kur satırı bulunamazsa veya
 // value_unit_rates hiç güncellenmemişse (bkz. supabase/functions/sync-market-rates)
 // kaydın kendi tutarını etkilemeden şeffafça "kur bilgisi yok" gösterilir.
-function formatCacheAge(cachedAt: string): string {
-  const hours = Math.round((Date.now() - new Date(cachedAt).getTime()) / (60 * 60 * 1000));
-  if (hours < 1) return 'az önce';
-  if (hours < 24) return `${hours} saat önce`;
-  return `${Math.round(hours / 24)} gün önce`;
-}
-
-function ReferenceValueRow({
-  amountMinor,
-  unitCode,
-  rates,
-  isLoading,
-}: {
-  amountMinor: number;
-  unitCode: string;
-  rates: ValueUnitRate[] | undefined;
-  isLoading: boolean;
-}) {
-  if (isLoading) return null;
-
-  const reference = rates ? convertToReferenceMinor(amountMinor, unitCode, rates) : null;
-  if (!reference) {
-    return (
-      <Text variant="caption" color="textSecondary">
-        Güncel TL karşılığı için kur bilgisi bulunamadı.
-      </Text>
-    );
-  }
-
-  return (
-    <Text variant="caption" color="textSecondary">
-      ≈ {formatMinorAmount(reference.amountMinor, 'TRY')} (güncel kur
-      {reference.isStale ? `, ${formatCacheAge(reference.cachedAt)} güncellendi` : ''})
-    </Text>
-  );
-}
-
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <Row align="center">

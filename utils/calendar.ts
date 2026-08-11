@@ -25,6 +25,23 @@ export function addMonths(date: Date, delta: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
+export function addDays(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + delta);
+}
+
+// docs/03-bilgi-mimarisi-ekranlar.md §5.9 — Takvim'in "Hafta" görünümü için, verilen
+// tarihi içeren Pazartesi başlangıçlı 7 günlük dizi (ay grid'indeki aynı hafta başlangıcı
+// kuralıyla tutarlı — bkz. getMonthGridWeeks).
+export function getWeekDays(date: Date): Date[] {
+  const weekday = (date.getDay() + 6) % 7;
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - weekday);
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    days.push(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
+  }
+  return days;
+}
+
 // Pazartesi=0 ... Pazar=6 sıralı, ayın gösterildiği tüm haftaları dolduran grid.
 export function getMonthGridWeeks(monthDate: Date): Date[][] {
   const year = monthDate.getFullYear();

@@ -9,6 +9,7 @@ import { withAlpha } from '@/theme/colors';
 import { Card, Divider, Pressable, ProgressRing, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { Amount, type AmountDirection } from '@/components/finance/Amount';
 import { CalendarMonthGrid } from '@/components/finance/CalendarMonthGrid';
+import { CalendarWeekStrip } from '@/components/finance/CalendarWeekStrip';
 import { CalendarAgendaList } from '@/components/finance/CalendarAgendaList';
 import { CalendarObligationRow } from '@/components/finance/CalendarObligationRow';
 import {
@@ -17,14 +18,16 @@ import {
   ACTIVE_OBLIGATION_STATUSES,
   type ObligationDueItem,
 } from '@/features/obligations/api';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
-import { addMonths, getMonthGridWeeks, isSameMonth, toDateKey } from '@/utils/calendar';
+import { addDays, addMonths, getMonthGridWeeks, getWeekDays, isSameMonth, toDateKey } from '@/utils/calendar';
 
-type ViewMode = 'month' | 'liste';
+type ViewMode = 'month' | 'week' | 'liste';
 
 const VIEW_MODES: { key: ViewMode; label: string }[] = [
   { key: 'month', label: 'Ay' },
+  { key: 'week', label: 'Hafta' },
   { key: 'liste', label: 'Liste' },
 ];
 
@@ -76,6 +79,11 @@ export default function TakvimScreen() {
     enabled: !!activeWorkspaceId,
   });
 
+  const valueUnitRatesQuery = useQuery({
+    queryKey: queryKeys.valueUnitRates(),
+    queryFn: listValueUnitRates,
+  });
+
   const obligations = useMemo<ObligationDueItem[]>(() => {
     const installmentItems = installmentsQuery.data ?? [];
     const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
@@ -96,13 +104,21 @@ export default function TakvimScreen() {
   }, [obligations]);
 
   const selectedDayItems = obligationsByDay.get(toDateKey(selectedDate)) ?? [];
-  const payableTotal = selectedDayItems
-    .filter((o) => o.direction === 'payable')
-    .reduce((sum, o) => sum + o.remaining_amount_minor, 0);
-  const receivableTotal = selectedDayItems
-    .filter((o) => o.direction === 'receivable')
-    .reduce((sum, o) => sum + o.remaining_amount_minor, 0);
+  const valueUnitRates = valueUnitRatesQuery.data ?? [];
+  const payableTotal = sumToReferenceMinor(
+    selectedDayItems
+      .filter((o) => o.direction === 'payable')
+      .map((o) => ({ amountMinor: o.remaining_amount_minor, unitCode: o.currency_code })),
+    valueUnitRates
+  );
+  const receivableTotal = sumToReferenceMinor(
+    selectedDayItems
+      .filter((o) => o.direction === 'receivable')
+      .map((o) => ({ amountMinor: o.remaining_amount_minor, unitCode: o.currency_code })),
+    valueUnitRates
+  );
   const netTotal = receivableTotal - payableTotal;
+  const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
 
   function handleSelectDate(day: Date) {
     setSelectedDate(day);
@@ -121,6 +137,18 @@ export default function TakvimScreen() {
     const next = addMonths(monthDate, 1);
     setMonthDate(next);
     setSelectedDate(next);
+  }
+
+  // getMonthGridWeeks(monthDate) her zaman monthDate'in ayındaki herhangi bir günü
+  // içeren haftaların tamamını (komşu aya taşan günler dahil) kapsar — handleSelectDate
+  // ayı senkron tuttuğu için seçili tarihin haftası zaten yüklenen veri aralığının
+  // (gridStart..gridEnd) içindedir, ayrı bir sorgu aralığı gerekmez.
+  function handlePrevWeek() {
+    handleSelectDate(addDays(selectedDate, -7));
+  }
+
+  function handleNextWeek() {
+    handleSelectDate(addDays(selectedDate, 7));
   }
 
   return (
@@ -161,29 +189,34 @@ export default function TakvimScreen() {
               onNextMonth={handleNextMonth}
             />
 
-            <Stack gap="sm">
-              <Text variant="sectionTitle">{dayTitleFormatter.format(selectedDate)}</Text>
+            <DaySelectionDetail
+              selectedDate={selectedDate}
+              payableTotal={payableTotal}
+              receivableTotal={receivableTotal}
+              netTotal={netTotal}
+              selectedDayItems={selectedDayItems}
+              activeWorkspaceId={activeWorkspaceId}
+            />
+          </>
+        ) : viewMode === 'week' ? (
+          <>
+            <CalendarWeekStrip
+              weekDays={weekDays}
+              obligationsByDay={obligationsByDay}
+              selectedDate={selectedDate}
+              onSelectDate={handleSelectDate}
+              onPrevWeek={handlePrevWeek}
+              onNextWeek={handleNextWeek}
+            />
 
-              <DaySummaryCard payableMinor={payableTotal} receivableMinor={receivableTotal} netMinor={netTotal} />
-
-              {selectedDayItems.length === 0 ? (
-                <Card>
-                  <Text variant="body" color="textSecondary">
-                    Bu tarihte vadesi gelen kayıt yok.
-                  </Text>
-                </Card>
-              ) : (
-                <Stack gap="xs">
-                  {selectedDayItems.map((obligation) => (
-                    <CalendarObligationRow
-                      key={obligation.id}
-                      workspaceId={activeWorkspaceId as string}
-                      obligation={obligation}
-                    />
-                  ))}
-                </Stack>
-              )}
-            </Stack>
+            <DaySelectionDetail
+              selectedDate={selectedDate}
+              payableTotal={payableTotal}
+              receivableTotal={receivableTotal}
+              netTotal={netTotal}
+              selectedDayItems={selectedDayItems}
+              activeWorkspaceId={activeWorkspaceId}
+            />
           </>
         ) : (
           <>
@@ -235,6 +268,53 @@ export default function TakvimScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+interface DaySelectionDetailProps {
+  selectedDate: Date;
+  payableTotal: number;
+  receivableTotal: number;
+  netTotal: number;
+  selectedDayItems: ObligationDueItem[];
+  activeWorkspaceId: string | null;
+}
+
+// Ay ve Hafta görünümleri, farklı bir üst gezinme bileşeni (CalendarMonthGrid /
+// CalendarWeekStrip) kullansa da seçili günün detayını aynı şekilde gösterir — bu blok
+// önceden yalnızca Ay dalında vardı, Hafta eklenince tekrarlanmasın diye çıkarıldı.
+function DaySelectionDetail({
+  selectedDate,
+  payableTotal,
+  receivableTotal,
+  netTotal,
+  selectedDayItems,
+  activeWorkspaceId,
+}: DaySelectionDetailProps) {
+  return (
+    <Stack gap="sm">
+      <Text variant="sectionTitle">{dayTitleFormatter.format(selectedDate)}</Text>
+
+      <DaySummaryCard payableMinor={payableTotal} receivableMinor={receivableTotal} netMinor={netTotal} />
+
+      {selectedDayItems.length === 0 ? (
+        <Card>
+          <Text variant="body" color="textSecondary">
+            Bu tarihte vadesi gelen kayıt yok.
+          </Text>
+        </Card>
+      ) : (
+        <Stack gap="xs">
+          {selectedDayItems.map((obligation) => (
+            <CalendarObligationRow
+              key={obligation.id}
+              workspaceId={activeWorkspaceId as string}
+              obligation={obligation}
+            />
+          ))}
+        </Stack>
+      )}
+    </Stack>
   );
 }
 

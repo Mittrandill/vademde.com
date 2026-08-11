@@ -5,6 +5,7 @@ import {
   listInstallmentsDue,
   type ObligationDueItem,
 } from '@/features/obligations/api';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 
 export interface DateRange {
   from?: string;
@@ -19,6 +20,7 @@ export interface IncomeExpenseTotals {
 type RangeTransactionRow = {
   amount_minor: number;
   direction: string;
+  currency_code: string;
   account_id: string;
   transfer_to_account_id: string | null;
   occurred_at: string;
@@ -27,7 +29,7 @@ type RangeTransactionRow = {
 async function listRangeTransactions(workspaceId: string, range: DateRange): Promise<RangeTransactionRow[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, direction, account_id, transfer_to_account_id, occurred_at')
+    .select('amount_minor, direction, currency_code, account_id, transfer_to_account_id, occurred_at')
     .eq('workspace_id', workspaceId);
   if (range.from) query = query.gte('occurred_at', range.from);
   if (range.to) query = query.lt('occurred_at', range.to);
@@ -41,11 +43,12 @@ export async function getIncomeExpenseTotals(
   workspaceId: string,
   range: DateRange = {}
 ): Promise<IncomeExpenseTotals> {
-  const rows = await listRangeTransactions(workspaceId, range);
+  const [rows, rates] = await Promise.all([listRangeTransactions(workspaceId, range), listValueUnitRates()]);
   return rows.reduce<IncomeExpenseTotals>(
     (totals, row) => {
-      if (row.direction === 'income') totals.incomeMinor += row.amount_minor;
-      else if (row.direction === 'expense') totals.expenseMinor += row.amount_minor;
+      const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+      if (row.direction === 'income') totals.incomeMinor += refMinor;
+      else if (row.direction === 'expense') totals.expenseMinor += refMinor;
       return totals;
     },
     { incomeMinor: 0, expenseMinor: 0 }
@@ -65,7 +68,10 @@ const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat('tr-TR', { month: 'short' 
 export async function getMonthlyComparison(workspaceId: string, monthsBack = 6): Promise<MonthlyTotal[]> {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1);
-  const rows = await listRangeTransactions(workspaceId, { from: start.toISOString() });
+  const [rows, rates] = await Promise.all([
+    listRangeTransactions(workspaceId, { from: start.toISOString() }),
+    listValueUnitRates(),
+  ]);
 
   const buckets = new Map<string, MonthlyTotal>();
   for (let i = 0; i < monthsBack; i += 1) {
@@ -80,8 +86,9 @@ export async function getMonthlyComparison(workspaceId: string, monthsBack = 6):
     const key = `${occurred.getFullYear()}-${String(occurred.getMonth() + 1).padStart(2, '0')}`;
     const bucket = buckets.get(key);
     if (!bucket) continue;
-    if (row.direction === 'income') bucket.incomeMinor += row.amount_minor;
-    else bucket.expenseMinor += row.amount_minor;
+    const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+    if (row.direction === 'income') bucket.incomeMinor += refMinor;
+    else bucket.expenseMinor += refMinor;
   }
 
   return Array.from(buckets.values());
@@ -98,6 +105,7 @@ export interface CategoryBreakdownItem {
 
 type CategoryTransactionRow = {
   amount_minor: number;
+  currency_code: string;
   category: { id: string; name: string; icon: string | null; color: string | null } | null;
 };
 
@@ -109,13 +117,13 @@ export async function getCategoryBreakdown(
 ): Promise<CategoryBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, category:categories(id, name, icon, color)')
+    .select('amount_minor, currency_code, category:categories(id, name, icon, color)')
     .eq('workspace_id', workspaceId)
     .eq('direction', direction);
   if (range.from) query = query.gte('occurred_at', range.from);
   if (range.to) query = query.lt('occurred_at', range.to);
 
-  const { data, error } = await query;
+  const [{ data, error }, rates] = await Promise.all([query, listValueUnitRates()]);
   if (error) throw error;
 
   const totals = new Map<string, { name: string; icon: string | null; color: string | null; amountMinor: number }>();
@@ -125,9 +133,10 @@ export async function getCategoryBreakdown(
     const name = row.category?.name ?? 'Kategorisiz';
     const existing =
       totals.get(key) ?? { name, icon: row.category?.icon ?? null, color: row.category?.color ?? null, amountMinor: 0 };
-    existing.amountMinor += row.amount_minor;
+    const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+    existing.amountMinor += refMinor;
     totals.set(key, existing);
-    grandTotal += row.amount_minor;
+    grandTotal += refMinor;
   }
 
   return Array.from(totals.entries())
@@ -151,6 +160,7 @@ export interface CounterpartyBreakdownItem {
 
 type CounterpartyTransactionRow = {
   amount_minor: number;
+  currency_code: string;
   counterparty: { id: string; name: string } | null;
 };
 
@@ -161,14 +171,14 @@ export async function getCounterpartyBreakdown(
 ): Promise<CounterpartyBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, counterparty:counterparties(id, name)')
+    .select('amount_minor, currency_code, counterparty:counterparties(id, name)')
     .eq('workspace_id', workspaceId)
     .in('direction', ['income', 'expense'])
     .not('counterparty_id', 'is', null);
   if (range.from) query = query.gte('occurred_at', range.from);
   if (range.to) query = query.lt('occurred_at', range.to);
 
-  const { data, error } = await query;
+  const [{ data, error }, rates] = await Promise.all([query, listValueUnitRates()]);
   if (error) throw error;
 
   const totals = new Map<string, CounterpartyBreakdownItem>();
@@ -180,7 +190,7 @@ export async function getCounterpartyBreakdown(
       amountMinor: 0,
       count: 0,
     };
-    existing.amountMinor += row.amount_minor;
+    existing.amountMinor += sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
     existing.count += 1;
     totals.set(row.counterparty.id, existing);
   }
@@ -254,7 +264,16 @@ export async function getOverdueObligations(workspaceId: string): Promise<Obliga
   const overdueInstallments = installmentItems.filter(
     (i) => !!i.due_date && i.due_date < todayStr && i.remaining_amount_minor > 0
   );
-  const obligationIdsWithInstallments = new Set(overdueInstallments.map((i) => i.id));
+  // Taksitli bir kaydın (ör. abonelik) ilk taksidi geçmişte olsa bile, o taksit zaten
+  // ödenmişse (remaining 0) obligationIdsWithInstallments eskiden bunu içermiyordu —
+  // yalnızca HÂLÂ gecikmiş olan taksitlerden kuruluyordu. Sonuç: geçmiş taksitlerin
+  // tamamı ödenmiş ama gelecekteki taksitler yüzünden obligation'ın toplam kalan
+  // bakiyesi hâlâ >0 olan bir kayıt, aşağıdaki "düz obligation" dalına düşüp donmuş
+  // (ilk taksidin) vade tarihi ve toplam kalan bakiyeyle hayalet bir "gecikmiş" satırı
+  // olarak görünüyordu — ödenmiş taksitler de dahil TÜM geçmiş/bugünkü taksitler
+  // hariç tutulmalı, obligation'ın kendi satırı yalnızca hiç taksiti olmayan kayıtlarda
+  // devreye girsin.
+  const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
   const overdueObligations = obligations.filter(
     (o) =>
       !obligationIdsWithInstallments.has(o.id) &&
@@ -341,13 +360,16 @@ export async function getCashFlowForecast(workspaceId: string, daysAhead = 30): 
   limit.setDate(limit.getDate() + daysAhead);
   const limitStr = limit.toISOString().slice(0, 10);
 
-  const obligations = await listObligations({
-    workspaceId,
-    statuses: ACTIVE_OBLIGATION_STATUSES,
-    dueFrom: todayStr,
-    dueTo: limitStr,
-    pageSize: 200,
-  });
+  const [obligations, rates] = await Promise.all([
+    listObligations({
+      workspaceId,
+      statuses: ACTIVE_OBLIGATION_STATUSES,
+      dueFrom: todayStr,
+      dueTo: limitStr,
+      pageSize: 200,
+    }),
+    listValueUnitRates(),
+  ]);
 
   const buckets: CashFlowBucket[] = CASH_FLOW_BUCKET_DEFS.map((def) => ({ ...def, payableMinor: 0, receivableMinor: 0 }));
 
@@ -356,8 +378,12 @@ export async function getCashFlowForecast(workspaceId: string, daysAhead = 30): 
     const diffDays = Math.round((new Date(obligation.due_date).getTime() - today.getTime()) / 86_400_000);
     const bucket = buckets.find((b) => diffDays >= b.fromDay && diffDays <= b.toDay);
     if (!bucket) continue;
-    if (obligation.direction === 'payable') bucket.payableMinor += obligation.remaining_amount_minor;
-    else bucket.receivableMinor += obligation.remaining_amount_minor;
+    const refMinor = sumToReferenceMinor(
+      [{ amountMinor: obligation.remaining_amount_minor, unitCode: obligation.currency_code }],
+      rates
+    );
+    if (obligation.direction === 'payable') bucket.payableMinor += refMinor;
+    else bucket.receivableMinor += refMinor;
   }
 
   return buckets;

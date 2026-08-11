@@ -1,3 +1,5 @@
+import type { QueryClient } from '@tanstack/react-query';
+
 // docs/06-teknik-mimari.md §10.6.1 — sabit queryKey şeması.
 export const queryKeys = {
   workspaces: () => ['workspaces'] as const,
@@ -64,3 +66,19 @@ export const queryKeys = {
   planLimits: () => ['plan-limits'] as const,
   ocrUsage: (periodMonth: string) => ['ocr-usage', periodMonth] as const,
 };
+
+// Bir ödeme kaydedildiğinde/güncellendiğinde/silindiğinde (bkz. features/payments/api.ts)
+// DB tarafındaki trigger (payments_recompute_progress → recompute_obligation_progress/
+// recompute_installment_progress) obligations.status'ü doğru günceller (ör. 'gecikti' →
+// 'odendi'), ama React Query önbelleği kendiliğinden tazelenmez. Önceden çağıran taraflar
+// yalnızca [workspaceId, 'obligations'] prefix'ini invalidate ediyordu — bu da 'obligations'
+// ile başlamayan [workspaceId, 'reports', ...] sorgularını (Raporlar sekmesindeki "Gecikmiş
+// Ödemeler" dahil) asla tazelemiyordu; ödenen kayıt orada eskisi gibi "gecikti" görünmeye
+// devam ediyordu. Bu yardımcı, bir ödeme değiştiğinde etkilenebilecek TÜM prefix'leri tek
+// yerden invalidate eder — yeni bir ödeme akışı eklendiğinde bir prefix'in unutulmasını önler.
+export function invalidatePaymentRelatedQueries(queryClient: QueryClient, workspaceId: string) {
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'obligations'] });
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'transactions'] });
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'account-balances'] });
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'reports'] });
+}

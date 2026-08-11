@@ -24,8 +24,10 @@ import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
 import { HeroStatCard } from '@/components/finance/HeroStatCard';
+import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
@@ -104,14 +106,27 @@ export default function AccountsScreen() {
   });
   const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
 
-  // Toplam bakiye tüm hesapların (filtreden bağımsız) kuruş cinsinden toplamıdır —
-  // dashboard'daki BalanceHero ile aynı kural: farklı para birimleri karışsa da tek bir
-  // varsayılan para biriminde (TRY) özetlenir. Kredi kartı hariç: kart borcu zaten
-  // Kredilerim'de obligation olarak ayrıca takip ediliyor, buraya karışırsa nakit/banka
-  // bakiyeleriyle karışıp yanlış bir toplam çıkar.
-  const totalBalanceMinor = allAccounts
-    .filter((a) => a.type !== 'credit_card')
-    .reduce((sum, a) => sum + (balanceByAccountId.get(a.id) ?? a.opening_balance_minor), 0);
+  // Hesaplar farklı değer birimlerinde olabilir (TRY, USD, gram_altin, ...) — bkz.
+  // features/valueUnits/units.ts. Toplama girmeden önce her hesap güncel TL karşılığına
+  // çevrilir (bkz. features/valueUnits/api.ts sumToReferenceMinor, aynı desen
+  // obligation toplamlarında kullanılıyor).
+  const valueUnitRatesQuery = useQuery({
+    queryKey: queryKeys.valueUnitRates(),
+    queryFn: listValueUnitRates,
+  });
+
+  // Toplam bakiye tüm hesapların (filtreden bağımsız) TL karşılığının toplamıdır. Kredi
+  // kartı hariç: kart borcu zaten Kredilerim'de obligation olarak ayrıca takip ediliyor,
+  // buraya karışırsa nakit/banka bakiyeleriyle karışıp yanlış bir toplam çıkar.
+  const totalBalanceMinor = sumToReferenceMinor(
+    allAccounts
+      .filter((a) => a.type !== 'credit_card')
+      .map((a) => ({
+        amountMinor: balanceByAccountId.get(a.id) ?? a.opening_balance_minor,
+        unitCode: a.currency_code,
+      })),
+    valueUnitRatesQuery.data ?? []
+  );
 
   // Tek dikey scroll sahibi: başlık, hero bakiye kartı, arama ve filtre FlatList'in
   // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde
@@ -237,6 +252,16 @@ export default function AccountsScreen() {
                     overdue={balanceMinor < 0}
                   />
                 </Row>
+                {type === 'cash' && item.currency_code !== 'TRY' ? (
+                  <Row style={{ justifyContent: 'flex-end', marginTop: theme.spacing.xxs }}>
+                    <ReferenceValueRow
+                      amountMinor={balanceMinor}
+                      unitCode={item.currency_code}
+                      rates={valueUnitRatesQuery.data}
+                      isLoading={valueUnitRatesQuery.isLoading}
+                    />
+                  </Row>
+                ) : null}
               </Card>
             </Pressable>
           );

@@ -1,5 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
+import { listValueUnitRates, sumToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
 
 export interface IncomeExpenseTotals {
   incomeMinor: number;
@@ -15,37 +16,50 @@ export async function getMonthTransactionTotals(
   const start = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1);
   const end = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
 
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('amount_minor, direction')
-    .eq('workspace_id', workspaceId)
-    .in('direction', ['income', 'expense'])
-    .gte('occurred_at', start.toISOString())
-    .lt('occurred_at', end.toISOString());
+  const [{ data, error }, rates] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select('amount_minor, direction, currency_code')
+      .eq('workspace_id', workspaceId)
+      .in('direction', ['income', 'expense'])
+      .gte('occurred_at', start.toISOString())
+      .lt('occurred_at', end.toISOString()),
+    listValueUnitRates(),
+  ]);
 
   if (error) throw error;
-  return sumByDirection(data);
+  return sumByDirection(data, rates);
 }
 
 // docs/01-finansal-kayit-modeli.md §8 — Bakiye Hero: açılış bakiyesi + tamamlanan
 // gelirler - giderler. Tarih filtresiz, dar seçim; veri hacmi büyürse sunucu
 // taraflı aggregate'e (RPC/view) taşınabilir.
 export async function getAllTimeIncomeExpenseTotals(workspaceId: string): Promise<IncomeExpenseTotals> {
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('amount_minor, direction')
-    .eq('workspace_id', workspaceId)
-    .in('direction', ['income', 'expense']);
+  const [{ data, error }, rates] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select('amount_minor, direction, currency_code')
+      .eq('workspace_id', workspaceId)
+      .in('direction', ['income', 'expense']),
+    listValueUnitRates(),
+  ]);
 
   if (error) throw error;
-  return sumByDirection(data);
+  return sumByDirection(data, rates);
 }
 
-function sumByDirection(rows: Pick<Tables<'transactions'>, 'amount_minor' | 'direction'>[]): IncomeExpenseTotals {
+// İşlemler hangi hesaba aitse o hesabın değer birimini taşır (TRY, USD, gram_altin, ...) —
+// bkz. features/accounts/api.ts. Doğrudan toplamak yerine her satır güncel TL karşılığına
+// çevrilir (bkz. features/valueUnits/api.ts sumToReferenceMinor).
+function sumByDirection(
+  rows: Pick<Tables<'transactions'>, 'amount_minor' | 'direction' | 'currency_code'>[],
+  rates: ValueUnitRate[]
+): IncomeExpenseTotals {
   return rows.reduce<IncomeExpenseTotals>(
     (totals, row) => {
-      if (row.direction === 'income') totals.incomeMinor += row.amount_minor;
-      else if (row.direction === 'expense') totals.expenseMinor += row.amount_minor;
+      const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+      if (row.direction === 'income') totals.incomeMinor += refMinor;
+      else if (row.direction === 'expense') totals.expenseMinor += refMinor;
       return totals;
     },
     { incomeMinor: 0, expenseMinor: 0 }

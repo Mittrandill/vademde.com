@@ -38,7 +38,8 @@ import {
   COUNTERPARTY_LESS_DOCUMENT_TYPES,
 } from '@/features/obligations/documentTypes';
 import { matchBankByName } from '@/features/banks/banks';
-import { queryKeys } from '@/services/queryKeys';
+import { VALUE_UNITS, getValueUnit } from '@/features/valueUnits/units';
+import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
@@ -53,6 +54,14 @@ const DIRECTIONS: { key: Direction; label: string }[] = [
 ];
 
 const LOW_CONFIDENCE_THRESHOLD = 0.7;
+
+// OCR taradığı belgeler (çek/senet/fatura/kredi/ekstre) her zaman fiat para birimindedir —
+// kıymetli maden (gram altın vb.) OCR şemasında modellenmiyor (bkz. docs/04-ocr-belge-isleme.md).
+// Seçenekler bu yüzden VALUE_UNITS'in tamamı yerine yalnızca fiat birimlerle sınırlıdır; bu
+// sayede hassasiyet (precision) her zaman 2 kalır ve dosyadaki mevcut parseAmountToMinor
+// (fiat-only, /100) çağrıları değişmeden doğru sonuç üretmeye devam eder.
+const CURRENCY_OPTIONS = VALUE_UNITS.filter((u) => u.unitType === 'fiat').map((u) => ({ key: u.code, label: u.code }));
+const CURRENCY_CODES = new Set(CURRENCY_OPTIONS.map((o) => o.key));
 
 // OCR'dan gelen tarihler her zaman geçerli ISO olmayabiliyor (model 'YYYY-AA-GG' yerine
 // serbest metin döndürebilir, kullanıcı da alanı elle düzenleyebilir). new Date(bozuk)
@@ -97,6 +106,7 @@ export default function DocumentReviewScreen() {
   const [bankCode, setBankCode] = useState<string | null>(null);
   const [extractedBankName, setExtractedBankName] = useState<string | null>(null);
   const [title, setTitle] = useState('');
+  const [valueUnitCode, setValueUnitCode] = useState('TRY');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [documentNumber, setDocumentNumber] = useState('');
@@ -188,6 +198,11 @@ export default function DocumentReviewScreen() {
     // sınıflandırsa bile (ör. "banka_dekontu" tahmin etse) paramDocumentType kazanır.
     // Kullanıcı yine de DocumentTypePicker'dan değiştirebilir.
     setDocumentType(paramDocumentType ?? document.document_type);
+    // Gemini'nin çıkardığı para birimi (financial_documents.currency_code) daha önce hiç
+    // okunmuyordu — kayıt her zaman sessizce TRY olarak oluşuyordu. Tanınmayan/boş bir kod
+    // gelirse (serbest metin çıktısı) TRY'ye düşülür; kullanıcı yine de PARA BİRİMİ alanından
+    // düzeltebilir (bkz. aşağıdaki LowConfidenceHint fieldName="currency").
+    setValueUnitCode(document.currency_code && CURRENCY_CODES.has(document.currency_code) ? document.currency_code : 'TRY');
     setAmount(
       document.total_amount_minor ? formatAmountInput((document.total_amount_minor / 100).toFixed(2).replace('.', ',')) : ''
     );
@@ -235,14 +250,19 @@ export default function DocumentReviewScreen() {
       .catch(() => {});
   }, [documentQuery.data, initialized]);
 
-  // docs/04-ocr-belge-isleme.md §6.6 — isim benzerliğiyle kişi/firma eşleştirme;
-  // eşleşme yoksa yeni kişi/firma otomatik oluşturulur. Kredi ve kredi kartı ekstresinde
-  // OCR'ın "kişi/firma" olarak okuduğu isim aslında bankadır — bu ikisinde banka kimliği
-  // zaten bank_code/logo üzerinden temsil edildiğinden ayrıca bir kişi/firma kaydı açılmaz.
-  // Çek/senet'te ise isim gerçek bir karşı taraftır (lehtar/borçlu) — orada bu adım çalışır.
+  // docs/04-ocr-belge-isleme.md §6.6 — isim benzerliğiyle kişi/firma eşleştirme. Yalnızca
+  // TAM eşleşen mevcut bir kayıt varsa önceden seçilir (DB'ye hiçbir şey yazmaz). Eşleşme
+  // yoksa artık burada otomatik yeni kişi/firma OLUŞTURULMAZ — önceden bu efekt ekran
+  // açılır açılmaz (belge hiç onaylanmasa/silinse bile) createCounterparty çağırıyordu ve
+  // sahipsiz kayıtlar birikiyordu. Eşleşme bulunamayan durumda kullanıcı aşağıdaki
+  // CounterpartyPicker'dan (mevcut bir kayıtla eşleştirme veya "yeni oluştur") elle seçer;
+  // hiç seçmezse yeni kayıt yalnızca belge onaylanırken (confirmMutation) açılır.
+  // Kredi ve kredi kartı ekstresinde OCR'ın "kişi/firma" olarak okuduğu isim aslında
+  // bankadır — bu ikisinde banka kimliği zaten bank_code/logo üzerinden temsil edildiğinden
+  // ayrıca bir kişi/firma eşleştirmesi denenmez.
   useEffect(() => {
     const document = documentQuery.data;
-    if (!document?.counterparty_name || !activeWorkspaceId || !counterpartiesQuery.isSuccess || counterpartyResolved) {
+    if (!document?.counterparty_name || !counterpartiesQuery.isSuccess || counterpartyResolved) {
       return;
     }
     if (document.document_type && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(document.document_type)) {
@@ -255,23 +275,8 @@ export default function DocumentReviewScreen() {
     const match = counterpartiesQuery.data.find(
       (c) => c.name.trim().toLocaleLowerCase('tr-TR') === normalizedTarget
     );
-
-    if (match) {
-      setCounterpartyId(match.id);
-      return;
-    }
-
-    createCounterparty({
-      workspace_id: activeWorkspaceId,
-      name: document.counterparty_name.trim(),
-      type: 'individual',
-    })
-      .then((created) => {
-        setCounterpartyId(created.id);
-        queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
-      })
-      .catch(() => {});
-  }, [documentQuery.data, counterpartiesQuery.isSuccess, counterpartiesQuery.data, activeWorkspaceId, counterpartyResolved, queryClient]);
+    if (match) setCounterpartyId(match.id);
+  }, [documentQuery.data, counterpartiesQuery.isSuccess, counterpartiesQuery.data, counterpartyResolved]);
 
   // Kredi kartı ekstresi son 4 hane ↔ mevcut kredi kartı hesabı eşleştirmesi (bkz. yukarıdaki
   // banka adı eşleştirmesiyle aynı desen). accountsQuery, documentQuery'den sonra da
@@ -400,6 +405,24 @@ export default function DocumentReviewScreen() {
       // dönülür (docs/01-finansal-kayit-modeli.md §8.1 — tutarsız veri asla yazılmaz).
       if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
 
+      // Kullanıcı KİŞİ/FİRMA alanından mevcut bir kayıtla eşleştirmediyse (bkz.
+      // CounterpartyPicker) ve OCR bir isim okuduysa, yeni kişi/firma kaydı ancak burada —
+      // belge gerçekten onaylanırken — açılır. Önceden bu, ekran açılır açılmaz (belge hiç
+      // onaylanmasa/silinse bile) otomatik oluşuyordu; artık kayıt yalnızca "Kaydet"
+      // basıldığında yazılır.
+      let resolvedCounterpartyId = counterpartyId;
+      const rawCounterpartyName = documentQuery.data?.counterparty_name?.trim();
+      const counterpartyEligible = !(documentType && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(documentType));
+      if (!resolvedCounterpartyId && counterpartyEligible && rawCounterpartyName) {
+        const created = await createCounterparty({
+          workspace_id: activeWorkspaceId,
+          name: rawCounterpartyName,
+          type: 'individual',
+        });
+        resolvedCounterpartyId = created.id;
+        queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
+      }
+
       if (direction === 'payable' || direction === 'receivable') {
         if (!documentType) throw new Error('Belge türü seçin');
 
@@ -444,14 +467,19 @@ export default function DocumentReviewScreen() {
             )
           : null;
 
+        // Kredi kartı ekstresi her zaman TRY'dir (bkz. isCreditCardStatement); diğer
+        // belge türlerinde kullanıcının PARA BİRİMİ alanından onayladığı/düzelttiği birim
+        // kullanılır — önceden burası hiç gönderilmiyordu ve kayıt sessizce TRY oluyordu.
         const obligation = await createObligation({
           workspace_id: activeWorkspaceId,
           direction,
           document_type: documentType,
           title: title.trim() || 'Belge',
           total_amount_minor: installmentsSumMinor ?? amountMinor,
+          currency_code: isCreditCardStatement ? 'TRY' : valueUnitCode,
+          value_unit_type: getValueUnit(isCreditCardStatement ? 'TRY' : valueUnitCode).unitType,
           due_date: earliestInstallmentDueDate ?? dueDate ?? null,
-          counterparty_id: counterpartyId,
+          counterparty_id: resolvedCounterpartyId,
           account_id: accountId,
           category_id: categoryId,
           bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
@@ -547,7 +575,7 @@ export default function DocumentReviewScreen() {
               account_id: accountId,
               direction,
               category_id: categoryId,
-              counterparty_id: counterpartyId,
+              counterparty_id: resolvedCounterpartyId,
               amount_minor: amountMinor,
               occurred_at: isoOrNull(dueDate) ?? new Date().toISOString(),
               description: title.trim() || null,
@@ -568,8 +596,7 @@ export default function DocumentReviewScreen() {
       // mount'tayken arka planda liste yeniden render olup çökmeye yol açar.
       function invalidateAll() {
         if (!activeWorkspaceId) return;
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
-        queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+        invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
         queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
       }
 
@@ -664,6 +691,9 @@ export default function DocumentReviewScreen() {
     (documentType !== 'kredi_karti_ekstresi' || !categorizeCardSpending || !!accountId);
 
   const isLoanDocument = documentType === 'kredi';
+  // Kredi kartı hesapları her zaman TRY'dir (bkz. app/accounts/new.tsx isCash koşulu) —
+  // ekstre borcu o hesaba bağlı olduğundan burada para birimi seçimi anlamsızdır.
+  const isCreditCardStatement = documentType === 'kredi_karti_ekstresi';
   // OCR bir tarih okuduysa ve kullanıcı belirli bir ekstre dönemi seçerek buraya geldiyse
   // (bkz. paramExpectedDueDate notu yukarıda), ikisi farklı aylara düşüyorsa yumuşak bir
   // uyarı gösterilir — kaydı engellemez, sadece yanlış belge/ay taranmış olabileceğini işaret eder.
@@ -766,6 +796,18 @@ export default function DocumentReviewScreen() {
               <TextField value={title} onChangeText={setTitle} />
             </Stack>
 
+            {(direction === 'payable' || direction === 'receivable') && !isCreditCardStatement ? (
+              <Stack gap="sm">
+                <Row align="center">
+                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
+                    PARA BİRİMİ
+                  </Text>
+                  <LowConfidenceHint fieldName="currency" />
+                </Row>
+                <SegmentedControl options={CURRENCY_OPTIONS} value={valueUnitCode} onChange={setValueUnitCode} />
+              </Stack>
+            ) : null}
+
             <Stack gap="sm">
               <Row align="center">
                 <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
@@ -796,7 +838,7 @@ export default function DocumentReviewScreen() {
                   FAİZ (TOPLAM)
                 </Text>
                 <Text variant="body" tabular>
-                  {formatMinorAmount(totalInterestMinor, document.currency_code ?? 'TRY')}
+                  {formatMinorAmount(totalInterestMinor, valueUnitCode)}
                 </Text>
               </Row>
             ) : null}
@@ -807,7 +849,7 @@ export default function DocumentReviewScreen() {
                   TOPLAM GERİ ÖDEME
                 </Text>
                 <Text variant="body" tabular>
-                  {formatMinorAmount(totalRepaymentMinor, document.currency_code ?? 'TRY')}
+                  {formatMinorAmount(totalRepaymentMinor, valueUnitCode)}
                 </Text>
               </Row>
             ) : null}

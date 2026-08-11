@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import { ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 
 export type Counterparty = Tables<'counterparties'>;
 
@@ -62,21 +63,25 @@ export async function getCounterpartyLedger(
   workspaceId: string,
   counterpartyId: string
 ): Promise<CounterpartyLedger> {
-  const { data, error } = await supabase
-    .from('obligations')
-    .select('direction, remaining_amount_minor, status, due_date')
-    .eq('workspace_id', workspaceId)
-    .eq('counterparty_id', counterpartyId)
-    .in('status', ACTIVE_OBLIGATION_STATUSES);
+  const [{ data, error }, rates] = await Promise.all([
+    supabase
+      .from('obligations')
+      .select('direction, remaining_amount_minor, currency_code, status, due_date')
+      .eq('workspace_id', workspaceId)
+      .eq('counterparty_id', counterpartyId)
+      .in('status', ACTIVE_OBLIGATION_STATUSES),
+    listValueUnitRates(),
+  ]);
   if (error) throw error;
 
   const rows = data ?? [];
-  const receivableMinor = rows
-    .filter((r) => r.direction === 'receivable')
-    .reduce((sum, r) => sum + r.remaining_amount_minor, 0);
-  const payableMinor = rows
-    .filter((r) => r.direction === 'payable')
-    .reduce((sum, r) => sum + r.remaining_amount_minor, 0);
+  const toRef = (r: { remaining_amount_minor: number; currency_code: string }) =>
+    sumToReferenceMinor([{ amountMinor: r.remaining_amount_minor, unitCode: r.currency_code }], rates);
+  // Kayıtlar farklı değer birimlerinde olabilir (TRY, USD, gram_altin, ...) — bkz.
+  // getObligationSummary'deki aynı gerekçe. Doğrudan toplamak yerine her satır önce
+  // güncel TL karşılığına çevrilir.
+  const receivableMinor = rows.filter((r) => r.direction === 'receivable').reduce((sum, r) => sum + toRef(r), 0);
+  const payableMinor = rows.filter((r) => r.direction === 'payable').reduce((sum, r) => sum + toRef(r), 0);
   const overdue = rows.filter((r) => r.status === 'gecikti');
   const dueDates = rows
     .map((r) => r.due_date)
@@ -87,7 +92,7 @@ export async function getCounterpartyLedger(
     receivableMinor,
     payableMinor,
     netMinor: receivableMinor - payableMinor,
-    overdueMinor: overdue.reduce((sum, r) => sum + r.remaining_amount_minor, 0),
+    overdueMinor: overdue.reduce((sum, r) => sum + toRef(r), 0),
     overdueCount: overdue.length,
     openCount: rows.length,
     nearestDueDate: dueDates[0] ?? null,
@@ -98,19 +103,23 @@ export async function getCounterpartyLedger(
 // ayrı istek atılmaz. Dönüş Map değil düz nesnedir çünkü react-query cache'i AsyncStorage'a
 // JSON olarak yazılıyor (bkz. services/queryClient.ts).
 export async function getCounterpartyBalances(workspaceId: string): Promise<Record<string, number>> {
-  const { data, error } = await supabase
-    .from('obligations')
-    .select('counterparty_id, direction, remaining_amount_minor')
-    .eq('workspace_id', workspaceId)
-    .not('counterparty_id', 'is', null)
-    .in('status', ACTIVE_OBLIGATION_STATUSES);
+  const [{ data, error }, rates] = await Promise.all([
+    supabase
+      .from('obligations')
+      .select('counterparty_id, direction, remaining_amount_minor, currency_code')
+      .eq('workspace_id', workspaceId)
+      .not('counterparty_id', 'is', null)
+      .in('status', ACTIVE_OBLIGATION_STATUSES),
+    listValueUnitRates(),
+  ]);
   if (error) throw error;
 
   const balances: Record<string, number> = {};
   for (const row of data ?? []) {
     if (!row.counterparty_id) continue;
     const sign = row.direction === 'receivable' ? 1 : -1;
-    balances[row.counterparty_id] = (balances[row.counterparty_id] ?? 0) + sign * row.remaining_amount_minor;
+    const refMinor = sumToReferenceMinor([{ amountMinor: row.remaining_amount_minor, unitCode: row.currency_code }], rates);
+    balances[row.counterparty_id] = (balances[row.counterparty_id] ?? 0) + sign * refMinor;
   }
   return balances;
 }

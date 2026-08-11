@@ -16,12 +16,17 @@ export async function listValueUnitRates(): Promise<ValueUnitRate[]> {
 // Kur/fiyat çok eskiyse (Edge Function günde 1 kez çalışıyor, bkz. supabase/functions/
 // sync-market-rates) referans TL karşılığı yerine "güncellenemedi" şeffaflığı gösterilir.
 // 36 saat: günlük senkronizasyonun bir günü kaçırması durumuna tolerans tanır, iki günü kaçırırsa göstermez.
-const STALE_AFTER_MS = 36 * 60 * 60 * 1000;
+export const STALE_AFTER_MS = 36 * 60 * 60 * 1000;
 
 export interface ReferenceValue {
   amountMinor: number;
   cachedAt: string;
   isStale: boolean;
+}
+
+export function isRateStale(cachedAt: string): boolean {
+  const cachedAtMs = new Date(cachedAt).getTime();
+  return !Number.isFinite(cachedAtMs) || Date.now() - cachedAtMs > STALE_AFTER_MS;
 }
 
 // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydının TL karşılığı
@@ -45,8 +50,20 @@ export function convertToReferenceMinor(
   const amountInUnits = amountMinor / 10 ** getValueUnit(unitCode).precision;
   const referenceMinor = Math.round(amountInUnits * rate.try_equivalent_minor);
 
-  const cachedAtMs = new Date(rate.cached_at).getTime();
-  const isStale = !Number.isFinite(cachedAtMs) || Date.now() - cachedAtMs > STALE_AFTER_MS;
+  return { amountMinor: referenceMinor, cachedAt: rate.cached_at, isStale: isRateStale(rate.cached_at) };
+}
 
-  return { amountMinor: referenceMinor, cachedAt: rate.cached_at, isStale };
+// docs/01-finansal-kayit-modeli.md §3.5 — birden çok kayıt (ör. bir kısmı TRY, bir kısmı
+// gram_altin) tek bir toplamda gösterilecekse önce her biri kendi biriminden TL karşılığına
+// çevrilip öyle toplanmalı; aksi halde "5 gram" ham sayı olarak "5 TL" gibi toplama girer.
+// Kur satırı bulunamayan (senkron hiç çalışmamış/silinmiş birim) kayıtlar toplamdan hariç
+// tutulur — yanlış bir TL karşılığı uydurmak, hiç göstermemekten daha kötüdür.
+export function sumToReferenceMinor(
+  rows: { amountMinor: number; unitCode: string }[],
+  rates: ValueUnitRate[]
+): number {
+  return rows.reduce(
+    (sum, row) => sum + (convertToReferenceMinor(row.amountMinor, row.unitCode, rates)?.amountMinor ?? 0),
+    0
+  );
 }

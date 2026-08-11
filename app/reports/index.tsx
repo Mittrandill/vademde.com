@@ -15,6 +15,7 @@ import { AccountBalancesList } from '@/components/finance/AccountBalancesList';
 import { OverdueObligationsList } from '@/components/finance/OverdueObligationsList';
 import { MonthlyComparisonChart } from '@/components/finance/MonthlyComparisonChart';
 import { CashFlowForecastList } from '@/components/finance/CashFlowForecastList';
+import { CurrentRatesCard } from '@/components/finance/CurrentRatesCard';
 import {
   getAccountBalances,
   getCashFlowForecast,
@@ -28,6 +29,7 @@ import {
 } from '@/features/reports/api';
 import { exportReportPdf } from '@/features/reports/pdf';
 import { ACTIVE_OBLIGATION_STATUSES, listObligations } from '@/features/obligations/api';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { toCsv } from '@/utils/csv';
@@ -141,6 +143,14 @@ export default function ReportsScreen() {
     enabled: !!activeWorkspaceId,
   });
 
+  // Borç/alacak kayıtları farklı değer birimlerinde olabilir (TRY, USD, gram_altin, ...) —
+  // toplama girmeden önce her biri güncel TL karşılığına çevrilir (bkz.
+  // features/valueUnits/api.ts sumToReferenceMinor, aynı desen app/(tabs)/index.tsx'te).
+  const valueUnitRatesQuery = useQuery({
+    queryKey: queryKeys.valueUnitRates(),
+    queryFn: listValueUnitRates,
+  });
+
   const activeObligations = useMemo(() => obligationsSummaryQuery.data ?? [], [obligationsSummaryQuery.data]);
   const payableObligations = useMemo(() => activeObligations.filter((o) => o.direction === 'payable'), [activeObligations]);
   const receivableObligations = useMemo(
@@ -148,12 +158,20 @@ export default function ReportsScreen() {
     [activeObligations]
   );
   const payableTotalMinor = useMemo(
-    () => payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
-    [payableObligations]
+    () =>
+      sumToReferenceMinor(
+        payableObligations.map((o) => ({ amountMinor: o.remaining_amount_minor, unitCode: o.currency_code })),
+        valueUnitRatesQuery.data ?? []
+      ),
+    [payableObligations, valueUnitRatesQuery.data]
   );
   const receivableTotalMinor = useMemo(
-    () => receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
-    [receivableObligations]
+    () =>
+      sumToReferenceMinor(
+        receivableObligations.map((o) => ({ amountMinor: o.remaining_amount_minor, unitCode: o.currency_code })),
+        valueUnitRatesQuery.data ?? []
+      ),
+    [receivableObligations, valueUnitRatesQuery.data]
   );
   const obligationTotalMinor = payableTotalMinor + receivableTotalMinor;
 
@@ -193,9 +211,9 @@ export default function ReportsScreen() {
         periodLabel: PERIOD_SUMMARY_TITLE[period],
         incomeMinor: summaryQuery.data?.incomeMinor ?? 0,
         expenseMinor: summaryQuery.data?.expenseMinor ?? 0,
-        payableTotalMinor: payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
+        payableTotalMinor,
         payableCount: payableObligations.length,
-        receivableTotalMinor: receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
+        receivableTotalMinor,
         receivableCount: receivableObligations.length,
         monthlyComparison: monthlyComparisonQuery.data ?? [],
         expenseCategories,
@@ -264,6 +282,8 @@ export default function ReportsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
           <SegmentedControl options={PERIODS} value={period} onChange={setPeriod} />
         </ScrollView>
+
+        <CurrentRatesCard rates={valueUnitRatesQuery.data ?? []} isLoading={valueUnitRatesQuery.isLoading} />
 
         <IncomeExpenseAnalysis
           title={PERIOD_SUMMARY_TITLE[period]}

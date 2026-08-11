@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import { installmentTotalMatches } from '@/utils/validation';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 
 export type Obligation = Tables<'obligations'>;
 export type Installment = Tables<'installments'>;
@@ -105,6 +106,12 @@ export interface ObligationSummary {
 // Liste sayfalandırıldığı için özet yüklenen sayfalardan hesaplanamaz (yalnızca ilk 30
 // kaydı toplar, yanlış rakam gösterir). Bu yüzden aynı filtrelerle, sadece toplanacak
 // kolonları çeken ayrı bir sorgu kullanılır.
+//
+// Kayıtlar farklı değer birimlerinde olabilir (TRY, USD, gram_altin, ...) — bkz.
+// features/valueUnits/units.ts. Ham remaining_amount_minor/total_amount_minor değerleri
+// birbirinden farklı birimlerde olduğu için doğrudan toplanamaz (5 gram altın 500 "minor"
+// birim olur ve TRY kuruşuyla toplanırsa 5 TL gibi görünür); her satır önce kendi biriminin
+// güncel TL karşılığına çevrilip öyle toplanır (bkz. sumToReferenceMinor).
 export async function getObligationSummary({
   workspaceId,
   direction,
@@ -114,7 +121,7 @@ export async function getObligationSummary({
 }: Omit<ListObligationsFilter, 'page' | 'pageSize' | 'dueFrom' | 'dueTo'>): Promise<ObligationSummary> {
   let query = supabase
     .from('obligations')
-    .select('direction, remaining_amount_minor, total_amount_minor, status')
+    .select('direction, remaining_amount_minor, total_amount_minor, currency_code, status')
     .eq('workspace_id', workspaceId);
   if (direction) query = query.eq('direction', direction);
   if (documentType) query = query.eq('document_type', documentType);
@@ -122,24 +129,30 @@ export async function getObligationSummary({
   const trimmedSearch = search?.trim();
   if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
 
-  const { data, error } = await query;
+  const [{ data, error }, rates] = await Promise.all([query, listValueUnitRates()]);
   if (error) throw error;
 
   const rows = data ?? [];
+  const payableRows = rows.filter((r) => r.direction === 'payable');
+  const receivableRows = rows.filter((r) => r.direction === 'receivable');
   return {
     count: rows.length,
-    payableMinor: rows
-      .filter((r) => r.direction === 'payable')
-      .reduce((sum, r) => sum + r.remaining_amount_minor, 0),
-    receivableMinor: rows
-      .filter((r) => r.direction === 'receivable')
-      .reduce((sum, r) => sum + r.remaining_amount_minor, 0),
-    payableTotalMinor: rows
-      .filter((r) => r.direction === 'payable')
-      .reduce((sum, r) => sum + r.total_amount_minor, 0),
-    receivableTotalMinor: rows
-      .filter((r) => r.direction === 'receivable')
-      .reduce((sum, r) => sum + r.total_amount_minor, 0),
+    payableMinor: sumToReferenceMinor(
+      payableRows.map((r) => ({ amountMinor: r.remaining_amount_minor, unitCode: r.currency_code })),
+      rates
+    ),
+    receivableMinor: sumToReferenceMinor(
+      receivableRows.map((r) => ({ amountMinor: r.remaining_amount_minor, unitCode: r.currency_code })),
+      rates
+    ),
+    payableTotalMinor: sumToReferenceMinor(
+      payableRows.map((r) => ({ amountMinor: r.total_amount_minor, unitCode: r.currency_code })),
+      rates
+    ),
+    receivableTotalMinor: sumToReferenceMinor(
+      receivableRows.map((r) => ({ amountMinor: r.total_amount_minor, unitCode: r.currency_code })),
+      rates
+    ),
     overdueCount: rows.filter((r) => r.status === 'gecikti').length,
   };
 }
@@ -159,11 +172,14 @@ export async function getObligationTotalsByType(
   workspaceId: string,
   statuses: Obligation['status'][] = ACTIVE_OBLIGATION_STATUSES
 ): Promise<Record<string, ObligationTypeTotal>> {
-  const { data, error } = await supabase
-    .from('obligations')
-    .select('document_type, remaining_amount_minor')
-    .eq('workspace_id', workspaceId)
-    .in('status', statuses);
+  const [{ data, error }, rates] = await Promise.all([
+    supabase
+      .from('obligations')
+      .select('document_type, remaining_amount_minor, currency_code')
+      .eq('workspace_id', workspaceId)
+      .in('status', statuses),
+    listValueUnitRates(),
+  ]);
   if (error) throw error;
 
   const totals: Record<string, ObligationTypeTotal> = {};
@@ -172,7 +188,8 @@ export async function getObligationTotalsByType(
     const current = totals[row.document_type] ?? { count: 0, totalMinor: 0 };
     totals[row.document_type] = {
       count: current.count + 1,
-      totalMinor: current.totalMinor + row.remaining_amount_minor,
+      totalMinor:
+        current.totalMinor + sumToReferenceMinor([{ amountMinor: row.remaining_amount_minor, unitCode: row.currency_code }], rates),
     };
   }
   return totals;

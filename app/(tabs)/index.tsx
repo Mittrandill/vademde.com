@@ -23,6 +23,7 @@ import {
 } from '@/features/obligations/api';
 import { listTransactions } from '@/features/transactions/api';
 import { getAllTimeIncomeExpenseTotals, getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
@@ -141,11 +142,24 @@ export default function HomeScreen() {
     enabled: !!activeWorkspaceId,
   });
 
+  // Hesaplar ve borç/alacak kayıtları farklı değer birimlerinde olabilir (TRY, USD,
+  // gram_altin, ...) — aşağıdaki toplamlar için her kaydın güncel TL karşılığı gerekir
+  // (bkz. features/valueUnits/api.ts sumToReferenceMinor).
+  const valueUnitRatesQuery = useQuery({
+    queryKey: queryKeys.valueUnitRates(),
+    queryFn: listValueUnitRates,
+  });
+
   const totalBalanceMinor = useMemo(() => {
-    const openingSum = (accountsQuery.data ?? []).reduce((sum, a) => sum + a.opening_balance_minor, 0);
+    const openingSum = sumToReferenceMinor(
+      (accountsQuery.data ?? []).map((a) => ({ amountMinor: a.opening_balance_minor, unitCode: a.currency_code })),
+      valueUnitRatesQuery.data ?? []
+    );
+    // allTimeTotalsQuery zaten TL referansına çevrilmiş gelir/gider toplamlarını döner
+    // (bkz. features/dashboard/api.ts getAllTimeIncomeExpenseTotals).
     const totals = allTimeTotalsQuery.data ?? { incomeMinor: 0, expenseMinor: 0 };
     return openingSum + totals.incomeMinor - totals.expenseMinor;
-  }, [accountsQuery.data, allTimeTotalsQuery.data]);
+  }, [accountsQuery.data, allTimeTotalsQuery.data, valueUnitRatesQuery.data]);
 
   const monthNetMinor = useMemo(() => {
     const totals = monthTotalsQuery.data ?? { incomeMinor: 0, expenseMinor: 0 };
@@ -175,12 +189,20 @@ export default function HomeScreen() {
   );
 
   const payableTotalMinor = useMemo(
-    () => payableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
-    [payableObligations]
+    () =>
+      sumToReferenceMinor(
+        payableObligations.map((o) => ({ amountMinor: o.remaining_amount_minor, unitCode: o.currency_code })),
+        valueUnitRatesQuery.data ?? []
+      ),
+    [payableObligations, valueUnitRatesQuery.data]
   );
   const receivableTotalMinor = useMemo(
-    () => receivableObligations.reduce((sum, o) => sum + o.remaining_amount_minor, 0),
-    [receivableObligations]
+    () =>
+      sumToReferenceMinor(
+        receivableObligations.map((o) => ({ amountMinor: o.remaining_amount_minor, unitCode: o.currency_code })),
+        valueUnitRatesQuery.data ?? []
+      ),
+    [receivableObligations, valueUnitRatesQuery.data]
   );
 
   return (

@@ -41,11 +41,17 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
 
   const filtered = useMemo(() => {
     const today = startOfDay(new Date());
+    // Taksitli/abonelik kayıtlarda geçmiş bir taksit zaten ödenmiş olabilir (remaining 0) —
+    // parent obligation hâlâ aktif statüde kaldığı için (gelecekteki taksitler yüzünden)
+    // bu satır sorgudan düşmüyordu, yalnızca tarihe bakan filtre de bunu elemiyordu; ödenmiş
+    // bir taksit süresiz olarak "Gecikmiş" sekmesinde kalıyordu. Widget'ın tüm sekmeleri
+    // yalnızca HÂLÂ bekleyen kayıtları göstermeli — bkz. getOverdueObligations'taki aynı kural.
+    const pending = obligations.filter((o) => o.remaining_amount_minor > 0);
 
     // "Gecikmiş" ayrı bir sekme: vadesi bugünden önce olan kayıtlar artık Bugün/7
     // Gün/30 Gün sekmelerine karışmıyor, sadece bu sekmede görünüyor.
     if (segment === 'overdue') {
-      return obligations.filter((o) => {
+      return pending.filter((o) => {
         if (!o.due_date) return false;
         return startOfDay(new Date(o.due_date)) < today;
       });
@@ -55,7 +61,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
     const limit = new Date(today);
     limit.setDate(limit.getDate() + days);
 
-    return obligations.filter((o) => {
+    return pending.filter((o) => {
       if (!o.due_date) return false;
       const due = startOfDay(new Date(o.due_date));
       return due >= today && due <= limit;

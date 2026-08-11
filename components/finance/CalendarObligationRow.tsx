@@ -13,6 +13,7 @@ import { recordPayment } from '@/features/payments/api';
 import { formatValueUnitAmount } from '@/utils/money';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 import { syncObligationReminder } from '@/services/notifications';
+import { invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 
 export interface CalendarObligationRowProps {
   workspaceId: string;
@@ -41,7 +42,7 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
         obligationCurrencyCode: obligation.currency_code,
       }),
     onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: [workspaceId, 'obligations'] });
+      invalidatePaymentRelatedQueries(queryClient, workspaceId);
       const fresh = await getObligation(obligation.id);
       await syncObligationReminder(workspaceId, fresh);
     },
