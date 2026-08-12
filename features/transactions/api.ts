@@ -77,7 +77,11 @@ export async function listTransactions({
     .order('occurred_at', { ascending: false })
     .range(page * pageSize, page * pageSize + pageSize - 1);
 
-  if (accountId) query = query.eq('account_id', accountId);
+  // Transfer tek satırdır: account_id kaynak, transfer_to_account_id hedeftir. Hesap
+  // hareketlerinde iki tarafın da aynı kaydı görebilmesi için her iki alanı sorgula.
+  if (accountId) {
+    query = query.or(`account_id.eq.${accountId},transfer_to_account_id.eq.${accountId}`);
+  }
   if (counterpartyId) query = query.eq('counterparty_id', counterpartyId);
   if (direction) query = query.eq('direction', direction);
   const trimmedSearch = search?.trim();

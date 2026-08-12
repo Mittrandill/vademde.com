@@ -405,7 +405,7 @@ export default function AccountDetailScreen() {
                     <SectionHeader title={section.title} />
                     <Stack gap="xs">
                       {section.data.map((item) => (
-                        <TransactionRow key={item.id} item={item} />
+                        <TransactionRow key={item.id} item={item} accountId={account.id} />
                       ))}
                     </Stack>
                   </Stack>
@@ -566,7 +566,7 @@ export default function AccountDetailScreen() {
             <SectionHeader title={section.title} />
           </View>
         )}
-        renderItem={({ item }) => <TransactionRow item={item} />}
+        renderItem={({ item }) => <TransactionRow item={item} accountId={account.id} />}
         ListEmptyComponent={<EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />}
         ListFooterComponent={
           <Stack gap="lg" style={{ marginTop: theme.spacing.sm }}>
@@ -689,8 +689,11 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TransactionRow({ item }: { item: TransactionWithRelations }) {
-  const sign = item.direction === 'expense' ? -1 : item.direction === 'income' ? 1 : 0;
+function TransactionRow({ item, accountId }: { item: TransactionWithRelations; accountId: string }) {
+  const isIncomingTransfer = item.direction === 'transfer' && item.transfer_to_account_id === accountId;
+  const isOutgoingTransfer = item.direction === 'transfer' && item.account_id === accountId;
+  const displayDirection = isIncomingTransfer ? 'income' : isOutgoingTransfer ? 'expense' : item.direction;
+  const sign = displayDirection === 'expense' ? -1 : displayDirection === 'income' ? 1 : 0;
 
   return (
     <Pressable onPress={() => router.push(`/transactions/${item.id}`)}>
@@ -701,13 +704,22 @@ function TransactionRow({ item }: { item: TransactionWithRelations }) {
               {item.description || item.category?.name || item.counterparty?.name || 'Hareket'}
             </Text>
             <Text variant="caption" color="textSecondary">
-              {item.category?.name ?? (sign > 0 ? 'Gelir' : sign < 0 ? 'Gider' : 'Transfer')}
+              {item.category?.name ??
+                (isIncomingTransfer
+                  ? 'Gelen transfer'
+                  : isOutgoingTransfer
+                    ? 'Giden transfer'
+                    : sign > 0
+                      ? 'Gelir'
+                      : sign < 0
+                        ? 'Gider'
+                        : 'Transfer')}
             </Text>
           </Stack>
           <Amount
             amountMinor={item.amount_minor}
             currencyCode={item.currency_code}
-            direction={item.direction as 'income' | 'expense' | 'transfer'}
+            direction={displayDirection as 'income' | 'expense' | 'transfer'}
             variant="body"
           />
         </Row>
