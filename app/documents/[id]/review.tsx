@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +28,11 @@ import { listCategories, createCategory } from '@/features/categories/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
 import { createObligation, createInstallmentPlan, type Installment } from '@/features/obligations/api';
 import { recordPastInstallmentPayments } from '@/features/payments/api';
-import { createTransaction, createTransactions } from '@/features/transactions/api';
+import {
+  createTransaction,
+  createTransactions,
+  listCardStatementMatchCandidates,
+} from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import {
@@ -43,6 +47,13 @@ import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys
 import { syncObligationReminder } from '@/services/notifications';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import {
+  cardLineLabel,
+  isCardExpenseLine,
+  isCardStatementLine,
+  matchStatementLines,
+  statementMatchDateRange,
+} from '@/utils/cardStatement';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
@@ -136,6 +147,7 @@ export default function DocumentReviewScreen() {
   // her ekstre satırı için ayrı bir gider işlemi ve kategori seçimi gerekir.
   const [categorizeCardSpending, setCategorizeCardSpending] = useState(false);
   const [cardTransactionCategoryById, setCardTransactionCategoryById] = useState<Record<string, string | null>>({});
+  const [cardMatchOverrides, setCardMatchOverrides] = useState<Record<string, 'import' | 'skip'>>({});
   // Taksit tablosu satırları (vade + tutar + ödendi durumu) kullanıcı tarafından tek tek
   // düzenlenebilir; OCR'ın döndürdüğü document_line_items'tan bir kez taslak olarak kopyalanır.
   const [installmentDrafts, setInstallmentDrafts] = useState<
@@ -167,13 +179,55 @@ export default function DocumentReviewScreen() {
     enabled: !!id,
   });
   const installmentItems = (lineItemsQuery.data ?? []).filter((item) => item.kind === 'installment');
-  const cardTransactionItems = (lineItemsQuery.data ?? []).filter((item) => item.kind === 'card_transaction');
+  const cardTransactionItems = useMemo(
+    () => (lineItemsQuery.data ?? []).filter(isCardStatementLine),
+    [lineItemsQuery.data]
+  );
+  const cardExpenseItems = useMemo(() => cardTransactionItems.filter(isCardExpenseLine), [cardTransactionItems]);
+  const cardOtherItems = useMemo(
+    () => cardTransactionItems.filter((item) => !isCardExpenseLine(item)),
+    [cardTransactionItems]
+  );
+  const statementMatchRange = useMemo(() => statementMatchDateRange(cardExpenseItems), [cardExpenseItems]);
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
     queryFn: () => listAccounts(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
+
+  const statementCandidatesQuery = useQuery({
+    queryKey: [
+      activeWorkspaceId,
+      'statement-match-candidates',
+      accountId,
+      statementMatchRange,
+      cardExpenseItems.map((item) => item.amount_minor),
+    ],
+    queryFn: () =>
+      listCardStatementMatchCandidates({
+        workspaceId: activeWorkspaceId as string,
+        accountId: accountId as string,
+        fromDate: statementMatchRange!.fromDate,
+        toDate: statementMatchRange!.toDate,
+        amountsMinor: cardExpenseItems.map((item) => item.amount_minor),
+      }),
+    enabled:
+      documentType === 'kredi_karti_ekstresi' &&
+      !!activeWorkspaceId &&
+      !!accountId &&
+      !!statementMatchRange,
+  });
+  const cardMatches = useMemo(
+    () => matchStatementLines(cardExpenseItems, statementCandidatesQuery.data ?? []),
+    [cardExpenseItems, statementCandidatesQuery.data]
+  );
+  const shouldSkipMatchedItem = (itemId: string) => {
+    const override = cardMatchOverrides[itemId];
+    if (override) return override === 'skip';
+    return cardMatches.get(itemId)?.confidence === 'high';
+  };
+  const cardItemsToImport = cardExpenseItems.filter((item) => !shouldSkipMatchedItem(item.id));
 
   const categoryKind = direction === 'payable' || direction === 'expense' ? 'expense' : 'income';
   const categoriesQuery = useQuery({
@@ -284,11 +338,14 @@ export default function DocumentReviewScreen() {
   useEffect(() => {
     if (cardAccountMatchAttempted || !cardLastFourFromOcr || !accountsQuery.isSuccess || accountId) return;
     setCardAccountMatchAttempted(true);
-    const match = accountsQuery.data.find(
-      (a) => a.type === 'credit_card' && a.card_last_four === cardLastFourFromOcr
+    const matches = accountsQuery.data.filter(
+      (a) =>
+        a.type === 'credit_card' &&
+        a.card_last_four === cardLastFourFromOcr &&
+        (!bankCode || !a.bank_code || a.bank_code === bankCode)
     );
-    if (match) setAccountId(match.id);
-  }, [cardAccountMatchAttempted, cardLastFourFromOcr, accountsQuery.isSuccess, accountsQuery.data, accountId]);
+    if (matches.length === 1) setAccountId(matches[0]!.id);
+  }, [cardAccountMatchAttempted, cardLastFourFromOcr, accountsQuery.isSuccess, accountsQuery.data, accountId, bankCode]);
 
   // Eşleşme denendi ama kart kayıtlı hesaplarda yoktu: kullanıcıya kayıtlı kartlara
   // eklemek isteyip istemediği sorulur (aksi halde HESAP alanında hiçbir seçenek
@@ -425,6 +482,20 @@ export default function DocumentReviewScreen() {
 
       if (direction === 'payable' || direction === 'receivable') {
         if (!documentType) throw new Error('Belge türü seçin');
+        if (
+          documentType === 'kredi_karti_ekstresi' &&
+          categorizeCardSpending &&
+          statementCandidatesQuery.isFetching
+        ) {
+          throw new Error('Mükerrer hareket kontrolünün tamamlanmasını bekleyin');
+        }
+        if (
+          documentType === 'kredi_karti_ekstresi' &&
+          categorizeCardSpending &&
+          statementCandidatesQuery.isError
+        ) {
+          throw new Error('Mevcut hareketler karşılaştırılamadı. Tekrar deneyin');
+        }
 
         const hasInstallmentPlan = documentType === 'kredi' && installmentDrafts.length > 0;
         // Kullanıcının düzenlediği taksit taslakları (vade/tutar), OCR'ın orijinal
@@ -545,7 +616,7 @@ export default function DocumentReviewScreen() {
         if (documentType === 'kredi_karti_ekstresi' && categorizeCardSpending && accountId) {
           try {
             await createTransactions(
-              cardTransactionItems.map((item) => ({
+              cardItemsToImport.map((item) => ({
                 workspace_id: activeWorkspaceId,
                 account_id: accountId,
                 direction: 'expense' as const,
@@ -685,10 +756,18 @@ export default function DocumentReviewScreen() {
   }
 
   const document = documentQuery.data;
+  const accountOptions =
+    documentType === 'kredi_karti_ekstresi'
+      ? (accountsQuery.data ?? []).filter((account) => account.type === 'credit_card')
+      : (accountsQuery.data ?? []);
   const canSubmit =
     !!amount &&
     ((direction === 'payable' || direction === 'receivable') ? !!documentType : !!accountId) &&
     (documentType !== 'kredi_karti_ekstresi' || !categorizeCardSpending || !!accountId);
+  const statementMatchingReady =
+    documentType !== 'kredi_karti_ekstresi' ||
+    !categorizeCardSpending ||
+    (!statementCandidatesQuery.isFetching && !statementCandidatesQuery.isError);
 
   const isLoanDocument = documentType === 'kredi';
   // Kredi kartı hesapları her zaman TRY'dir (bkz. app/accounts/new.tsx isCash koşulu) —
@@ -957,7 +1036,7 @@ export default function DocumentReviewScreen() {
             {documentType === 'kredi_karti_ekstresi' && cardTransactionItems.length > 0 ? (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
-                  EKSTRE HARCAMALARI ({cardTransactionItems.length} işlem)
+                  EKSTRE HARCAMALARI ({cardExpenseItems.length} işlem)
                 </Text>
                 <SegmentedControl
                   options={[
@@ -970,30 +1049,80 @@ export default function DocumentReviewScreen() {
                 {categorizeCardSpending ? (
                   <Card>
                     <Stack gap="sm">
-                    <Text variant="caption" color="textSecondary">
-                      Her işlem, seçtiğiniz hesaba ayrı bir gider olarak kaydedilir.
-                    </Text>
-                    {cardTransactionItems.map((item) => (
-                      <Stack key={item.id} gap="xxs">
-                        <Row align="center">
-                          <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                            {item.description || 'İşlem'}
-                          </Text>
-                          <Text variant="body" tabular>
-                            {formatMinorAmount(item.amount_minor, document.currency_code ?? 'TRY')}
-                          </Text>
-                        </Row>
-                        {(categoriesQuery.data ?? []).length > 0 ? (
-                          <CategoryPicker
-                            categories={categoriesQuery.data ?? []}
-                            selectedId={cardTransactionCategoryById[item.id] ?? null}
-                            onSelect={(catId) =>
-                              setCardTransactionCategoryById((prev) => ({ ...prev, [item.id]: catId }))
-                            }
-                          />
-                        ) : null}
-                      </Stack>
-                    ))}
+                      <Text variant="caption" color="textSecondary">
+                        Aynı karttaki mevcut hareketler tutar, tarih ve açıklamaya göre karşılaştırılır.
+                      </Text>
+                      {statementCandidatesQuery.isFetching ? (
+                        <Text variant="caption" color="textSecondary">Mevcut hareketler karşılaştırılıyor…</Text>
+                      ) : null}
+                      {statementCandidatesQuery.isError ? (
+                        <Text variant="caption" color="danger">
+                          Mevcut hareketler karşılaştırılamadı. Kaydetmeden önce tekrar deneyin.
+                        </Text>
+                      ) : null}
+                      {cardExpenseItems.map((item) => {
+                        const match = cardMatches.get(item.id);
+                        const skipped = shouldSkipMatchedItem(item.id);
+                        return (
+                          <Stack key={item.id} gap="xxs">
+                            <Row align="center">
+                              <Stack gap="xxs" style={{ flex: 1 }}>
+                                <Text variant="body" numberOfLines={1}>{item.description || 'İşlem'}</Text>
+                                <Text variant="caption" color="textSecondary">
+                                  {item.occurred_at ?? 'Tarih okunamadı'} · {cardLineLabel(item.kind)}
+                                </Text>
+                              </Stack>
+                              <Text variant="body" tabular>
+                                {formatMinorAmount(item.amount_minor, document.currency_code ?? 'TRY')}
+                              </Text>
+                            </Row>
+                            {match ? (
+                              <Text variant="caption" color={skipped ? 'success' : 'accentViolet'}>
+                                {skipped ? 'Mevcut hareketle eşleşti' : 'Olası eşleşme'}: {match.transaction.occurred_at.slice(0, 10)} · {match.transaction.description || 'Açıklamasız'}
+                              </Text>
+                            ) : null}
+                            {skipped ? (
+                              <Button
+                                label="Yine de yeni ekle"
+                                variant="secondary"
+                                onPress={() => setCardMatchOverrides((previous) => ({ ...previous, [item.id]: 'import' }))}
+                              />
+                            ) : match ? (
+                              <Button
+                                label="Mevcut hareketle eşleştir"
+                                variant="secondary"
+                                onPress={() => setCardMatchOverrides((previous) => ({ ...previous, [item.id]: 'skip' }))}
+                              />
+                            ) : (categoriesQuery.data ?? []).length > 0 ? (
+                              <CategoryPicker
+                                categories={categoriesQuery.data ?? []}
+                                selectedId={cardTransactionCategoryById[item.id] ?? null}
+                                onSelect={(catId) =>
+                                  setCardTransactionCategoryById((prev) => ({ ...prev, [item.id]: catId }))
+                                }
+                              />
+                            ) : null}
+                          </Stack>
+                        );
+                      })}
+                      {cardOtherItems.length > 0 ? (
+                        <Stack gap="xs">
+                          <Text variant="caption" color="textSecondary">HARCAMA OLARAK EKLENMEYECEK</Text>
+                          {cardOtherItems.map((item) => (
+                            <Row key={item.id} align="center">
+                              <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
+                                {item.description || 'Ekstre işlemi'} · {cardLineLabel(item.kind)}
+                              </Text>
+                              <Text variant="body" tabular>
+                                {formatMinorAmount(item.amount_minor, document.currency_code ?? 'TRY')}
+                              </Text>
+                            </Row>
+                          ))}
+                        </Stack>
+                      ) : null}
+                      <Text variant="caption" color="textSecondary">
+                        {cardItemsToImport.length} yeni hareket eklenecek · {cardExpenseItems.length - cardItemsToImport.length} mükerrer atlanacak
+                      </Text>
                     </Stack>
                   </Card>
                 ) : null}
@@ -1042,15 +1171,29 @@ export default function DocumentReviewScreen() {
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                {direction === 'income' || direction === 'expense' ? 'HESAP' : 'HESAP (İSTEĞE BAĞLI)'}
+                {documentType === 'kredi_karti_ekstresi'
+                  ? 'EKSTRENİN AİT OLDUĞU KREDİ KARTI'
+                  : direction === 'income' || direction === 'expense'
+                    ? 'HESAP'
+                    : 'HESAP (İSTEĞE BAĞLI)'}
               </Text>
-              {(accountsQuery.data ?? []).length === 0 ? (
+              {accountOptions.length === 0 ? (
                 <Text variant="body" color="textSecondary">
-                  Önce Hesaplar'dan bir hesap ekleyin.
+                  {documentType === 'kredi_karti_ekstresi'
+                    ? 'Bu ekstreyle eşleşen kayıtlı kredi kartı yok.'
+                    : "Önce Hesaplar'dan bir hesap ekleyin."}
                 </Text>
               ) : (
-                <AccountPicker accounts={accountsQuery.data ?? []} selectedId={accountId} onSelect={setAccountId} />
+                <AccountPicker accounts={accountOptions} selectedId={accountId} onSelect={setAccountId} />
               )}
+              {documentType === 'kredi_karti_ekstresi' && !accountId && cardLastFourFromOcr ? (
+                <Button
+                  label={quickAddCardMutation.isPending ? 'Kart oluşturuluyor…' : `•••• ${cardLastFourFromOcr} kartını oluştur ve devam et`}
+                  variant="secondary"
+                  onPress={() => quickAddCardMutation.mutate()}
+                  loading={quickAddCardMutation.isPending}
+                />
+              ) : null}
             </Stack>
 
             {confirmMutation.error ? (
@@ -1068,7 +1211,7 @@ export default function DocumentReviewScreen() {
               label="Kontrol Et ve Kaydet"
               onPress={() => confirmMutation.mutate()}
               loading={confirmMutation.isPending}
-              disabled={!canSubmit}
+              disabled={!canSubmit || !statementMatchingReady}
             />
             <Button label="Taslak Olarak Bırak" variant="secondary" onPress={() => router.back()} />
             <Button

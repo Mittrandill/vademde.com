@@ -86,6 +86,8 @@ Banka, kredi türü, kredi tutarı, toplam geri ödeme, taksit sayısı, faiz, m
 
 Banka, kart adı, son dört hane, hesap kesim tarihi, son ödeme tarihi, dönem borcu, asgari ödeme, önceki borç, toplam harcama, ödeme, faiz/ücret ve işlem satırları çıkarılır. Kullanıcı yalnızca toplam kart borcunu veya harcamaları da kategorilere ayırmayı seçebilir.
 
+Ekstre satırları alışveriş, kart ödemesi, iade, ücret/komisyon, faiz, nakit avans ve belirsiz olarak sınıflandırılır. Kart ödemesi ve iade satırları yeni bir gider olarak oluşturulmaz. Kayıtlı kart son dört hane ve banka ile otomatik bulunur; kart yoksa onay ekranından oluşturulabilir. Harcama satırları, aynı karttaki mevcut giderlerle tutar, tarih (±2 gün) ve normalize edilmiş açıklama benzerliğine göre karşılaştırılır. Tek ve yüksek güvenli eşleşmede mevcut hareket ile kategorisi korunur, yeni hareket oluşturulmaz; belirsiz eşleşmeyi kullanıcı onaylar.
+
 ### 7.5 Fatura ve e-Fatura
 
 Fatura türü, numara, ETTN, düzenlenme/vade tarihi, satıcı, alıcı, vergi dairesi/no, satırlar, ara toplam, KDV, indirim, genel toplam, para birimi ve ödeme bilgisi çıkarılır. Çalışma alanındaki işletme bilgileri yön tahmininde kullanılır.

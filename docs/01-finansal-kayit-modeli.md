@@ -34,13 +34,19 @@ Kredi, kredi kartı, çek, senet ve fatura gider kategorisi değildir. Bunlar fi
 
 ### 3.3 Gelir ve gider kategorileri
 
-| Gider kategorileri | Gelir kategorileri |
-|---|---|
-| Kira, elektrik, su, internet, telefon | Maaş, ürün satışı, hizmet geliri |
-| Yakıt, market, yemek, ulaşım | Kira geliri, proje geliri |
-| Sağlık, eğitim, personel | Komisyon, tahsilat, ek gelir |
-| Malzeme, bakım, vergi, sigorta | Faiz veya diğer gelir |
-| Abonelik, komisyon, diğer | Diğer |
+Varsayılan kategori kataloğu çalışma alanı türüne göre oluşturulur. Kişisel çalışma
+alanları günlük yaşam, aile ve bireysel gelirleri; işletme çalışma alanları operasyon,
+personel, vergi ve ticari gelirleri öne çıkarır. Kullanıcı bu kategorileri düzenleyebilir
+ve kendi kategorilerini ekleyebilir.
+
+| Çalışma alanı | Varsayılan gider kapsamı | Varsayılan gelir kapsamı |
+|---|---|---|
+| Kişisel | Market, restoran/kafe, kişisel bakım, giyim, sağlık, eğitim, ev/yaşam, faturalar, ulaşım, araç, seyahat, spor, eğlence, aile/çocuk, evcil hayvan, teknoloji, abonelik ve benzeri günlük yaşam giderleri | Maaş, serbest çalışma, hizmet, kira, faiz, yatırım, prim/bonus, burs, emekli maaşı, hediye/destek ve ikinci el satış |
+| İşletme | Personel, SGK, vergi, kira, fatura, malzeme/hammadde, stok, ekipman, lojistik, pazarlama, yazılım, POS/banka masrafları, profesyonel hizmet, temsil, seyahat ve benzeri operasyon giderleri | Ürün satışı, hizmet, proje, abonelik, komisyon, kira, faiz, telif/lisans ve sponsorluk/reklam geliri |
+
+Kredi kartı ödemesi, kredi taksiti, borç/alacak kapatma ve hesaplar arası aktarım
+gelir/gider kategorisi değildir. Bunlar ilgili belge, ödeme veya transfer kaydıyla
+izlenir; kategori gibi kaydedilmeleri raporlarda çift sayıma yol açar.
 
 ### 3.4 Kayıt durumları
 

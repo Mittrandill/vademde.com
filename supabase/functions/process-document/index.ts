@@ -17,7 +17,10 @@ const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash';
 const MAX_INLINE_FILE_BYTES = 14 * 1024 * 1024;
 
 // Gemini çağrısı yanıtsız kalırsa arka plan görevi süresiz asılı kalmasın diye üst sınır.
-const GEMINI_TIMEOUT_MS = 170_000;
+// Supabase Free Edge Function wall-clock sınırı 150 saniyedir. Gemini isteğini daha erken
+// sonlandırarak catch bloğuna belgeyi 'failed' yazması için yeterli süre bırakıyoruz; aksi halde
+// runtime kapanınca kayıt kalıcı olarak 'processing' durumunda kalabiliyor.
+const GEMINI_TIMEOUT_MS = 120_000;
 
 // CORS: react-native-web istemcisi preflight (OPTIONS) gönderir; native istemci göndermez.
 // Bu başlıklar olmadan OPTIONS 405 dönüyordu (bkz. edge loglarında OPTIONS|405).
@@ -118,8 +121,12 @@ const RESPONSE_SCHEMA = {
               date: { type: 'STRING' },
               description: { type: 'STRING' },
               amount: { type: 'NUMBER' },
+              transactionType: {
+                type: 'STRING',
+                enum: ['purchase', 'payment', 'refund', 'fee', 'interest', 'cash_advance', 'unknown'],
+              },
             },
-            required: ['date', 'description', 'amount'],
+            required: ['date', 'description', 'amount', 'transactionType'],
           },
         },
       },
@@ -183,7 +190,7 @@ Belge türüne özel kurallar:
 - documentType "cek" ise: ÇEKİ DÜZENLEYEN/İMZALAYAN/KAŞELEYEN taraf (hesap sahibi, "keşideci") ÖDEMEYİ YAPACAK taraftır — borçludur. "___ emrine ödeyiniz" ibaresinden SONRA EL YAZISIYLA yazılan isim ise ÖDEMEYİ ALACAK taraftır (lehtar/alacaklı) — bu iki ismi ASLA birbirine karıştırma. Belgeyi tarayan kullanıcı, fiziksel çek genellikle tahsil edecek kişide bulunduğu için varsayılan olarak LEHTAR (alacaklı) kabul edilir: direction'ı "receivable" yap ve counterpartyName alanına KEŞİDECİNİN adını (imza/kaşe/hesap sahibi bilgisi, "emrine"deki el yazısı isim DEĞİL) yaz. Belgede kullanıcının kendi imzası/kaşesi keşideci olarak görünüyorsa (yani kullanıcı çeki kendisi düzenlemişse) bunun yerine direction "payable", counterpartyName ise "emrine" kısmındaki lehtar adı olmalıdır — ama bu yalnızca kullanıcının kendi adı/işletmesi keşideci tarafında açıkça görünüyorsa geçerlidir, aksi halde varsayılan (receivable + keşideci adı) kullanılır. Kullanıcı yön ve tarafı onay ekranında düzeltebilir.
 - documentType "senet" ise aynı ayrım geçerlidir: senedi İMZALAYAN taraf borçludur (ödeyecek), senette adı geçen alacaklı ise tahsil edecek taraftır. Aynı varsayım: tarayan kullanıcı genellikle alacaklıdır (direction "receivable"), counterpartyName borçlunun adıdır — kullanıcının kendisi borçlu tarafında açıkça görünmedikçe.
 - documentType "kredi" ise installmentPlan alanını doldur: her taksit satırı için vade, anapara, faiz, vergi, taksit tutarı ve kalan anapara. installmentPlan.totalRepayment toplam geri ödemedir, totalAmount kredi anaparasıdır.
-- documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz.
+- documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Her satıra transactionType ata: normal alışveriş "purchase"; "ÖDEME", "KART ÖDEMESİ", "TAHSİLAT", "ÖDEME - TEŞEKKÜRLER" benzeri geçmiş dönem borç kapatma satırları "payment"; işyeri/ürün iadesi "refund"; üyelik/yıllık kart/komisyon/BSMV gibi ücretler "fee"; akdi/gecikme faizi "interest"; nakit çekim/avans "cash_advance"; güvenle ayıramadığın satır "unknown". Ödeme ve iadeleri ASLA purchase olarak sınıflandırma. Satır amount değerlerini işaret kullanmadan pozitif sayı döndür; yön transactionType ile belirlenir. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz.
 - documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur.
 - documentType "makbuz_fis" ise lineItems alanını doldur (varsa).
 - Diğer türlerde installmentPlan, cardStatement, lineItems, invoiceDetails alanlarını null/boş bırak.
@@ -247,7 +254,17 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 interface LineItemRow {
   workspace_id: string;
   document_id: string;
-  kind: 'line_item' | 'installment' | 'card_transaction';
+  kind:
+    | 'line_item'
+    | 'installment'
+    | 'card_transaction'
+    | 'card_purchase'
+    | 'card_payment'
+    | 'card_refund'
+    | 'card_fee'
+    | 'card_interest'
+    | 'card_cash_advance'
+    | 'card_unknown';
   sort_order: number;
   description: string | null;
   occurred_at: string | null;
@@ -551,17 +568,27 @@ Deno.serve(async (req: Request) => {
       parsed.cardStatement.transactions.forEach((item: Record<string, unknown>, index: number) => {
         const amountMinor = toMinor(item.amount);
         if (amountMinor === null) return;
+        const transactionType = typeof item.transactionType === 'string' ? item.transactionType : 'unknown';
+        const kindByType: Record<string, LineItemRow['kind']> = {
+          purchase: 'card_purchase',
+          payment: 'card_payment',
+          refund: 'card_refund',
+          fee: 'card_fee',
+          interest: 'card_interest',
+          cash_advance: 'card_cash_advance',
+          unknown: 'card_unknown',
+        };
         lineItemRows.push({
           workspace_id: document.workspace_id,
           document_id: documentId,
-          kind: 'card_transaction',
+          kind: kindByType[transactionType] ?? 'card_unknown',
           sort_order: index,
           description: (item.description as string) ?? null,
           occurred_at: (item.date as string) ?? null,
           quantity: null,
           unit_price_minor: null,
           tax_minor: null,
-          amount_minor: amountMinor,
+          amount_minor: Math.abs(amountMinor),
           remaining_minor: null,
         });
       });

@@ -141,6 +141,34 @@ export async function createTransactions(
   return data;
 }
 
+export async function listCardStatementMatchCandidates({
+  workspaceId,
+  accountId,
+  fromDate,
+  toDate,
+  amountsMinor,
+}: {
+  workspaceId: string;
+  accountId: string;
+  fromDate: string;
+  toDate: string;
+  amountsMinor: number[];
+}): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .eq('account_id', accountId)
+    .eq('direction', 'expense')
+    .in('amount_minor', Array.from(new Set(amountsMinor)))
+    .gte('occurred_at', `${fromDate}T00:00:00.000Z`)
+    .lte('occurred_at', `${toDate}T23:59:59.999Z`)
+    .order('occurred_at', { ascending: true })
+    .limit(500);
+  if (error) throw error;
+  return data;
+}
+
 export async function updateTransaction(
   id: string,
   input: TablesUpdate<'transactions'>
