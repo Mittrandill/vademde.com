@@ -1,5 +1,47 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native — EAS CNG ile yeniden üretir
+/ios/
+/android/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Env / secrets
+.env
+.env.local
+.env*.local
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Editor ve yerel ajan araçları
+.vscode/
+.idea/
+.agents/
+
+# TypeScript
+*.tsbuildinfo
+
+# Supabase CLI local cache
+supabase/.temp/
+
+# Build için gerekmeyen proje varlıkları
 Vademde_Tam_Logo_Paketi_v2.0/
 Vademde_PRD_v1.3.pdf
 docs/
-ios/
-android/
