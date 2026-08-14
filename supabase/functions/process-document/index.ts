@@ -9,7 +9,15 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash';
+// gemini-2.5-flash, gemini-3.5-flash'a göre ~4-4.5x daha ucuz (input $0.30 vs $1.50,
+// output $2.50 vs $9.00 / 1M token) ve responseSchema zorlaması sayesinde çoğu belgede
+// yeterli. gemini-3.5-flash-lite aynı fiyatla A/B test edilebilir — bu env var'ı
+// değiştirmek yeterli, kod değişikliği gerekmez.
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+// Primary model katı bir hatayla (bozuk JSON, boş çıktı, HTTP hatası) başarısız olursa
+// tek seferlik denenir. Yalnızca gerçekten zor/sorunlu belgelerde tetiklenmesi beklenir;
+// tetiklenme oranı document_extractions.model üzerinden izlenmelidir.
+const GEMINI_FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') ?? 'gemini-3.5-flash';
 
 // Gemini inline_data ile gönderilen istek toplam ~20 MB ile sınırlıdır; base64 ham dosyayı
 // ~%33 şişirir, ayrıca prompt + şema da yer kaplar. Çok sayfalı ekstre bu sınırı aşınca
@@ -17,9 +25,9 @@ const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash';
 const MAX_INLINE_FILE_BYTES = 14 * 1024 * 1024;
 
 // Gemini çağrısı yanıtsız kalırsa arka plan görevi süresiz asılı kalmasın diye üst sınır.
-// Supabase Free Edge Function wall-clock sınırı 150 saniyedir. Gemini isteğini daha erken
-// sonlandırarak catch bloğuna belgeyi 'failed' yazması için yeterli süre bırakıyoruz; aksi halde
-// runtime kapanınca kayıt kalıcı olarak 'processing' durumunda kalabiliyor.
+// Fallback devreye girerse en kötü ihtimalle iki sıralı çağrı (≤240sn) yapılır; proje
+// Supabase Pro+ planda olduğundan (400sn wall-clock) bu, kalan DB yazma işlemleri için
+// yeterli pay bırakarak sığar. Free plana (150sn) geri dönülürse bu değer düşürülmeli.
 const GEMINI_TIMEOUT_MS = 120_000;
 
 // CORS: react-native-web istemcisi preflight (OPTIONS) gönderir; native istemci göndermez.
@@ -42,7 +50,6 @@ const RESPONSE_SCHEMA = {
     documentType: { type: 'STRING', enum: DOCUMENT_TYPES },
     documentTypeConfidence: { type: 'NUMBER' },
     direction: { type: 'STRING', enum: ['payable', 'receivable', 'income', 'expense', 'transfer'] },
-    directionConfidence: { type: 'NUMBER' },
     currency: { type: 'STRING' },
     // Tutarlar modelden ana birimde (TL) ondalık sayı olarak istenir, kuruşa çevirme işi
     // koda aittir — bkz. toMinor(). Modele "×100 yap" dedirtmek, Türkçe binlik ayıracıyla
@@ -251,6 +258,62 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+// Tek bir Gemini generateContent çağrısını yürütür; timeout, HTTP hata, boş çıktı ve
+// bozuk JSON durumlarında fırlatır. runProcessing bunu önce primary sonra (gerekirse)
+// fallback modeliyle çağırır — bkz. GEMINI_FALLBACK_MODEL notu yukarıda.
+async function callGemini(model: string, mimeType: string, base64Data: string): Promise<any> {
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), GEMINI_TIMEOUT_MS);
+  let geminiResponse: Response;
+  try {
+    geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: abortController.signal,
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: PROMPT },
+                { inline_data: { mime_type: mimeType, data: base64Data } },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: RESPONSE_SCHEMA,
+          },
+        }),
+      }
+    );
+  } catch (fetchError) {
+    if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+      throw new Error('Belge analizi zaman aşımına uğradı. Lütfen tekrar deneyin veya daha küçük bir belge yükleyin.');
+    }
+    throw fetchError;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!geminiResponse.ok) {
+    throw new Error(`Gemini API hatası: ${geminiResponse.status} ${await geminiResponse.text()}`);
+  }
+
+  const geminiJson = await geminiResponse.json();
+  const outputText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!outputText) throw new Error('Gemini yanıtı boş');
+
+  try {
+    return JSON.parse(outputText);
+  } catch {
+    // Model bazen (özellikle uzun ekstrelerde MAX_TOKENS ile kesilince) geçersiz/yarım JSON
+    // döndürebiliyor; korumasız JSON.parse burada throw edip belgeyi genel 500 ile bozuyordu.
+    throw new Error('Belge okunamadı: analiz sonucu beklenen biçimde değil. Lütfen tekrar deneyin.');
+  }
+}
+
 interface LineItemRow {
   workspace_id: string;
   document_id: string;
@@ -416,57 +479,21 @@ Deno.serve(async (req: Request) => {
     }
     const base64 = arrayBufferToBase64(arrayBuffer);
 
-    // Gemini çağrısına açık zaman aşımı: yanıt gelmezse arka plan görevi süresiz asılı kalmaz.
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), GEMINI_TIMEOUT_MS);
-    let geminiResponse: Response;
-    try {
-      geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: abortController.signal,
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: PROMPT },
-                  { inline_data: { mime_type: document.mime_type, data: base64 } },
-                ],
-              },
-            ],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              responseSchema: RESPONSE_SCHEMA,
-            },
-          }),
-        }
-      );
-    } catch (fetchError) {
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        throw new Error('Belge analizi zaman aşımına uğradı. Lütfen tekrar deneyin veya daha küçük bir belge yükleyin.');
-      }
-      throw fetchError;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    if (!geminiResponse.ok) {
-      throw new Error(`Gemini API hatası: ${geminiResponse.status} ${await geminiResponse.text()}`);
-    }
-
-    const geminiJson = await geminiResponse.json();
-    const outputText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!outputText) throw new Error('Gemini yanıtı boş');
-
+    // Önce ucuz primary model denenir; yalnızca katı bir hatayla (HTTP hatası, boş çıktı,
+    // bozuk JSON) başarısız olursa tek seferlik pahalı fallback modeline geçilir. Düşük
+    // confidence gibi "yumuşak" sinyaller bilinçli olarak tetikleyici değildir — bkz.
+    // GEMINI_FALLBACK_MODEL notu.
     let parsed: any;
+    let modelUsed = GEMINI_MODEL;
     try {
-      parsed = JSON.parse(outputText);
-    } catch {
-      // Model bazen (özellikle uzun ekstrelerde MAX_TOKENS ile kesilince) geçersiz/yarım JSON
-      // döndürebiliyor; korumasız JSON.parse burada throw edip belgeyi genel 500 ile bozuyordu.
-      throw new Error('Belge okunamadı: analiz sonucu beklenen biçimde değil. Lütfen tekrar deneyin.');
+      parsed = await callGemini(GEMINI_MODEL, document.mime_type, base64);
+    } catch (primaryError) {
+      console.warn(
+        `Primary model (${GEMINI_MODEL}) başarısız, fallback deneniyor (${GEMINI_FALLBACK_MODEL}):`,
+        primaryError instanceof Error ? primaryError.message : primaryError
+      );
+      modelUsed = GEMINI_FALLBACK_MODEL;
+      parsed = await callGemini(GEMINI_FALLBACK_MODEL, document.mime_type, base64);
     }
 
     // Toplam tutar iki bağımsız yoldan elde edilir: modelin verdiği ondalık sayı ve
@@ -494,7 +521,7 @@ Deno.serve(async (req: Request) => {
       workspace_id: document.workspace_id,
       document_id: documentId,
       provider: 'gemini',
-      model: GEMINI_MODEL,
+      model: modelUsed,
       structured_output: parsed,
     });
 
