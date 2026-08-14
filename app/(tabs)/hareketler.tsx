@@ -32,8 +32,8 @@ import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 
 type FilterKey = 'all' | 'income' | 'expense' | 'payable' | 'receivable' | 'transfer';
 
-// "Transfer" için ayrı bir hızlı-filtre sekmesi yok — transfer işlemleri "Tümü" altında
-// görünmeye devam eder; bu, filtre satırının tek satırda (kaydırma/sarma olmadan) sığması içindir.
+// "Transfer" için ayrı bir hızlı-filtre sekmesi yok; transfer işlemleri "Tümü" altında
+// görünmeye devam eder.
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'Tümü' },
   { key: 'income', label: 'Gelir' },
@@ -363,9 +363,8 @@ export default function HareketlerScreen() {
         </Pressable>
       </Row>
 
-      {/* Elle yazılmış kapsül satırı yerine ortak bileşen: yükseklik uygulama genelinde
-          tek token'dan gelsin (theme.controlHeight.segmented). */}
-      <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} size="compact" stretch />
+      {/* Uzun filtreler, ortak sekme stilini koruyarak yatay kaydırılır. */}
+      <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} size="compact" scrollable />
 
       {error ? (
         <Text variant="body" color="danger">

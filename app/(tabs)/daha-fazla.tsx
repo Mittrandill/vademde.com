@@ -18,11 +18,14 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 
-// Hub'da gösterilecek belge türleri. Tümü değil, günlük kullanımda sık geçenler —
-// gerisine Hareketler'in belge türü filtresinden ulaşılır. "Kredi" ve "Kredi Kartlarım"
-// (hesap bazlı, kendi ekranı) elle en başa yerleştirildiği için burada değil; geri kalanlar
-// aynı sırayla map'lenir.
-const OTHER_DOCUMENT_TYPES = ['cek', 'senet', 'kira', 'abonelik'];
+// Hub'da gösterilecek belge/bağlantı türleri. Kişiler / Cariler, eski Kira kutusunun
+// yerini alır; Kira kayıtlarına Hareketler üzerinden erişilmeye devam edilir.
+const OTHER_RECORD_TILES = [
+  { kind: 'document', type: 'cek' },
+  { kind: 'document', type: 'senet' },
+  { kind: 'counterparties' },
+  { kind: 'document', type: 'abonelik' },
+] as const;
 
 // docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad (Ayarlar ile aynı eşleme).
 const PLAN_LABELS: Record<string, string> = {
@@ -107,7 +110,7 @@ export default function MoreScreen() {
             ekranına gider (More sekmesi = hesap girişi deseni; iOS Ayarlar'daki Apple ID
             satırıyla aynı mantık — genel Ayarlar'a değil, doğrudan kimlik ekranına). */}
         <Pressable onPress={() => router.push('/profile')}>
-          <Card elevated>
+          <Card>
             <Row gap="sm">
               <View
                 style={{
@@ -164,15 +167,27 @@ export default function MoreScreen() {
               }
               href="/accounts/credit-cards"
             />
-            {OTHER_DOCUMENT_TYPES.map((type) => {
-              const totals = totalsByType?.[type];
+            {OTHER_RECORD_TILES.map((item) => {
+              if (item.kind === 'counterparties') {
+                return (
+                  <HubTile
+                    key="counterparties"
+                    icon="people-outline"
+                    label="Kişiler / Cariler"
+                    detail="Kişi ve firmalar"
+                    href="/counterparties"
+                  />
+                );
+              }
+
+              const totals = totalsByType?.[item.type];
               return (
                 <HubTile
-                  key={type}
-                  icon={DOCUMENT_TYPE_ICON[type] ?? 'document-outline'}
-                  label={DOCUMENT_TYPE_LABEL[type] ?? type}
+                  key={item.type}
+                  icon={DOCUMENT_TYPE_ICON[item.type] ?? 'document-outline'}
+                  label={DOCUMENT_TYPE_LABEL[item.type] ?? item.type}
                   detail={totals ? `${totals.count} kayıt · ${formatMinorAmount(totals.totalMinor)}` : 'Kayıt yok'}
-                  href={{ pathname: '/obligations', params: { type } }}
+                  href={{ pathname: '/obligations', params: { type: item.type } }}
                 />
               );
             })}
@@ -197,13 +212,6 @@ export default function MoreScreen() {
             />
             <RowDivider />
             <ListRow
-              icon="people-outline"
-              label="Kişiler"
-              detail="Kişi ve firmalar"
-              href="/counterparties"
-            />
-            <RowDivider />
-            <ListRow
               icon="pricetags-outline"
               label="Kategoriler"
               detail="Gelir ve gider"
@@ -217,6 +225,13 @@ export default function MoreScreen() {
               label="Raporlar"
               detail="Gelir, gider ve borç/alacak özeti"
               href="/reports"
+            />
+            <RowDivider />
+            <ListRow
+              icon="sparkles-outline"
+              label="Abonelik Ayarları"
+              detail={planLabel}
+              href="/subscription"
             />
           </Card>
         </Stack>
@@ -267,8 +282,6 @@ interface HubTileProps {
 }
 
 function HubTile({ icon, label, detail, accent, href }: HubTileProps) {
-  const theme = useTheme();
-
   return (
     // Grid: minWidth satır başına kaç kutu sığacağını belirler (dar telefonda 2),
     // flex:1 ile aynı satırdakiler kalan genişliği eşit paylaşır.

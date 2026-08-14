@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
+import { withAlpha } from '@/theme/colors';
 import { Pressable } from './Pressable';
 import { Row, Stack } from './Stack';
 import { Text } from './Text';
@@ -93,17 +94,26 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
           </Stack>
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="İşlem menüsünü kapat"
             onPress={onClose}
             style={{
-              height: theme.controlHeight.segmented,
+              minHeight: 50,
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: theme.radius.widget,
               borderWidth: 1,
-              borderColor: theme.colors.border,
+              borderColor:
+                theme.scheme === 'dark' ? withAlpha(theme.colors.textPrimary, 0.24) : theme.colors.border,
+              backgroundColor:
+                theme.scheme === 'dark' ? theme.colors.backgroundPrimary : theme.colors.surfacePrimary,
             }}
           >
-            <Text variant="body" color="textSecondary">
+            <Text
+              variant="body"
+              color={theme.scheme === 'dark' ? 'textPrimary' : 'textSecondary'}
+              style={{ fontWeight: '600' }}
+            >
               Vazgeç
             </Text>
           </Pressable>

@@ -451,16 +451,31 @@ Deno.serve(async (req: Request) => {
   // (retain_original=false) ham belge artık gerekmez; Gemini analizini bitirdiğimiz an
   // (başarılı ya da başarısız fark etmez) siliniyor — kullanıcının onay ekranını
   // bitirmesini beklemek gibi belirsiz bir süre boyunca (terk edilirse süresiz) hassas
-  // finansal belgeyi bucket'ta bekletmemek için. Silme başarısız olursa (ör. zaten
-  // silinmiş) durum güncellemesini engellememesi için ayrı try/catch içinde.
-  async function deleteOriginalIfNotRetained() {
+  // finansal belgeyi bucket'ta bekletmemek için. Başarılı akışta silme tamamlanmadan
+  // belge ready_for_review yapılmaz; böylece istemci silme ile yarışıp artık saklanmaması
+  // gereken dosya için imzalı URL alamaz.
+  async function deleteOriginalIfNotRetained(): Promise<void> {
     if (document.retain_original !== false) return;
+
+    const { error } = await adminClient.storage
+      .from('financial-documents')
+      .remove([document.storage_path]);
+
+    if (error) {
+      throw new Error(`Ham belge silinemedi: ${error.message}`);
+    }
+  }
+
+  // Ana işlem zaten hata verdiyse temizlik hatası asıl hatayı gölgelememeli. Yine de
+  // Storage istemcisinin döndürdüğü error açıkça kontrol edilir ve sunucu logunda görünür.
+  async function deleteOriginalBestEffort(): Promise<void> {
     try {
-      await adminClient.storage.from('financial-documents').remove([document.storage_path]);
-    } catch {
-      // Sessizce yutulur — dosyanın silinmemiş olması kritik değil, kullanıcı zaten
-      // onu bir daha görmeyecek (review ekranı retain_original=false'ta imageUrl'i
-      // opsiyonel gösterir).
+      await deleteOriginalIfNotRetained();
+    } catch (error) {
+      console.error(
+        'Ham belge temizlenemedi',
+        error instanceof Error ? error.message : 'Bilinmeyen Storage hatası'
+      );
     }
   }
 
@@ -678,6 +693,11 @@ Deno.serve(async (req: Request) => {
       };
     }
 
+    // Ham belge saklanmayacaksa önce Storage'dan kaldırılır. Bu tamamlanmadan durumun
+    // ready_for_review olması, poll eden istemcinin silinmek üzere olan belgeyi açmasına
+    // neden oluyordu.
+    await deleteOriginalIfNotRetained();
+
     await adminClient
       .from('financial_documents')
       .update({
@@ -708,9 +728,8 @@ Deno.serve(async (req: Request) => {
       .eq('document_id', documentId)
       .eq('status', 'processing');
 
-    // Buraya ulaşıldıysa belge 'ready_for_review' ve job 'succeeded' olarak yazıldı; arka
-    // plan görevi başarıyla tamamlanır (istemci poll ile inceleme ekranına geçer).
-    await deleteOriginalIfNotRetained();
+    // Buraya ulaşıldıysa ham belge tercihe göre temizlenmiş, belge 'ready_for_review' ve
+    // job 'succeeded' olarak yazılmıştır; istemci poll ile inceleme ekranına geçebilir.
    } catch (error) {
     const message = error instanceof Error ? error.message : 'Bilinmeyen hata';
 
@@ -720,7 +739,7 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'failed', last_error: message, completed_at: new Date().toISOString() })
       .eq('document_id', documentId)
       .eq('status', 'processing');
-    await deleteOriginalIfNotRetained();
+    await deleteOriginalBestEffort();
    }
   };
 

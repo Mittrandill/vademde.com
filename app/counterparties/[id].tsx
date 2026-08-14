@@ -1,25 +1,25 @@
 import { useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import {
+  ActionSheet,
   Card,
-  Divider,
   EmptyState,
   Pagination,
   Pressable,
   Row,
   SectionHeader,
-  SegmentedControl,
   Stack,
   Text,
 } from '@/components/primitives';
-import { StatColumns } from '@/components/primitives/StatColumns';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
-import { DetailHeroCard, DetailIdentityRow, DetailMetricRow } from '@/components/finance/DetailHero';
+import {
+  FinanceDetailHero,
+  FinanceDetailInfoCard,
+  FinanceDetailTabs,
+} from '@/components/finance/FinanceDetailBlocks';
 import { Amount } from '@/components/finance/Amount';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
@@ -48,6 +48,7 @@ export default function CounterpartyDetailScreen() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const enabled = !!activeWorkspaceId && !!id;
   const [tab, setTab] = useState<DetailTab>('genel');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [obligationsPage, setObligationsPage] = useState(0);
   const [transactionsPage, setTransactionsPage] = useState(0);
 
@@ -126,7 +127,6 @@ export default function CounterpartyDetailScreen() {
   const owesUs = netMinor > 0;
   const settled = netMinor === 0;
   const netColor = settled ? theme.colors.textSecondary : owesUs ? theme.colors.success : theme.colors.textPrimary;
-  const netLabel = settled ? 'Bakiye kapalı' : owesUs ? `${counterparty.name} size borçlu` : 'Siz borçlusunuz';
 
   // Obligation detayındaki aynı formül: halka, net bakiyenin değil alacak/borç
   // dengesinin görselidir.
@@ -138,85 +138,61 @@ export default function CounterpartyDetailScreen() {
     { key: 'kayitlar', label: `Açık Kayıtlar (${allOpenObligations.length})` },
     { key: 'hareketler', label: 'Hareketler' },
   ];
+  const infoRows = [
+    { label: 'Tür', value: counterparty.type === 'company' ? 'Firma' : 'Kişi' },
+    ...(counterparty.phone ? [{ label: 'Telefon', value: counterparty.phone }] : []),
+    ...(counterparty.email ? [{ label: 'E-posta', value: counterparty.email }] : []),
+    ...(counterparty.tax_number ? [{ label: 'Vergi No', value: counterparty.tax_number }] : []),
+    { label: 'Alacak', value: formatMinorAmount(ledger?.receivableMinor ?? 0) },
+    { label: 'Borç', value: formatMinorAmount(ledger?.payableMinor ?? 0) },
+    { label: 'Geciken', value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
+    ...(ledger?.nearestDueDate
+      ? [{ label: 'En Yakın Vade', value: dateFormatter.format(new Date(ledger.nearestDueDate)) }]
+      : []),
+    ...(counterparty.notes ? [{ label: 'Notlar', value: counterparty.notes }] : []),
+  ];
 
   return (
+    <>
     <DetailScaffold
       header={{
         title: counterparty.name,
         right: {
-          icon: 'pencil',
-          accessibilityLabel: 'Düzenle',
-          onPress: () => router.push({ pathname: '/counterparties/new', params: { id: counterparty.id } }),
+          icon: 'ellipsis-horizontal',
+          accessibilityLabel: 'Cari işlemleri',
+          onPress: () => setMenuOpen(true),
         },
       }}
       isLoading={false}
     >
-      <DetailHeroCard
-        sections={[
-          <DetailIdentityRow
-            key="identity"
-            icon={<PersonAvatar name={counterparty.name} size={44} />}
-            title={counterparty.name}
-            subtitle={`${counterparty.type === 'company' ? 'Firma' : 'Kişi'}${
-              counterparty.phone || counterparty.email
-                ? ` · ${[counterparty.phone, counterparty.email].filter(Boolean).join(' · ')}`
-                : ''
-            }`}
-          />,
-          <DetailMetricRow
-            key="metric"
-            label="CARİ BAKİYE"
-            value={formatMinorAmount(Math.abs(netMinor))}
-            valueStyle={{ color: netColor }}
-            caption={netLabel}
-            ring={
-              directionalTotal > 0
-                ? {
-                    progress: receivableShare,
-                    color: theme.colors.success,
-                    trackColor: withAlpha(theme.colors.success, 0.18),
-                    centerContent: <Ionicons name="people-outline" size={22} color={theme.colors.success} />,
-                  }
-                : undefined
-            }
-          />,
-          <StatColumns
-            key="stats"
-            columns={[
-              { label: 'AÇIK KAYIT', value: ledger?.openCount ?? 0 },
-              {
-                label: 'EN YAKIN VADE',
-                value: ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok',
-                align: 'flex-end',
-              },
-            ]}
-          />,
+      <FinanceDetailHero
+        icon={<PersonAvatar name={counterparty.name} size={44} />}
+        eyebrow="CARİ DURUM"
+        title={`${counterparty.name} · ${counterparty.type === 'company' ? 'Firma' : 'Kişi'}`}
+        amountLabel="CARİ BAKİYE"
+        amount={formatMinorAmount(Math.abs(netMinor))}
+        amountColor={netColor}
+        progress={directionalTotal > 0 ? receivableShare : undefined}
+        progressLabel="Alacak payı"
+        progressColor={theme.colors.success}
+        stats={[
+          { label: 'AÇIK KAYIT', value: String(ledger?.openCount ?? 0) },
+          { label: 'GECİKEN', value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
+          {
+            label: 'EN YAKIN VADE',
+            value: ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok',
+          },
         ]}
       />
 
-      <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
+      <FinanceDetailTabs options={tabOptions} value={tab} onChange={setTab} />
 
       {tab === 'genel' ? (
-        <Card>
-          <Stack gap="md">
-            <Row gap="sm" align="center">
-              <Ionicons name="person-outline" size={18} color={theme.colors.brandPrimary} />
-              <Text variant="cardTitle">Cari Bilgileri</Text>
-            </Row>
-            <Divider />
-            <InfoRow label="Tür" value={counterparty.type === 'company' ? 'Firma' : 'Kişi'} />
-            {counterparty.phone ? <InfoRow label="Telefon" value={counterparty.phone} /> : null}
-            {counterparty.email ? <InfoRow label="E-posta" value={counterparty.email} /> : null}
-            {counterparty.tax_number ? <InfoRow label="Vergi No" value={counterparty.tax_number} /> : null}
-            <InfoRow label="Alacak" value={formatMinorAmount(ledger?.receivableMinor ?? 0)} />
-            <InfoRow label="Borç" value={formatMinorAmount(ledger?.payableMinor ?? 0)} />
-            <InfoRow label="Geciken" value={formatMinorAmount(ledger?.overdueMinor ?? 0)} />
-            {ledger?.nearestDueDate ? (
-              <InfoRow label="En Yakın Vade" value={dateFormatter.format(new Date(ledger.nearestDueDate))} />
-            ) : null}
-            {counterparty.notes ? <InfoRow label="Notlar" value={counterparty.notes} /> : null}
-          </Stack>
-        </Card>
+        <FinanceDetailInfoCard
+          title="Cari Bilgileri"
+          description="İletişim, tür ve finansal özet"
+          rows={infoRows}
+        />
       ) : tab === 'kayitlar' ? (
         <Stack gap="md">
           {openObligations.length === 0 ? (
@@ -256,19 +232,21 @@ export default function CounterpartyDetailScreen() {
         </Stack>
       )}
     </DetailScaffold>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <Row align="center">
-      <Text variant="body" color="textSecondary" style={{ flex: 1 }}>
-        {label}
-      </Text>
-      <Text variant="body" tabular numberOfLines={1} style={{ maxWidth: '55%', textAlign: 'right' }}>
-        {value}
-      </Text>
-    </Row>
+    <ActionSheet
+      visible={menuOpen}
+      title="Cari işlemleri"
+      onClose={() => setMenuOpen(false)}
+      options={[
+        {
+          key: 'edit',
+          label: 'Düzenle',
+          description: 'Cari bilgilerini güncelleyin.',
+          icon: 'create-outline',
+          onPress: () => router.push({ pathname: '/counterparties/new', params: { id: counterparty.id } }),
+        },
+      ]}
+    />
+    </>
   );
 }
 

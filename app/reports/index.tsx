@@ -279,9 +279,7 @@ export default function ReportsScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-          <SegmentedControl options={PERIODS} value={period} onChange={setPeriod} />
-        </ScrollView>
+        <SegmentedControl options={PERIODS} value={period} onChange={setPeriod} scrollable />
 
         <CurrentRatesCard rates={valueUnitRatesQuery.data ?? []} isLoading={valueUnitRatesQuery.isLoading} />
 

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Alert, SectionList, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,20 +15,19 @@ import {
   Pressable,
   Row,
   SectionHeader,
-  SegmentedControl,
   Stack,
   Text,
 } from '@/components/primitives';
-import { StatColumns } from '@/components/primitives/StatColumns';
-import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
-import { DetailHeroCard, DetailMetricRow } from '@/components/finance/DetailHero';
+import {
+  FinanceDetailHero,
+  FinanceDetailInfoCard,
+  FinanceDetailTabs,
+} from '@/components/finance/FinanceDetailBlocks';
 import { Amount } from '@/components/finance/Amount';
 import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
-import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
-import { HeroStatCard } from '@/components/finance/HeroStatCard';
 import { archiveAccount, getAccount, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
@@ -41,7 +39,7 @@ import { queryKeys } from '@/services/queryKeys';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
 import { computeStatementPeriod, periodKeyFor, periodKeyForDueDate } from '@/utils/creditCardPeriod';
-import { getValueUnit, type ValueUnitType } from '@/features/valueUnits/units';
+import type { ValueUnitType } from '@/features/valueUnits/units';
 import { listValueUnitRates } from '@/features/valueUnits/api';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
@@ -88,6 +86,7 @@ export default function AccountDetailScreen() {
   // Yalnızca kredi kartı hesabında kullanılır (bkz. aşağıdaki kredi kartı dalı) —
   // hook sırası bozulmasın diye diğer hesap türlerinde de koşulsuz çağrılır.
   const [tab, setTab] = useState<CreditCardTab>('genel');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [statementSheetMonth, setStatementSheetMonth] = useState<StatementMonth | null>(null);
 
   const accountQuery = useQuery({
@@ -214,10 +213,7 @@ export default function AccountDetailScreen() {
   }
 
   if (isCreditCardAccount) {
-    // app/obligations/[id].tsx'teki kredi detayıyla aynı hero + sekme deseni
-    // (DetailScaffold/DetailHeroCard üzerinden paylaşılıyor): fiziksel kart görseli
-    // üstte, altında büyük tutar + limit kullanım halkasından oluşan hero kart,
-    // ardından Genel/Ekstreler/Hareketler sekmeleri.
+    // Kredi/çek/senet detaylarıyla aynı ortak hero + sekme + bilgi kartı deseni.
     const hasLimit = (account.credit_limit_minor ?? 0) > 0;
     const utilization = hasLimit ? balanceMinor / (account.credit_limit_minor as number) : 0;
     const clampedUtilization = Math.max(0, Math.min(1, utilization));
@@ -240,82 +236,75 @@ export default function AccountDetailScreen() {
           title: account.name,
           left: { icon: 'chevron-back', accessibilityLabel: 'Geri', onPress: goBack },
           right: {
-            icon: 'pencil',
-            accessibilityLabel: 'Düzenle',
-            onPress: () => router.push({ pathname: '/accounts/new', params: { id: account.id } }),
+            icon: 'ellipsis-horizontal',
+            accessibilityLabel: 'Kart işlemleri',
+            onPress: () => setMenuOpen(true),
           },
         }}
         isLoading={false}
       >
-        <CreditCardVisual account={account} />
-
-        <DetailHeroCard
-          sections={[
-            <DetailMetricRow
-              key="metric"
-              label="GÜNCEL BORÇ"
-              value={formatMinorAmount(balanceMinor, account.currency_code)}
-              valueStyle={{ color: heroAmountColor }}
-              ring={
-                hasLimit
-                  ? {
-                      progress: clampedUtilization,
-                      color: stateAccent,
-                      trackColor: withAlpha(stateAccent, 0.18),
-                      centerContent: (
-                        <Text variant="cardTitle" tabular>
-                          %{Math.round(clampedUtilization * 100)}
-                        </Text>
-                      ),
-                    }
-                  : undefined
-              }
-            />,
-            <StatColumns
-              key="stats"
-              columns={[
-                {
-                  label: 'SON ÖDEME GÜNÜ',
-                  value: account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok',
-                },
-                {
-                  label: 'KULLANILABİLİR LİMİT',
-                  value: hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok',
-                  align: 'flex-end',
-                },
-              ]}
-            />,
+        <FinanceDetailHero
+          icon={<BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={44} />}
+          title={account.name}
+          amountLabel="GÜNCEL BORÇ"
+          amount={formatMinorAmount(balanceMinor, account.currency_code)}
+          amountColor={heroAmountColor}
+          progress={hasLimit ? clampedUtilization : undefined}
+          progressLabel="Limit kullanımı"
+          progressColor={stateAccent}
+          stats={[
+            {
+              label: 'SON ÖDEME',
+              value: account.payment_due_day ? `Ayın ${account.payment_due_day}.` : 'Yok',
+            },
+            {
+              label: 'KULLANILABİLİR',
+              value: hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok',
+            },
+            {
+              label: 'KART LİMİTİ',
+              value: hasLimit
+                ? formatMinorAmount(account.credit_limit_minor as number, account.currency_code)
+                : 'Yok',
+            },
           ]}
         />
 
-        <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
+        <FinanceDetailTabs options={tabOptions} value={tab} onChange={setTab} />
 
         {tab === 'genel' ? (
-          <Card>
-            <Stack gap="md">
-              <Row gap="sm" align="center">
-                <Ionicons name="card-outline" size={18} color={theme.colors.brandPrimary} />
-                <Text variant="cardTitle">Kart Bilgileri</Text>
-              </Row>
-              <Divider />
-              <InfoRow label="Kart No" value={`•••• ${account.card_last_four ?? '····'}`} />
-              <InfoRow label="Kesim Günü" value={account.statement_day ? `Her ayın ${account.statement_day}.` : 'Yok'} />
-              <InfoRow
-                label="Son Ödeme Günü"
-                value={account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok'}
-              />
-              {hasLimit ? (
-                <InfoRow
-                  label="Kredi Limiti"
-                  value={formatMinorAmount(account.credit_limit_minor as number, account.currency_code)}
-                />
-              ) : null}
-              <InfoRow label="Güncel Borç" value={formatMinorAmount(balanceMinor, account.currency_code)} />
-              {hasLimit ? (
-                <InfoRow label="Kullanılabilir Limit" value={formatMinorAmount(availableMinor, account.currency_code)} />
-              ) : null}
-            </Stack>
-          </Card>
+          <FinanceDetailInfoCard
+            title="Kart Bilgileri"
+            description="Kart, dönem ve limit ayrıntıları"
+            rows={[
+              { label: 'Kart No', value: `•••• ${account.card_last_four ?? '····'}` },
+              {
+                label: 'Kesim Günü',
+                value: account.statement_day ? `Her ayın ${account.statement_day}.` : 'Yok',
+              },
+              {
+                label: 'Son Ödeme Günü',
+                value: account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok',
+              },
+              ...(hasLimit
+                ? [
+                    {
+                      label: 'Kredi Limiti',
+                      value: formatMinorAmount(account.credit_limit_minor as number, account.currency_code),
+                    },
+                  ]
+                : []),
+              { label: 'Güncel Borç', value: formatMinorAmount(balanceMinor, account.currency_code) },
+              ...(hasLimit
+                ? [
+                    {
+                      label: 'Kullanılabilir Limit',
+                      value: formatMinorAmount(availableMinor, account.currency_code),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         ) : tab === 'ekstreler' ? (
           <Stack gap="sm">
             <Card>
@@ -373,26 +362,6 @@ export default function AccountDetailScreen() {
                 })}
               </Stack>
             </Card>
-            {mostRecentUnfulfilled ? (
-              <Pressable
-                onPress={() => setStatementSheetMonth(mostRecentUnfulfilled)}
-                style={{
-                  height: theme.controlHeight.segmented,
-                  borderRadius: theme.radius.widget,
-                  borderWidth: 1,
-                  borderColor: theme.colors.brandPrimary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'row',
-                  gap: theme.spacing.xxs,
-                }}
-              >
-                <Ionicons name="add-circle-outline" size={16} color={theme.colors.brandPrimary} />
-                <Text variant="body" color="brandPrimary">
-                  {monthFormatter.format(mostRecentUnfulfilled.monthDate)} Ekstresi Ekle
-                </Text>
-              </Pressable>
-            ) : null}
           </Stack>
         ) : (
           <Stack gap="md">
@@ -416,25 +385,41 @@ export default function AccountDetailScreen() {
           </Stack>
         )}
 
-        <Pressable
-          onPress={confirmArchive}
-          style={{
-            height: theme.controlHeight.segmented,
-            borderRadius: theme.radius.widget,
-            borderWidth: 1,
-            borderColor: theme.colors.danger,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'row',
-            gap: theme.spacing.xxs,
-          }}
-        >
-          <Ionicons name="archive-outline" size={16} color={theme.colors.danger} />
-          <Text variant="body" color="danger">
-            Hesabı Arşivle
-          </Text>
-        </Pressable>
       </DetailScaffold>
+
+      <ActionSheet
+        visible={menuOpen}
+        title="Kart işlemleri"
+        onClose={() => setMenuOpen(false)}
+        options={[
+          ...(mostRecentUnfulfilled
+            ? [
+                {
+                  key: 'statement',
+                  label: 'Ekstre Ekle',
+                  description: `${monthFormatter.format(mostRecentUnfulfilled.monthDate)} dönemini ekleyin.`,
+                  icon: 'add-circle-outline' as const,
+                  onPress: () => setStatementSheetMonth(mostRecentUnfulfilled),
+                },
+              ]
+            : []),
+          {
+            key: 'edit',
+            label: 'Düzenle',
+            description: 'Kart bilgilerini güncelleyin.',
+            icon: 'create-outline',
+            onPress: () => router.push({ pathname: '/accounts/new', params: { id: account.id } }),
+          },
+          {
+            key: 'archive',
+            label: 'Arşivle',
+            description: 'Kartı listeden kaldırın; geçmiş hareketler korunsun.',
+            icon: 'archive-outline',
+            danger: true,
+            onPress: confirmArchive,
+          },
+        ]}
+      />
 
       {statementSheetMonth ? (
         <ActionSheet
@@ -479,68 +464,70 @@ export default function AccountDetailScreen() {
     );
   }
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          padding: theme.screenEdge.standard,
-          paddingBottom: theme.spacing.huge,
-          gap: theme.spacing.xs,
-          flexGrow: 1,
-        }}
-        keyboardShouldPersistTaps="handled"
-        stickySectionHeadersEnabled={false}
-        ListHeaderComponent={
-          <Stack gap="lg" style={{ marginBottom: theme.spacing.lg }}>
-            <ScreenHeader
-              title={account.name}
-              left={{ icon: 'chevron-back', accessibilityLabel: 'Geri', onPress: goBack }}
-              right={{
-                icon: 'pencil',
-                accessibilityLabel: 'Düzenle',
-                onPress: () => router.push({ pathname: '/accounts/new', params: { id: account.id } }),
-              }}
-            />
+  const overdraftUsedMinor = hasOverdraft ? Math.min(Math.max(-balanceMinor, 0), overdraftLimitMinor) : 0;
+  const overdraftProgress = hasOverdraft ? overdraftUsedMinor / overdraftLimitMinor : undefined;
+  const accountInfoRows = [
+    { label: 'Hesap Türü', value: TYPE_LABEL[type] },
+    { label: 'Para Birimi', value: account.currency_code },
+    ...(account.iban ? [{ label: 'IBAN', value: maskIban(account.iban) }] : []),
+    { label: 'Açılış Bakiyesi', value: formatMinorAmount(account.opening_balance_minor, account.currency_code) },
+    ...(hasOverdraft
+      ? [{ label: 'Ek Hesap Limiti', value: formatMinorAmount(overdraftLimitMinor, account.currency_code) }]
+      : []),
+    ...(type === 'pos'
+      ? [{ label: 'POS Komisyonu', value: account.pos_commission_rate != null ? `%${account.pos_commission_rate}` : 'Girilmedi' }]
+      : []),
+  ];
+  const accountTabOptions: { key: CreditCardTab; label: string }[] = [
+    { key: 'genel', label: 'Genel' },
+    { key: 'hareketler', label: 'Hareketler' },
+  ];
 
-            <HeroStatCard
-              label="GÜNCEL BAKİYE"
-              amountMinor={balanceMinor}
-              currencyCode={account.currency_code}
-              valueUnitType={type === 'cash' ? getValueUnit(account.currency_code).unitType : undefined}
-              danger={balanceMinor < 0}
-              above={
-                <Row gap="sm" align="center">
-                  {type === 'cash' ? (
-                    <ValueUnitBadge unitCode={account.currency_code} size={44} />
-                  ) : (
-                    <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={44} />
-                  )}
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Row gap="xs" align="center">
-                      <View
-                        style={{
-                          paddingHorizontal: theme.spacing.xs,
-                          paddingVertical: 2,
-                          borderRadius: 999,
-                          backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
-                        }}
-                      >
-                        <Text variant="caption" color="textSecondary">
-                          {TYPE_LABEL[type]}
-                        </Text>
-                      </View>
-                    </Row>
-                    {account.iban ? (
-                      <Text variant="caption" color="textSecondary" tabular>
-                        {maskIban(account.iban)}
-                      </Text>
-                    ) : null}
-                  </Stack>
-                </Row>
-              }
+  return (
+    <>
+      <DetailScaffold
+        header={{
+          title: account.name,
+          left: { icon: 'chevron-back', accessibilityLabel: 'Geri', onPress: goBack },
+          right: {
+            icon: 'ellipsis-horizontal',
+            accessibilityLabel: 'Hesap işlemleri',
+            onPress: () => setMenuOpen(true),
+          },
+        }}
+        isLoading={false}
+      >
+        <FinanceDetailHero
+          icon={
+            type === 'cash' ? (
+              <ValueUnitBadge unitCode={account.currency_code} size={44} />
+            ) : (
+              <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={44} />
+            )
+          }
+          eyebrow="HESAP DURUMU"
+          title={account.name}
+          amountLabel="GÜNCEL BAKİYE"
+          amount={formatMinorAmount(balanceMinor, account.currency_code)}
+          amountColor={balanceMinor < 0 ? theme.colors.danger : theme.colors.textPrimary}
+          progress={overdraftProgress}
+          progressLabel="Ek hesap kullanımı"
+          progressColor={overdraftProgress !== undefined && overdraftProgress >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary}
+          stats={[
+            { label: 'HESAP TÜRÜ', value: TYPE_LABEL[type] },
+            { label: 'PARA BİRİMİ', value: account.currency_code },
+            { label: 'HAREKET', value: String(allTransactions.length) },
+          ]}
+        />
+
+        <FinanceDetailTabs options={accountTabOptions} value={tab} onChange={setTab} />
+
+        {tab === 'genel' ? (
+          <Stack gap="lg">
+            <FinanceDetailInfoCard
+              title="Hesap Bilgileri"
+              description="Hesap türü, kimlik ve limit ayrıntıları"
+              rows={accountInfoRows}
             />
 
             {type === 'cash' && account.currency_code !== 'TRY' ? (
@@ -553,46 +540,64 @@ export default function AccountDetailScreen() {
             ) : null}
 
             {hasOverdraft ? (
-              <OverdraftCard accountId={account.id} balanceMinor={balanceMinor} limitMinor={overdraftLimitMinor} currencyCode={account.currency_code} />
+              <OverdraftCard
+                accountId={account.id}
+                balanceMinor={balanceMinor}
+                limitMinor={overdraftLimitMinor}
+                currencyCode={account.currency_code}
+              />
             ) : null}
 
             {type === 'pos' ? <PosCommissionCard account={account} /> : null}
-
-            <Text variant="sectionTitle">Hareketler</Text>
           </Stack>
-        }
-        renderSectionHeader={({ section }) => (
-          <View style={{ paddingTop: theme.spacing.sm }}>
-            <SectionHeader title={section.title} />
-          </View>
+        ) : (
+          <Stack gap="lg">
+            {sections.length === 0 ? (
+              <EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />
+            ) : (
+              <Stack gap="md">
+                {sections.map((section) => (
+                  <Stack gap="xs" key={section.title}>
+                    <SectionHeader title={section.title} />
+                    <Stack gap="xs">
+                      {section.data.map((item) => (
+                        <TransactionRow key={item.id} item={item} accountId={account.id} />
+                      ))}
+                    </Stack>
+                  </Stack>
+                ))}
+              </Stack>
+            )}
+            {totalPages > 1 ? (
+              <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} />
+            ) : null}
+          </Stack>
         )}
-        renderItem={({ item }) => <TransactionRow item={item} accountId={account.id} />}
-        ListEmptyComponent={<EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />}
-        ListFooterComponent={
-          <Stack gap="lg" style={{ marginTop: theme.spacing.sm }}>
-            {totalPages > 1 ? <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} /> : null}
-            <Pressable
-              onPress={confirmArchive}
-              style={{
-                height: theme.controlHeight.segmented,
-                borderRadius: theme.radius.widget,
-                borderWidth: 1,
-                borderColor: theme.colors.danger,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: theme.spacing.xxs,
-              }}
-            >
-              <Ionicons name="archive-outline" size={16} color={theme.colors.danger} />
-              <Text variant="body" color="danger">
-                Hesabı Arşivle
-              </Text>
-            </Pressable>
-          </Stack>
-        }
+      </DetailScaffold>
+
+      <ActionSheet
+        visible={menuOpen}
+        title="Hesap işlemleri"
+        onClose={() => setMenuOpen(false)}
+        options={[
+          {
+            key: 'edit',
+            label: 'Düzenle',
+            description: 'Hesap bilgilerini güncelleyin.',
+            icon: 'create-outline',
+            onPress: () => router.push({ pathname: '/accounts/new', params: { id: account.id } }),
+          },
+          {
+            key: 'archive',
+            label: 'Arşivle',
+            description: 'Hesabı listeden kaldırın; geçmiş hareketler korunsun.',
+            icon: 'archive-outline',
+            danger: true,
+            onPress: confirmArchive,
+          },
+        ]}
       />
-    </SafeAreaView>
+    </>
   );
 }
 

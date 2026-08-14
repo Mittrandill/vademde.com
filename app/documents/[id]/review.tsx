@@ -299,9 +299,12 @@ export default function DocumentReviewScreen() {
     );
     setInitialized(true);
 
-    getSignedUrl(document.storage_path)
-      .then(setImageUrl)
-      .catch(() => {});
+    setImageUrl(null);
+    if (document.retain_original === true) {
+      getSignedUrl(document.storage_path)
+        .then(setImageUrl)
+        .catch(() => {});
+    }
   }, [documentQuery.data, initialized]);
 
   // docs/04-ocr-belge-isleme.md §6.6 — isim benzerliğiyle kişi/firma eşleştirme. Yalnızca

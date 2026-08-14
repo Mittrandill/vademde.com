@@ -83,7 +83,13 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
     <Stack gap="sm">
       <SectionHeader title="Yaklaşan Vadeler" />
 
-      <SegmentedControl options={SEGMENTS} value={segment} onChange={setSegment} size="compact" stretch />
+      <SegmentedControl
+        options={SEGMENTS}
+        value={segment}
+        onChange={setSegment}
+        size="compact"
+        scrollable
+      />
 
       {filtered.length === 0 ? (
         <EmptyState icon="calendar-outline" message="Bu aralıkta vadesi gelen kayıt yok." />

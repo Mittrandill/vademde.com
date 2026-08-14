@@ -6,10 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
-import { Card, Divider, EmptyState, Pagination, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Card, EmptyState, Pagination, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
-import { DetailHeroCard, DetailIdentityRow, DetailMetricRow } from '@/components/finance/DetailHero';
-import { StatColumns } from '@/components/primitives/StatColumns';
+import {
+  FinanceDetailHero,
+  FinanceDetailInfoCard,
+  FinanceDetailTabs,
+} from '@/components/finance/FinanceDetailBlocks';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
@@ -133,75 +136,48 @@ export default function BankDetailScreen() {
     { key: 'hesaplar', label: `Hesaplar (${allBankAccounts.length})` },
     { key: 'krediler', label: `Krediler (${allOpenObligations.length})` },
   ];
+  const infoRows = [
+    { label: 'Hesap Sayısı', value: String(allBankAccounts.length) },
+    { label: 'Açık Kredi Sayısı', value: String(ledger?.openCount ?? 0) },
+    { label: 'Kalan Borç', value: formatMinorAmount(ledger?.payableMinor ?? 0) },
+    ...(totalPayableMinor > 0
+      ? [{ label: 'Toplam Anapara', value: formatMinorAmount(totalPayableMinor) }]
+      : []),
+    { label: 'Geciken Tutar', value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
+    ...(ledger?.nearestDueDate
+      ? [{ label: 'En Yakın Vade', value: dateFormatter.format(new Date(ledger.nearestDueDate)) }]
+      : []),
+  ];
 
   return (
     <DetailScaffold header={{ title: bankName }} isLoading={false}>
-      <DetailHeroCard
-        sections={[
-          <DetailIdentityRow
-            key="identity"
-            icon={<BankLogo bankCode={code as string} fallbackName={bankName} size={44} />}
-            title={bankName}
-            subtitle="Banka"
-            badge={hasOverdue ? <StatusBadge status="gecikti" /> : null}
-          />,
-          <DetailMetricRow
-            key="metric"
-            label="KALAN BORÇ"
-            value={formatMinorAmount(payableMinor)}
-            valueStyle={{ color: hasOverdue ? theme.colors.danger : theme.colors.textPrimary }}
-            ring={
-              totalPayableMinor > 0
-                ? {
-                    progress: clampedProgress,
-                    color: stateAccent,
-                    trackColor: withAlpha(stateAccent, 0.18),
-                    centerContent: (
-                      <Text variant="cardTitle" tabular>
-                        %{Math.round(clampedProgress * 100)}
-                      </Text>
-                    ),
-                  }
-                : undefined
-            }
-          />,
-          <StatColumns
-            key="stats"
-            columns={[
-              { label: 'HESAP', value: allBankAccounts.length },
-              { label: 'AÇIK KREDİ', value: ledger?.openCount ?? 0 },
-              {
-                label: 'EN YAKIN VADE',
-                value: ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok',
-                align: 'flex-end',
-              },
-            ]}
-          />,
+      <FinanceDetailHero
+        icon={<BankLogo bankCode={code as string} fallbackName={bankName} size={44} />}
+        title={bankName}
+        status={hasOverdue ? <StatusBadge status="gecikti" /> : undefined}
+        amountLabel="KALAN BORÇ"
+        amount={formatMinorAmount(payableMinor)}
+        amountColor={hasOverdue ? theme.colors.danger : theme.colors.textPrimary}
+        progress={totalPayableMinor > 0 ? clampedProgress : undefined}
+        progressColor={stateAccent}
+        stats={[
+          { label: 'HESAP', value: String(allBankAccounts.length) },
+          { label: 'AÇIK KREDİ', value: String(ledger?.openCount ?? 0) },
+          {
+            label: 'EN YAKIN VADE',
+            value: ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok',
+          },
         ]}
       />
 
-      <SegmentedControl options={tabOptions} value={tab} onChange={setTab} size="compact" stretch />
+      <FinanceDetailTabs options={tabOptions} value={tab} onChange={setTab} />
 
       {tab === 'genel' ? (
-        <Card>
-          <Stack gap="md">
-            <Row gap="sm" align="center">
-              <Ionicons name="business-outline" size={18} color={theme.colors.brandPrimary} />
-              <Text variant="cardTitle">Banka Bilgileri</Text>
-            </Row>
-            <Divider />
-            <InfoRow label="Hesap Sayısı" value={String(allBankAccounts.length)} />
-            <InfoRow label="Açık Kredi Sayısı" value={String(ledger?.openCount ?? 0)} />
-            <InfoRow label="Kalan Borç" value={formatMinorAmount(ledger?.payableMinor ?? 0)} />
-            {totalPayableMinor > 0 ? (
-              <InfoRow label="Toplam Anapara" value={formatMinorAmount(totalPayableMinor)} />
-            ) : null}
-            <InfoRow label="Geciken Tutar" value={formatMinorAmount(ledger?.overdueMinor ?? 0)} />
-            {ledger?.nearestDueDate ? (
-              <InfoRow label="En Yakın Vade" value={dateFormatter.format(new Date(ledger.nearestDueDate))} />
-            ) : null}
-          </Stack>
-        </Card>
+        <FinanceDetailInfoCard
+          title="Banka Bilgileri"
+          description="Hesap, kredi ve ödeme özeti"
+          rows={infoRows}
+        />
       ) : tab === 'hesaplar' ? (
         <Stack gap="md">
           {bankAccounts.length === 0 ? (
@@ -238,19 +214,6 @@ export default function BankDetailScreen() {
         </Stack>
       )}
     </DetailScaffold>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <Row align="center">
-      <Text variant="body" color="textSecondary" style={{ flex: 1 }}>
-        {label}
-      </Text>
-      <Text variant="body" tabular numberOfLines={1} style={{ maxWidth: '55%', textAlign: 'right' }}>
-        {value}
-      </Text>
-    </Row>
   );
 }
 

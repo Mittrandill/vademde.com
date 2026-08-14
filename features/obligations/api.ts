@@ -255,10 +255,14 @@ export async function getObligation(id: string): Promise<Obligation> {
 
 export async function getObligationWithInstallments(
   id: string
-): Promise<{ obligation: Obligation; installments: Installment[] }> {
+): Promise<{ obligation: ObligationWithRelations; installments: Installment[] }> {
   const [{ data: obligation, error: obligationError }, { data: installments, error: installmentsError }] =
     await Promise.all([
-      supabase.from('obligations').select('*').eq('id', id).single(),
+      supabase
+        .from('obligations')
+        .select('*, category:categories(name), counterparty:counterparties(name), account:accounts(name)')
+        .eq('id', id)
+        .single(),
       supabase
         .from('installments')
         .select('*')
@@ -268,7 +272,7 @@ export async function getObligationWithInstallments(
 
   if (obligationError) throw obligationError;
   if (installmentsError) throw installmentsError;
-  return { obligation, installments };
+  return { obligation: obligation as unknown as ObligationWithRelations, installments };
 }
 
 // docs/12-mvp-kabul-kriterleri.md — taksitli borçlarda bildirim, ödenmiş taksitlerin

@@ -1,34 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, InteractionManager, View } from 'react-native';
+import { ActivityIndicator, Alert, InteractionManager, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import {
   ActionSheet,
-  Button,
-  Card,
   Divider,
-  EmptyState,
-  Pagination,
   Pressable,
-  ProgressRing,
-  Row,
-  SegmentedControl,
   Skeleton,
   Stack,
   Text,
-  TextField,
 } from '@/components/primitives';
-import { StatColumns } from '@/components/primitives/StatColumns';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
-import { DocumentCalendarIllustration } from '@/components/finance/DocumentCalendarIllustration';
+import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
+import { FinanceListHero } from '@/components/finance/FinanceListHero';
+import { FinanceListEmptyState, FinanceListSurface } from '@/components/finance/FinanceListSurface';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
-import { StatusBadge } from '@/components/finance/StatusBadge';
+import { OBLIGATION_STATUS_LABEL, type ObligationStatus } from '@/components/finance/StatusBadge';
 import {
   listObligations,
   getObligationSummary,
@@ -47,6 +39,7 @@ import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert } from '@/utils/alerts';
+import { formatMinorAmount } from '@/utils/money';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -228,299 +221,111 @@ export default function ObligationsByTypeScreen() {
   }
 
   const overview = overviewQuery.data;
-  const activeCount = overview?.active.count ?? 0;
   const totalTypeCount = overview?.total.count ?? 0;
   const overdueCount = overview?.active.overdueCount ?? 0;
   const heroPayableMinor = overview?.active.payableMinor ?? 0;
   const heroReceivableMinor = overview?.active.receivableMinor ?? 0;
   const showsPayable = heroPayableMinor > 0 || heroReceivableMinor === 0;
-  // İlerleme oranı: gösterilen yöndeki (borç/alacak) orijinal toplam tutarın ne kadarı
-  // zaten ödendi — kalan tutar arttıkça değil azaldıkça dolan bir çubuk.
-  const heroOriginalMinor = showsPayable
-    ? (overview?.active.payableTotalMinor ?? 0)
-    : (overview?.active.receivableTotalMinor ?? 0);
-  const heroRemainingMinor = showsPayable ? heroPayableMinor : heroReceivableMinor;
-  const progressRatio = heroOriginalMinor > 0 ? 1 - heroRemainingMinor / heroOriginalMinor : 0;
   const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? documentType) : 'Kayıt';
-
-  // Tek dikey scroll sahibi: başlık, tanıtım şeridi, hero kartı, filtreler ve arama
-  // FlatList'in ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça
-  // halinde birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
   const isInitialLoading = obligationsQuery.isLoading && rows.length === 0;
 
-  const listHeader = (
-    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
-      <ScreenHeader
-        title={title}
-        left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-        right={{
-          icon: 'add',
-          accessibilityLabel: 'Yeni kayıt',
-          variant: 'accent',
-          onPress: () => router.push('/obligations/new'),
-        }}
-      />
+  const openNewRecord = () =>
+    router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} });
 
-      {/* Tanıtım şeridi: sayfanın kimliği ve kısa açıklaması, istatistiklerden ayrı
-          sakin bir yüzeyde — tutarlar aşağıdaki karta ait, burada dikkat dağıtmaz. */}
-      <Card
-        style={{
-          borderRadius: theme.radius.heroWidget,
-          padding: theme.spacing.lg,
-          backgroundColor: withAlpha(theme.colors.brandPrimary, 0.08),
-        }}
-      >
-        <Row gap="sm" align="center">
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: theme.radius.input,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.18),
-            }}
-          >
-            <Ionicons
-              name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
-              size={22}
-              color={theme.colors.brandPrimary}
-            />
-          </View>
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle" numberOfLines={1}>
-              Tek ekrandan kontrol sizde
-            </Text>
-            <Text variant="caption" color="textSecondary" numberOfLines={2}>
-              Vade ve ödeme durumunu tek ekrandan takip edin.
-            </Text>
-          </Stack>
-          <DocumentCalendarIllustration size={72} />
-        </Row>
-      </Card>
-
-      {/* İstatistik hero kartı: üstte gerçek borç/alacak tutarı + gecikme halkası, altta
-          aktif/toplam/gecikmiş sayaçları — Ana Sayfa'daki BalanceHero ile aynı dil
-          (büyük tutar + halka + ayraçlı özet satırı). Sayaçlar sekme/arama filtresinden
-          bağımsız `overviewQuery`den gelir ki "Kapalı" sekmesine geçmek hero'yu değiştirmesin. */}
-      <Card variant="hero">
-        <Stack gap="lg">
-          <Row gap="md" align="center">
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.4 }}>
-                {showsPayable ? 'TOPLAM BORÇ' : 'TOPLAM ALACAK'}
-              </Text>
-              <Amount
-                amountMinor={showsPayable ? heroPayableMinor : heroReceivableMinor}
-                direction={showsPayable ? 'payable' : 'receivable'}
-                variant="displayAmount"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.55}
-              />
-              {heroPayableMinor > 0 && heroReceivableMinor > 0 ? (
-                <Row gap="xs" align="center">
-                  <Text variant="caption" color="textSecondary">
-                    Alacak:
-                  </Text>
-                  <Amount amountMinor={heroReceivableMinor} direction="receivable" variant="caption" />
-                </Row>
-              ) : null}
-            </Stack>
-
-            <View
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: theme.radius.input,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-              }}
-            >
-              <Ionicons
-                name={(documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
-                size={24}
-                color={theme.colors.brandPrimary}
-              />
-            </View>
-          </Row>
-
-          <Stack gap="xs">
-            <Row align="center" style={{ justifyContent: 'space-between' }}>
-              <Text variant="caption" color="textSecondary">
-                İLERLEME ORANI
-              </Text>
-              <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>
-                %{Math.round(progressRatio * 100)}
-              </Text>
-            </Row>
-            <View
-              style={{
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-                overflow: 'hidden',
-              }}
-            >
-              <View
-                style={{
-                  width: `${Math.max(0, Math.min(100, Math.round(progressRatio * 100)))}%`,
-                  height: '100%',
-                  borderRadius: 4,
-                  backgroundColor: theme.colors.brandPrimary,
-                }}
-              />
-            </View>
-          </Stack>
-
-          <Divider />
-
-          <StatColumns
-            columns={[
-              { label: `AKTİF ${typeLabel.toLocaleUpperCase('tr-TR')}`, value: activeCount },
-              { label: `TOPLAM ${typeLabel.toLocaleUpperCase('tr-TR')}`, value: totalTypeCount },
-              ...(overdueCount > 0
-                ? [{ label: 'GECİKMİŞ', labelColor: 'danger' as const, valueColor: 'danger' as const, value: overdueCount }]
-                : []),
-            ]}
-          />
-
-          <Button
-            icon="add"
-            label={`Yeni ${typeLabel} Ekle`}
-            onPress={() =>
-              router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} })
-            }
-          />
-        </Stack>
-      </Card>
-
-      <SegmentedControl options={STATUS_OPTIONS} value={statusKey} onChange={setStatusKey} size="compact" stretch />
-
-      <Row gap="xs">
-        <View style={{ flex: 1, position: 'relative', justifyContent: 'center' }}>
-          <Ionicons
-            name="search"
-            size={18}
-            color={theme.colors.textSecondary}
-            style={{ position: 'absolute', left: theme.spacing.sm, zIndex: 1 }}
-          />
-          <TextField
-            placeholder={`${title} ara...`}
-            value={searchInput}
-            onChangeText={setSearchInput}
-            returnKeyType="search"
-            autoCorrect={false}
-            style={{ paddingLeft: theme.spacing.xxl }}
-          />
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Tarihe göre sırala"
-          onPress={() => setSortAscending((v) => !v)}
-          style={{
-            height: theme.buttonHeight.primary,
-            paddingHorizontal: theme.spacing.sm,
-            borderRadius: theme.radius.input,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.xxs,
-          }}
-        >
-          <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
-          <Text variant="body" color="textSecondary">
-            Tarih
-          </Text>
-        </Pressable>
-      </Row>
-
-      {obligationsQuery.error ? (
-        <Text variant="body" color="danger">
-          {obligationsQuery.error instanceof Error ? obligationsQuery.error.message : 'Kayıtlar yüklenemedi'}
-        </Text>
-      ) : null}
-    </Stack>
-  );
+  const footerLabel = totalCount
+    ? `${effectivePage * LIST_PAGE_SIZE + 1}–${Math.min((effectivePage + 1) * LIST_PAGE_SIZE, totalCount)} / ${totalCount} kayıt`
+    : '0 kayıt gösteriliyor';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <FlatList
-        data={rows}
-        keyExtractor={(item) => item.id}
-        style={{ flex: 1 }}
+      <ScrollView
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,
+          paddingTop: theme.spacing.md,
           paddingBottom: theme.spacing.xxl,
-          gap: theme.spacing.md,
-          flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={listHeader}
-        renderItem={({ item }) => (
-          <ObligationRowCard
-            item={item}
-            installmentSummary={installmentSummaries[item.id]}
-            onDelete={confirmDelete}
-            deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
+      >
+        <Stack gap="lg">
+          <ScreenHeader
+            title={title}
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+            right={{ icon: 'add', accessibilityLabel: `Yeni ${typeLabel}`, variant: 'accent', onPress: openNewRecord }}
           />
-        )}
-        ListEmptyComponent={
-          isInitialLoading ? (
-            <Stack gap="sm">
-              <Skeleton height={72} borderRadius={theme.radius.widget} />
-              <Skeleton height={72} borderRadius={theme.radius.widget} />
-              <Skeleton height={72} borderRadius={theme.radius.widget} />
-            </Stack>
-          ) : (
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              <EmptyState
-                icon={
-                  isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'
-                }
+
+          <FinanceListHero
+            label={showsPayable ? 'TOPLAM BORÇ' : 'TOPLAM ALACAK'}
+            description={`${title} için aktif kayıtların kalan toplamı`}
+            amountText={formatMinorAmount(showsPayable ? heroPayableMinor : heroReceivableMinor)}
+            amountColor={showsPayable ? 'danger' : 'success'}
+            metrics={[
+              { label: 'TOPLAM KAYIT', value: totalTypeCount, caption: `Tüm ${typeLabel.toLocaleLowerCase('tr-TR')} kayıtları` },
+              { label: 'ALACAĞINIZ', value: formatMinorAmount(heroReceivableMinor), caption: 'Tahsil edilecek', valueColor: 'success' },
+              { label: 'BORCUNUZ', value: formatMinorAmount(heroPayableMinor), caption: 'Ödenecek', valueColor: 'danger' },
+              { label: 'GECİKMİŞ', value: overdueCount, caption: 'Vadesi geçen', valueColor: overdueCount > 0 ? 'danger' : undefined },
+            ]}
+          />
+
+          <FinanceFilterCard
+            title="KAYIT DURUMU"
+            description="Listede görmek istediğiniz kayıt durumunu seçin."
+            options={STATUS_OPTIONS}
+            value={statusKey}
+            onChange={setStatusKey}
+          />
+
+          <FinanceListSurface
+            searchPlaceholder={`${title} ara...`}
+            searchValue={searchInput}
+            onSearchChange={setSearchInput}
+            sortAction={{
+              label: 'Tarih',
+              accessibilityLabel: 'Tarihe göre sırala',
+              icon: sortAscending ? 'arrow-up' : 'arrow-down',
+              onPress: () => setSortAscending((value) => !value),
+            }}
+            footerLabel={rows.length > 0 ? footerLabel : undefined}
+            actionLabel={rows.length > 0 ? `Yeni ${typeLabel}` : undefined}
+            onActionPress={rows.length > 0 ? openNewRecord : undefined}
+            page={effectivePage}
+            totalPages={totalPages}
+            paginationLoading={obligationsQuery.isFetching}
+            onPageChange={setPage}
+          >
+            {obligationsQuery.error ? (
+              <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
+                {obligationsQuery.error instanceof Error ? obligationsQuery.error.message : 'Kayıtlar yüklenemedi'}
+              </Text>
+            ) : isInitialLoading ? (
+              <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
+                <Skeleton height={72} borderRadius={theme.radius.widget} />
+                <Skeleton height={72} borderRadius={theme.radius.widget} />
+                <Skeleton height={72} borderRadius={theme.radius.widget} />
+              </Stack>
+            ) : rows.length === 0 ? (
+              <FinanceListEmptyState
+                icon={isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
                 title={isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}
-                message={
-                  isFiltered
-                    ? 'Arama terimini veya filtreleri değiştirin.'
-                    : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'
-                }
-                actionLabel={
-                  isFiltered ? undefined : `Yeni ${documentType ? DOCUMENT_TYPE_LABEL[documentType] : 'Kayıt'} Ekle`
-                }
-                onActionPress={
-                  isFiltered
-                    ? undefined
-                    : () =>
-                        router.push({
-                          pathname: '/obligations/new',
-                          params: documentType ? { type: documentType } : {},
-                        })
-                }
+                message={isFiltered ? 'Arama terimini veya filtreleri değiştirin.' : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'}
+                actionLabel={isFiltered ? undefined : `Yeni ${typeLabel}`}
+                onActionPress={isFiltered ? undefined : openNewRecord}
               />
-            </View>
-          )
-        }
-        ListFooterComponent={
-          totalPages > 1 ? (
-            <View
-              style={{
-                paddingTop: theme.spacing.sm,
-                borderTopWidth: 1,
-                borderTopColor: theme.colors.border,
-              }}
-            >
-              <Pagination
-                page={effectivePage}
-                totalPages={totalPages}
-                loading={obligationsQuery.isFetching}
-                onChange={setPage}
-              />
-            </View>
-          ) : null
-        }
-      />
+            ) : (
+              rows.map((item, index) => (
+                <View key={item.id}>
+                  {index > 0 ? <Divider /> : null}
+                  <ObligationRowCard
+                    item={item}
+                    installmentSummary={installmentSummaries[item.id]}
+                    onDelete={confirmDelete}
+                    deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
+                  />
+                </View>
+              ))
+            )}
+          </FinanceListSurface>
+        </Stack>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -542,179 +347,65 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
   const isPayable = item.direction === 'payable';
   const bankName = item.bank_code ? (BANK_NAME[item.bank_code] ?? null) : null;
   const serviceName = item.service_code ? (SERVICE_NAME[item.service_code] ?? null) : null;
-  const progress =
-    item.total_amount_minor > 0 ? 1 - item.remaining_amount_minor / item.total_amount_minor : 0;
-  const clampedProgress = Math.max(0, Math.min(1, progress));
-  const isClosed = item.status === 'odendi' || item.status === 'tahsil_edildi';
-  const effectiveRatio =
-    installmentSummary?.hasRateData && installmentSummary.principalSumMinor > 0
-      ? (installmentSummary.interestSumMinor / installmentSummary.principalSumMinor) * 100
-      : null;
+  const statusLabel = OBLIGATION_STATUS_LABEL[item.status as ObligationStatus] ?? item.status;
+  const dueDate = installmentSummary?.nextDueDate ?? item.due_date;
+  const subtitle = [
+    DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type,
+    statusLabel,
+    dueDate ? dateFormatter.format(new Date(dueDate)) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <>
-      <Pressable onPress={() => router.push(`/obligations/${item.id}`)} disabled={deleting}>
-        <Card style={{ opacity: deleting ? 0.5 : 1 }}>
-          <Stack gap="sm">
-            <Row gap="sm" align="center">
-              {/* Banka logosu/adı ayrı bir dokunma alanı: banka detayına götürür (ilerleme
-                  halkası, o bankaya ait tüm hesap/kart/kredi özeti). bank_code yoksa (kredi
-                  dışı belge türleri) disabled kalır, dokunuş kartın geneline (obligation
-                  detayına) düşer — bkz. app/banks/[code].tsx. */}
-              <Pressable
-                onPress={() => item.bank_code && router.push(`/banks/${item.bank_code}`)}
-                disabled={!item.bank_code}
-                accessibilityRole="button"
-                accessibilityLabel={item.bank_code ? `${bankName ?? 'Banka'} sayfasına git` : undefined}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, flex: 1 }}
-              >
-                <ObligationIcon
-                  documentType={item.document_type}
-                  bankCode={item.bank_code}
-                  serviceCode={item.service_code}
-                  fallbackName={item.title}
-                  size={36}
-                />
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle" numberOfLines={1}>
-                    {bankName ?? serviceName ?? item.title}
-                  </Text>
-                  <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                    {DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type}
-                    {bankName || serviceName ? ` · ${item.title}` : ''}
-                  </Text>
-                </Stack>
-              </Pressable>
-              <StatusBadge status={item.status} />
-              {deleting ? (
-                <ActivityIndicator color={theme.colors.textSecondary} />
-              ) : (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Diğer işlemler"
-                  onPress={() => setSheetOpen(true)}
-                  hitSlop={10}
-                >
-                  <Ionicons name="ellipsis-vertical" size={18} color={theme.colors.textSecondary} />
-                </Pressable>
-              )}
-            </Row>
-
-            <Row>
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="caption" color="textSecondary">
-                  {isPayable ? 'KALAN BORÇ' : 'KALAN ALACAK'}
-                </Text>
-                <Amount
-                  amountMinor={item.remaining_amount_minor}
-                  currencyCode={item.currency_code}
-                  valueUnitType={item.value_unit_type as ValueUnitType}
-                  direction={item.direction as 'payable' | 'receivable'}
-                  overdue={item.status === 'gecikti'}
-                  variant="cardTitle"
-                  numberOfLines={1}
-                />
-              </Stack>
-              <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-              <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-                <Text variant="caption" color="textSecondary">
-                  {hasInstallments ? 'SONRAKİ ÖDEME' : 'VADE'}
-                </Text>
-                {hasInstallments ? (
-                  <>
-                    <Amount
-                      amountMinor={installmentSummary?.nextAmountMinor ?? 0}
-                      currencyCode={item.currency_code}
-                      valueUnitType={item.value_unit_type as ValueUnitType}
-                      variant="cardTitle"
-                      numberOfLines={1}
-                    />
-                    {installmentSummary?.nextDueDate ? (
-                      <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
-                        {dateFormatter.format(new Date(installmentSummary.nextDueDate))}
-                      </Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text variant="cardTitle" tabular numberOfLines={1}>
-                    {item.due_date ? dateFormatter.format(new Date(item.due_date)) : 'Vade yok'}
-                  </Text>
-                )}
-              </Stack>
-            </Row>
-
-            {hasInstallments ? (
-              <>
-                <Divider />
-                <Stack gap="sm">
-                  <Text variant="caption" color="textSecondary">
-                    ÖDEME İLERLEMESİ
-                  </Text>
-                  <Row gap="sm" align="center">
-                    <ProgressRing
-                      size={56}
-                      strokeWidth={6}
-                      progress={clampedProgress}
-                      color={isClosed ? theme.colors.success : theme.colors.brandPrimary}
-                      trackColor={withAlpha(isClosed ? theme.colors.success : theme.colors.brandPrimary, 0.18)}
-                      cap
-                    >
-                      <Text variant="caption" tabular style={{ fontWeight: '700' }}>
-                        %{Math.round(clampedProgress * 100)}
-                      </Text>
-                    </ProgressRing>
-                    <Row gap="sm" style={{ flex: 1 }}>
-                      <Stack gap="xxs" style={{ flex: 1 }}>
-                        <Text variant="caption" color="textSecondary">
-                          FAİZ ORANI
-                        </Text>
-                        {effectiveRatio !== null ? (
-                          <Text variant="cardTitle" tabular style={{ color: theme.colors.brandPrimary }}>
-                            %{effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}
-                          </Text>
-                        ) : (
-                          <Text variant="cardTitle" color="textSecondary">
-                            —
-                          </Text>
-                        )}
-                      </Stack>
-                      <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                      <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-                        <Text variant="caption" color="textSecondary">
-                          KALAN TAKSİT
-                        </Text>
-                        <Text variant="cardTitle" tabular>
-                          {installmentSummary!.remainingCount}
-                        </Text>
-                        <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                          {installmentSummary!.totalCount} taksitten
-                        </Text>
-                      </Stack>
-                    </Row>
-                  </Row>
-                </Stack>
-
-                {item.due_date ? (
-                  <Row
-                    gap="xs"
-                    align="center"
-                    style={{
-                      backgroundColor: theme.colors.backgroundPrimary,
-                      borderRadius: theme.radius.input,
-                      paddingHorizontal: theme.spacing.sm,
-                      paddingVertical: theme.spacing.xs,
-                    }}
-                  >
-                    <Ionicons name="calendar-outline" size={14} color={theme.colors.textSecondary} />
-                    <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                      Son ödeme tarihi: {dateFormatter.format(new Date(item.due_date))}
-                    </Text>
-                  </Row>
-                ) : null}
-              </>
-            ) : null}
-          </Stack>
-        </Card>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${bankName ?? serviceName ?? item.title} detayını aç`}
+        onPress={() => router.push(`/obligations/${item.id}`)}
+        onLongPress={() => setSheetOpen(true)}
+        disabled={deleting}
+        style={{
+          minHeight: 86,
+          opacity: deleting ? 0.5 : 1,
+          paddingHorizontal: theme.spacing.lg,
+          paddingVertical: theme.spacing.md,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: theme.spacing.md,
+        }}
+      >
+        <ObligationIcon
+          documentType={item.document_type}
+          bankCode={item.bank_code}
+          serviceCode={item.service_code}
+          fallbackName={item.title}
+          size={48}
+        />
+        <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+          <Text variant="cardTitle" numberOfLines={1}>
+            {bankName ?? serviceName ?? item.title}
+          </Text>
+          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </Stack>
+        <Amount
+          amountMinor={item.remaining_amount_minor}
+          currencyCode={item.currency_code}
+          valueUnitType={item.value_unit_type as ValueUnitType}
+          direction={isPayable ? 'expense' : 'income'}
+          variant="cardTitle"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.68}
+          style={{ maxWidth: '34%', color: isPayable ? theme.colors.danger : theme.colors.success }}
+        />
+        {deleting ? (
+          <ActivityIndicator color={theme.colors.textSecondary} />
+        ) : (
+          <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+        )}
       </Pressable>
 
       <ActionSheet

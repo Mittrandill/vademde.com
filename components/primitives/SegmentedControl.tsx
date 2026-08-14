@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { ScrollView } from 'react-native';
 
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/colors';
@@ -19,12 +20,13 @@ export interface SegmentedControlProps<T extends string> {
   trackColor?: keyof ThemeColors;
   /** Satırın tamamını kaplar ve segmentleri eşit böler (iOS segmented control gibi). */
   stretch?: boolean;
+  /** Uzun filtre satırlarında seçenekleri küçültmeden sabit genişlikle yatay kaydırır. */
+  scrollable?: boolean;
 }
 
-// docs/08-tasarim-sistemi.md §12.3/§12.17 — iki-üç seçenekli münhasır anahtarlar tek bir
-// grafit yüzey içinde kayan Saffron seçili segment olarak gösterilir (Apple segmented
-// control benzeri); ayrık kapsül grupları (bkz. filtre çipleri) burada kullanılmaz çünkü
-// bu bileşen içeriğine göre boyutlanan, sola hizalı ve münhasır (exclusive) bir seçimdir.
+// Kredi detayındaki onaylı sekme deseninin uygulama genelindeki tek kaynağı: grafit dış
+// yüzey, input-radius dikdörtgen seçenekler ve Saffron seçili durum. Başlık/açıklama bu
+// bileşenin parçası değildir; ekran yalnızca seçenekleri ve seçili değeri sağlar.
 function SegmentedControlInner<T extends string>({
   options,
   value,
@@ -32,6 +34,7 @@ function SegmentedControlInner<T extends string>({
   size = 'default',
   trackColor = 'surfacePrimary',
   stretch = false,
+  scrollable = false,
 }: SegmentedControlProps<T>) {
   const theme = useTheme();
   const compact = size === 'compact';
@@ -44,18 +47,15 @@ function SegmentedControlInner<T extends string>({
     onChange(key);
   }
 
-  return (
+  const control = (
     <Row
-      gap="xxs"
+      gap="xs"
       style={{
-        alignSelf: stretch ? 'stretch' : 'flex-start',
+        alignSelf: stretch && !scrollable ? 'stretch' : 'flex-start',
         backgroundColor: theme.colors[trackColor],
-        borderRadius: 999,
-        padding: 4,
-        // Yükseklik her ekranda aynı olsun diye dikey padding'e değil sabit token'a bağlı
-        // (docs/08-tasarim-sistemi.md §12.7). `size` yalnızca yatay ölçüyü ve tipografiyi
-        // değiştirir, satır yüksekliğini değil.
-        height: theme.controlHeight.segmented,
+        borderRadius: theme.radius.heroWidget,
+        padding: theme.spacing.xs,
+        height: 60,
         alignItems: 'center',
       }}
     >
@@ -65,34 +65,31 @@ function SegmentedControlInner<T extends string>({
           <Pressable
             key={option.key}
             onPress={() => handleSelect(option.key)}
-            // Ortak Pressable yatayda da hitSlop ekler. Yan yana segmentlerde bu alanlar
-            // üst üste binerek özellikle ortadaki Gelir/Gider seçimlerini kararsız hâle
-            // getiriyordu. Dokunma alanını yalnızca dikeyde 46 pt'ye tamamla.
-            hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
+            hitSlop={{ top: 0, bottom: 0, left: 0, right: 0 }}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            accessibilityLabel={`${option.label} filtresi`}
+            accessibilityLabel={`${option.label} seçeneği`}
             style={{
-              flex: stretch ? 1 : undefined,
-              minWidth: 0,
-              // stretch modunda genişliği flex belirler; yatay padding minimum kalır ki
-              // uzun etiketler (ör. "Gecikmiş") dar telefonda kırpılmasın.
-              paddingHorizontal: stretch ? theme.spacing.xxs : compact ? theme.spacing.sm : theme.spacing.lg,
-              height: theme.controlHeight.segmented - 8,
-              borderRadius: 999,
+              flex: stretch && !scrollable ? 1 : undefined,
+              width: scrollable ? 108 : undefined,
+              minWidth: scrollable ? 108 : 0,
+              paddingHorizontal:
+                stretch && !scrollable ? theme.spacing.xxs : compact ? theme.spacing.sm : theme.spacing.lg,
+              height: 44,
+              borderRadius: theme.radius.input,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: selected ? theme.colors.brandPrimary : 'transparent',
             }}
           >
             <Text
-              variant={compact ? 'caption' : 'body'}
+              variant="caption"
               numberOfLines={1}
-              adjustsFontSizeToFit={stretch}
+              adjustsFontSizeToFit={stretch && !scrollable}
               minimumFontScale={0.85}
               style={{
                 color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary,
-                fontWeight: selected ? '600' : '400',
+                fontWeight: '600',
                 textAlign: 'center',
               }}
             >
@@ -102,6 +99,20 @@ function SegmentedControlInner<T extends string>({
         );
       })}
     </Row>
+  );
+
+  if (!scrollable) return control;
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      alwaysBounceHorizontal={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingRight: theme.spacing.md }}
+    >
+      {control}
+    </ScrollView>
   );
 }
 

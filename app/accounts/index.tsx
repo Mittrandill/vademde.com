@@ -1,29 +1,25 @@
 import { useMemo, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import {
-  Card,
-  EmptyState,
-  Pagination,
+  Divider,
   Pressable,
-  Row,
-  SegmentedControl,
   Skeleton,
   Stack,
   Text,
-  TextField,
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
+import { FinanceListHero } from '@/components/finance/FinanceListHero';
+import { FinanceListEmptyState, FinanceListSurface } from '@/components/finance/FinanceListSurface';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
-import { HeroStatCard } from '@/components/finance/HeroStatCard';
 import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
@@ -33,6 +29,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
+import { formatMinorAmount } from '@/utils/money';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
@@ -128,179 +125,154 @@ export default function AccountsScreen() {
     valueUnitRatesQuery.data ?? []
   );
 
-  // Tek dikey scroll sahibi: başlık, hero bakiye kartı, arama ve filtre FlatList'in
-  // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde
-  // birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
-  const listHeader = (
-    <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
-      <ScreenHeader
-        title="Hesaplar"
-        left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-        right={{
-          icon: 'add',
-          accessibilityLabel: 'Yeni hesap',
-          variant: 'accent',
-          onPress: () => router.push('/accounts/new'),
-        }}
-      />
-
-      {allAccounts.length > 0 ? (
-        <HeroStatCard
-          label="TOPLAM BAKİYE"
-          amountMinor={totalBalanceMinor}
-          caption={`${allAccounts.length} hesap`}
-        />
-      ) : null}
-
-      {allAccounts.length > 1 ? (
-        <Pressable
-          onPress={() => router.push('/transactions/new?direction=transfer')}
-          style={{
-            height: theme.controlHeight.segmented,
-            borderRadius: theme.radius.widget,
-            borderWidth: 1,
-            borderColor: theme.colors.brandPrimary,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'row',
-            gap: theme.spacing.xxs,
-          }}
-        >
-          <Ionicons name="swap-horizontal-outline" size={16} color={theme.colors.brandPrimary} />
-          <Text variant="body" color="brandPrimary">
-            Hesaplar Arası Transfer
-          </Text>
-        </Pressable>
-      ) : null}
-
-      <Stack gap="sm">
-        <TextField
-          placeholder="Hesap adı veya IBAN'da ara"
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-          autoCorrect={false}
-        />
-        <SegmentedControl options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} size="compact" stretch />
-      </Stack>
-
-      {accountsQuery.error ? (
-        <Text variant="body" color="danger">
-          {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Hesaplar yüklenemedi'}
-        </Text>
-      ) : null}
-    </Stack>
-  );
+  const openNewAccount = () => router.push('/accounts/new');
+  const footerLabel = accounts.length
+    ? `${effectivePage * PAGE_SIZE + 1}–${Math.min((effectivePage + 1) * PAGE_SIZE, accounts.length)} / ${accounts.length} hesap`
+    : '0 hesap gösteriliyor';
+  const isFiltered = search.trim().length > 0 || typeFilter !== 'all';
+  const cashCount = allAccounts.filter((account) => account.type === 'cash').length;
+  const bankCount = allAccounts.filter((account) => account.type === 'bank').length;
+  const otherCount = allAccounts.length - cashCount - bankCount;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <FlatList
-        data={pagedAccounts}
-        keyExtractor={(item) => item.id}
-        style={{ flex: 1 }}
+      <ScrollView
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,
-          gap: theme.spacing.sm,
+          paddingTop: theme.spacing.md,
           paddingBottom: theme.spacing.xxl,
-          flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={listHeader}
-        renderItem={({ item }) => {
-          const balanceMinor = balanceByAccountId.get(item.id) ?? item.opening_balance_minor;
-          const type = item.type as Account['type'];
+      >
+        <Stack gap="lg">
+          <ScreenHeader
+            title="Hesaplar"
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+            right={{ icon: 'add', accessibilityLabel: 'Yeni hesap', variant: 'accent', onPress: openNewAccount }}
+          />
 
-          return (
-            <Pressable onPress={() => router.push(`/accounts/${item.id}`)}>
-              <Card>
-                <Row gap="sm" align="center">
-                  {type === 'cash' ? (
-                    <ValueUnitBadge unitCode={item.currency_code} size={36} />
-                  ) : (
-                    <BankLogo bankCode={item.bank_code} fallbackIcon={TYPE_ICON[type]} size={36} />
-                  )}
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle" numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Row gap="xs" align="center">
-                      <View
-                        style={{
-                          paddingHorizontal: theme.spacing.xs,
-                          paddingVertical: 2,
-                          borderRadius: 999,
-                          backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
-                        }}
-                      >
-                        <Text variant="caption" color="textSecondary">
-                          {TYPE_LABEL[type]}
-                        </Text>
-                      </View>
-                      {item.iban ? (
-                        <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
-                          {maskIban(item.iban)}
-                        </Text>
-                      ) : null}
-                    </Row>
-                  </Stack>
-                  <Amount
-                    amountMinor={balanceMinor}
-                    currencyCode={item.currency_code}
-                    valueUnitType={type === 'cash' ? getValueUnit(item.currency_code).unitType : undefined}
-                    variant="cardTitle"
-                    numberOfLines={1}
-                    overdue={balanceMinor < 0}
-                  />
-                </Row>
-                {type === 'cash' && item.currency_code !== 'TRY' ? (
-                  <Row style={{ justifyContent: 'flex-end', marginTop: theme.spacing.xxs }}>
-                    <ReferenceValueRow
-                      amountMinor={balanceMinor}
-                      unitCode={item.currency_code}
-                      rates={valueUnitRatesQuery.data}
-                      isLoading={valueUnitRatesQuery.isLoading}
-                    />
-                  </Row>
-                ) : null}
-              </Card>
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          !accountsQuery.isSuccess ? (
-            <Stack gap="sm">
-              <Skeleton height={64} borderRadius={theme.radius.widget} />
-              <Skeleton height={64} borderRadius={theme.radius.widget} />
-              <Skeleton height={64} borderRadius={theme.radius.widget} />
-            </Stack>
-          ) : (
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              <EmptyState
-                icon="wallet-outline"
+          <FinanceListHero
+            label="TOPLAM BAKİYE"
+            description="Kredi kartları hariç hesap bakiyelerinizin TL karşılığı"
+            amountText={formatMinorAmount(totalBalanceMinor)}
+            amountColor={totalBalanceMinor < 0 ? 'danger' : 'success'}
+            metrics={[
+              { label: 'TOPLAM HESAP', value: allAccounts.length, caption: 'Tüm kayıtlar' },
+              { label: 'KASA', value: cashCount, caption: 'Nakit hesap' },
+              { label: 'BANKA', value: bankCount, caption: 'Banka hesabı' },
+              { label: 'DİĞER', value: otherCount, caption: 'Cüzdan, kart ve POS' },
+            ]}
+          />
+
+          <FinanceFilterCard
+            title="HESAP TÜRÜ"
+            description="Listede görmek istediğiniz hesap türünü seçin."
+            options={TYPE_FILTERS}
+            value={typeFilter}
+            onChange={setTypeFilter}
+          />
+
+          <FinanceListSurface
+            searchPlaceholder="Hesap adı veya IBAN'da ara"
+            searchValue={search}
+            onSearchChange={setSearch}
+            footerLabel={pagedAccounts.length > 0 ? footerLabel : undefined}
+            actionLabel={pagedAccounts.length > 0 ? 'Yeni hesap' : undefined}
+            onActionPress={pagedAccounts.length > 0 ? openNewAccount : undefined}
+            page={effectivePage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          >
+            {accountsQuery.error ? (
+              <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
+                {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Hesaplar yüklenemedi'}
+              </Text>
+            ) : !accountsQuery.isSuccess ? (
+              <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
+                <Skeleton height={64} borderRadius={theme.radius.widget} />
+                <Skeleton height={64} borderRadius={theme.radius.widget} />
+                <Skeleton height={64} borderRadius={theme.radius.widget} />
+              </Stack>
+            ) : pagedAccounts.length === 0 ? (
+              <FinanceListEmptyState
+                icon={isFiltered ? 'search-outline' : 'wallet-outline'}
                 title={allAccounts.length === 0 ? 'Henüz hesap yok' : 'Sonuç bulunamadı'}
-                message={
-                  allAccounts.length === 0
-                    ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.'
-                    : 'Arama terimini veya filtreyi değiştirin.'
-                }
+                message={allAccounts.length === 0 ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.' : 'Arama terimini veya filtreyi değiştirin.'}
+                actionLabel={isFiltered ? undefined : 'Yeni hesap'}
+                onActionPress={isFiltered ? undefined : openNewAccount}
               />
-            </View>
-          )
-        }
-        ListFooterComponent={
-          totalPages > 1 ? (
-            <View
-              style={{
-                paddingTop: theme.spacing.sm,
-                borderTopWidth: 1,
-                borderTopColor: theme.colors.border,
-              }}
-            >
-              <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} />
-            </View>
-          ) : null
-        }
-      />
+            ) : (
+              pagedAccounts.map((item, index) => (
+                <View key={item.id}>
+                  {index > 0 ? <Divider /> : null}
+                  <AccountRow
+                    account={item}
+                    balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
+                    rates={valueUnitRatesQuery.data}
+                    ratesLoading={valueUnitRatesQuery.isLoading}
+                  />
+                </View>
+              ))
+            )}
+          </FinanceListSurface>
+        </Stack>
+      </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function AccountRow({
+  account,
+  balanceMinor,
+  rates,
+  ratesLoading,
+}: {
+  account: Account;
+  balanceMinor: number;
+  rates: Parameters<typeof ReferenceValueRow>[0]['rates'];
+  ratesLoading: boolean;
+}) {
+  const theme = useTheme();
+  const type = account.type as Account['type'];
+  const detail = account.iban ? `${TYPE_LABEL[type]} · ${maskIban(account.iban)}` : TYPE_LABEL[type];
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${account.name} hesap detayını aç`}
+      onPress={() => router.push(`/accounts/${account.id}`)}
+      style={{
+        minHeight: 86,
+        paddingHorizontal: theme.spacing.lg,
+        paddingVertical: theme.spacing.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.md,
+      }}
+    >
+      {type === 'cash' ? (
+        <ValueUnitBadge unitCode={account.currency_code} size={48} />
+      ) : (
+        <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={48} />
+      )}
+      <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+        <Text variant="cardTitle" numberOfLines={1}>{account.name}</Text>
+        <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>{detail}</Text>
+        {type === 'cash' && account.currency_code !== 'TRY' ? (
+          <ReferenceValueRow amountMinor={balanceMinor} unitCode={account.currency_code} rates={rates} isLoading={ratesLoading} />
+        ) : null}
+      </Stack>
+      <Amount
+        amountMinor={balanceMinor}
+        currencyCode={account.currency_code}
+        valueUnitType={type === 'cash' ? getValueUnit(account.currency_code).unitType : undefined}
+        variant="cardTitle"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.68}
+        style={{ maxWidth: '34%', color: balanceMinor < 0 ? theme.colors.danger : theme.colors.success }}
+      />
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+    </Pressable>
   );
 }

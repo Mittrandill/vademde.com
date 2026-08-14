@@ -1,29 +1,24 @@
 import { useMemo, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import {
-  Button,
-  Card,
   Divider,
-  EmptyState,
-  Pagination,
   Pressable,
-  Row,
-  SegmentedControl,
+  Skeleton,
   Stack,
   Text,
-  TextField,
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
-import { DocumentCalendarIllustration } from '@/components/finance/DocumentCalendarIllustration';
+import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
+import { FinanceListHero } from '@/components/finance/FinanceListHero';
+import { FinanceListEmptyState, FinanceListSurface } from '@/components/finance/FinanceListSurface';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
@@ -31,7 +26,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { computeStatementPeriod, periodKeyForDueDate } from '@/utils/creditCardPeriod';
-import type { ValueUnitType } from '@/features/valueUnits/units';
+import { formatMinorAmount } from '@/utils/money';
 
 const PAGE_SIZE = 10;
 const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
@@ -176,233 +171,99 @@ export default function CreditCardsScreen() {
     0
   );
   const isFiltered = searchInput.trim().length > 0 || statusKey !== 'all';
-
-  const listHeader = (
-    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
-      <ScreenHeader
-        title="Kredi Kartlarım"
-        left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: closeScreen }}
-        right={{
-          icon: 'add',
-          accessibilityLabel: 'Yeni kredi kartı',
-          variant: 'accent',
-          onPress: () => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } }),
-        }}
-      />
-
-      {/* Tanıtım şeridi: obligations/index.tsx'teki aynı sakin yüzey — istatistiklerden
-          ayrı, sayfanın kimliğini taşır. */}
-      <Card
-        style={{
-          borderRadius: theme.radius.heroWidget,
-          padding: theme.spacing.lg,
-          backgroundColor: withAlpha(theme.colors.brandPrimary, 0.08),
-        }}
-      >
-        <Row gap="sm" align="center">
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: theme.radius.input,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.18),
-            }}
-          >
-            <Ionicons name="card-outline" size={22} color={theme.colors.brandPrimary} />
-          </View>
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle" numberOfLines={1}>
-              Kartlarınız tek ekranda
-            </Text>
-            <Text variant="caption" color="textSecondary" numberOfLines={2}>
-              Borç, ekstre ve ödeme tarihlerini tek yerden takip edin.
-            </Text>
-          </Stack>
-          <DocumentCalendarIllustration size={72} />
-        </Row>
-      </Card>
-
-      {/* İstatistik hero kartı: Kredilerim'deki büyük tutar + sayaç satırı dili. */}
-      <Card variant="hero">
-        <Stack gap="lg">
-          <Row gap="md" align="center">
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.4 }}>
-                TOPLAM KART BORCU
-              </Text>
-              <Amount
-                amountMinor={totalDebtMinor}
-                variant="displayAmount"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.55}
-                style={{ color: totalDebtMinor > 0 ? theme.colors.danger : theme.colors.textPrimary }}
-              />
-            </Stack>
-            <View
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: theme.radius.input,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-              }}
-            >
-              <Ionicons name="card-outline" size={24} color={theme.colors.brandPrimary} />
-            </View>
-          </Row>
-
-          <Divider />
-
-          <Row>
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                TOPLAM KART
-              </Text>
-              <Text variant="cardTitle" tabular>
-                {allCards.length}
-              </Text>
-            </Stack>
-            {allCards.length > 0 ? (
-              <>
-                <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text
-                    variant="caption"
-                    color={cardsAwaitingStatement > 0 ? 'danger' : 'textSecondary'}
-                    numberOfLines={1}
-                  >
-                    EKSTRE BEKLEYEN
-                  </Text>
-                  <Text
-                    variant="cardTitle"
-                    tabular
-                    style={cardsAwaitingStatement > 0 ? { color: theme.colors.danger } : undefined}
-                  >
-                    {cardsAwaitingStatement}
-                  </Text>
-                </Stack>
-              </>
-            ) : null}
-          </Row>
-
-          <Button
-            icon="add"
-            label="Yeni Kredi Kartı Ekle"
-            onPress={() => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } })}
-          />
-        </Stack>
-      </Card>
-
-      <SegmentedControl options={CARD_STATUS_OPTIONS} value={statusKey} onChange={setStatusKey} size="compact" stretch />
-
-      <Row gap="xs">
-        <View style={{ flex: 1, position: 'relative', justifyContent: 'center' }}>
-          <Ionicons
-            name="search"
-            size={18}
-            color={theme.colors.textSecondary}
-            style={{ position: 'absolute', left: theme.spacing.sm, zIndex: 1 }}
-          />
-          <TextField
-            placeholder="Kredi kartlarımda ara..."
-            value={searchInput}
-            onChangeText={setSearchInput}
-            returnKeyType="search"
-            autoCorrect={false}
-            style={{ paddingLeft: theme.spacing.xxl }}
-          />
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Tarihe göre sırala"
-          onPress={() => setSortAscending((v) => !v)}
-          style={{
-            height: theme.buttonHeight.primary,
-            paddingHorizontal: theme.spacing.sm,
-            borderRadius: theme.radius.input,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.xxs,
-          }}
-        >
-          <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
-          <Text variant="body" color="textSecondary">
-            Tarih
-          </Text>
-        </Pressable>
-      </Row>
-
-      {accountsQuery.error ? (
-        <Text variant="body" color="danger">
-          {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Kredi kartları yüklenemedi'}
-        </Text>
-      ) : null}
-    </Stack>
-  );
+  const openNewCard = () => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } });
+  const footerLabel = cards.length
+    ? `${effectivePage * PAGE_SIZE + 1}–${Math.min((effectivePage + 1) * PAGE_SIZE, cards.length)} / ${cards.length} kart`
+    : '0 kart gösteriliyor';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <FlatList
-        data={pagedCards}
-        keyExtractor={(item) => item.id}
-        style={{ flex: 1 }}
+      <ScrollView
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,
+          paddingTop: theme.spacing.md,
           paddingBottom: theme.spacing.xxl,
-          gap: theme.spacing.md,
-          flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={listHeader}
-        renderItem={({ item }) => (
-          <CreditCardRowCard
-            account={item}
-            balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
-            statements={statementsByAccount.get(item.id) ?? []}
-            hasCurrentStatement={cardInfoById.get(item.id)?.hasCurrentStatement ?? false}
+      >
+        <Stack gap="lg">
+          <ScreenHeader
+            title="Kredi Kartlarım"
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: closeScreen }}
+            right={{ icon: 'add', accessibilityLabel: 'Yeni kredi kartı', variant: 'accent', onPress: openNewCard }}
           />
-        )}
-        ListEmptyComponent={
-          accountsQuery.isSuccess ? (
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              <EmptyState
+
+          <FinanceListHero
+            label="TOPLAM KART BORCU"
+            description="Kredi kartlarınızın güncel toplam borcu"
+            amountText={formatMinorAmount(totalDebtMinor)}
+            amountColor={totalDebtMinor > 0 ? 'danger' : 'textPrimary'}
+            metrics={[
+              { label: 'TOPLAM KART', value: allCards.length, caption: 'Tüm kartlar' },
+              { label: 'EKSTRE BEKLEYEN', value: cardsAwaitingStatement, caption: 'Yüklenmesi gereken', valueColor: cardsAwaitingStatement > 0 ? 'danger' : undefined },
+              { label: 'EKSTRE YÜKLENDİ', value: allCards.length - cardsAwaitingStatement, caption: 'Bu dönem', valueColor: 'success' },
+              { label: 'BORÇLU KART', value: allCards.filter((account) => (balanceByAccountId.get(account.id) ?? account.opening_balance_minor) > 0).length, caption: 'Bakiye taşıyan', valueColor: 'danger' },
+            ]}
+          />
+
+          <FinanceFilterCard
+            title="EKSTRE DURUMU"
+            description="Listede görmek istediğiniz ekstre durumunu seçin."
+            options={CARD_STATUS_OPTIONS}
+            value={statusKey}
+            onChange={setStatusKey}
+          />
+
+          <FinanceListSurface
+            searchPlaceholder="Kredi kartlarımda ara..."
+            searchValue={searchInput}
+            onSearchChange={setSearchInput}
+            sortAction={{
+              label: 'Tarih',
+              accessibilityLabel: 'Tarihe göre sırala',
+              icon: sortAscending ? 'arrow-up' : 'arrow-down',
+              onPress: () => setSortAscending((value) => !value),
+            }}
+            footerLabel={pagedCards.length > 0 ? footerLabel : undefined}
+            actionLabel={pagedCards.length > 0 ? 'Yeni kredi kartı' : undefined}
+            onActionPress={pagedCards.length > 0 ? openNewCard : undefined}
+            page={effectivePage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          >
+            {accountsQuery.error ? (
+              <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
+                {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Kredi kartları yüklenemedi'}
+              </Text>
+            ) : !accountsQuery.isSuccess ? (
+              <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
+                <Skeleton height={72} borderRadius={theme.radius.widget} />
+                <Skeleton height={72} borderRadius={theme.radius.widget} />
+              </Stack>
+            ) : pagedCards.length === 0 ? (
+              <FinanceListEmptyState
                 icon={isFiltered ? 'search-outline' : 'card-outline'}
                 title={isFiltered ? 'Sonuç bulunamadı' : 'Henüz kredi kartı yok'}
-                message={
-                  isFiltered
-                    ? 'Arama terimini veya filtreleri değiştirin.'
-                    : 'Kredi kartı ekleyerek borcunuzu ve ekstrelerinizi takip etmeye başlayın.'
-                }
-                actionLabel={isFiltered ? undefined : 'Yeni Kredi Kartı Ekle'}
-                onActionPress={
-                  isFiltered
-                    ? undefined
-                    : () => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } })
-                }
+                message={isFiltered ? 'Arama terimini veya filtreleri değiştirin.' : 'Kredi kartı ekleyerek borcunuzu ve ekstrelerinizi takip etmeye başlayın.'}
+                actionLabel={isFiltered ? undefined : 'Yeni kredi kartı'}
+                onActionPress={isFiltered ? undefined : openNewCard}
               />
-            </View>
-          ) : null
-        }
-        ListFooterComponent={
-          totalPages > 1 ? (
-            <View
-              style={{
-                paddingTop: theme.spacing.sm,
-                borderTopWidth: 1,
-                borderTopColor: theme.colors.border,
-              }}
-            >
-              <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} />
-            </View>
-          ) : null
-        }
-      />
+            ) : (
+              pagedCards.map((item, index) => (
+                <View key={item.id}>
+                  {index > 0 ? <Divider /> : null}
+                  <CreditCardRowCard
+                    account={item}
+                    balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
+                    statements={statementsByAccount.get(item.id) ?? []}
+                    hasCurrentStatement={cardInfoById.get(item.id)?.hasCurrentStatement ?? false}
+                  />
+                </View>
+              ))
+            )}
+          </FinanceListSurface>
+        </Stack>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -419,99 +280,48 @@ interface CreditCardRowCardProps {
 function CreditCardRowCard({ account, balanceMinor, statements, hasCurrentStatement }: CreditCardRowCardProps) {
   const theme = useTheme();
   const latestStatement = statements[0] ?? null;
+  const detail = [
+    account.card_last_four ? `•••• ${account.card_last_four}` : 'Kredi Kartı',
+    hasCurrentStatement ? 'Ekstre yüklendi' : 'Ekstre bekliyor',
+    latestStatement?.due_date ? monthFormatter.format(new Date(latestStatement.due_date)) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <Pressable onPress={() => router.push(`/accounts/${account.id}`)}>
-      <Card>
-        <Stack gap="sm">
-          <Row gap="sm" align="center">
-            <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={36} />
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="cardTitle" numberOfLines={1}>
-                {account.name}
-              </Text>
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                {account.card_last_four ? `•••• ${account.card_last_four}` : 'Kredi Kartı'}
-              </Text>
-            </Stack>
-            <View
-              style={{
-                paddingHorizontal: theme.spacing.xs,
-                paddingVertical: 2,
-                borderRadius: 999,
-                backgroundColor: withAlpha(hasCurrentStatement ? theme.colors.success : theme.colors.textSecondary, 0.14),
-              }}
-            >
-              <Text
-                variant="caption"
-                style={{ color: hasCurrentStatement ? theme.colors.success : theme.colors.textSecondary }}
-              >
-                {hasCurrentStatement ? 'Ekstre yüklendi' : 'Ekstre bekliyor'}
-              </Text>
-            </View>
-          </Row>
-
-          <Row>
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="caption" color="textSecondary">
-                GÜNCEL BORÇ
-              </Text>
-              <Amount
-                amountMinor={balanceMinor}
-                currencyCode={account.currency_code}
-                variant="cardTitle"
-                numberOfLines={1}
-                overdue={balanceMinor > 0}
-              />
-            </Stack>
-            <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.sm }} />
-            <Stack gap="xxs" style={{ flex: 1 }} align="flex-end">
-              <Text variant="caption" color="textSecondary">
-                SON EKSTRE
-              </Text>
-              {latestStatement ? (
-                <>
-                  <Amount
-                    amountMinor={latestStatement.remaining_amount_minor}
-                    currencyCode={latestStatement.currency_code}
-                    valueUnitType={latestStatement.value_unit_type as ValueUnitType}
-                    variant="cardTitle"
-                    numberOfLines={1}
-                  />
-                  {latestStatement.due_date ? (
-                    <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
-                      {monthFormatter.format(new Date(latestStatement.due_date))}
-                    </Text>
-                  ) : null}
-                </>
-              ) : (
-                <Text variant="cardTitle" color="textSecondary" numberOfLines={1}>
-                  Yok
-                </Text>
-              )}
-            </Stack>
-          </Row>
-
-          {account.statement_day ? (
-            <Row
-              gap="xs"
-              align="center"
-              style={{
-                backgroundColor: theme.colors.backgroundPrimary,
-                borderRadius: theme.radius.input,
-                paddingHorizontal: theme.spacing.sm,
-                paddingVertical: theme.spacing.xs,
-              }}
-            >
-              <Ionicons name="calendar-outline" size={14} color={theme.colors.textSecondary} />
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                Kesim: {account.statement_day}
-                {account.payment_due_day ? ` · Son ödeme: ${account.payment_due_day}` : ''}
-              </Text>
-            </Row>
-          ) : null}
-        </Stack>
-      </Card>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${account.name} kart detayını aç`}
+      onPress={() => router.push(`/accounts/${account.id}`)}
+      style={{
+        minHeight: 86,
+        paddingHorizontal: theme.spacing.lg,
+        paddingVertical: theme.spacing.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.md,
+      }}
+    >
+      <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={48} />
+      <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+        <Text variant="cardTitle" numberOfLines={1}>
+          {account.name}
+        </Text>
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          {detail}
+        </Text>
+      </Stack>
+      <Amount
+        amountMinor={balanceMinor}
+        currencyCode={account.currency_code}
+        direction="expense"
+        variant="cardTitle"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.68}
+        style={{ maxWidth: '34%', color: theme.colors.danger }}
+      />
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
     </Pressable>
   );
 }

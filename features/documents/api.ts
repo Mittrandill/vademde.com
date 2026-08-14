@@ -17,7 +17,7 @@ export interface UploadDocumentInput {
   mimeType: string;
   contentHash?: string;
   // docs/07-guvenlik-gizlilik.md §11.3 — "orijinal belgeyi saklama veya işlem sonrası
-  // silme tercihi". Belirtilmezse (ör. eski çağrılar) varsayılan true — davranış değişmez.
+  // silme tercihi". Belirtilmezse güvenli varsayılan false'tur.
   retainOriginal?: boolean;
 }
 
@@ -81,7 +81,16 @@ export async function uploadAndCreateDocument({
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Yükleme başarılı olup metadata kaydı başarısız olursa dosya hiçbir belge kaydına
+    // bağlanmadan bucket'ta kalır. Hemen temizleyerek hassas bir yetim dosya oluşmasını
+    // engelle; temizlik de başarısızsa iki hatayı birlikte görünür kıl.
+    const { error: cleanupError } = await supabase.storage.from(BUCKET).remove([storagePath]);
+    if (cleanupError) {
+      throw new Error(`${error.message}; yüklenen ham belge temizlenemedi: ${cleanupError.message}`);
+    }
+    throw error;
+  }
   return data;
 }
 
