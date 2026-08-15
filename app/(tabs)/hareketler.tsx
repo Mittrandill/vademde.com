@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import {
   ActionSheet,
   Divider,
@@ -105,6 +106,7 @@ const LIST_PAGE_SIZE = 10;
 
 export default function HareketlerScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [searchInput, setSearchInput] = useState('');
@@ -375,7 +377,7 @@ export default function HareketlerScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <FlatList
         data={visibleRows}
         keyExtractor={(item) => `${item.kind}-${item.id}${item.installmentId ? `-${item.installmentId}` : ''}`}

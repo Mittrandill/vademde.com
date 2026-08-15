@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 
@@ -155,9 +156,10 @@ const SECTIONS: Section[] = [
 
 export default function TermsOfServiceScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
         <ScreenHeader
           title="Kullanım Koşulları"

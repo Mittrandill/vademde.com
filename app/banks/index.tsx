@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Divider, Pressable, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
@@ -37,6 +38,7 @@ const BANK_FILTERS: { key: BankFilterKey; label: string }[] = [
 // finansal hero, tek filtre kartı ve bölücülü tek liste yüzeyi.
 export default function BanksScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<BankFilterKey>('all');
@@ -101,7 +103,7 @@ export default function BanksScreen() {
     : '0 banka gösteriliyor';
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,

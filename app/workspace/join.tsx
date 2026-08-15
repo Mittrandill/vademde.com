@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Button, Card, Stack, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { redeemWorkspaceInvite } from '@/features/workspaces/members';
@@ -16,6 +17,7 @@ import { showErrorAlert, showSaveSuccess } from '@/utils/alerts';
 // veya doğrudan paylaşılan kodun karşılığıdır; katılınca çalışma alanı listeye eklenir ve aktif olur.
 export default function JoinWorkspaceScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
   const params = useLocalSearchParams<{ code?: string }>();
@@ -35,7 +37,7 @@ export default function JoinWorkspaceScreen() {
   const canSubmit = code.trim().length >= 4;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
         <ScreenHeader title="Çalışma Alanına Katıl" />
       </View>

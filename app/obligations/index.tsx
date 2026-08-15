@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import {
   ActionSheet,
   Divider,
@@ -74,6 +75,7 @@ const STATUSES_BY_KEY: Record<StatusKey, Obligation['status'][] | undefined> = {
 // böylece kredi kartı ekstresi gibi başka taksitli türler de aynı zengin kartı ücretsiz alır.
 export default function ObligationsByTypeScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const { type } = useLocalSearchParams<{ type?: string }>();
@@ -237,7 +239,7 @@ export default function ObligationsByTypeScreen() {
     : '0 kayıt gösteriliyor';
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,

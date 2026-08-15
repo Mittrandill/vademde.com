@@ -5,6 +5,7 @@ import { router, type Href } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Card, Divider, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { listAccounts } from '@/features/accounts/api';
@@ -46,6 +47,7 @@ function initialsFrom(name: string | null | undefined, email: string | null | un
 
 export default function MoreScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const { session } = useSession();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
 
@@ -94,7 +96,7 @@ export default function MoreScreen() {
   const planLabel = PLAN_LABELS[planCode] ?? planCode;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView
         contentContainerStyle={{
           padding: theme.screenEdge.standard,

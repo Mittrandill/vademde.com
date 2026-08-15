@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Card, Divider, Pressable, ProgressRing, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { Amount, type AmountDirection } from '@/components/finance/Amount';
@@ -36,6 +37,7 @@ const monthLabelFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', ye
 
 export default function TakvimScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
 
   const today = useMemo(() => new Date(), []);
@@ -152,7 +154,7 @@ export default function TakvimScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView
         contentContainerStyle={{
           padding: theme.screenEdge.standard,

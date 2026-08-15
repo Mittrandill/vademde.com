@@ -124,6 +124,33 @@ export type Database = {
           },
         ]
       }
+      contact_messages: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          name: string
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          name: string
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          subject?: string
+        }
+        Relationships: []
+      }
       counterparties: {
         Row: {
           created_at: string
@@ -981,6 +1008,7 @@ export type Database = {
           id: string
           occurred_at: string
           related_transaction_id: string | null
+          source_obligation_id: string | null
           transfer_to_account_id: string | null
           updated_at: string
           workspace_id: string
@@ -997,6 +1025,7 @@ export type Database = {
           id?: string
           occurred_at?: string
           related_transaction_id?: string | null
+          source_obligation_id?: string | null
           transfer_to_account_id?: string | null
           updated_at?: string
           workspace_id: string
@@ -1013,6 +1042,7 @@ export type Database = {
           id?: string
           occurred_at?: string
           related_transaction_id?: string | null
+          source_obligation_id?: string | null
           transfer_to_account_id?: string | null
           updated_at?: string
           workspace_id?: string
@@ -1044,6 +1074,13 @@ export type Database = {
             columns: ["related_transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_source_obligation_id_fkey"
+            columns: ["source_obligation_id"]
+            isOneToOne: false
+            referencedRelation: "obligations"
             referencedColumns: ["id"]
           },
           {
@@ -1264,6 +1301,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      default_category_catalog: {
+        Args: { p_workspace_type: string }
+        Returns: {
+          color: string
+          icon: string
+          kind: string
+          name: string
+        }[]
       }
       increment_ocr_usage: {
         Args: { target_owner: string; target_period: string }

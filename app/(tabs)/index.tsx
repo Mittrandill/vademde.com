@@ -27,12 +27,17 @@ import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/a
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
+import { useReflowKey } from '@/services/reflow';
 
 export default function HomeScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { activeWorkspaceId, setActiveWorkspaceId, balanceHidden, toggleBalanceHidden } = useWorkspaceStore();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  // Sistem yazı boyutu ekran açıkken değişirse (bkz. services/reflow.ts), bu ekranın
+  // yeniden mount olması için — büyük fontta bozulan (BalanceHero'nun bir kerelik ölçülen
+  // pageWidth'i gibi) düzenler kullanıcı sekme değiştirmeden düzelsin.
+  const reflowKey = useReflowKey();
 
   const workspacesQuery = useQuery({
     queryKey: queryKeys.workspaces(),
@@ -206,7 +211,7 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       {!workspacesQuery.isSuccess || workspaces.length === 0 ? (
         <Stack gap="lg" style={{ padding: theme.screenEdge.standard }}>
           <Skeleton height={32} width="60%" />

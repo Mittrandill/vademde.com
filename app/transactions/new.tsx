@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { AmountField, Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
@@ -34,6 +35,7 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 
 export default function NewTransactionScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const { id, accountId, direction, description } = useLocalSearchParams<{
     id?: string;
     accountId?: string;
@@ -50,7 +52,7 @@ export default function NewTransactionScreen() {
 
   if (isEditing && !existingQuery.data) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
@@ -64,6 +66,7 @@ export default function NewTransactionScreen() {
 
   return (
     <TransactionForm
+      key={reflowKey}
       id={isEditing ? (id as string) : null}
       initial={existingQuery.data ?? null}
       initialAccountId={typeof accountId === 'string' ? accountId : undefined}
@@ -114,6 +117,11 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
   // kart borcu buradan değil harcama/ekstre akışından değişir (bkz. app/accounts/[id].tsx
   // ekstre/ödeme akışı). Transfer yönünde kart hesapları seçilemez hale getirilir.
   const transferableAccounts = accounts.filter((a) => a.type !== 'credit_card');
+  // POS bir tahsilat cihazıdır — yalnızca gelir (kart/nakit tahsilatı) alır, ondan ödeme
+  // yapılamaz. Gider yönünde HESAP seçeneklerinden çıkarılır; gelirde ve transferde
+  // (kasaya nakit çekme gibi) POS yine seçilebilir kalır.
+  const payableAccounts = accounts.filter((a) => a.type !== 'pos');
+  const accountsForDirection = direction === 'expense' ? payableAccounts : accounts;
 
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId
@@ -243,6 +251,9 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
                 if (value === 'transfer' && accounts.find((a) => a.id === accountId)?.type === 'credit_card') {
                   setAccountId(null);
                 }
+                if (value === 'expense' && accounts.find((a) => a.id === accountId)?.type === 'pos') {
+                  setAccountId(null);
+                }
               }}
               stretch
             />
@@ -253,15 +264,17 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
               <Text variant="caption" color="textSecondary">
                 {direction === 'transfer' ? 'KAYNAK HESAP' : 'HESAP'}
               </Text>
-              {(direction === 'transfer' ? transferableAccounts : accounts).length === 0 ? (
+              {(direction === 'transfer' ? transferableAccounts : accountsForDirection).length === 0 ? (
                 <Text variant="body" color="textSecondary">
                   {direction === 'transfer'
                     ? 'Transfer için kredi kartı dışında en az bir hesap gerekir.'
-                    : "Önce Hesaplar'dan bir hesap ekleyin."}
+                    : direction === 'expense' && accounts.length > 0
+                      ? 'POS dışında en az bir hesap gerekir.'
+                      : "Önce Hesaplar'dan bir hesap ekleyin."}
                 </Text>
               ) : (
                 <AccountPicker
-                  accounts={direction === 'transfer' ? transferableAccounts : accounts}
+                  accounts={direction === 'transfer' ? transferableAccounts : accountsForDirection}
                   selectedId={accountId}
                   onSelect={setAccountId}
                   title="Kaynak Hesap Seç"

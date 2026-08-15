@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
@@ -106,6 +107,7 @@ export default function DocumentReviewScreen() {
     expectedDueDate?: string;
   }>();
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
 
@@ -627,6 +629,10 @@ export default function DocumentReviewScreen() {
                 amount_minor: item.amount_minor,
                 occurred_at: isoOrNull(item.occurred_at) ?? new Date().toISOString(),
                 description: item.description,
+                // Bu obligation (kart borcu) silinince aynı ekstreden kategorilere ayrılmış
+                // harcamalar da (ON DELETE CASCADE) birlikte silinsin diye kaynağına bağlanır —
+                // aksi halde ekstre silindikten sonra Hareketler'de yetim kayıtlar kalıyordu.
+                source_obligation_id: obligation.id,
               }))
             );
           } catch {
@@ -748,7 +754,7 @@ export default function DocumentReviewScreen() {
 
   if (documentQuery.isLoading || !documentQuery.data) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text variant="body" color="textSecondary">
             Yükleniyor...
@@ -759,10 +765,15 @@ export default function DocumentReviewScreen() {
   }
 
   const document = documentQuery.data;
+  // POS yalnızca tahsilat alır, ondan ödeme yapılamaz — borç/gider yönünde HESAP
+  // seçeneklerinden çıkarılır; alacak/gelir yönünde (ör. POS'tan tahsilat) orada kalır.
+  const isPayingOut = direction === 'payable' || direction === 'expense';
   const accountOptions =
     documentType === 'kredi_karti_ekstresi'
       ? (accountsQuery.data ?? []).filter((account) => account.type === 'credit_card')
-      : (accountsQuery.data ?? []);
+      : isPayingOut
+        ? (accountsQuery.data ?? []).filter((account) => account.type !== 'pos')
+        : (accountsQuery.data ?? []);
   const canSubmit =
     !!amount &&
     ((direction === 'payable' || direction === 'receivable') ? !!documentType : !!accountId) &&
@@ -792,7 +803,7 @@ export default function DocumentReviewScreen() {
   const totalInterestMinor = totalRepaymentMinor !== null ? totalRepaymentMinor - principalMinor : null;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -867,7 +878,17 @@ export default function DocumentReviewScreen() {
                 YÖN
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-                <SegmentedControl options={DIRECTIONS} value={direction} onChange={setDirection} />
+                <SegmentedControl
+                  options={DIRECTIONS}
+                  value={direction}
+                  onChange={(value) => {
+                    setDirection(value);
+                    const willPayOut = value === 'payable' || value === 'expense';
+                    if (willPayOut && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
+                      setAccountId(null);
+                    }
+                  }}
+                />
               </ScrollView>
             </Stack>
 

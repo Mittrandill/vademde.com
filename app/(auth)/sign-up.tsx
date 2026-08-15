@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Button, Divider, Row, Stack, Text, TextField } from '@/components/primitives';
 import { AuthHeader } from '@/components/brand/AuthHeader';
 import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
@@ -12,6 +13,7 @@ import { translateAuthError } from '@/features/auth/errors';
 
 export default function SignUpScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -62,7 +64,7 @@ export default function SignUpScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}

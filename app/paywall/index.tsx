@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Divider, Pressable, Row, SectionHeader, SegmentedControl, Stack, Text } from '@/components/primitives';
 import {
@@ -110,6 +111,7 @@ function useReduceMotion(): boolean {
 
 export default function PaywallScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('yearly');
   const [chosenPlan, setChosenPlan] = useState<PlanCode | null>(null);
@@ -196,7 +198,7 @@ export default function PaywallScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Row
         style={{
           justifyContent: 'space-between',

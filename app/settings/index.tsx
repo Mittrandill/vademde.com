@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { useSession } from '@/features/auth/useSession';
@@ -41,6 +42,7 @@ function initialsFrom(name: string | null | undefined, email: string | null | un
 // burada değil, kendi ekranlarında (bkz. app/profile, app/subscription).
 export default function SettingsScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const { session } = useSession();
   const themePreference = useThemePreferenceStore((s) => s.themePreference);
   const setThemePreference = useThemePreferenceStore((s) => s.setThemePreference);
@@ -61,7 +63,7 @@ export default function SettingsScreen() {
   const fullName = profileQuery.data?.full_name ?? null;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Row
         align="center"
         gap="sm"

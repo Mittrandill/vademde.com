@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { ActionSheet, Card, EmptyState, Pagination, Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import type { ActionSheetOption } from '@/components/primitives/ActionSheet';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
@@ -77,6 +78,7 @@ function contentFor(reminder: DeliveredReminder): ReminderContent | null {
 
 export default function NotificationsScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [page, setPage] = useState(0);
@@ -160,7 +162,7 @@ export default function NotificationsScreen() {
     .map((title) => ({ title, data: groups.get(title)! }));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Stack gap="lg" style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.md }}>
         <ScreenHeader
           title="Bildirimler"

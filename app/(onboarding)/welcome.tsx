@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Pressable, Row, Stack, Text } from '@/components/primitives';
 import { OnboardingScanIllustration } from '@/components/brand/OnboardingScanIllustration';
 import { OnboardingReminderIllustration } from '@/components/brand/OnboardingReminderIllustration';
@@ -35,6 +36,7 @@ const PAGES = [
 
 export default function WelcomeScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const scrollRef = useRef<ScrollView>(null);
   const setHasSeenWelcome = useOnboardingStore((s) => s.setHasSeenWelcome);
   const [page, setPage] = useState(0);
@@ -59,7 +61,7 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Row style={{ justifyContent: 'flex-end', paddingHorizontal: theme.screenEdge.standard, height: theme.touchTarget.minimum }}>
         {!isLastPage ? (
           <Pressable onPress={finish} hitSlop={8}>

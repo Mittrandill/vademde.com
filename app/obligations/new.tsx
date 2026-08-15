@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
@@ -47,6 +48,7 @@ const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', mo
 
 export default function NewObligationScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const { id, type, accountId, dueDate } = useLocalSearchParams<{
     id?: string;
     type?: string;
@@ -63,7 +65,7 @@ export default function NewObligationScreen() {
 
   if (isEditing && !existingQuery.data) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
@@ -77,6 +79,7 @@ export default function NewObligationScreen() {
 
   return (
     <ObligationForm
+      key={reflowKey}
       id={isEditing ? (id as string) : null}
       initial={existingQuery.data?.obligation ?? null}
       hasInstallments={(existingQuery.data?.installments.length ?? 0) > 0}
@@ -148,6 +151,13 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   // herhangi bir hesaba (kasa/banka/cüzdan/POS) yatırılabilir.
   const creditCardAccounts = (accountsQuery.data ?? []).filter((a) => a.type === 'credit_card');
   const depositTargetAccounts = (accountsQuery.data ?? []).filter((a) => a.type !== 'credit_card');
+  // POS yalnızca tahsilat alır, ondan ödeme yapılamaz — borç (payable) kaydında HESAP
+  // seçeneklerinden çıkarılır; alacak (receivable) tahsilatı POS'tan olabileceği için
+  // orada kalır.
+  const generalAccounts =
+    direction === 'payable'
+      ? (accountsQuery.data ?? []).filter((a) => a.type !== 'pos')
+      : accountsQuery.data ?? [];
 
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.categories(activeWorkspaceId, categoryKind) : ['categories', 'disabled'],
@@ -375,6 +385,9 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               onChange={(value) => {
                 setDirection(value);
                 setCategoryId(null);
+                if (value === 'payable' && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
+                  setAccountId(null);
+                }
               }}
               stretch
             />
@@ -496,7 +509,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               <Text variant="caption" color="textSecondary">
                 {isCashAdvanceType ? 'KREDİ KARTI' : 'HESAP (İSTEĞE BAĞLI)'}
               </Text>
-              {(isCashAdvanceType ? creditCardAccounts : accountsQuery.data ?? []).length === 0 ? (
+              {(isCashAdvanceType ? creditCardAccounts : generalAccounts).length === 0 ? (
                 <Text variant="body" color="textSecondary">
                   {isCashAdvanceType
                     ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
@@ -504,7 +517,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
                 </Text>
               ) : (
                 <AccountPicker
-                  accounts={isCashAdvanceType ? creditCardAccounts : accountsQuery.data ?? []}
+                  accounts={isCashAdvanceType ? creditCardAccounts : generalAccounts}
                   selectedId={accountId}
                   onSelect={setAccountId}
                 />

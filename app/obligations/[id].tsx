@@ -630,6 +630,10 @@ function PaymentForm({
       valueUnit.precision
     )
   );
+  // POS yalnızca tahsilat alır, ondan ödeme yapılamaz — borç (payable) ödemesinde HESAP
+  // seçeneklerinden çıkarılır; alacak (receivable) tahsilatı POS'tan olabileceği için orada kalır.
+  const payableAccounts =
+    obligation.direction === 'payable' ? accounts.filter((a) => a.type !== 'pos') : accounts;
   const [accountId, setAccountId] = useState<string | null>(editingPayment?.account_id ?? null);
   // Ödeme varsayılan olarak işlem yapıldığı anın tarihiyle (DB varsayılanı) kaydedilir,
   // ama geçmiş/ileri tarihli ödemeler için kullanıcı bunu elle değiştirebilir.
@@ -708,12 +712,12 @@ function PaymentForm({
 
         <DateField label="ÖDEME TARİHİ" value={dateStr} onChangeText={setDateStr} />
 
-        {accounts.length > 0 ? (
+        {payableAccounts.length > 0 ? (
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
               HESAP (İSTEĞE BAĞLI)
             </Text>
-            <AccountPicker accounts={accounts} selectedId={accountId} onSelect={setAccountId} />
+            <AccountPicker accounts={payableAccounts} selectedId={accountId} onSelect={setAccountId} />
           </Stack>
         ) : null}
 

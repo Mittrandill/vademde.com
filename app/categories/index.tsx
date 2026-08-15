@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Card, EmptyState, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import { listCategories, type Category } from '@/features/categories/api';
@@ -23,6 +24,7 @@ const KIND_FILTERS: { key: KindFilterKey; label: string }[] = [
 
 export default function CategoriesScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<KindFilterKey>('all');
@@ -104,7 +106,7 @@ export default function CategoriesScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <SectionList
           sections={sections}
           keyExtractor={(item: Category) => item.id}

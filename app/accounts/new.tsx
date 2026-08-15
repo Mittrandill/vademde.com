@@ -6,8 +6,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
-import { AmountField, Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, Divider, Pressable, Row, SectionHeader, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
@@ -61,6 +63,7 @@ function FormSection({
 
 export default function NewAccountScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const { id, type: typeParam } = useLocalSearchParams<{ id?: string; type?: string }>();
   const isEditing = !!id;
@@ -217,7 +220,7 @@ export default function NewAccountScreen() {
   } as Account;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
@@ -227,14 +230,10 @@ export default function NewAccountScreen() {
           contentContainerStyle={{ padding: theme.screenEdge.standard }}
         >
         <Stack gap="lg">
-          <Row align="center">
-            <Pressable onPress={() => router.back()} hitSlop={12}>
-              <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-              {isEditing ? 'Hesabı Düzenle' : 'Yeni Hesap'}
-            </Text>
-          </Row>
+          <ScreenHeader
+            title={isEditing ? 'Hesabı Düzenle' : 'Yeni Hesap'}
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+          />
 
           <SegmentedControl
             options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
@@ -256,9 +255,7 @@ export default function NewAccountScreen() {
             <>
               <FormSection icon="card-outline" title="Kart Bilgileri">
                 <Stack gap="sm">
-                  <Text variant="caption" color="textSecondary">
-                    BANKA (İSTEĞE BAĞLI)
-                  </Text>
+                  <SectionHeader title="Banka (isteğe bağlı)" />
                   <BankPicker selectedId={bankCode} onSelect={setBankCode} />
                 </Stack>
 

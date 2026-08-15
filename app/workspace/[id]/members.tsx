@@ -6,6 +6,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
@@ -46,6 +47,7 @@ function initials(name: string | null, email: string | null): string {
 
 export default function WorkspaceMembersScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const { session } = useSession();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -145,7 +147,7 @@ export default function WorkspaceMembersScreen() {
   const invites = invitesQuery.data ?? [];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
         <ScreenHeader title="Ekip" />
       </View>

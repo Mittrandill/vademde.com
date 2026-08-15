@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
@@ -38,6 +39,7 @@ function initialsFrom(name: string | null | undefined, email: string | null | un
 // (görünüm) ve diğer hub ekranlarına gidişin yaşadığı yer olur.
 export default function ProfileScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const { session } = useSession();
   const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore();
@@ -226,7 +228,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
         <ScreenHeader title="Profil" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
       </View>

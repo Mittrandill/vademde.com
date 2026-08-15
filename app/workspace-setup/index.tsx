@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { AmountField, Button, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWorkspaceIllustration';
 import { setupInitialWorkspaces } from '@/features/workspaces/api';
@@ -30,6 +31,7 @@ const DEFAULT_NAME: Record<'personal' | 'business', string> = {
 // kullanıcılar buraya yönlendirilir (bkz. app/(tabs)/index.tsx).
 export default function WorkspaceSetupScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
 
@@ -72,7 +74,7 @@ export default function WorkspaceSetupScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"

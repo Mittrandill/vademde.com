@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { IncomeExpenseAnalysis } from '@/components/finance/IncomeExpenseAnalysis';
@@ -86,6 +87,7 @@ const CATEGORY_DIRECTION_OPTIONS: { key: CategoryDirection; label: string }[] = 
 // beş akışa (Ana Sayfa/Hareketler/Tara/Takvim/Daha Fazla) ayrılmış olduğundan buraya taşındı.
 export default function ReportsScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [period, setPeriod] = useState<Period>('month');
   const [categoryDirection, setCategoryDirection] = useState<CategoryDirection>('expense');
@@ -251,7 +253,7 @@ export default function ReportsScreen() {
 
   if (!activeWorkspaceId) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack gap="xs" style={{ flex: 1, padding: theme.screenEdge.standard, justifyContent: 'center' }}>
           <Text variant="pageTitle">Raporlar</Text>
           <Text variant="body" color="textSecondary">
@@ -263,7 +265,7 @@ export default function ReportsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Stack gap="lg" style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.md }}>
         <ScreenHeader
           title="Raporlar"

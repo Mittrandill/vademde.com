@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Divider, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
@@ -60,6 +61,7 @@ function buildFeatures(limits: { advanced_reports: boolean; document_archive: bo
 // değiştirme/satın alma akışı hâlâ paywall'da kalır (docs/10-abonelik-gelir-modeli.md).
 export default function SubscriptionScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -111,7 +113,7 @@ export default function SubscriptionScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
         <ScreenHeader title="Abonelik" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
       </View>

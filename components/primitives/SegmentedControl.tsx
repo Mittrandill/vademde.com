@@ -53,7 +53,7 @@ function SegmentedControlInner<T extends string>({
       style={{
         alignSelf: stretch && !scrollable ? 'stretch' : 'flex-start',
         backgroundColor: theme.colors[trackColor],
-        borderRadius: theme.radius.heroWidget,
+        borderRadius: theme.radius.widget,
         padding: theme.spacing.xs,
         height: 60,
         alignItems: 'center',

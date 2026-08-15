@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Button, Stack, Text, TextField } from '@/components/primitives';
 import { updatePassword } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
@@ -12,6 +13,7 @@ import { translateAuthError } from '@/features/auth/errors';
 // kurduktan sonra buraya yönlendirir; kullanıcı burada yeni şifresini belirler.
 export default function ResetPasswordScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -36,7 +38,7 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"

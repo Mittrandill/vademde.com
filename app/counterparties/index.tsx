@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import {
   Card,
@@ -44,6 +45,7 @@ const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
 
 export default function CounterpartiesScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilterKey>('all');
@@ -121,7 +123,7 @@ export default function CounterpartiesScreen() {
       : `${pagedCounterparties.length} / ${filtered.length} cari gösteriliyor`;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,

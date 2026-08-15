@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import {
   createCounterparty,
@@ -26,6 +27,7 @@ const TYPES: Array<{ value: PartyType; label: string }> = [
 
 export default function NewCounterpartyScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!id;
 
@@ -37,7 +39,7 @@ export default function NewCounterpartyScreen() {
 
   if (isEditing && !existingQuery.data) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
@@ -49,7 +51,7 @@ export default function NewCounterpartyScreen() {
     );
   }
 
-  return <CounterpartyForm id={isEditing ? (id as string) : null} initial={existingQuery.data ?? null} />;
+  return <CounterpartyForm key={reflowKey} id={isEditing ? (id as string) : null} initial={existingQuery.data ?? null} />;
 }
 
 function CounterpartyForm({ id, initial }: { id: string | null; initial: Counterparty | null }) {

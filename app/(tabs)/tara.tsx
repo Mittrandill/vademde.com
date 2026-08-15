@@ -10,6 +10,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import {
@@ -68,6 +69,7 @@ const SCAN_INFO_TEXT =
 
 export default function TaraScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const { isViewer } = useMyWorkspaceRole();
@@ -332,7 +334,7 @@ export default function TaraScreen() {
 
   if (pendingAsset) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         {/* Önizleme görseli + uzun izin metni + iki buton küçük ekranlara (ve büyük
             yazı tipi ayarlarına) sığmıyor, alttaki "Vazgeç" ekran dışında kalıyordu.
             flexGrow ile birlikte ScrollView: yer varsa içerik dikeyde ortalanır, yoksa
@@ -375,7 +377,7 @@ export default function TaraScreen() {
 
   if (localUri) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
+      <View key={reflowKey} style={{ flex: 1, backgroundColor: '#000' }}>
         {isPdf ? (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.surfacePrimary }]} />
         ) : (
@@ -463,7 +465,7 @@ export default function TaraScreen() {
     const quotaAccent = quotaEmpty ? theme.colors.danger : theme.colors.brandPrimary;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }} edges={['top', 'left', 'right']}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }} edges={['top', 'left', 'right']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
@@ -593,12 +595,12 @@ export default function TaraScreen() {
   }
 
   if (!permission) {
-    return <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }} />;
+    return <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }} />;
   }
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         {/* İzin ekranı da izin metni ekranıyla aynı desende kaydırılabilir: büyük yazı
             tipi ayarlarında buton çifti ekran dışına taşmasın. */}
         <ScrollView
@@ -629,7 +631,7 @@ export default function TaraScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
+    <View key={reflowKey} style={{ flex: 1, backgroundColor: '#000' }}>
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}

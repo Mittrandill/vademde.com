@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import {
   Divider,
   Pressable,
@@ -58,6 +59,7 @@ function closeScreen() {
 // hesap olduğu için liste kaynağı ve satır içerikleri farklı, ama iskelet bilerek aynı.
 export default function CreditCardsScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [searchInput, setSearchInput] = useState('');
   const [statusKey, setStatusKey] = useState<CardStatusKey>('all');
@@ -177,7 +179,7 @@ export default function CreditCardsScreen() {
     : '0 kart gösteriliyor';
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,

@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
@@ -32,6 +33,7 @@ const KINDS: Array<{ value: Kind; label: string }> = [
 
 export default function NewCategoryScreen() {
   const theme = useTheme();
+  const reflowKey = useReflowKey();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!id;
 
@@ -43,7 +45,7 @@ export default function NewCategoryScreen() {
 
   if (isEditing && !existingQuery.data) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
@@ -55,7 +57,7 @@ export default function NewCategoryScreen() {
     );
   }
 
-  return <CategoryForm id={isEditing ? (id as string) : null} initial={existingQuery.data ?? null} />;
+  return <CategoryForm key={reflowKey} id={isEditing ? (id as string) : null} initial={existingQuery.data ?? null} />;
 }
 
 function CategoryForm({ id, initial }: { id: string | null; initial: Category | null }) {
