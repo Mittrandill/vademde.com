@@ -101,6 +101,15 @@ const TRANSACTION_DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap>
 // olanlar gerçekleşmiş sayılır (bkz. rows useMemo'daki filtre).
 const REALIZED_OBLIGATION_STATUSES = new Set(['odendi', 'tahsil_edildi', 'kismen_odendi', 'kismen_tahsil_edildi']);
 
+// Bir ödeme hesap seçilmeden (elden/nakit) kaydedilirse ilişkili bir transaction hiç
+// oluşmaz (bkz. features/payments/api.ts recordPayment) — bu yüzden gerçek ödeme tarihi
+// için ilişkili transaction'a değil, doğrudan payments.paid_at'e güvenilir. Birden fazla
+// ödeme varsa en sonuncusu (en yeni paid_at) gösterilir.
+function latestPaidAt(payments: { paid_at: string }[] | undefined): string | undefined {
+  if (!payments?.length) return undefined;
+  return payments.reduce((latest, p) => (p.paid_at > latest ? p.paid_at : latest), payments[0].paid_at);
+}
+
 // Krediler listesindeki gerçek (numaralı) sayfalandırmayla aynı desen: kredi detayındaki
 // Ödeme Planı/Geçmişi sekmeleri gibi, kaynaklar sınırlı ama cömert bir üst sınırla (500)
 // tek seferde çekilir, tarihe göre sıralanır ve ekranda 10'luk sayfalar halinde dilimlenir —
@@ -253,11 +262,16 @@ export default function HareketlerScreen() {
               kind: 'obligation',
               title: o.title,
               subtitle: o.counterparty?.name || o.category?.name || '',
-              // Ödendiyse gerçekte ödendiği tarih (bağlı transaction'ın occurred_at'i, bkz.
-              // recordPayment/updatePayment) gösterilir — vade tarihi değil. Aksi halde bir
-              // ödemenin tarihini düzenlemek Hareketler'de hiç yansımazdı (dashboard'da
-              // yansıyordu çünkü o doğrudan transactions.occurred_at okur).
-              date: paymentTx?.occurred_at ?? o.due_date ?? o.created_at,
+              // "Tümü" sekmesi gerçekte ödendiği tarihi (payments.paid_at) gösterir — vade
+              // tarihi değil. Hesaptan yapılan ödemelerde bağlı transaction'ın occurred_at'i de
+              // aynı tarihi taşır (bkz. recordPayment/updatePayment) ama elden/nakit ödemelerde
+              // hiç transaction oluşmaz, o yüzden önce doğrudan payments'a bakılır. Borç/Alacak
+              // sekmelerinde ise (henüz ödenmemiş kalan tutarla birlikte gösterildiği için) her
+              // zaman vade tarihi kalır.
+              date:
+                filter === 'all'
+                  ? (latestPaidAt(o.payments) ?? paymentTx?.occurred_at ?? o.due_date ?? o.created_at)
+                  : (o.due_date ?? o.created_at),
               amountMinor: realizedAmountMinor,
               currencyCode: o.currency_code,
               valueUnitType: o.value_unit_type,
@@ -290,7 +304,10 @@ export default function HareketlerScreen() {
         subtitle: o.counterparty?.name || o.category?.name || '',
         // bkz. yukarıdaki obligationRows'taki aynı not — bu satırlar zaten yalnızca ödenmiş
         // taksitler (paidInstallmentItems), gerçek ödeme tarihi vade tarihinden farklı olabilir.
-        date: paymentTx?.occurred_at ?? o.due_date ?? o.created_at,
+        date:
+          filter === 'all'
+            ? (latestPaidAt(o.payments) ?? paymentTx?.occurred_at ?? o.due_date ?? o.created_at)
+            : (o.due_date ?? o.created_at),
         amountMinor: o.total_amount_minor,
         currencyCode: o.currency_code,
         valueUnitType: o.value_unit_type,

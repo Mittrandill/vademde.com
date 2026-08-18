@@ -10,6 +10,11 @@ export type ObligationWithRelations = Obligation & {
   category: { name: string } | null;
   counterparty: { name: string } | null;
   account: { name: string } | null;
+  // Bu borca/alacağa yapılmış ödemelerin gerçek tarihleri (payments.paid_at) — Hareketler'in
+  // "Tümü" sekmesi, kısmen ödenen/tahsil edilen kayıtlarda vade tarihi yerine bu tarihi
+  // gösterir (bkz. hareketler.tsx). Ödeme bir hesaptan yapılmamışsa (elden/nakit) ilişkili
+  // bir transaction hiç oluşmaz, bu yüzden tarih doğrudan payments'tan okunur.
+  payments?: { paid_at: string }[];
 };
 
 // Taksitli bir obligation'ın tek bir taksitini takvim/liste ekranlarında ObligationWithRelations
@@ -73,7 +78,7 @@ export async function listObligations({
 }: ListObligationsFilter): Promise<ObligationWithRelations[]> {
   let query = supabase
     .from('obligations')
-    .select('*, category:categories(name), counterparty:counterparties(name), account:accounts(name)')
+    .select('*, category:categories(name), counterparty:counterparties(name), account:accounts(name), payments(paid_at)')
     .eq('workspace_id', workspaceId);
   if (direction) query = query.eq('direction', direction);
   if (documentType) query = query.eq('document_type', documentType);
@@ -221,7 +226,7 @@ export async function listInstallmentsDue({
   let query = supabase
     .from('installments')
     .select(
-      'id, installment_number, due_date, amount_minor, remaining_amount_minor, status, obligation:obligations!inner(*, category:categories(name), counterparty:counterparties(name), account:accounts(name))'
+      'id, installment_number, due_date, amount_minor, remaining_amount_minor, status, payments(paid_at), obligation:obligations!inner(*, category:categories(name), counterparty:counterparties(name), account:accounts(name))'
     )
     .eq('workspace_id', workspaceId)
     .neq('status', 'iptal_edildi');
@@ -236,7 +241,9 @@ export async function listInstallmentsDue({
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
 
-  return (data as unknown as (Installment & { obligation: ObligationWithRelations })[]).map((row) => ({
+  return (
+    data as unknown as (Installment & { obligation: ObligationWithRelations; payments?: { paid_at: string }[] })[]
+  ).map((row) => ({
     ...row.obligation,
     due_date: row.due_date,
     total_amount_minor: row.amount_minor,
@@ -244,6 +251,9 @@ export async function listInstallmentsDue({
     status: row.status,
     installment_id: row.id,
     installment_number: row.installment_number,
+    // row.obligation.payments TÜM taksitlerin ödemelerini taşır — burada yalnızca BU taksite
+    // ait ödemeler istenir (installment_id ile ilişkili), o yüzden yukarıdaki spread'i ezer.
+    payments: row.payments,
   }));
 }
 
