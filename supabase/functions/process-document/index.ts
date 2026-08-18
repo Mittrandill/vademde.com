@@ -65,7 +65,15 @@ const RESPONSE_SCHEMA = {
     counterpartyTaxNumber: { type: 'STRING', nullable: true },
     counterpartyIban: { type: 'STRING', nullable: true },
     documentNumber: { type: 'STRING', nullable: true },
+    // Model kategori ADI döner (id değil, model kategori id'lerini bilemez) — sistem bunu
+    // workspace'in mevcut kategorileriyle eşleştirip suggested_category_id'yi doldurur
+    // (bkz. aşağıdaki suggestedCategoryId eşleştirmesi, runProcessing içinde).
     suggestedCategory: { type: 'STRING', nullable: true },
+    paymentMethod: {
+      type: 'STRING',
+      nullable: true,
+      enum: ['nakit', 'kredi_karti', 'banka_karti', 'havale_eft', 'cek', 'bilinmiyor'],
+    },
     warnings: { type: 'ARRAY', items: { type: 'STRING' } },
     missingRequiredFields: { type: 'ARRAY', items: { type: 'STRING' } },
     fields: {
@@ -192,14 +200,16 @@ Genel kurallar:
 - direction alanı için: ödeyecek taraf belirtilmişse veya belge bir borç niteliğindeyse "payable"; tahsil edilecekse "receivable"; belge zaten gerçekleşmiş bir gider ise "expense", gerçekleşmiş bir gelir ise "income"; hesaplar arası transfer ise "transfer".
 - fields dizisine belgeden okuduğun her önemli alanı (banka, çek no, IBAN, hesap, imza notu vb.) fieldName/rawValue/normalizedValue/confidence olarak ekle. confidence 0-1 arası olmalı.
 - Emin olmadığın veya belgede bulunmayan alanlar için confidence düşük olsun ve missingRequiredFields dizisine ekle.
+- suggestedCategory alanına, belgenin niteliğine en uygun YAYGIN bir Türkçe kişisel/işletme finans kategori adı yaz — kategori id'si DEĞİL, tam kategori adı (sistem bunu mevcut kategorilerle eşleştirir). Örnekler: market/süpermarket fişi -> "Market"; restoran/kafe fişi -> "Restoran / Kafe"; akaryakıt -> "Yakıt"; eczane/hastane -> "Sağlık"; elektrik/su/doğalgaz/internet/telefon faturası -> "Faturalar"; giyim mağazası -> "Giyim & Aksesuar"; elektronik/teknoloji mağazası -> "Teknoloji & Elektronik"; kira ödemesi -> "Kira"; maaş bordrosu/gelir belgesi -> "Maaş". Belgenin niteliği bu örneklerin hiçbirine net biçimde uymuyorsa (ör. çek, senet, kredi, banka dekontu gibi kategoriden bağımsız türler) null bırak — uydurma isim yazma.
+- paymentMethod alanına ödemenin nasıl yapıldığını/yapılacağını yaz: nakit ödendiyse "nakit" (fişte "NAKİT" yazması veya nakit tutarı/para üstü satırı gibi işaretler); kredi kartıyla ödendiyse "kredi_karti"; banka/debit kartıyla ödendiyse "banka_karti"; havale/EFT ile ödendiyse/ödenecekse "havale_eft"; çekle ödendiyse "cek"; belgede ödeme yöntemi hiç belirtilmemişse null bırak (bilinmiyor değerini yalnızca belgede birden fazla/belirsiz yöntem izi varsa kullan).
 
 Belge türüne özel kurallar:
 - documentType "cek" ise: ÇEKİ DÜZENLEYEN/İMZALAYAN/KAŞELEYEN taraf (hesap sahibi, "keşideci") ÖDEMEYİ YAPACAK taraftır — borçludur. "___ emrine ödeyiniz" ibaresinden SONRA EL YAZISIYLA yazılan isim ise ÖDEMEYİ ALACAK taraftır (lehtar/alacaklı) — bu iki ismi ASLA birbirine karıştırma. Belgeyi tarayan kullanıcı, fiziksel çek genellikle tahsil edecek kişide bulunduğu için varsayılan olarak LEHTAR (alacaklı) kabul edilir: direction'ı "receivable" yap ve counterpartyName alanına KEŞİDECİNİN adını (imza/kaşe/hesap sahibi bilgisi, "emrine"deki el yazısı isim DEĞİL) yaz. Belgede kullanıcının kendi imzası/kaşesi keşideci olarak görünüyorsa (yani kullanıcı çeki kendisi düzenlemişse) bunun yerine direction "payable", counterpartyName ise "emrine" kısmındaki lehtar adı olmalıdır — ama bu yalnızca kullanıcının kendi adı/işletmesi keşideci tarafında açıkça görünüyorsa geçerlidir, aksi halde varsayılan (receivable + keşideci adı) kullanılır. Kullanıcı yön ve tarafı onay ekranında düzeltebilir.
 - documentType "senet" ise aynı ayrım geçerlidir: senedi İMZALAYAN taraf borçludur (ödeyecek), senette adı geçen alacaklı ise tahsil edecek taraftır. Aynı varsayım: tarayan kullanıcı genellikle alacaklıdır (direction "receivable"), counterpartyName borçlunun adıdır — kullanıcının kendisi borçlu tarafında açıkça görünmedikçe.
 - documentType "kredi" ise installmentPlan alanını doldur: her taksit satırı için vade, anapara, faiz, vergi, taksit tutarı ve kalan anapara. installmentPlan.totalRepayment toplam geri ödemedir, totalAmount kredi anaparasıdır. Belgede krediyi veren bankanın adı geçiyorsa (logo, başlık, "... Bankası A.Ş." ibaresi vb.) bunu HEM installmentPlan.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz — kredide "kişi/firma" tarafı zaten bankanın kendisidir, bu iki alan farklı bankalar veya biri dolu diğeri boş olacak şekilde ASLA tutarsız olmamalı.
 - documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Her satıra transactionType ata: normal alışveriş "purchase"; "ÖDEME", "KART ÖDEMESİ", "TAHSİLAT", "ÖDEME - TEŞEKKÜRLER" benzeri geçmiş dönem borç kapatma satırları "payment"; işyeri/ürün iadesi "refund"; üyelik/yıllık kart/komisyon/BSMV gibi ücretler "fee"; akdi/gecikme faizi "interest"; nakit çekim/avans "cash_advance"; güvenle ayıramadığın satır "unknown". Ödeme ve iadeleri ASLA purchase olarak sınıflandırma. Satır amount değerlerini işaret kullanmadan pozitif sayı döndür; yön transactionType ile belirlenir. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz. Ekstreyi veren bankanın adını HEM cardStatement.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz (kredi kartı ekstresinde de "kişi/firma" tarafı bankadır).
-- documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur.
-- documentType "makbuz_fis" ise lineItems alanını doldur (varsa).
+- documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur; counterpartyName alanına SATICI (invoiceDetails.sellerName ile birebir aynı) adını yaz — alıcı değil.
+- documentType "makbuz_fis" ise lineItems alanını doldur (varsa); counterpartyName alanına fişi/makbuzu düzenleyen İŞLETMENİN (market, mağaza, restoran vb. — fişin başlığında/kaşesinde geçen ad) adını yaz, alıcı/müşteri değil.
 - Diğer türlerde installmentPlan, cardStatement, lineItems, invoiceDetails alanlarını null/boş bırak.
 - Yalnızca şemaya uyan JSON döndür, başka açıklama ekleme.`;
 
@@ -692,6 +702,44 @@ Deno.serve(async (req: Request) => {
         grandTotalMinor: toMinor(parsed.invoiceDetails.grandTotal),
       };
     }
+    // review.tsx (bkz. paymentMethod tabanlı hesap eşleştirmesi) belge türünden bağımsız
+    // olarak okur — bu yüzden loan/card/invoice gibi belge türüne özel bir alt nesneye değil,
+    // extractedSummary'nin köküne yazılır.
+    if (parsed.paymentMethod) {
+      extractedSummary.paymentMethod = parsed.paymentMethod;
+    }
+
+    // Modelin serbest metin suggestedCategory'sini (bkz. PROMPT) workspace'in MEVCUT
+    // kategorileriyle eşleştirir — id'yi bilemeyeceği için model yalnızca isim döner, eşleştirme
+    // burada yapılır. Yalnızca var olan bir kategoriyle eşleşirse yazılır; yeni kategori burada
+    // OLUŞTURULMAZ (aksi halde iptal edilen/hiç onaylanmayan taramalar bile kategori kirliliği
+    // yaratırdı — bkz. aşağıdaki kişi/firma eşleştirmesiyle aynı ilke, review.tsx confirmMutation).
+    let suggestedCategoryId: string | null = null;
+    const categoryKind =
+      parsed.direction === 'payable' || parsed.direction === 'expense'
+        ? 'expense'
+        : parsed.direction === 'receivable' || parsed.direction === 'income'
+          ? 'income'
+          : null;
+    if (parsed.suggestedCategory && categoryKind) {
+      const { data: categories } = await adminClient
+        .from('categories')
+        .select('id, name')
+        .eq('workspace_id', document.workspace_id)
+        .eq('kind', categoryKind);
+      if (categories?.length) {
+        const normalize = (s: string) => s.trim().toLocaleLowerCase('tr-TR');
+        const target = normalize(parsed.suggestedCategory);
+        const exact = categories.find((c) => normalize(c.name) === target);
+        const partial =
+          exact ??
+          categories.find((c) => {
+            const normalizedName = normalize(c.name);
+            return normalizedName.includes(target) || target.includes(normalizedName);
+          });
+        suggestedCategoryId = partial?.id ?? null;
+      }
+    }
 
     // Ham belge saklanmayacaksa önce Storage'dan kaldırılır. Bu tamamlanmadan durumun
     // ready_for_review olması, poll eden istemcinin silinmek üzere olan belgeyi açmasına
@@ -712,6 +760,7 @@ Deno.serve(async (req: Request) => {
         counterparty_name: parsed.counterpartyName ?? null,
         overall_confidence: parsed.documentTypeConfidence ?? null,
         extracted_summary: Object.keys(extractedSummary).length > 0 ? extractedSummary : null,
+        suggested_category_id: suggestedCategoryId,
       })
       .eq('id', documentId);
 

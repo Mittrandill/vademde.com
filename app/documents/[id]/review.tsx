@@ -75,6 +75,22 @@ const LOW_CONFIDENCE_THRESHOLD = 0.7;
 const CURRENCY_OPTIONS = VALUE_UNITS.filter((u) => u.unitType === 'fiat').map((u) => ({ key: u.code, label: u.code }));
 const CURRENCY_CODES = new Set(CURRENCY_OPTIONS.map((o) => o.key));
 
+// Türkçe ticari unvan eklerini (A.Ş., LTD, ŞTİ, TİC, SAN vb.) ve noktalama/boşluk
+// farklarını yok sayarak karşılaştırılabilir hale getirir — "Migros Ticaret A.Ş." OCR
+// metniyle kayıtlı "Migros" kişi/firmasını eşleştirebilmek için (bkz. docs/04-ocr-belge-isleme.md
+// §6.6 "isim benzerliği", aşağıdaki kişi/firma eşleştirme efekti).
+const LEGAL_SUFFIX_PATTERN =
+  /\b(a\.?ş\.?|ltd\.?|şti\.?|limited|anonim|tic\.?|ticaret|san\.?|sanayi|paz\.?|pazarlama|co\.?|inc\.?)\b/g;
+
+function normalizeCounterpartyName(name: string): string {
+  return name
+    .toLocaleLowerCase('tr-TR')
+    .replace(/[.,]/g, ' ')
+    .replace(LEGAL_SUFFIX_PATTERN, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // OCR'dan gelen tarihler her zaman geçerli ISO olmayabiliyor (model 'YYYY-AA-GG' yerine
 // serbest metin döndürebilir, kullanıcı da alanı elle düzenleyebilir). new Date(bozuk)
 // → Invalid Date → .toISOString() RangeError fırlatır ve onay akışının tamamını düşürürdü;
@@ -127,6 +143,10 @@ export default function DocumentReviewScreen() {
   const [accountId, setAccountId] = useState<string | null>(paramAccountId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [categoryAutoSet, setCategoryAutoSet] = useState(false);
+  // Kredi dışındaki türlerde belgenin suggested_category_id'sini (bkz. process-document
+  // — Gemini'nin suggestedCategory adını mevcut kategorilerle sunucu tarafında eşleştirir)
+  // bir kez uygulamak için — aşağıdaki genel kategori efekti.
+  const [suggestedCategoryApplied, setSuggestedCategoryApplied] = useState(false);
   // Kredi belgelerine özel: OCR'ın çıkardığı faiz oranı ve toplam geri ödeme (bilgi amaçlı,
   // taksit tablosu asıl kaynaktır) — bkz. supabase/functions/process-document installmentPlan şeması.
   const [interestRatePercent, setInterestRatePercent] = useState('');
@@ -142,6 +162,10 @@ export default function DocumentReviewScreen() {
   // hiç çalıştırmıyor (kontrolü !accountId); burada true başlatmak yalnızca niyeti
   // açık kılar, davranışı değiştirmez.
   const [cardAccountMatchAttempted, setCardAccountMatchAttempted] = useState(!!paramAccountId);
+  // OCR'ın okuduğu ödeme yöntemi (bkz. process-document extractedSummary.paymentMethod)
+  // "nakit" ise ve kayıtlı bir Nakit/Kasa hesabı varsa aynı desenle (yukarıdaki
+  // cardAccountMatchAttempted gibi) yalnızca bir kez otomatik seçilir.
+  const [cashAccountMatchAttempted, setCashAccountMatchAttempted] = useState(!!paramAccountId);
   // Eşleşme bulunamayan (kayıtsız) kart için "kayıtlı kartlara eklensin mi?" sorusu
   // kullanıcıya yalnızca bir kez sorulur.
   const [cardQuickAddOffered, setCardQuickAddOffered] = useState(false);
@@ -315,12 +339,13 @@ export default function DocumentReviewScreen() {
   }, [documentQuery.data, initialized]);
 
   // docs/04-ocr-belge-isleme.md §6.6 — isim benzerliğiyle kişi/firma eşleştirme. Yalnızca
-  // TAM eşleşen mevcut bir kayıt varsa önceden seçilir (DB'ye hiçbir şey yazmaz). Eşleşme
-  // yoksa artık burada otomatik yeni kişi/firma OLUŞTURULMAZ — önceden bu efekt ekran
-  // açılır açılmaz (belge hiç onaylanmasa/silinse bile) createCounterparty çağırıyordu ve
-  // sahipsiz kayıtlar birikiyordu. Eşleşme bulunamayan durumda kullanıcı aşağıdaki
-  // CounterpartyPicker'dan (mevcut bir kayıtla eşleştirme veya "yeni oluştur") elle seçer;
-  // hiç seçmezse yeni kayıt yalnızca belge onaylanırken (confirmMutation) açılır.
+  // mevcut bir kayıtla TEK ve belirsiz olmayan bir eşleşme varsa önceden seçilir (DB'ye
+  // hiçbir şey yazmaz). Eşleşme yoksa artık burada otomatik yeni kişi/firma OLUŞTURULMAZ —
+  // önceden bu efekt ekran açılır açılmaz (belge hiç onaylanmasa/silinse bile)
+  // createCounterparty çağırıyordu ve sahipsiz kayıtlar birikiyordu. Eşleşme bulunamayan
+  // durumda kullanıcı aşağıdaki CounterpartyPicker'dan (mevcut bir kayıtla eşleştirme veya
+  // "yeni oluştur") elle seçer; hiç seçmezse yeni kayıt yalnızca belge onaylanırken
+  // (confirmMutation) açılır.
   // Kredi ve kredi kartı ekstresinde OCR'ın "kişi/firma" olarak okuduğu isim aslında
   // bankadır — bu ikisinde banka kimliği zaten bank_code/logo üzerinden temsil edildiğinden
   // ayrıca bir kişi/firma eşleştirmesi denenmez.
@@ -335,11 +360,25 @@ export default function DocumentReviewScreen() {
     }
     setCounterpartyResolved(true);
 
-    const normalizedTarget = document.counterparty_name.trim().toLocaleLowerCase('tr-TR');
-    const match = counterpartiesQuery.data.find(
-      (c) => c.name.trim().toLocaleLowerCase('tr-TR') === normalizedTarget
+    const normalizedTarget = normalizeCounterpartyName(document.counterparty_name);
+    if (!normalizedTarget) return;
+    // Önce tam (unvan eki/noktalama farkı yok sayılarak) eşleşme aranır; yoksa "Migros
+    // Ticaret A.Ş." OCR'ı ile kayıtlı "Migros" gibi bir kısmi/benzer eşleşme denenir — ama
+    // yalnızca TEK bir aday varsa otomatik seçilir; birden fazla belirsiz aday varsa yanlış
+    // birleştirme riskine girmemek için hiçbiri seçilmez, kullanıcı elle seçer.
+    const exact = counterpartiesQuery.data.find(
+      (c) => normalizeCounterpartyName(c.name) === normalizedTarget
     );
-    if (match) setCounterpartyId(match.id);
+    if (exact) {
+      setCounterpartyId(exact.id);
+      return;
+    }
+    if (normalizedTarget.length < 3) return;
+    const similar = counterpartiesQuery.data.filter((c) => {
+      const normalizedName = normalizeCounterpartyName(c.name);
+      return normalizedName.length >= 3 && (normalizedName.includes(normalizedTarget) || normalizedTarget.includes(normalizedName));
+    });
+    if (similar.length === 1) setCounterpartyId(similar[0]!.id);
   }, [documentQuery.data, counterpartiesQuery.isSuccess, counterpartiesQuery.data, counterpartyResolved]);
 
   // Kredi kartı ekstresi son 4 hane ↔ mevcut kredi kartı hesabı eşleştirmesi (bkz. yukarıdaki
@@ -356,6 +395,37 @@ export default function DocumentReviewScreen() {
     );
     if (matches.length === 1) setAccountId(matches[0]!.id);
   }, [cardAccountMatchAttempted, cardLastFourFromOcr, accountsQuery.isSuccess, accountsQuery.data, accountId, bankCode]);
+
+  // OCR "nakit" ödeme okuduysa (bkz. process-document PROMPT'taki paymentMethod kuralı) ve
+  // kullanıcı/parametre henüz bir hesap seçmediyse, kayıtlı TEK bir Nakit/Kasa hesabı varsa
+  // önceden seçilir — birden fazla nakit hesap varsa (ör. "Cüzdan" + "İşyeri Kasası")
+  // hangisinin doğru olduğu belirsiz olduğundan hiçbiri otomatik seçilmez, kullanıcı elle
+  // seçer. Kredi kartı ekstresi zaten kendi son-dört-hane eşleştirmesine sahiptir (yukarıda),
+  // burada dışlanır.
+  useEffect(() => {
+    if (
+      cashAccountMatchAttempted ||
+      accountId ||
+      !accountsQuery.isSuccess ||
+      !documentQuery.isSuccess ||
+      documentType === 'kredi_karti_ekstresi'
+    ) {
+      return;
+    }
+    setCashAccountMatchAttempted(true);
+    const summary = documentQuery.data.extracted_summary as { paymentMethod?: string | null } | null;
+    if (summary?.paymentMethod !== 'nakit') return;
+    const cashAccounts = accountsQuery.data.filter((a) => a.type === 'cash');
+    if (cashAccounts.length === 1) setAccountId(cashAccounts[0]!.id);
+  }, [
+    cashAccountMatchAttempted,
+    accountId,
+    accountsQuery.isSuccess,
+    accountsQuery.data,
+    documentQuery.isSuccess,
+    documentQuery.data,
+    documentType,
+  ]);
 
   // Eşleşme denendi ama kart kayıtlı hesaplarda yoktu: kullanıcıya kayıtlı kartlara
   // eklemek isteyip istemediği sorulur (aksi halde HESAP alanında hiçbir seçenek
@@ -463,6 +533,34 @@ export default function DocumentReviewScreen() {
       })
       .catch(() => {});
   }, [categoryAutoSet, documentType, activeWorkspaceId, categoriesQuery.isSuccess, categoriesQuery.data, categoryKind, queryClient]);
+
+  // Kredi dışındaki tüm belge türleri için: sunucu tarafında (process-document) Gemini'nin
+  // suggestedCategory'siyle workspace'in mevcut kategorileri arasında zaten yapılmış eşleşme
+  // (financial_documents.suggested_category_id) burada yalnızca önceden seçilir — kullanıcı
+  // KategoriPicker'dan yine değiştirebilir. categoriesQuery direction'a göre (income/expense)
+  // filtrelendiğinden, öneri yanlış yöndeyse (nadiren) listede bulunamaz ve sessizce atlanır.
+  useEffect(() => {
+    if (
+      suggestedCategoryApplied ||
+      categoryId ||
+      documentType === 'kredi' ||
+      !categoriesQuery.isSuccess ||
+      !documentQuery.isSuccess
+    ) {
+      return;
+    }
+    setSuggestedCategoryApplied(true);
+    const suggested = documentQuery.data.suggested_category_id;
+    if (suggested && categoriesQuery.data.some((c) => c.id === suggested)) setCategoryId(suggested);
+  }, [
+    suggestedCategoryApplied,
+    categoryId,
+    documentType,
+    categoriesQuery.isSuccess,
+    categoriesQuery.data,
+    documentQuery.isSuccess,
+    documentQuery.data,
+  ]);
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
