@@ -97,6 +97,10 @@ const TRANSACTION_DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap>
   transfer: 'swap-horizontal-outline',
 };
 
+// "Tümü" sekmesinde taksitsiz borç/alacaklardan yalnızca en az bir ödeme/tahsilat görmüş
+// olanlar gerçekleşmiş sayılır (bkz. rows useMemo'daki filtre).
+const REALIZED_OBLIGATION_STATUSES = new Set(['odendi', 'tahsil_edildi', 'kismen_odendi', 'kismen_tahsil_edildi']);
+
 // Krediler listesindeki gerçek (numaralı) sayfalandırmayla aynı desen: kredi detayındaki
 // Ödeme Planı/Geçmişi sekmeleri gibi, kaynaklar sınırlı ama cömert bir üst sınırla (500)
 // tek seferde çekilir, tarihe göre sıralanır ve ekranda 10'luk sayfalar halinde dilimlenir —
@@ -219,8 +223,31 @@ export default function HareketlerScreen() {
     const obligationRows: HareketRow[] = wantsObligations
       ? (obligationsQuery.data ?? [])
           .filter((o) => !obligationIdsWithInstallments.has(o.id))
+          // "Tümü" sekmesi yalnızca gerçekleşmiş hareketleri gösterir: henüz hiç ödeme/tahsilat
+          // görmemiş (bekliyor/gecikti/taslak/inceleme_gerekli/iptal_edildi) taksitsiz borç/alacaklar
+          // burada listelenmez. Borç/Alacak sekmelerinde (obligationDirection dolu, yani filter
+          // 'all' değil) bu kısıtlama uygulanmaz — o sekmelerin amacı zaten bekleyenleri de görmek.
+          .filter((o) => filter !== 'all' || REALIZED_OBLIGATION_STATUSES.has(o.status))
           .map((o) => {
             const paymentTx = paymentTxByObligationId.get(o.id);
+            // "Tümü" sekmesinde kısmen ödenen/tahsil edilen bir borç/alacak tüm tutarıyla değil,
+            // yalnızca o ana kadar gerçekten ödenen/tahsil edilen kısmıyla görünür — kalan (henüz
+            // gerçekleşmemiş) kısım burada bir hareket değildir. Borç/Alacak sekmelerinde ve tam
+            // ödenmiş/tahsil edilmiş kayıtlarda tutar değişmeden (tam tutar) kalır.
+            const isPartialInAll =
+              filter === 'all' && (o.status === 'kismen_odendi' || o.status === 'kismen_tahsil_edildi');
+            const realizedAmountMinor = isPartialInAll
+              ? o.total_amount_minor - o.remaining_amount_minor
+              : o.total_amount_minor;
+            // "Tümü" bu satırda yalnızca gerçekleşen ödenen/tahsil edilen kısmı gösterdiği için
+            // rozet de "kısmen" değil, o kısmın kendisi tamammış gibi görünür — asıl "kısmen
+            // ödendi/tahsil edildi" durumu (kalan borçla birlikte) yalnızca Borç/Alacak
+            // sekmelerinde değişmeden kalır.
+            const displayStatus = isPartialInAll
+              ? o.status === 'kismen_odendi'
+                ? 'odendi'
+                : 'tahsil_edildi'
+              : o.status;
             return {
               id: o.id,
               kind: 'obligation',
@@ -231,11 +258,11 @@ export default function HareketlerScreen() {
               // ödemenin tarihini düzenlemek Hareketler'de hiç yansımazdı (dashboard'da
               // yansıyordu çünkü o doğrudan transactions.occurred_at okur).
               date: paymentTx?.occurred_at ?? o.due_date ?? o.created_at,
-              amountMinor: o.total_amount_minor,
+              amountMinor: realizedAmountMinor,
               currencyCode: o.currency_code,
               valueUnitType: o.value_unit_type,
               direction: o.direction,
-              status: o.status,
+              status: displayStatus,
               documentType: o.document_type,
               bankCode: o.bank_code,
               serviceCode: o.service_code,
@@ -291,6 +318,7 @@ export default function HareketlerScreen() {
     installmentsQuery,
     wantsTransactions,
     wantsObligations,
+    filter,
     sortAscending,
   ]);
 
