@@ -280,7 +280,12 @@ export default function DocumentReviewScreen() {
         };
         card?: { bankName?: string | null; cardLastFourDigits?: string | null; statementDate?: string | null };
       } | null;
-      const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? null;
+      // Gemini prompt'u installmentPlan/cardStatement.bankName alanını doldurmayı her zaman
+      // garanti etmiyor, ama bu iki türde "kişi/firma" olarak okunan counterparty_name aslında
+      // zaten bankanın adıdır (bkz. aşağıdaki COUNTERPARTY_LESS_DOCUMENT_TYPES efekti) ve BAŞLIK
+      // bunu her zaman kullanır (bkz. altdaki setTitle). Yapılandırılmış alan boşsa aynı isme
+      // buradan da düşülür — aksi halde başlıkta görünen banka adı BANKA alanıyla eşleşmiyordu.
+      const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? document.counterparty_name ?? null;
       setExtractedBankName(ocrBankName);
       const matchedBankCode = matchBankByName(ocrBankName);
       if (matchedBankCode) setBankCode(matchedBankCode);
