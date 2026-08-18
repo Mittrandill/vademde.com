@@ -6,6 +6,57 @@ export interface InstallmentPlanItem {
   interestMinor: number;
 }
 
+// Taksit planı düzenlemesinde "başlangıç tarihi" değiştiğinde tüm ödenmemiş taksitleri
+// aynı aylık kadansla yeniden dizmek için (bkz. app/obligations/new.tsx InstallmentPlanEditor).
+export function addMonthsToIsoDate(isoDate: string, months: number): string {
+  const date = new Date(isoDate);
+  date.setMonth(date.getMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+export interface InstallmentEditRecompute {
+  amountMinor: number;
+  remainingAmountMinor: number;
+  status: string;
+}
+
+// installments.remaining_amount_minor/status yalnızca ödeme (payments) değişince DB
+// trigger'ıyla (recompute_installment_progress) yeniden hesaplanır — taksit satırı
+// doğrudan düzenlenip amount_minor değişince bu trigger tetiklenmez. Taksit planı
+// düzenlemesinde aynı kuralı burada, client tarafında uygularız: ödenen tutar
+// (paidMinor) yeni tutardan büyük olamayacağı çağıran tarafta önceden doğrulanır
+// (bkz. getPlanValidationError), bu fonksiyon yalnızca kalan/durumu yeniden türetir.
+const RECOMPUTABLE_STATUSES = new Set([
+  'bekliyor',
+  'kismen_odendi',
+  'odendi',
+  'kismen_tahsil_edildi',
+  'tahsil_edildi',
+  'gecikti',
+]);
+
+export function recomputeInstallmentAfterAmountEdit(
+  current: { amountMinor: number; remainingAmountMinor: number; status: string },
+  newAmountMinor: number,
+  direction: 'payable' | 'receivable'
+): InstallmentEditRecompute {
+  const paidMinor = Math.max(0, current.amountMinor - current.remainingAmountMinor);
+  const remainingAmountMinor = Math.max(newAmountMinor - paidMinor, 0);
+
+  let status = current.status;
+  if (RECOMPUTABLE_STATUSES.has(current.status)) {
+    if (paidMinor >= newAmountMinor && newAmountMinor > 0) {
+      status = direction === 'payable' ? 'odendi' : 'tahsil_edildi';
+    } else if (paidMinor > 0) {
+      status = direction === 'payable' ? 'kismen_odendi' : 'kismen_tahsil_edildi';
+    } else {
+      status = 'bekliyor';
+    }
+  }
+
+  return { amountMinor: newAmountMinor, remainingAmountMinor, status };
+}
+
 // docs/01-finansal-kayit-modeli.md §8.1 — taksit toplamı ana toplamla uyuşmuyorsa
 // son taksit düzeltmesi yapılır; kalan kuruş/faiz son taksite eklenir.
 // monthlyInterestRatePercent verilirse (yalnızca kredi eklerken, isteğe bağlı) azalan

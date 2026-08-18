@@ -27,12 +27,20 @@ import {
   deleteObligation,
   getObligationWithInstallments,
   updateObligation,
+  updateInstallmentPlan,
+  type Installment,
   type Obligation,
+  type UpdateInstallmentPlanRow,
 } from '@/features/obligations/api';
 import { createTransaction } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
-import { buildAmortizedInstallments, type InstallmentPlanItem } from '@/utils/installmentPlan';
+import {
+  buildAmortizedInstallments,
+  addMonthsToIsoDate,
+  recomputeInstallmentAfterAmountEdit,
+  type InstallmentPlanItem,
+} from '@/utils/installmentPlan';
 import { queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert } from '@/utils/alerts';
@@ -43,6 +51,18 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
   { value: 'payable', label: 'Borç' },
   { value: 'receivable', label: 'Alacak' },
 ];
+
+// Düzenlemede mevcut bir taksit planının satırı — `id`/`original` doluysa DB'deki gerçek
+// taksite karşılık gelir, `locked` (tamamen ödenmiş) satırların tarih/tutarı değiştirilemez
+// ve asla silinemez (bkz. InstallmentPlanEditor, getPlanValidationError).
+interface PlanRow {
+  id: string | null;
+  installmentNumber: number;
+  dueDate: string;
+  amountStr: string;
+  locked: boolean;
+  original: Installment | null;
+}
 
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
 
@@ -82,6 +102,7 @@ export default function NewObligationScreen() {
       key={reflowKey}
       id={isEditing ? (id as string) : null}
       initial={existingQuery.data?.obligation ?? null}
+      installments={existingQuery.data?.installments ?? []}
       hasInstallments={(existingQuery.data?.installments.length ?? 0) > 0}
       initialDocumentType={typeof type === 'string' ? type : undefined}
       initialAccountId={typeof accountId === 'string' ? accountId : undefined}
@@ -93,6 +114,9 @@ export default function NewObligationScreen() {
 interface ObligationFormProps {
   id: string | null;
   initial: Obligation | null;
+  /** Düzenleme modunda mevcut taksit planı — taksit tarihi/tutarı/sayısı düzenlemesi
+   * (BAŞLANGIÇ TARİHİ + TAKSİT PLANI bölümü) bu listeden başlatılır. */
+  installments: Installment[];
   hasInstallments: boolean;
   initialDocumentType?: string;
   /** Hesap detayından "Ekstre Ekle" gibi kısayollarla gelindiğinde hesabı önceden doldurur. */
@@ -103,7 +127,15 @@ interface ObligationFormProps {
   initialDueDate?: string;
 }
 
-function ObligationForm({ id, initial, hasInstallments, initialDocumentType, initialAccountId, initialDueDate }: ObligationFormProps) {
+function ObligationForm({
+  id,
+  initial,
+  installments,
+  hasInstallments,
+  initialDocumentType,
+  initialAccountId,
+  initialDueDate,
+}: ObligationFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -198,6 +230,98 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
   // aynı gerekçe — bkz. COUNTERPARTY_LESS_DOCUMENT_TYPES), HESAP zorunludur ve yalnızca kredi
   // kartı hesapları arasından seçilir; ayrıca çekilen nakit gerçekten bir hesaba yatırılabilir.
   const isCashAdvanceType = documentType === 'nakit_avans';
+  const unitLabel = isSubscriptionType ? 'Ay' : 'Taksit';
+
+  // Mevcut bir taksit planı olan kaydı düzenlerken TUTAR/VADE/TAKSİT SAYISI alanları
+  // yerine aşağıdaki taksit planı editörü (BAŞLANGIÇ TARİHİ + numaralı taksit satırları)
+  // gösterilir — tek bir toplam tutar yerine her taksitin kendi tarihi/tutarı düzenlenir.
+  const [planRows, setPlanRows] = useState<PlanRow[]>(() =>
+    installments.map((inst) => ({
+      id: inst.id,
+      installmentNumber: inst.installment_number,
+      dueDate: inst.due_date,
+      amountStr: formatAmountInput(
+        (inst.amount_minor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+        valueUnit.precision
+      ),
+      locked: inst.remaining_amount_minor <= 0,
+      original: inst,
+    }))
+  );
+  const isPlanEditing = isEditing && hasInstallments;
+  // Tamamen ödenmiş taksitler asla silinemez; kuyruk yalnızca en son ödenmiş taksitin
+  // numarasına kadar kısaltılabilir (taksitler numaralandırmada boşluksuz kalmalı).
+  const minPlanCount = Math.max(
+    1,
+    installments.reduce(
+      (max, inst) => (inst.remaining_amount_minor <= 0 ? Math.max(max, inst.installment_number) : max),
+      0
+    )
+  );
+
+  function updatePlanRowDate(index: number, value: string) {
+    setPlanRows((rows) => rows.map((r, i) => (i === index ? { ...r, dueDate: value } : r)));
+  }
+
+  function updatePlanRowAmount(index: number, value: string) {
+    setPlanRows((rows) => rows.map((r, i) => (i === index ? { ...r, amountStr: value } : r)));
+  }
+
+  // Başlangıç tarihi değişince yalnızca henüz ödenmemiş taksitler aynı aylık kadansla
+  // yeniden dizilir — ödenmiş taksitlerin tarihi geçmişi yansıttığı için sabit kalır.
+  function updatePlanStartDate(value: string) {
+    setPlanRows((rows) =>
+      rows.map((r) => (r.locked ? r : { ...r, dueDate: addMonthsToIsoDate(value, r.installmentNumber - 1) }))
+    );
+  }
+
+  function addPlanRow() {
+    setPlanRows((rows) => {
+      const last = rows[rows.length - 1];
+      return [
+        ...rows,
+        {
+          id: null,
+          installmentNumber: (last?.installmentNumber ?? 0) + 1,
+          dueDate: last ? addMonthsToIsoDate(last.dueDate, 1) : new Date().toISOString().slice(0, 10),
+          amountStr: last?.amountStr ?? '',
+          locked: false,
+          original: null,
+        },
+      ];
+    });
+  }
+
+  // Yalnızca kuyruktaki (en sondaki) taksit kaldırılabilir — numaralandırma böylece
+  // her zaman 1..N aralığında boşluksuz kalır.
+  function removeLastPlanRow() {
+    setPlanRows((rows) => rows.slice(0, -1));
+  }
+
+  function getPlanValidationError(rows: PlanRow[]): string | null {
+    if (rows.length === 0) return 'En az bir taksit olmalı.';
+    let previous: number | null = null;
+    for (const row of rows) {
+      const amountMinor = parseValueUnitAmountToMinor(row.amountStr, valueUnitCode);
+      if (amountMinor === null || amountMinor <= 0) return `${row.installmentNumber}. taksit tutarı okunamadı.`;
+      const parsedDate = new Date(row.dueDate);
+      if (Number.isNaN(parsedDate.getTime())) return `${row.installmentNumber}. taksit tarihi okunamadı.`;
+      if (previous !== null && parsedDate.getTime() < previous) return 'Taksit tarihleri sıralı olmalı.';
+      previous = parsedDate.getTime();
+      if (row.original) {
+        const paidMinor = Math.max(0, row.original.amount_minor - row.original.remaining_amount_minor);
+        if (amountMinor < paidMinor) {
+          return `${row.installmentNumber}. taksit için ödenen tutardan düşük tutar girilemez.`;
+        }
+      }
+    }
+    return null;
+  }
+
+  const planError = isPlanEditing ? getPlanValidationError(planRows) : null;
+  const planTotalMinor = isPlanEditing
+    ? planRows.reduce((sum, r) => sum + (parseValueUnitAmountToMinor(r.amountStr, valueUnitCode) ?? 0), 0)
+    : 0;
 
   // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydı P1 MVP kapsamında
   // yalnızca tek seferlik borç/alacak olarak tutulur; taksitlendirme (buildAmortizedInstallments,
@@ -226,7 +350,10 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId || !title.trim() || !totalAmountMinor || !documentType) {
+      if (!activeWorkspaceId || !title.trim() || !documentType) {
+        throw new Error('Eksik alan var');
+      }
+      if (isPlanEditing ? planTotalMinor <= 0 : !totalAmountMinor) {
         throw new Error('Eksik alan var');
       }
 
@@ -235,17 +362,68 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
       const counterpartyIdForType = isLoanType || isSubscriptionType || isCashAdvanceType ? null : counterpartyId;
 
       if (isEditing) {
+        if (isPlanEditing) {
+          const validationError = getPlanValidationError(planRows);
+          if (validationError) throw new Error(validationError);
+
+          // Yalnızca gerçekten değişen (veya yeni eklenen) satırlar yazılır — değişmeyen
+          // taksitlerin principal/interest kırılımı (bkz. detay ekranı "Anapara/Faiz")
+          // korunur. Tutarı değişen bir taksitin kırılımı artık geçerli olmadığı için null'a çekilir.
+          const preparedRows: UpdateInstallmentPlanRow[] = [];
+          for (const row of planRows) {
+            const amountMinor = parseValueUnitAmountToMinor(row.amountStr, valueUnitCode) as number;
+            const amountChanged = !row.original || row.original.amount_minor !== amountMinor;
+            const dateChanged = !row.original || row.original.due_date !== row.dueDate;
+            if (row.original && !amountChanged && !dateChanged) continue;
+
+            const recompute = row.original
+              ? recomputeInstallmentAfterAmountEdit(
+                  {
+                    amountMinor: row.original.amount_minor,
+                    remainingAmountMinor: row.original.remaining_amount_minor,
+                    status: row.original.status,
+                  },
+                  amountMinor,
+                  direction
+                )
+              : { amountMinor, remainingAmountMinor: amountMinor, status: 'bekliyor' };
+
+            preparedRows.push({
+              id: row.id,
+              installmentNumber: row.installmentNumber,
+              dueDate: row.dueDate,
+              amountMinor: recompute.amountMinor,
+              remainingAmountMinor: recompute.remainingAmountMinor,
+              status: recompute.status,
+              principalMinor: amountChanged ? null : (row.original?.principal_minor ?? null),
+              interestMinor: amountChanged ? null : (row.original?.interest_minor ?? null),
+            });
+          }
+
+          const currentIds = new Set(planRows.map((r) => r.id).filter((rowId): rowId is string => !!rowId));
+          const removedIds = installments.filter((inst) => !currentIds.has(inst.id)).map((inst) => inst.id);
+
+          if (preparedRows.length > 0 || removedIds.length > 0) {
+            await updateInstallmentPlan({
+              workspaceId: activeWorkspaceId,
+              obligationId: id as string,
+              rows: preparedRows,
+              removedIds,
+            });
+          }
+        }
+
         const obligation = await updateObligation(id, {
           direction,
           document_type: documentType,
           title: title.trim(),
-          due_date: dueDate,
+          due_date: isPlanEditing ? planRows[0].dueDate : dueDate,
           counterparty_id: counterpartyIdForType,
           account_id: accountId,
           category_id: categoryId,
           bank_code: bankCodeForType,
           service_code: serviceCodeForType,
-          ...(hasInstallments ? {} : { total_amount_minor: totalAmountMinor }),
+          total_amount_minor: isPlanEditing ? planTotalMinor : totalAmountMinor,
         });
         await syncObligationReminder(activeWorkspaceId, obligation);
         return obligation;
@@ -254,12 +432,14 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
       // Faiz oranı girildiyse taksitler azalan bakiye üzerinden hesaplanır; obligation'ın
       // toplamı taksitlerin gerçek toplamı (anapara+faiz) olmalı ki kalan borç/ilerleme
       // hesapları doğru kalsın.
-      const installments =
+      const installmentPlanItems =
         installmentCount > 1
           ? buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent)
           : [];
       const obligationTotalMinor =
-        installments.length > 0 ? installments.reduce((sum, item) => sum + item.amountMinor, 0) : totalAmountMinor;
+        installmentPlanItems.length > 0
+          ? installmentPlanItems.reduce((sum, item) => sum + item.amountMinor, 0)
+          : totalAmountMinor;
 
       const obligation = await createObligation({
         workspace_id: activeWorkspaceId,
@@ -277,12 +457,12 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
         service_code: serviceCodeForType,
       });
 
-      if (installments.length > 0) {
+      if (installmentPlanItems.length > 0) {
         await createInstallmentPlan({
           workspaceId: activeWorkspaceId,
           obligationId: obligation.id,
           totalAmountMinor: obligationTotalMinor,
-          installments,
+          installments: installmentPlanItems,
         });
       }
 
@@ -360,7 +540,7 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
 
   const canSubmit =
     !!title.trim() &&
-    totalAmountMinor > 0 &&
+    (isPlanEditing ? planTotalMinor > 0 && !planError : totalAmountMinor > 0) &&
     !!documentType &&
     (!isLoanType || !!bankCode) &&
     (!isCashAdvanceType || !!accountId);
@@ -413,10 +593,9 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               <Text variant="caption" color="textSecondary">
                 {isSubscriptionType ? `AYLIK ÖDEME (${valueUnit.quantityLabel})` : `TUTAR (${valueUnit.quantityLabel})`}
               </Text>
-              {isEditing && hasInstallments ? (
+              {isPlanEditing ? (
                 <Text variant="body" color="textSecondary">
-                  {formatValueUnitAmount(totalAmountMinor, valueUnitCode)} — taksit planı olan kayıtlarda tutar
-                  düzenlenemez.
+                  {formatValueUnitAmount(planTotalMinor, valueUnitCode)} — aşağıdaki taksit planının toplamıdır.
                 </Text>
               ) : (
                 <AmountField
@@ -428,11 +607,34 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
               )}
             </Stack>
 
-            <DateField
-              label={!isEditing && installmentCount > 1 ? 'İLK VADE' : 'VADE'}
-              value={dueDate}
-              onChangeText={setDueDate}
-            />
+            {isPlanEditing ? null : (
+              <DateField
+                label={!isEditing && installmentCount > 1 ? 'İLK VADE' : 'VADE'}
+                value={dueDate}
+                onChangeText={setDueDate}
+              />
+            )}
+
+            {isPlanEditing ? (
+              <InstallmentPlanEditor
+                rows={planRows}
+                unitLabel={unitLabel}
+                precision={valueUnit.precision}
+                currencyCode={valueUnitCode}
+                minCount={minPlanCount}
+                onStartDateChange={updatePlanStartDate}
+                onDateChange={updatePlanRowDate}
+                onAmountChange={updatePlanRowAmount}
+                onAdd={addPlanRow}
+                onRemoveLast={removeLastPlanRow}
+              />
+            ) : null}
+
+            {planError ? (
+              <Text variant="caption" color="danger">
+                {planError}
+              </Text>
+            ) : null}
 
             {isLoanType || isSubscriptionType || isCashAdvanceType ? null : (
               <Stack gap="sm">
@@ -624,6 +826,175 @@ function ObligationForm({ id, initial, hasInstallments, initialDocumentType, ini
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+interface InstallmentPlanEditorProps {
+  rows: PlanRow[];
+  unitLabel: string;
+  precision: 0 | 2;
+  currencyCode: string;
+  /** Kuyruk yalnızca bu sayının altına inecek şekilde kısaltılamaz (ödenmiş taksitleri korur). */
+  minCount: number;
+  onStartDateChange: (value: string) => void;
+  onDateChange: (index: number, value: string) => void;
+  onAmountChange: (index: number, value: string) => void;
+  onAdd: () => void;
+  onRemoveLast: () => void;
+}
+
+// Mevcut bir taksit planını düzenleme UI'ı: aynı "taksit zaman çizgisi" görsel dili
+// (bkz. app/obligations/[id].tsx TimelineInstallmentRow, InstallmentPreviewTimeline
+// aşağıda) — ama satırlar burada canlı düzenlenebilir. Ödenmiş taksitler (yeşil, kilitli)
+// tarih/tutar alanı göstermez ve kaldırılamaz; yalnızca kuyruktaki son taksit "+ Taksit
+// Ekle" / çöp kutusu ile büyütülüp küçültülebilir (docs/01-finansal-kayit-modeli.md §8.1
+// — taksit toplamı, obligation'ın total_amount_minor'ıyla her zaman birebir örtüşmeli).
+function InstallmentPlanEditor({
+  rows,
+  unitLabel,
+  precision,
+  currencyCode,
+  minCount,
+  onStartDateChange,
+  onDateChange,
+  onAmountChange,
+  onAdd,
+  onRemoveLast,
+}: InstallmentPlanEditorProps) {
+  const theme = useTheme();
+  const firstRow = rows[0] ?? null;
+  const lastIndex = rows.length - 1;
+  const canRemoveLast = rows.length > minCount && lastIndex >= 0 && !rows[lastIndex].locked;
+
+  return (
+    <Stack gap="sm">
+      <Text variant="caption" color="textSecondary">
+        TAKSİT PLANI
+      </Text>
+
+      <Stack gap="sm">
+        <Text variant="caption" color="textSecondary">
+          BAŞLANGIÇ TARİHİ
+        </Text>
+        {!firstRow || firstRow.locked ? (
+          <Text variant="body" color="textSecondary">
+            {firstRow ? shortDateFormatter.format(new Date(firstRow.dueDate)) : '—'} — ilk {unitLabel.toLocaleLowerCase('tr-TR')}
+            {' '}ödendiği için başlangıç tarihi değiştirilemez.
+          </Text>
+        ) : (
+          <DateField value={firstRow.dueDate} onChangeText={onStartDateChange} />
+        )}
+      </Stack>
+
+      <Stack gap="xxs">
+        {rows.map((row, index) => {
+          const isLast = index === lastIndex;
+          const markerBg = row.locked ? theme.colors.success : 'transparent';
+          const markerBorder = row.locked ? theme.colors.success : theme.colors.border;
+
+          return (
+            <Row
+              key={row.id ?? `new-${row.installmentNumber}`}
+              gap="sm"
+              align="stretch"
+              style={{ marginBottom: isLast ? 0 : theme.spacing.sm }}
+            >
+              <Stack gap="xs" align="center" style={{ width: 32 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    borderWidth: row.locked ? 0 : 1.5,
+                    borderColor: markerBorder,
+                    backgroundColor: markerBg,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {row.locked ? (
+                    <Ionicons name="checkmark" size={16} color={theme.colors.brandPrimaryText} />
+                  ) : (
+                    <Text variant="caption" style={{ color: theme.colors.textSecondary, fontWeight: '700' }}>
+                      {row.installmentNumber}
+                    </Text>
+                  )}
+                </View>
+                {!isLast ? (
+                  <View
+                    style={{
+                      flex: 1,
+                      width: 2,
+                      borderRadius: 1,
+                      backgroundColor: row.locked ? theme.colors.success : theme.colors.border,
+                    }}
+                  />
+                ) : null}
+              </Stack>
+
+              <View style={{ flex: 1 }}>
+                <Card>
+                  {row.locked ? (
+                    <Row gap="sm" align="center">
+                      <Stack gap="xxs" style={{ flex: 1 }}>
+                        <Text variant="cardTitle" numberOfLines={1}>
+                          {row.installmentNumber}. {unitLabel} — {shortDateFormatter.format(new Date(row.dueDate))}
+                        </Text>
+                        <Text variant="caption" style={{ color: theme.colors.success, fontWeight: '600' }}>
+                          Ödendi
+                        </Text>
+                      </Stack>
+                      <Text variant="body" tabular>
+                        {formatValueUnitAmount(row.original?.amount_minor ?? 0, currencyCode)}
+                      </Text>
+                    </Row>
+                  ) : (
+                    <Stack gap="sm">
+                      <Row align="center">
+                        <Text variant="cardTitle" style={{ flex: 1 }}>
+                          {row.installmentNumber}. {unitLabel}
+                        </Text>
+                        {isLast && canRemoveLast ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Taksiti kaldır"
+                            onPress={onRemoveLast}
+                            hitSlop={8}
+                          >
+                            <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />
+                          </Pressable>
+                        ) : null}
+                      </Row>
+                      <DateField value={row.dueDate} onChangeText={(value) => onDateChange(index, value)} />
+                      <AmountField
+                        placeholder={precision === 0 ? '1' : '0,00'}
+                        precision={precision}
+                        value={row.amountStr}
+                        onChangeText={(value) => onAmountChange(index, value)}
+                      />
+                    </Stack>
+                  )}
+                </Card>
+              </View>
+            </Row>
+          );
+        })}
+      </Stack>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Taksit ekle"
+        onPress={onAdd}
+        style={{ alignSelf: 'flex-start', paddingVertical: theme.spacing.xs }}
+      >
+        <Row gap="xs" align="center">
+          <Ionicons name="add-circle-outline" size={18} color={theme.colors.brandPrimary} />
+          <Text variant="body" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+            Taksit Ekle
+          </Text>
+        </Row>
+      </Pressable>
+    </Stack>
   );
 }
 

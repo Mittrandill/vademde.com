@@ -420,3 +420,69 @@ export async function createInstallmentPlan({
   if (error) throw error;
   return data;
 }
+
+export interface UpdateInstallmentPlanRow {
+  /** null → yeni taksit (kuyruğa eklendi), doluysa mevcut satır güncellenir. */
+  id: string | null;
+  installmentNumber: number;
+  dueDate: string;
+  amountMinor: number;
+  remainingAmountMinor: number;
+  status: string;
+  principalMinor: number | null;
+  interestMinor: number | null;
+}
+
+// Taksit planı düzenlemesi (bkz. app/obligations/new.tsx InstallmentPlanEditor):
+// yalnızca değişen satırlar `rows`'ta gelir (değişmeyenler çağıran tarafta elenir),
+// kaldırılan taksitler `removedIds` ile silinir. remaining_amount_minor/status çağıran
+// tarafta (utils/installmentPlan.ts recomputeInstallmentAfterAmountEdit) önceden
+// hesaplanmış olarak gelir — installments UPDATE'inde bunu otomatik yeniden hesaplayan
+// bir trigger yoktur (yalnızca ödemeler değişince tetiklenir).
+export async function updateInstallmentPlan({
+  workspaceId,
+  obligationId,
+  rows,
+  removedIds,
+}: {
+  workspaceId: string;
+  obligationId: string;
+  rows: UpdateInstallmentPlanRow[];
+  removedIds: string[];
+}): Promise<void> {
+  if (removedIds.length > 0) {
+    const { error } = await supabase.from('installments').delete().in('id', removedIds);
+    if (error) throw error;
+  }
+
+  const toInsert = rows.filter((r) => !r.id);
+  const toUpdate = rows.filter((r): r is UpdateInstallmentPlanRow & { id: string } => !!r.id);
+
+  if (toInsert.length > 0) {
+    const insertRows: TablesInsert<'installments'>[] = toInsert.map((r) => ({
+      workspace_id: workspaceId,
+      obligation_id: obligationId,
+      installment_number: r.installmentNumber,
+      due_date: r.dueDate,
+      amount_minor: r.amountMinor,
+    }));
+    const { error } = await supabase.from('installments').insert(insertRows);
+    if (error) throw error;
+  }
+
+  for (const r of toUpdate) {
+    const { error } = await supabase
+      .from('installments')
+      .update({
+        installment_number: r.installmentNumber,
+        due_date: r.dueDate,
+        amount_minor: r.amountMinor,
+        remaining_amount_minor: r.remainingAmountMinor,
+        status: r.status,
+        principal_minor: r.principalMinor,
+        interest_minor: r.interestMinor,
+      })
+      .eq('id', r.id);
+    if (error) throw error;
+  }
+}
