@@ -240,14 +240,22 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
     }
   }
 
-  return accounts.map((account) => ({
-    accountId: account.id,
-    name: account.name,
-    type: account.type,
-    bankCode: account.bank_code,
-    currencyCode: account.currency_code,
-    balanceMinor: account.opening_balance_minor + (deltas.get(account.id) ?? 0),
-  }));
+  return accounts.map((account) => {
+    const delta = deltas.get(account.id) ?? 0;
+    // Kredi kartı bir varlık değil borç hesabıdır: harcama (expense) borcu artırır, ödeme
+    // (bu hesaba income/transfer-in) borcu azaltır — diğer hesap türlerinin tam tersi işaret.
+    // opening_balance_minor kart için zaten "güncel kart borcu" olarak pozitif girilir
+    // (bkz. app/accounts/new.tsx "GÜNCEL KART BORCU"), bu yüzden yalnızca delta ters çevrilir.
+    const signedDelta = account.type === 'credit_card' ? -delta : delta;
+    return {
+      accountId: account.id,
+      name: account.name,
+      type: account.type,
+      bankCode: account.bank_code,
+      currencyCode: account.currency_code,
+      balanceMinor: account.opening_balance_minor + signedDelta,
+    };
+  });
 }
 
 // docs/01-finansal-kayit-modeli.md §3.4 — Gecikme: vade geçmiş ve kalan tutar > 0.

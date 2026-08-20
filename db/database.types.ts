@@ -1007,6 +1007,7 @@ export type Database = {
           direction: string
           id: string
           occurred_at: string
+          payment_method: string | null
           related_transaction_id: string | null
           source_obligation_id: string | null
           transfer_to_account_id: string | null
@@ -1024,6 +1025,7 @@ export type Database = {
           direction: string
           id?: string
           occurred_at?: string
+          payment_method?: string | null
           related_transaction_id?: string | null
           source_obligation_id?: string | null
           transfer_to_account_id?: string | null
@@ -1041,6 +1043,7 @@ export type Database = {
           direction?: string
           id?: string
           occurred_at?: string
+          payment_method?: string | null
           related_transaction_id?: string | null
           source_obligation_id?: string | null
           transfer_to_account_id?: string | null

@@ -22,7 +22,8 @@ import {
   type ObligationDueItem,
 } from '@/features/obligations/api';
 import { listTransactions } from '@/features/transactions/api';
-import { getAllTimeIncomeExpenseTotals, getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
+import { getAccountBalances } from '@/features/reports/api';
+import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -102,9 +103,12 @@ export default function HomeScreen() {
     }
   }, [activeWorkspaceId, accountsQuery.data]);
 
-  const allTimeTotalsQuery = useQuery({
-    queryKey: activeWorkspaceId ? queryKeys.dashboardAllTimeTotals(activeWorkspaceId) : ['all-time', 'disabled'],
-    queryFn: () => getAllTimeIncomeExpenseTotals(activeWorkspaceId as string),
+  // app/accounts/index.tsx'teki aynı desen: kredi kartı hariç, çünkü kart borcu
+  // (artık doğru işaretle) ayrıca kart hesabında takip ediliyor — nakit/banka
+  // bakiyeleriyle karışırsa toplam bakiye anlamsızlaşır.
+  const balancesQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
+    queryFn: () => getAccountBalances(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
 
@@ -156,15 +160,17 @@ export default function HomeScreen() {
   });
 
   const totalBalanceMinor = useMemo(() => {
-    const openingSum = sumToReferenceMinor(
-      (accountsQuery.data ?? []).map((a) => ({ amountMinor: a.opening_balance_minor, unitCode: a.currency_code })),
+    const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
+    return sumToReferenceMinor(
+      (accountsQuery.data ?? [])
+        .filter((a) => a.type !== 'credit_card')
+        .map((a) => ({
+          amountMinor: balanceByAccountId.get(a.id) ?? a.opening_balance_minor,
+          unitCode: a.currency_code,
+        })),
       valueUnitRatesQuery.data ?? []
     );
-    // allTimeTotalsQuery zaten TL referansına çevrilmiş gelir/gider toplamlarını döner
-    // (bkz. features/dashboard/api.ts getAllTimeIncomeExpenseTotals).
-    const totals = allTimeTotalsQuery.data ?? { incomeMinor: 0, expenseMinor: 0 };
-    return openingSum + totals.incomeMinor - totals.expenseMinor;
-  }, [accountsQuery.data, allTimeTotalsQuery.data, valueUnitRatesQuery.data]);
+  }, [accountsQuery.data, balancesQuery.data, valueUnitRatesQuery.data]);
 
   const monthNetMinor = useMemo(() => {
     const totals = monthTotalsQuery.data ?? { incomeMinor: 0, expenseMinor: 0 };

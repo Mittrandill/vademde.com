@@ -69,11 +69,13 @@ const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', mo
 export default function NewObligationScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, type, accountId, dueDate } = useLocalSearchParams<{
+  const { id, type, accountId, dueDate, counterpartyId, direction } = useLocalSearchParams<{
     id?: string;
     type?: string;
     accountId?: string;
     dueDate?: string;
+    counterpartyId?: string;
+    direction?: string;
   }>();
   const isEditing = !!id;
 
@@ -107,6 +109,8 @@ export default function NewObligationScreen() {
       initialDocumentType={typeof type === 'string' ? type : undefined}
       initialAccountId={typeof accountId === 'string' ? accountId : undefined}
       initialDueDate={typeof dueDate === 'string' ? dueDate : undefined}
+      initialCounterpartyId={typeof counterpartyId === 'string' ? counterpartyId : undefined}
+      initialDirection={direction === 'payable' || direction === 'receivable' ? direction : undefined}
     />
   );
 }
@@ -125,6 +129,11 @@ interface ObligationFormProps {
    * beklenen son ödeme tarihini önceden doldurur (bkz. app/accounts/[id].tsx) — kullanıcı
    * her zaman elle değiştirebilir. */
   initialDueDate?: string;
+  /** Cari detayından "Satış/Alış Faturası Oluştur" veya "Tahsilat/Ödeme Ekle → Çek/Senet"
+   * kısayollarıyla gelindiğinde kişi/firmayı önceden doldurur (bkz. app/counterparties/[id].tsx). */
+  initialCounterpartyId?: string;
+  /** Aynı kısayollarda borç/alacak yönünü önceden doldurur. */
+  initialDirection?: Direction;
 }
 
 function ObligationForm({
@@ -135,13 +144,17 @@ function ObligationForm({
   initialDocumentType,
   initialAccountId,
   initialDueDate,
+  initialCounterpartyId,
+  initialDirection,
 }: ObligationFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const isEditing = !!id;
 
-  const [direction, setDirection] = useState<Direction>((initial?.direction as Direction) ?? 'payable');
+  const [direction, setDirection] = useState<Direction>(
+    (initial?.direction as Direction) ?? initialDirection ?? 'payable'
+  );
   const [documentType, setDocumentType] = useState<string | null>(
     initial?.document_type ?? initialDocumentType ?? null
   );
@@ -165,7 +178,9 @@ function ObligationForm({
   const [dueDate, setDueDate] = useState(
     initial?.due_date ?? initialDueDate ?? new Date().toISOString().slice(0, 10)
   );
-  const [counterpartyId, setCounterpartyId] = useState<string | null>(initial?.counterparty_id ?? null);
+  const [counterpartyId, setCounterpartyId] = useState<string | null>(
+    initial?.counterparty_id ?? initialCounterpartyId ?? null
+  );
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
@@ -230,6 +245,11 @@ function ObligationForm({
   // aynı gerekçe — bkz. COUNTERPARTY_LESS_DOCUMENT_TYPES), HESAP zorunludur ve yalnızca kredi
   // kartı hesapları arasından seçilir; ayrıca çekilen nakit gerçekten bir hesaba yatırılabilir.
   const isCashAdvanceType = documentType === 'nakit_avans';
+  // Kredi kartı ekstresi: borçlu taraf da kart hesabıdır (aynı gerekçe) — HESAP zorunlu ve
+  // yalnızca kredi kartı hesapları listelenir. Hesapsız/sahipsiz bir ekstre oluşursa kart
+  // detayındaki Ekstreler sekmesinde ve kart ödemesi akışında hiç görünmez (bkz.
+  // app/accounts/[id].tsx statementsQuery, features/payments/api.ts recordCardPayment).
+  const isCardStatementType = documentType === 'kredi_karti_ekstresi';
   const unitLabel = isSubscriptionType ? 'Ay' : 'Taksit';
 
   // Mevcut bir taksit planı olan kaydı düzenlerken TUTAR/VADE/TAKSİT SAYISI alanları
@@ -359,7 +379,8 @@ function ObligationForm({
 
       const bankCodeForType = BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null;
       const serviceCodeForType = isSubscriptionType ? serviceCode : null;
-      const counterpartyIdForType = isLoanType || isSubscriptionType || isCashAdvanceType ? null : counterpartyId;
+      const counterpartyIdForType =
+        isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : counterpartyId;
 
       if (isEditing) {
         if (isPlanEditing) {
@@ -543,7 +564,8 @@ function ObligationForm({
     (isPlanEditing ? planTotalMinor > 0 && !planError : totalAmountMinor > 0) &&
     !!documentType &&
     (!isLoanType || !!bankCode) &&
-    (!isCashAdvanceType || !!accountId);
+    (!isCashAdvanceType || !!accountId) &&
+    (!isCardStatementType || !!accountId);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -636,7 +658,7 @@ function ObligationForm({
               </Text>
             ) : null}
 
-            {isLoanType || isSubscriptionType || isCashAdvanceType ? null : (
+            {isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
                   KİŞİ / FİRMA
@@ -663,9 +685,13 @@ function ObligationForm({
                 selectedId={documentType}
                 onSelect={(value) => {
                   setDocumentType(value);
-                  // Nakit avansta HESAP yalnızca kredi kartı olabilir — önceden seçilmiş bir
-                  // kart-dışı hesap varsa (veya tersi yönde geçilirken) geçersiz kalmasın diye temizlenir.
-                  if (value === 'nakit_avans' && !creditCardAccounts.some((a) => a.id === accountId)) {
+                  // Nakit avans/kredi kartı ekstresinde HESAP yalnızca kredi kartı olabilir —
+                  // önceden seçilmiş bir kart-dışı hesap varsa (veya tersi yönde geçilirken)
+                  // geçersiz kalmasın diye temizlenir.
+                  if (
+                    (value === 'nakit_avans' || value === 'kredi_karti_ekstresi') &&
+                    !creditCardAccounts.some((a) => a.id === accountId)
+                  ) {
                     setAccountId(null);
                   }
                 }}
@@ -709,17 +735,17 @@ function ObligationForm({
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                {isCashAdvanceType ? 'KREDİ KARTI' : 'HESAP (İSTEĞE BAĞLI)'}
+                {isCashAdvanceType || isCardStatementType ? 'KREDİ KARTI' : 'HESAP (İSTEĞE BAĞLI)'}
               </Text>
-              {(isCashAdvanceType ? creditCardAccounts : generalAccounts).length === 0 ? (
+              {(isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts).length === 0 ? (
                 <Text variant="body" color="textSecondary">
-                  {isCashAdvanceType
+                  {isCashAdvanceType || isCardStatementType
                     ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
                     : "Önce Hesaplar'dan bir hesap ekleyin."}
                 </Text>
               ) : (
                 <AccountPicker
-                  accounts={isCashAdvanceType ? creditCardAccounts : generalAccounts}
+                  accounts={isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts}
                   selectedId={accountId}
                   onSelect={setAccountId}
                 />

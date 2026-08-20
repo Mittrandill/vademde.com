@@ -1,5 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
+import { createTransfer } from '@/features/transactions/api';
 
 export type Payment = Tables<'payments'>;
 
@@ -172,6 +173,75 @@ export async function recordPastInstallmentPayments(
     .select('*');
   if (error) throw error;
   return data;
+}
+
+export interface RecordCardPaymentInput {
+  workspaceId: string;
+  cardAccountId: string;
+  /** Ödemenin çıktığı kasa/banka/cüzdan hesabı — kredi kartı ve POS olamaz (bkz.
+   * app/obligations/[id].tsx isCardStatementPayment ve components/finance/CardPaymentForm.tsx). */
+  sourceAccountId: string;
+  amountMinor: number;
+  currencyCode: string;
+  paidAt: string;
+}
+
+// Klasik kredi kartı mantığı: ödeme kaynak hesaptan karta TEK bir transferdir (limit hemen
+// açılır, bkz. features/reports/api.ts getAccountBalances — kart borcu artık bu transferi
+// gider gibi değil ödeme gibi okur). Kartın açık ekstireleri varsa (kredi_karti_ekstresi,
+// en eski vadeden başlayarak) aynı tutar bunlara da payments satırı olarak dağıtılır —
+// account_id/transaction bilgisi transferin kendisine işaret eder (account_id: null), böylece
+// tek para hareketi kaydedilmiş olur ve ekstre "Kısmen/Tamamen Ödendi" durumuna otomatik
+// (recompute_obligation_progress trigger'ı) geçer. Ekstre şartı yoktur — ödeme her zaman
+// yapılabilir, fazlası yalnızca kart borcunu düşürür (avans ödeme).
+export async function recordCardPayment({
+  workspaceId,
+  cardAccountId,
+  sourceAccountId,
+  amountMinor,
+  currencyCode,
+  paidAt,
+}: RecordCardPaymentInput): Promise<void> {
+  const transfer = await createTransfer({
+    workspaceId,
+    fromAccountId: sourceAccountId,
+    toAccountId: cardAccountId,
+    amountMinor,
+    currencyCode,
+    occurredAt: paidAt,
+    description: 'Kredi kartı ödemesi',
+  });
+
+  const { data: openStatements, error } = await supabase
+    .from('obligations')
+    .select('id, remaining_amount_minor')
+    .eq('workspace_id', workspaceId)
+    .eq('account_id', cardAccountId)
+    .eq('document_type', 'kredi_karti_ekstresi')
+    .gt('remaining_amount_minor', 0)
+    .order('due_date', { ascending: true });
+  if (error) throw error;
+
+  let unallocated = amountMinor;
+  const rows: TablesInsert<'payments'>[] = [];
+  for (const statement of openStatements ?? []) {
+    if (unallocated <= 0) break;
+    const applied = Math.min(unallocated, statement.remaining_amount_minor);
+    rows.push({
+      workspace_id: workspaceId,
+      obligation_id: statement.id,
+      amount_minor: applied,
+      account_id: null,
+      transaction_id: transfer.id,
+      paid_at: paidAt,
+    });
+    unallocated -= applied;
+  }
+
+  if (rows.length > 0) {
+    const { error: paymentsError } = await supabase.from('payments').insert(rows);
+    if (paymentsError) throw paymentsError;
+  }
 }
 
 // payments.transaction_id → transactions ON DELETE SET NULL'dır (cascade değil), yani

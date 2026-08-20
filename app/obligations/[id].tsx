@@ -376,17 +376,34 @@ export default function ObligationDetailScreen() {
         title={`${DOCUMENT_TYPE_LABEL[obligation.document_type] ?? 'Kayıt'} İşlemleri`}
         onClose={() => setMenuOpen(false)}
         options={[
-          ...(!isClosed && obligation.status !== 'iptal_edildi' && obligation.remaining_amount_minor > 0
-            ? [
-                {
-                  key: 'payment',
-                  label: 'Ödeme Ekle',
-                  description: 'Bu kayda yeni bir ödeme işle',
-                  icon: 'cash-outline' as const,
-                  onPress: () => setPayingInstallment('obligation'),
-                },
-              ]
-            : []),
+          // Kredi kartı ekstresi kendi başına ödenmez: ödeme kart hesabından tek bir
+          // transferle yapılır ve kartın açık ekstirelerine otomatik dağıtılır (bkz.
+          // features/payments/api.ts recordCardPayment, app/accounts/[id].tsx "Ödeme Ekle").
+          // Buradan doğrudan ödeme alınırsa kart bakiyesi güncellenmeden kalır — bu yüzden
+          // burada yerine kart sayfasına yönlendirilir.
+          ...(obligation.document_type === 'kredi_karti_ekstresi'
+            ? obligation.account_id
+              ? [
+                  {
+                    key: 'go-to-card',
+                    label: 'Karta Git',
+                    description: 'Ödeme, kart sayfasından işlenir.',
+                    icon: 'card-outline' as const,
+                    onPress: () => router.push(`/accounts/${obligation.account_id}`),
+                  },
+                ]
+              : []
+            : !isClosed && obligation.status !== 'iptal_edildi' && obligation.remaining_amount_minor > 0
+              ? [
+                  {
+                    key: 'payment',
+                    label: 'Ödeme Ekle',
+                    description: 'Bu kayda yeni bir ödeme işle',
+                    icon: 'cash-outline' as const,
+                    onPress: () => setPayingInstallment('obligation'),
+                  },
+                ]
+              : []),
           {
             key: 'edit',
             label: 'Düzenle',
@@ -632,8 +649,13 @@ function PaymentForm({
   );
   // POS yalnızca tahsilat alır, ondan ödeme yapılamaz — borç (payable) ödemesinde HESAP
   // seçeneklerinden çıkarılır; alacak (receivable) tahsilatı POS'tan olabileceği için orada kalır.
+  // Kredi kartı ekstresi ödemesinde ayrıca hiçbir kredi kartı hesabı kaynak olamaz — bir kartın
+  // borcu başka (veya aynı) bir kartla "ödenemez", gerçek parasal hareket temsil etmez.
+  const isCardStatementPayment = obligation.document_type === 'kredi_karti_ekstresi';
   const payableAccounts =
-    obligation.direction === 'payable' ? accounts.filter((a) => a.type !== 'pos') : accounts;
+    obligation.direction === 'payable'
+      ? accounts.filter((a) => a.type !== 'pos' && (!isCardStatementPayment || a.type !== 'credit_card'))
+      : accounts;
   const [accountId, setAccountId] = useState<string | null>(editingPayment?.account_id ?? null);
   // Ödeme varsayılan olarak işlem yapıldığı anın tarihiyle (DB varsayılanı) kaydedilir,
   // ama geçmiş/ileri tarihli ödemeler için kullanıcı bunu elle değiştirebilir.

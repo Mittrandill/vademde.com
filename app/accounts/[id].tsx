@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, InteractionManager, Modal, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,7 +28,8 @@ import { Amount } from '@/components/finance/Amount';
 import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
-import { archiveAccount, getAccount, type Account } from '@/features/accounts/api';
+import { CardPaymentForm } from '@/components/finance/CardPaymentForm';
+import { archiveAccount, getAccount, listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
@@ -36,7 +37,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
-import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { showSaveSuccess, showSuccessAlert, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
 import { computeStatementPeriod, periodKeyFor, periodKeyForDueDate } from '@/utils/creditCardPeriod';
 import type { ValueUnitType } from '@/features/valueUnits/units';
@@ -88,6 +89,7 @@ export default function AccountDetailScreen() {
   const [tab, setTab] = useState<CreditCardTab>('genel');
   const [menuOpen, setMenuOpen] = useState(false);
   const [statementSheetMonth, setStatementSheetMonth] = useState<StatementMonth | null>(null);
+  const [payingCard, setPayingCard] = useState(false);
 
   const accountQuery = useQuery({
     queryKey: ['account', id],
@@ -98,6 +100,15 @@ export default function AccountDetailScreen() {
   const balancesQuery = useQuery({
     queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
     queryFn: () => getAccountBalances(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+
+  // Kart ödemesi (CardPaymentForm) için kaynak hesap seçenekleri — bkz. aşağıdaki
+  // sourceAccounts: kredi kartı ve POS hariç (bir kartın borcu başka bir kartla ödenemez,
+  // aynı gerekçe app/obligations/[id].tsx isCardStatementPayment'ta).
+  const accountsQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
+    queryFn: () => listAccounts(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
 
@@ -222,6 +233,19 @@ export default function AccountDetailScreen() {
       balanceMinor <= 0 ? theme.colors.success : clampedUtilization >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary;
     const heroAmountColor = balanceMinor > 0 ? theme.colors.danger : theme.colors.textPrimary;
     const loadedStatementCount = statementMonths.filter((m) => m.obligation).length;
+    const sourceAccounts = (accountsQuery.data ?? []).filter(
+      (a) => a.type !== 'credit_card' && a.type !== 'pos'
+    );
+
+    function afterCardPayment() {
+      InteractionManager.runAfterInteractions(() => {
+        if (activeWorkspaceId) {
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
+        }
+      });
+    }
 
     const tabOptions: { key: CreditCardTab; label: string }[] = [
       { key: 'genel', label: 'Genel' },
@@ -392,6 +416,17 @@ export default function AccountDetailScreen() {
         title="Kart işlemleri"
         onClose={() => setMenuOpen(false)}
         options={[
+          ...(balanceMinor > 0
+            ? [
+                {
+                  key: 'pay',
+                  label: 'Ödeme Ekle',
+                  description: 'Kart borcuna ödeme işleyin.',
+                  icon: 'cash-outline' as const,
+                  onPress: () => setPayingCard(true),
+                },
+              ]
+            : []),
           ...(mostRecentUnfulfilled
             ? [
                 {
@@ -420,6 +455,31 @@ export default function AccountDetailScreen() {
           },
         ]}
       />
+
+      <Modal
+        visible={payingCard}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setPayingCard(false)}
+      >
+        {payingCard && activeWorkspaceId ? (
+          <CardPaymentForm
+            workspaceId={activeWorkspaceId}
+            cardAccountId={account.id}
+            cardAccountName={account.name}
+            currencyCode={account.currency_code}
+            currentDebtMinor={balanceMinor}
+            sourceAccounts={sourceAccounts}
+            onClose={() => setPayingCard(false)}
+            onSuccess={() => {
+              showSuccessAlert('Ödeme başarıyla kaydedildi.', () => {
+                setPayingCard(false);
+                afterCardPayment();
+              });
+            }}
+          />
+        ) : null}
+      </Modal>
 
       {statementSheetMonth ? (
         <ActionSheet

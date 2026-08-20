@@ -10,8 +10,10 @@ import { useReflowKey } from '@/services/reflow';
 import { AmountField, Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
+import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
+import { listCounterparties } from '@/features/counterparties/api';
 import {
   createTransaction,
   createTransfer,
@@ -26,6 +28,7 @@ import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/util
 import { queryKeys } from '@/services/queryKeys';
 
 type Direction = 'income' | 'expense' | 'transfer';
+type PaymentMethod = 'nakit' | 'havale' | 'kredi_karti' | 'online_odeme' | 'diger';
 
 const DIRECTIONS: Array<{ value: Direction; label: string }> = [
   { value: 'expense', label: 'Gider' },
@@ -33,14 +36,29 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
   { value: 'transfer', label: 'Transfer' },
 ];
 
+// Çek/senet birer finansal kayıt türüdür (obligations.document_type, bkz.
+// docs/01-finansal-kayit-modeli.md §3) — burada yer almaz; cari detayından "Tahsilat/Ödeme
+// Ekle → Çek/Senet" seçilirse doğrudan /obligations/new'e yönlendirilir (bkz.
+// app/counterparties/[id].tsx). Bu liste yalnızca anlık/gerçekleşmiş hareketlerin ödeme
+// yöntemini etiketler.
+const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
+  { value: 'nakit', label: 'Nakit' },
+  { value: 'havale', label: 'Havale/EFT' },
+  { value: 'kredi_karti', label: 'Kredi Kartı' },
+  { value: 'online_odeme', label: 'Online Ödeme' },
+  { value: 'diger', label: 'Diğer' },
+];
+
 export default function NewTransactionScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, accountId, direction, description } = useLocalSearchParams<{
+  const { id, accountId, direction, description, counterpartyId, paymentMethod } = useLocalSearchParams<{
     id?: string;
     accountId?: string;
     direction?: string;
     description?: string;
+    counterpartyId?: string;
+    paymentMethod?: string;
   }>();
   const isEditing = !!id;
 
@@ -72,6 +90,10 @@ export default function NewTransactionScreen() {
       initialAccountId={typeof accountId === 'string' ? accountId : undefined}
       initialDirection={DIRECTIONS.some((d) => d.value === direction) ? (direction as Direction) : undefined}
       initialDescription={typeof description === 'string' ? description : undefined}
+      initialCounterpartyId={typeof counterpartyId === 'string' ? counterpartyId : undefined}
+      initialPaymentMethod={
+        PAYMENT_METHODS.some((m) => m.value === paymentMethod) ? (paymentMethod as PaymentMethod) : undefined
+      }
     />
   );
 }
@@ -83,9 +105,21 @@ interface TransactionFormProps {
   initialAccountId?: string;
   initialDirection?: Direction;
   initialDescription?: string;
+  /** Cari detayından "Tahsilat/Ödeme Ekle" kısayoluyla gelindiğinde kişi/firmayı ve ödeme
+   * yöntemini önceden doldurur (bkz. app/counterparties/[id].tsx). */
+  initialCounterpartyId?: string;
+  initialPaymentMethod?: PaymentMethod;
 }
 
-function TransactionForm({ id, initial, initialAccountId, initialDirection, initialDescription }: TransactionFormProps) {
+function TransactionForm({
+  id,
+  initial,
+  initialAccountId,
+  initialDirection,
+  initialDescription,
+  initialCounterpartyId,
+  initialPaymentMethod,
+}: TransactionFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -106,6 +140,12 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
     initial ? initial.occurred_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
   const [description, setDescription] = useState(initial?.description ?? initialDescription ?? '');
+  const [counterpartyId, setCounterpartyId] = useState<string | null>(
+    initial?.counterparty_id ?? initialCounterpartyId ?? null
+  );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>(
+    (initial?.payment_method as PaymentMethod | null) ?? initialPaymentMethod ?? ''
+  );
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -113,10 +153,11 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
     enabled: !!activeWorkspaceId,
   });
   const accounts = accountsQuery.data ?? [];
-  // Kredi kartı hesapları arasında/kredi kartından "hesaplar arası transfer" anlamsız —
-  // kart borcu buradan değil harcama/ekstre akışından değişir (bkz. app/accounts/[id].tsx
-  // ekstre/ödeme akışı). Transfer yönünde kart hesapları seçilemez hale getirilir.
-  const transferableAccounts = accounts.filter((a) => a.type !== 'credit_card');
+  // Bir kredi kartından "hesaplar arası transfer" kaynağı olmak anlamsız — kart zaten bir
+  // borç hesabıdır, ondan para "çıkmaz". Kaynak listesinden çıkarılır. Hedef olarak ise
+  // kredi kartı geçerlidir — kart borcuna ödeme tam olarak budur (bkz. features/reports/api.ts
+  // getAccountBalances, features/payments/api.ts recordCardPayment ile aynı mekanizma).
+  const transferSourceAccounts = accounts.filter((a) => a.type !== 'credit_card');
   // POS bir tahsilat cihazıdır — yalnızca gelir (kart/nakit tahsilatı) alır, ondan ödeme
   // yapılamaz. Gider yönünde HESAP seçeneklerinden çıkarılır; gelirde ve transferde
   // (kasaya nakit çekme gibi) POS yine seçilebilir kalır.
@@ -131,6 +172,12 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
     enabled: !!activeWorkspaceId && direction !== 'transfer',
   });
   const categories = categoriesQuery.data ?? [];
+
+  const counterpartiesQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.counterparties(activeWorkspaceId) : ['counterparties', 'disabled'],
+    queryFn: () => listCounterparties(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId && direction !== 'transfer',
+  });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -149,6 +196,8 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
           transfer_to_account_id: direction === 'transfer' ? transferToAccountId : null,
           direction,
           category_id: direction === 'transfer' ? null : categoryId,
+          counterparty_id: direction === 'transfer' ? null : counterpartyId,
+          payment_method: direction === 'transfer' ? null : paymentMethod || null,
           amount_minor: amountMinor,
           occurred_at: occurredAt,
           description: description.trim() || null,
@@ -171,6 +220,8 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
         account_id: accountId,
         direction,
         category_id: categoryId,
+        counterparty_id: counterpartyId,
+        payment_method: paymentMethod || null,
         amount_minor: amountMinor,
         occurred_at: occurredAt,
         description: description.trim() || null,
@@ -264,7 +315,7 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
               <Text variant="caption" color="textSecondary">
                 {direction === 'transfer' ? 'KAYNAK HESAP' : 'HESAP'}
               </Text>
-              {(direction === 'transfer' ? transferableAccounts : accountsForDirection).length === 0 ? (
+              {(direction === 'transfer' ? transferSourceAccounts : accountsForDirection).length === 0 ? (
                 <Text variant="body" color="textSecondary">
                   {direction === 'transfer'
                     ? 'Transfer için kredi kartı dışında en az bir hesap gerekir.'
@@ -274,7 +325,7 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
                 </Text>
               ) : (
                 <AccountPicker
-                  accounts={direction === 'transfer' ? transferableAccounts : accountsForDirection}
+                  accounts={direction === 'transfer' ? transferSourceAccounts : accountsForDirection}
                   selectedId={accountId}
                   onSelect={setAccountId}
                   title="Kaynak Hesap Seç"
@@ -297,7 +348,7 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
                   HEDEF HESAP
                 </Text>
                 <AccountPicker
-                  accounts={transferableAccounts.filter((a) => a.id !== accountId)}
+                  accounts={accounts.filter((a) => a.id !== accountId)}
                   selectedId={transferToAccountId}
                   onSelect={setTransferToAccountId}
                   title="Hedef Hesap Seç"
@@ -317,6 +368,39 @@ function TransactionForm({ id, initial, initialAccountId, initialDirection, init
                   <CategoryPicker categories={categories} selectedId={categoryId} onSelect={setCategoryId} />
                 )}
               </Stack>
+            )}
+
+            {direction === 'transfer' ? null : (
+              <>
+                <Stack gap="sm">
+                  <Text variant="caption" color="textSecondary">
+                    KİŞİ / FİRMA (İSTEĞE BAĞLI)
+                  </Text>
+                  {activeWorkspaceId ? (
+                    <CounterpartyPicker
+                      workspaceId={activeWorkspaceId}
+                      counterparties={counterpartiesQuery.data ?? []}
+                      selectedId={counterpartyId}
+                      onSelect={setCounterpartyId}
+                      onCreated={() => {
+                        queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
+                      }}
+                    />
+                  ) : null}
+                </Stack>
+
+                <Stack gap="sm">
+                  <Text variant="caption" color="textSecondary">
+                    ÖDEME YÖNTEMİ (İSTEĞE BAĞLI)
+                  </Text>
+                  <SegmentedControl<PaymentMethod | ''>
+                    options={PAYMENT_METHODS.map((m) => ({ key: m.value, label: m.label }))}
+                    value={paymentMethod}
+                    onChange={setPaymentMethod}
+                    scrollable
+                  />
+                </Stack>
+              </>
             )}
 
             <DateField label="TARİH" value={dateStr} onChangeText={setDateStr} />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Alert, InteractionManager } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import {
@@ -24,14 +25,31 @@ import { Amount } from '@/components/finance/Amount';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { StatusBadge } from '@/components/finance/StatusBadge';
-import { getCounterparty, getCounterpartyLedger } from '@/features/counterparties/api';
+import { deleteCounterparty, getCounterparty, getCounterpartyLedger } from '@/features/counterparties/api';
 import { listObligations, ACTIVE_OBLIGATION_STATUSES, type ObligationWithRelations } from '@/features/obligations/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 import { groupByDay } from '@/utils/groupByDay';
+import { showSuccessAlert } from '@/utils/alerts';
 import type { ValueUnitType } from '@/features/valueUnits/units';
+
+// Tahsilat/Ödeme Ekle → yöntem alt-menüsü. Çek/Senet birer finansal kayıt türüdür
+// (obligations.document_type, docs/01-finansal-kayit-modeli.md §3) — borç kaydı şartı
+// olmadan doğrudan /obligations/new'e yönlendirilir. Diğerleri anlık/gerçekleşmiş
+// hareketlerdir — doğrudan /transactions/new'e yönlendirilir (bkz. app/transactions/new.tsx).
+type PaymentMenuDirection = 'tahsilat' | 'odeme';
+const QUICK_TRANSACTION_METHODS: Array<{
+  key: 'nakit' | 'havale' | 'kredi_karti' | 'online_odeme';
+  label: string;
+  icon: 'cash-outline' | 'swap-horizontal-outline' | 'card-outline' | 'globe-outline';
+}> = [
+  { key: 'nakit', label: 'Nakit', icon: 'cash-outline' },
+  { key: 'havale', label: 'Banka Havalesi/EFT', icon: 'swap-horizontal-outline' },
+  { key: 'kredi_karti', label: 'Kredi Kartı', icon: 'card-outline' },
+  { key: 'online_odeme', label: 'Online Ödeme', icon: 'globe-outline' },
+];
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
@@ -44,13 +62,43 @@ type DetailTab = 'genel' | 'kayitlar' | 'hareketler';
 // istatistikler) ve altında Genel/Açık Kayıtlar/Hareketler sekmeleri.
 export default function CounterpartyDetailScreen() {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const enabled = !!activeWorkspaceId && !!id;
   const [tab, setTab] = useState<DetailTab>('genel');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [paymentMenu, setPaymentMenu] = useState<PaymentMenuDirection | null>(null);
   const [obligationsPage, setObligationsPage] = useState(0);
   const [transactionsPage, setTransactionsPage] = useState(0);
+
+  const deleteCounterpartyMutation = useMutation({
+    mutationFn: () => deleteCounterparty(id as string),
+    onSuccess: () => {
+      showSuccessAlert('Kişi/Firma başarıyla silindi.', () => {
+        router.replace('/counterparties');
+        InteractionManager.runAfterInteractions(() => {
+          if (activeWorkspaceId) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
+          }
+          queryClient.removeQueries({ queryKey: ['counterparty', id] });
+        });
+      });
+    },
+    onError: () => {
+      Alert.alert(
+        'Silinemedi',
+        'Bu kişi/firma işlem veya borç/alacak kayıtlarında kullanılıyor. Önce ilişkili kayıtları güncelleyin.'
+      );
+    },
+  });
+
+  function confirmDeleteCounterparty() {
+    Alert.alert('Cariyi Sil', 'Bu kişi/firma kalıcı olarak silinecek. Emin misiniz?', [
+      { text: 'Vazgeç', style: 'cancel' },
+      { text: 'Sil', style: 'destructive', onPress: () => deleteCounterpartyMutation.mutate() },
+    ]);
+  }
 
   const counterpartyQuery = useQuery({
     queryKey: ['counterparty', id],
@@ -238,11 +286,110 @@ export default function CounterpartyDetailScreen() {
       onClose={() => setMenuOpen(false)}
       options={[
         {
+          key: 'sales-invoice',
+          label: 'Satış Faturası Oluştur',
+          description: 'Bu cariye kesilen bir alacak faturası ekleyin.',
+          icon: 'document-text-outline',
+          onPress: () =>
+            router.push({
+              pathname: '/obligations/new',
+              params: { type: 'fatura', direction: 'receivable', counterpartyId: counterparty.id },
+            }),
+        },
+        {
+          key: 'purchase-invoice',
+          label: 'Alış Faturası Oluştur',
+          description: 'Bu cariden gelen bir borç faturası ekleyin.',
+          icon: 'document-text-outline',
+          onPress: () =>
+            router.push({
+              pathname: '/obligations/new',
+              params: { type: 'fatura', direction: 'payable', counterpartyId: counterparty.id },
+            }),
+        },
+        {
+          key: 'collection',
+          label: 'Tahsilat Ekle',
+          description: 'Nakit, havale, kart, çek veya senet ile tahsilat işleyin.',
+          icon: 'arrow-down-circle-outline',
+          onPress: () => setPaymentMenu('tahsilat'),
+        },
+        {
+          key: 'payment',
+          label: 'Ödeme Ekle',
+          description: 'Nakit, havale, kart, çek veya senet ile ödeme işleyin.',
+          icon: 'arrow-up-circle-outline',
+          onPress: () => setPaymentMenu('odeme'),
+        },
+        {
           key: 'edit',
           label: 'Düzenle',
           description: 'Cari bilgilerini güncelleyin.',
           icon: 'create-outline',
           onPress: () => router.push({ pathname: '/counterparties/new', params: { id: counterparty.id } }),
+        },
+        {
+          key: 'delete',
+          label: deleteCounterpartyMutation.isPending ? 'Siliniyor…' : 'Sil',
+          description: 'Cariyi kalıcı olarak kaldırın.',
+          icon: 'trash-outline',
+          danger: true,
+          onPress: () => {
+            if (!deleteCounterpartyMutation.isPending) confirmDeleteCounterparty();
+          },
+        },
+      ]}
+    />
+
+    <ActionSheet
+      visible={paymentMenu !== null}
+      title={paymentMenu === 'tahsilat' ? 'Tahsilat Yöntemi' : 'Ödeme Yöntemi'}
+      onClose={() => setPaymentMenu(null)}
+      options={[
+        ...QUICK_TRANSACTION_METHODS.map((method) => ({
+          key: method.key,
+          label: method.label,
+          icon: method.icon,
+          onPress: () =>
+            router.push({
+              pathname: '/transactions/new',
+              params: {
+                direction: paymentMenu === 'tahsilat' ? 'income' : 'expense',
+                counterpartyId: counterparty.id,
+                paymentMethod: method.key,
+                description: `${counterparty.name} — ${method.label}`,
+              },
+            }),
+        })),
+        {
+          key: 'cek',
+          label: 'Çek',
+          description: 'Yeni bir çek kaydı oluşturun.',
+          icon: 'document-text-outline',
+          onPress: () =>
+            router.push({
+              pathname: '/obligations/new',
+              params: {
+                type: 'cek',
+                direction: paymentMenu === 'tahsilat' ? 'receivable' : 'payable',
+                counterpartyId: counterparty.id,
+              },
+            }),
+        },
+        {
+          key: 'senet',
+          label: 'Senet',
+          description: 'Yeni bir senet kaydı oluşturun.',
+          icon: 'document-text-outline',
+          onPress: () =>
+            router.push({
+              pathname: '/obligations/new',
+              params: {
+                type: 'senet',
+                direction: paymentMenu === 'tahsilat' ? 'receivable' : 'payable',
+                counterpartyId: counterparty.id,
+              },
+            }),
         },
       ]}
     />
