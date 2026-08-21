@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionSheet, Card, Divider, Row, Stack, Text } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import { DetailHeroCard, DetailIdentityRow } from '@/components/finance/DetailHero';
+import { AccountIcon } from '@/components/finance/AccountIcon';
 import { AccountLabelRow } from '@/components/finance/AccountLabelRow';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -165,8 +166,10 @@ export default function TransactionDetailScreen() {
             {transaction.category ? <Divider /> : null}
 
             <Row gap="sm" align="center">
-              <BankLogo
+              <AccountIcon
                 bankCode={transaction.account?.bank_code}
+                accountType={transaction.account?.type}
+                currencyCode={transaction.account?.currency_code}
                 fallbackName={transaction.account?.name}
                 size={36}
               />
@@ -179,6 +182,7 @@ export default function TransactionDetailScreen() {
                   accountName={transaction.account?.name}
                   accountType={transaction.account?.type}
                   cardLastFour={transaction.account?.card_last_four}
+                  currencyCode={transaction.account?.currency_code}
                 />
               </Stack>
             </Row>
@@ -187,8 +191,10 @@ export default function TransactionDetailScreen() {
               <>
                 <Divider />
                 <Row gap="sm" align="center">
-                  <BankLogo
+                  <AccountIcon
                     bankCode={transaction.transferToAccount.bank_code}
+                    accountType={transaction.transferToAccount.type}
+                    currencyCode={transaction.transferToAccount.currency_code}
                     fallbackName={transaction.transferToAccount.name}
                     size={36}
                   />

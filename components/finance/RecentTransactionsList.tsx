@@ -4,6 +4,7 @@ import type { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
 import { Card, Divider, EmptyState, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
+import { AccountIcon } from './AccountIcon';
 import { AccountLabelRow } from './AccountLabelRow';
 import { Amount } from './Amount';
 import { BankLogo } from './BankLogo';
@@ -78,6 +79,16 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
             />
           ) : t.category?.icon ? (
             <CategoryIcon icon={t.category.icon} color={t.category.color} size={36} />
+          ) : t.direction === 'transfer' && t.transferToAccount ? (
+            // Transferde asıl ikon paranın gittiği hesabı temsil eder (ör. bir kredi kartı
+            // ödemesinde asıl ikon kartın kendi logosudur) — kaynak hesap alt satırda kalır.
+            <AccountIcon
+              bankCode={t.transferToAccount.bank_code}
+              accountType={t.transferToAccount.type}
+              currencyCode={t.transferToAccount.currency_code}
+              fallbackName={t.transferToAccount.name}
+              size={36}
+            />
           ) : t.counterparty ? (
             <PersonAvatar name={t.counterparty.name} size={36} />
           ) : (
@@ -90,21 +101,25 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
           )}
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="cardTitle">
-              {t.description?.trim() ||
+              {t.counterparty?.name ||
+                t.description?.trim() ||
                 t.category?.name ||
                 (t.direction === 'transfer' ? 'Transfer' : t.direction === 'income' ? 'Gelir' : 'Gider')}
             </Text>
-            {t.counterparty ? (
-              <Text variant="caption" color="textSecondary">
-                {t.counterparty.name}
-              </Text>
-            ) : t.account ? (
+            {/* Alt satır her zaman işlemin geçtiği hesabı gösterir (kategori/kişi zaten üstteki
+                ikon ve başlıkla anlatılır) — kişi/firma adı yalnızca hiç hesap yoksa buraya düşer. */}
+            {t.account ? (
               <AccountLabelRow
                 bankCode={t.account.bank_code}
                 accountName={t.account.name}
                 accountType={t.account.type}
                 cardLastFour={t.account.card_last_four}
+                currencyCode={t.account.currency_code}
               />
+            ) : t.counterparty ? (
+              <Text variant="caption" color="textSecondary">
+                {t.counterparty.name}
+              </Text>
             ) : null}
           </Stack>
           <Amount

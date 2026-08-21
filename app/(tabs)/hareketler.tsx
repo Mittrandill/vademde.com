@@ -20,6 +20,7 @@ import {
   Text,
   TextField,
 } from '@/components/primitives';
+import { AccountIcon } from '@/components/finance/AccountIcon';
 import { AccountLabelRow } from '@/components/finance/AccountLabelRow';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
@@ -69,6 +70,15 @@ interface HareketRow {
   accountName?: string | null;
   accountType?: string | null;
   cardLastFour?: string | null;
+  // Yalnızca accountType === 'cash' olan hesaplarda ikon için (bkz. AccountIcon).
+  accountCurrencyCode?: string | null;
+  // Yalnızca transfer yönündeki işlemlerde dolar: paranın gittiği hesap. Asıl ikon olarak
+  // bundan yararlanılır (bkz. renderItem) — ör. bir kredi kartı ödemesinde asıl ikon kartın
+  // kendi logosudur, kaynak hesap (accountName) alt satırda kalır.
+  transferToBankCode?: string | null;
+  transferToAccountName?: string | null;
+  transferToAccountType?: string | null;
+  transferToCurrencyCode?: string | null;
   // Yalnızca kind === 'obligation' satırlarında doldurulur: bu taksit/borç bir hesaptan
   // ödendiyse (bkz. rows useMemo'daki eşleme), ödemenin yapıldığı hesap — ayrı bir
   // "işlem" satırı göstermek yerine bu bilgi doğrudan taksit/borç satırının alt
@@ -77,6 +87,7 @@ interface HareketRow {
   paidAccountName?: string | null;
   paidAccountType?: string | null;
   paidAccountCardLastFour?: string | null;
+  paidAccountCurrencyCode?: string | null;
 }
 
 const DIRECTION_PREFIX: Record<string, string> = {
@@ -209,6 +220,7 @@ export default function HareketlerScreen() {
         id: t.id,
         kind: 'transaction',
         title:
+          t.counterparty?.name ||
           t.description?.trim() ||
           t.category?.name ||
           (t.direction === 'transfer' ? 'Transfer' : t.direction === 'income' ? 'Gelir' : 'Gider'),
@@ -224,6 +236,11 @@ export default function HareketlerScreen() {
         accountName: t.account?.name ?? null,
         accountType: t.account?.type ?? null,
         cardLastFour: t.account?.card_last_four ?? null,
+        accountCurrencyCode: t.account?.currency_code ?? null,
+        transferToBankCode: t.transferToAccount?.bank_code ?? null,
+        transferToAccountName: t.transferToAccount?.name ?? null,
+        transferToAccountType: t.transferToAccount?.type ?? null,
+        transferToCurrencyCode: t.transferToAccount?.currency_code ?? null,
       }));
 
     const installmentItems = wantsObligations ? (installmentsQuery.data ?? []) : [];
@@ -284,6 +301,7 @@ export default function HareketlerScreen() {
               paidAccountName: paymentTx?.account?.name ?? null,
               paidAccountType: paymentTx?.account?.type ?? null,
               paidAccountCardLastFour: paymentTx?.account?.card_last_four ?? null,
+              paidAccountCurrencyCode: paymentTx?.account?.currency_code ?? null,
             };
           })
       : [];
@@ -321,6 +339,7 @@ export default function HareketlerScreen() {
         paidAccountName: paymentTx?.account?.name ?? null,
         paidAccountType: paymentTx?.account?.type ?? null,
         paidAccountCardLastFour: paymentTx?.account?.card_last_four ?? null,
+        paidAccountCurrencyCode: paymentTx?.account?.currency_code ?? null,
       };
     });
 
@@ -476,17 +495,29 @@ export default function HareketlerScreen() {
                   />
                 ) : item.categoryIcon ? (
                   <CategoryIcon icon={item.categoryIcon} color={item.categoryColor} size={36} />
+                ) : item.direction === 'transfer' && (item.transferToBankCode || item.transferToAccountName) ? (
+                  // Transferde asıl ikon paranın gittiği hesabı temsil eder (ör. bir kredi
+                  // kartı ödemesinde asıl ikon kartın kendi logosudur) — kaynak hesap alt
+                  // satırda kalır.
+                  <AccountIcon
+                    bankCode={item.transferToBankCode}
+                    accountType={item.transferToAccountType}
+                    currencyCode={item.transferToCurrencyCode}
+                    fallbackName={item.transferToAccountName}
+                    size={36}
+                  />
                 ) : (
                   <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={36} />
                 )}
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle">{item.title}</Text>
-                  {item.kind === 'transaction' && !item.counterpartyName && item.accountName ? (
+                  {item.kind === 'transaction' && item.accountName ? (
                     <AccountLabelRow
                       bankCode={item.bankCode}
                       accountName={item.accountName}
                       accountType={item.accountType}
                       cardLastFour={item.cardLastFour}
+                      currencyCode={item.accountCurrencyCode}
                     />
                   ) : item.kind === 'obligation' && (item.paidAccountName || item.paidAccountBankCode) ? (
                     // Bu taksit/borç bir hesaptan ödendi — ayrı bir işlem satırı yerine
@@ -496,6 +527,7 @@ export default function HareketlerScreen() {
                       accountName={item.paidAccountName}
                       accountType={item.paidAccountType}
                       cardLastFour={item.paidAccountCardLastFour}
+                      currencyCode={item.paidAccountCurrencyCode}
                     />
                   ) : item.subtitle ? (
                     <Text variant="caption" color="textSecondary">
