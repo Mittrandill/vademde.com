@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
+import { AppIconPicker } from '@/components/brand/AppIconPicker';
 import { Button, Card, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { useSession } from '@/features/auth/useSession';
 import { getMySubscription } from '@/features/subscriptions/api';
@@ -174,6 +175,15 @@ export default function SettingsScreen() {
               GÖRÜNÜM
             </Text>
             <SegmentedControl options={THEME_OPTIONS} value={themePreference} onChange={setThemePreference} />
+          </Stack>
+        </Card>
+
+        <Card>
+          <Stack gap="sm">
+            <Text variant="caption" color="textSecondary">
+              UYGULAMA İKONU
+            </Text>
+            <AppIconPicker />
           </Stack>
         </Card>
 

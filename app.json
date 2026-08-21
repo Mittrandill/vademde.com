@@ -85,7 +85,21 @@
           "remindersPermission": "Borç/alacak vadeleriniz için Hatırlatıcılar'da bir madde oluşturabilmek için erişim gerekir."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@howincodes/expo-dynamic-app-icon",
+        {
+          "koyu": {
+            "ios": "./assets/app-icons/koyu.png"
+          },
+          "monokrom": {
+            "ios": "./assets/app-icons/monokrom.png"
+          },
+          "mor": {
+            "ios": "./assets/app-icons/mor.png"
+          }
+        }
+      ]
     ],
     "extra": {
       "router": {},
