@@ -953,6 +953,45 @@ export type Database = {
           },
         ]
       }
+      shopier_orders: {
+        Row: {
+          amount_minor: number
+          billing_period: string
+          created_at: string
+          currency_code: string
+          id: string
+          owner_id: string
+          payment_id: string | null
+          plan: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_minor: number
+          billing_period: string
+          created_at?: string
+          currency_code?: string
+          id?: string
+          owner_id: string
+          payment_id?: string | null
+          plan: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          billing_period?: string
+          created_at?: string
+          currency_code?: string
+          id?: string
+          owner_id?: string
+          payment_id?: string | null
+          plan?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           billing_period: string | null
