@@ -1,5 +1,5 @@
-import { createContext, useContext, useMemo, type PropsWithChildren } from 'react';
-import { useColorScheme } from 'react-native';
+import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
+import { Appearance, useColorScheme } from 'react-native';
 
 import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 import { colorsByScheme, type ColorScheme, type ThemeColors } from './colors';
@@ -40,6 +40,14 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   const themePreference = useThemePreferenceStore((s) => s.themePreference);
   const scheme: ColorScheme =
     themePreference === 'system' ? (systemScheme === 'light' ? 'light' : 'dark') : themePreference;
+
+  // Yerel (native) bileşenler de (Alert, klavye, action sheet) uygulamanın kendi temasıyla
+  // aynı görünümde kalsın diye burada senkronize edilir — yoksa örn. Ayarlar'dan "Koyu"
+  // seçildiğinde uygulamanın kendi ekranları koyu kalır ama native bir uyarı kutusu sistem
+  // ayarını (açık) takip edip tutarsız görünebilirdi. 'Sistem' seçiliyken override kaldırılır.
+  useEffect(() => {
+    Appearance.setColorScheme(themePreference === 'system' ? 'unspecified' : themePreference);
+  }, [themePreference]);
 
   const theme = useMemo<Theme>(
     () => ({
