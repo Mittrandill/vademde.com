@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "vademde",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.akintkaya.vademde",
@@ -35,6 +34,7 @@
       }
     },
     "android": {
+      "package": "com.akintkaya.vademde",
       "adaptiveIcon": {
         "backgroundColor": "#F6F5F1",
         "foregroundImage": "./assets/adaptive-icon.png"
@@ -90,13 +90,16 @@
         "@howincodes/expo-dynamic-app-icon",
         {
           "koyu": {
-            "ios": "./assets/app-icons/koyu.png"
+            "ios": "./assets/app-icons/koyu.png",
+            "android": "./assets/app-icons/koyu.png"
           },
           "monokrom": {
-            "ios": "./assets/app-icons/monokrom.png"
+            "ios": "./assets/app-icons/monokrom.png",
+            "android": "./assets/app-icons/monokrom.png"
           },
           "mor": {
-            "ios": "./assets/app-icons/mor.png"
+            "ios": "./assets/app-icons/mor.png",
+            "android": "./assets/app-icons/mor.png"
           }
         }
       ]

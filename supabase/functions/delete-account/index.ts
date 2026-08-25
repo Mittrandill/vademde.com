@@ -1,8 +1,11 @@
 // docs/07-guvenlik-gizlilik.md — "Hesabı uygulama içinden silme" P0 gereksinimi.
 // workspaces.owner_id -> auth.users ve tüm workspace-scoped tablolar workspaces.id üzerinden
 // ON DELETE CASCADE olduğundan, kullanıcıyı auth.users'tan silmek sahip olduğu tüm veriyi
-// (hesaplar, işlemler, borç/alacak, belgeler vb.) otomatik olarak temizler. Bu fonksiyon
-// yalnızca önce Storage'daki orijinal belgeleri siler, ardından kullanıcıyı siler.
+// (hesaplar, işlemler, borç/alacak, belgeler vb.) otomatik olarak temizler. shopier_orders ve
+// shopier_processed_orders tablolarındaki owner_id -> auth.users FK'i ise CASCADE değil; bu
+// yüzden ödeme geçmişi olan bir kullanıcıyı silmeden önce bu iki tablo elle temizlenmezse silme
+// FK ihlaliyle başarısız olur. Bu fonksiyon önce Storage'daki orijinal belgeleri, sonra Shopier
+// sipariş kayıtlarını, ardından kullanıcıyı siler.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -58,6 +61,18 @@ Deno.serve(async (req: Request) => {
         if (removeError) throw removeError;
       }
     }
+
+    const { error: shopierProcessedError } = await adminClient
+      .from('shopier_processed_orders')
+      .delete()
+      .eq('owner_id', userId);
+    if (shopierProcessedError) throw shopierProcessedError;
+
+    const { error: shopierOrdersError } = await adminClient
+      .from('shopier_orders')
+      .delete()
+      .eq('owner_id', userId);
+    if (shopierOrdersError) throw shopierOrdersError;
 
     const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(userId);
     if (deleteUserError) throw deleteUserError;

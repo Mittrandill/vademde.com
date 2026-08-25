@@ -83,7 +83,8 @@ export default function SignUpScreen() {
 
             {confirmationSent ? (
               <Text variant="body" color="success">
-                Doğrulama e-postası gönderildi. Gelen kutunuzu kontrol edin.
+                Bu e-posta adresi sistemde kayıtlı değilse, doğrulama bağlantısı gönderildi.
+                Gelen kutunuzu kontrol edin.
               </Text>
             ) : (
               <>
