@@ -2,25 +2,25 @@ import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import type { CustomerInfo, PurchasesOfferings, PurchasesPackage } from 'react-native-purchases';
 
-// docs/10-abonelik-gelir-modeli.md — mağaza makbuz doğrulaması RevenueCat
-// sunucularında yapılır; bu modül yalnızca ince bir SDK sarmalayıcısıdır.
+// docs/10-abonelik-gelir-modeli.md — App Store / Play Store makbuz doğrulaması
+// RevenueCat sunucularında yapılır; bu modül yalnızca ince bir SDK sarmalayıcısıdır.
 // RevenueCat App User ID = Supabase auth user id (owner_id).
-// Apple App Store ve Google Play ayrı public SDK anahtarları kullanır. Web,
-// RevenueCat'in ayrı ürünü Web Billing'i gerektirdiği için burada configure edilmez.
+// Vademde iOS + Android dağıtımı yapar; web, Expo'nun varsayılan fallback hedefi
+// ve gerçek dağıtım platformumuz değil. react-native-purchases web'de
+// RevenueCat'in ayrı bir ürünü olan Web Billing'i kullanmaya çalışıp farklı bir
+// key formatı bekliyor — bu yüzden web'de hiç configure edilmez.
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 const REVENUECAT_ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
 
 let configured = false;
 
 export function configurePurchases(ownerId: string): void {
-  const apiKey = Platform.select({
-    ios: REVENUECAT_IOS_KEY,
-    android: REVENUECAT_ANDROID_KEY,
-  });
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
+  const apiKey = Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY;
+  const missingKeyName =
+    Platform.OS === 'ios' ? 'EXPO_PUBLIC_REVENUECAT_IOS_KEY' : 'EXPO_PUBLIC_REVENUECAT_ANDROID_KEY';
   if (!apiKey) {
-    if (Platform.OS !== 'web') {
-      console.warn(`RevenueCat ${Platform.OS} SDK anahtarı tanımlı değil; satın alma özellikleri devre dışı.`);
-    }
+    console.warn(`${missingKeyName} tanımlı değil; satın alma özellikleri devre dışı.`);
     return;
   }
   try {

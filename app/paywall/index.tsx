@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Alert, Animated, ScrollView, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Alert, Animated, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -366,7 +366,9 @@ export default function PaywallScreen() {
             <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
               {!selectedPackage && !isCurrentSelected
                 ? 'Mağaza fiyatları şu anda alınamıyor.'
-                : 'App Store üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.'}
+                : Platform.OS === 'android'
+                  ? 'Google Play üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.'
+                  : 'App Store üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.'}
             </Text>
             {/* App Store Review Guideline 3.1.2 — otomatik yenilenen abonelik satan ekranda
                 Gizlilik Politikası ve Kullanım Koşulları'na işlevsel bağlantı zorunludur. */}

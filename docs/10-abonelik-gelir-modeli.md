@@ -20,4 +20,4 @@ OCR maliyetleri nedeniyle ücretsiz planın aylık belge kotası olmalıdır. Ko
 - İşletme planında kullanıcı ve OCR kotasına göre kademelendirme
 - Kullanıcıya tarama öncesinde kalan OCR kotasını gösterme
 - Başarısız veya okunamayan işlemde kotayı haksız düşürmeme
-- iOS dijital özelliklerinde App Store IAP
+- iOS dijital özelliklerinde App Store IAP, Android'de Google Play Billing (ikisi de RevenueCat üzerinden, ayrı mağaza ürünleriyle)
