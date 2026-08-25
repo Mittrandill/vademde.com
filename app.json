@@ -35,7 +35,6 @@
     },
     "android": {
       "package": "com.akintkaya.vademde",
-      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#F6F5F1",
         "foregroundImage": "./assets/adaptive-icon.png"
