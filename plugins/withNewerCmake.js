@@ -20,6 +20,14 @@ const REPLACEMENT = `android {
     }`;
 
 module.exports = function withNewerCmake(config) {
+  // Bu, yalnızca Windows'ta yerel prebuild/gradlew alırken karşılaşılan bir sorunu
+  // düzeltir. EAS Build sunucuları Linux'tur, uzun dosya yolu sınırı yoktur ve
+  // cmake;3.31.6 paketi o imajlarda kurulu değildir — orada uygulanırsa
+  // "CMake '3.31.6' was not found" hatasıyla build çöker.
+  if (process.platform !== 'win32') {
+    return config;
+  }
+
   return withAppBuildGradle(config, (config) => {
     let contents = config.modResults.contents;
 
