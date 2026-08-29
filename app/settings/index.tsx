@@ -125,10 +125,24 @@ export default function SettingsScreen() {
           />
           <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
           <SettingsRow
+            leading={<RowIcon name="notifications-outline" />}
+            title="Bildirimler"
+            onPress={() => router.push('/notifications')}
+          />
+          <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
+          <SettingsRow
             leading={<RowIcon name="people-outline" />}
             title="Çalışma Alanları"
             subtitle={activeWorkspaceName ?? (workspaceCount === 0 ? 'Oluştur veya katıl' : undefined)}
             onPress={() => router.push('/workspace')}
+          />
+        </SettingsSection>
+
+        <SettingsSection title="GİZLİLİK">
+          <SettingsRow
+            leading={<RowIcon name="shield-checkmark-outline" />}
+            title="Gizlilik Politikası ve KVKK"
+            onPress={() => router.push('/legal/privacy-policy')}
           />
         </SettingsSection>
       </ScrollView>

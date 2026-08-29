@@ -12,16 +12,15 @@ import { RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Card, Divider, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { deleteAccount, signOut, updatePassword } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
 import { useSession } from '@/features/auth/useSession';
-import { listMyWorkspaces, updateWorkspaceName, deleteWorkspace, type Workspace } from '@/features/workspaces/api';
+import { listMyWorkspaces } from '@/features/workspaces/api';
 import { getMyProfile, updateMyProfile, uploadAvatar } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert } from '@/utils/alerts';
-import { useWorkspaceStore } from '@/store/workspaceStore';
 
 function initialsFrom(name: string | null | undefined, email: string | null | undefined): string {
   const source = name?.trim() || email?.trim() || '';
@@ -42,12 +41,9 @@ export default function ProfileScreen() {
   const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const { session } = useSession();
-  const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore();
   const [isDeleting, setIsDeleting] = useState(false);
   const [fullName, setFullName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
-  const [workspaceNameDraft, setWorkspaceNameDraft] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -136,55 +132,6 @@ export default function ProfileScreen() {
     });
     if (result.canceled || !result.assets[0]) return;
     avatarMutation.mutate(result.assets[0]);
-  }
-
-  const renameWorkspaceMutation = useMutation({
-    mutationFn: (vars: { id: string; name: string }) => updateWorkspaceName(vars.id, vars.name),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
-      setEditingWorkspaceId(null);
-    },
-    onError: (error) => Alert.alert('Kaydedilemedi', error instanceof Error ? error.message : 'Bir hata oluştu'),
-  });
-
-  const deleteWorkspaceMutation = useMutation({
-    mutationFn: (id: string) => deleteWorkspace(id),
-    onSuccess: (_data, id) => {
-      if (activeWorkspaceId === id) setActiveWorkspaceId(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
-    },
-    onError: (error) => Alert.alert('Silinemedi', error instanceof Error ? error.message : 'Bir hata oluştu'),
-  });
-
-  function startEditingWorkspace(workspace: Workspace) {
-    setEditingWorkspaceId(workspace.id);
-    setWorkspaceNameDraft(workspace.name);
-  }
-
-  // Hesap silmeyle aynı çift onaylı desen (bkz. confirmDeleteAccount) — workspace_id
-  // tüm finansal tablolarda ON DELETE CASCADE olduğu için burada da geri alınamaz bir işlem.
-  function confirmDeleteWorkspace(workspace: Workspace) {
-    Alert.alert(
-      `"${workspace.name}" çalışma alanını sil`,
-      'Bu işlem geri alınamaz. Bu çalışma alanındaki tüm hesaplar, işlemler, borç/alacak kayıtları ve belgeler kalıcı olarak silinecek.',
-      [
-        { text: 'Vazgeç', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert('Emin misin?', 'Bu son bir uyarıdır. Bu veriler kurtarılamaz.', [
-              { text: 'Vazgeç', style: 'cancel' },
-              {
-                text: 'Kalıcı Olarak Sil',
-                style: 'destructive',
-                onPress: () => deleteWorkspaceMutation.mutate(workspace.id),
-              },
-            ]);
-          },
-        },
-      ]
-    );
   }
 
   function confirmDeleteAccount() {
@@ -407,32 +354,12 @@ export default function ProfileScreen() {
             <Text variant="caption" color="textSecondary">
               ÇALIŞMA ALANLARI
             </Text>
-            {(workspacesQuery.data ?? []).map((w) => {
-              const isOwner = w.owner_id === session?.user?.id;
-
-              if (editingWorkspaceId === w.id) {
-                return (
-                  <Stack key={w.id} gap="sm">
-                    <TextField placeholder="Çalışma alanı adı" value={workspaceNameDraft} onChangeText={setWorkspaceNameDraft} autoFocus />
-                    <Row gap="sm">
-                      <View style={{ flex: 1 }}>
-                        <Button
-                          label="Kaydet"
-                          onPress={() => renameWorkspaceMutation.mutate({ id: w.id, name: workspaceNameDraft.trim() })}
-                          loading={renameWorkspaceMutation.isPending}
-                          disabled={!workspaceNameDraft.trim()}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Button label="Vazgeç" variant="secondary" onPress={() => setEditingWorkspaceId(null)} />
-                      </View>
-                    </Row>
-                  </Stack>
-                );
-              }
-
-              return (
-                <Row key={w.id} align="center" style={{ justifyContent: 'space-between' }}>
+            {(workspacesQuery.data ?? []).map((w) => (
+              <Pressable
+                key={w.id}
+                onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
+              >
+                <Row align="center" style={{ justifyContent: 'space-between' }}>
                   <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
                     {w.name}
                   </Text>
@@ -440,27 +367,11 @@ export default function ProfileScreen() {
                     <Text variant="caption" color="textSecondary">
                       {w.type === 'business' ? 'İşletme' : 'Kişisel'}
                     </Text>
-                    <Pressable
-                      accessibilityLabel="Ekip"
-                      hitSlop={8}
-                      onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
-                    >
-                      <Ionicons name="people-outline" size={18} color={theme.colors.brandPrimary} />
-                    </Pressable>
-                    {isOwner ? (
-                      <>
-                        <Pressable accessibilityLabel="Adını düzenle" hitSlop={8} onPress={() => startEditingWorkspace(w)}>
-                          <Ionicons name="pencil" size={16} color={theme.colors.textSecondary} />
-                        </Pressable>
-                        <Pressable accessibilityLabel="Çalışma alanını sil" hitSlop={8} onPress={() => confirmDeleteWorkspace(w)}>
-                          <Ionicons name="trash-outline" size={16} color={theme.colors.danger} />
-                        </Pressable>
-                      </>
-                    ) : null}
+                    <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
                   </Row>
                 </Row>
-              );
-            })}
+              </Pressable>
+            ))}
             <Button
               label="Davet koduyla katıl"
               variant="secondary"
@@ -497,6 +408,28 @@ export default function ProfileScreen() {
               </Row>
             </Pressable>
           </Stack>
+        </Card>
+
+        <Card style={{ padding: 0 }}>
+          <Pressable onPress={() => router.push('/subscription')}>
+            <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
+              <Ionicons name="sparkles-outline" size={18} color={theme.colors.brandPrimary} />
+              <Text variant="body" style={{ flex: 1 }}>
+                Abonelik
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+            </Row>
+          </Pressable>
+          <Divider style={{ marginLeft: theme.spacing.md + 18 + theme.spacing.sm }} />
+          <Pressable onPress={() => router.push('/settings')}>
+            <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
+              <Ionicons name="settings-outline" size={18} color={theme.colors.brandPrimary} />
+              <Text variant="body" style={{ flex: 1 }}>
+                Ayarlar
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+            </Row>
+          </Pressable>
         </Card>
 
         <Button label="Çıkış Yap" variant="secondary" onPress={handleSignOut} />

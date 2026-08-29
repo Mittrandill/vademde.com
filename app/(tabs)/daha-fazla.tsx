@@ -213,13 +213,6 @@ export default function MoreScreen() {
               href="/banks"
             />
             <RowDivider />
-            <ListRow
-              icon="pricetags-outline"
-              label="Kategoriler"
-              detail="Gelir ve gider"
-              href="/categories"
-            />
-            <RowDivider />
             {/* Eskiden alt sekmede ayrı bir "Raporlar" sekmesiydi — kayan tab bar
                 yalnızca en sık kullanılan beş akışa ayrıldığından buraya taşındı. */}
             <ListRow

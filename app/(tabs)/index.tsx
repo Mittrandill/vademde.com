@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { PAYWALL_LAST_SHOWN_KEY } from '@/utils/storageKeys';
 
 import { useTheme } from '@/theme';
 import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
@@ -15,6 +18,7 @@ import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
 import { RecentTransactionsList } from '@/components/finance/RecentTransactionsList';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { listAccounts } from '@/features/accounts/api';
+import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 import {
   listObligations,
   listInstallmentsDue,
@@ -24,16 +28,23 @@ import {
 import { listTransactions } from '@/features/transactions/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
+import { getMySubscription } from '@/features/subscriptions/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 import { useReflowKey } from '@/services/reflow';
 
+// Ücretsiz plandaki kullanıcıya ilk açılışta ve sonrasında en fazla 5 günde bir kez
+// gösterilen yumuşak paywall hatırlatması (kullanıcı kararı — Dashboard'da başka bir
+// yükseltme çağrısı yok). Ücretli kullanıcıya hiç gösterilmez.
+const PAYWALL_REMINDER_INTERVAL_MS = 5 * 24 * 60 * 60 * 1000;
+
 export default function HomeScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { activeWorkspaceId, setActiveWorkspaceId, balanceHidden, toggleBalanceHidden } = useWorkspaceStore();
+  const setThemePreference = useThemePreferenceStore((s) => s.setThemePreference);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   // Sistem yazı boyutu ekran açıkken değişirse (bkz. services/reflow.ts), bu ekranın
   // yeniden mount olması için — büyük fontta bozulan (BalanceHero'nun bir kerelik ölçülen
@@ -44,6 +55,23 @@ export default function HomeScreen() {
     queryKey: queryKeys.workspaces(),
     queryFn: listMyWorkspaces,
   });
+
+  const subscriptionQuery = useQuery({
+    queryKey: queryKeys.subscription(),
+    queryFn: getMySubscription,
+  });
+  const paywallCheckedRef = useRef(false);
+  useEffect(() => {
+    if (paywallCheckedRef.current || !subscriptionQuery.isSuccess) return;
+    if ((subscriptionQuery.data?.plan ?? 'free') !== 'free') return;
+    paywallCheckedRef.current = true;
+    AsyncStorage.getItem(PAYWALL_LAST_SHOWN_KEY).then((value) => {
+      const lastShownAt = value ? Number(value) : 0;
+      if (Date.now() - lastShownAt < PAYWALL_REMINDER_INTERVAL_MS) return;
+      AsyncStorage.setItem(PAYWALL_LAST_SHOWN_KEY, String(Date.now())).catch(() => {});
+      router.push('/paywall');
+    });
+  }, [subscriptionQuery.isSuccess, subscriptionQuery.data]);
 
   const workspaces = workspacesQuery.data ?? [];
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
@@ -238,24 +266,34 @@ export default function HomeScreen() {
         >
           <Stack gap="xs">
             <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Pressable
-                onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
-                disabled={workspaces.length <= 1}
-              >
-                <Row gap="xs" align="center">
-                  <Text variant="caption" color="textSecondary">
-                    ÇALIŞMA ALANI
-                  </Text>
-                  {workspaces.length > 1 ? (
-                    <Ionicons
-                      name={switcherOpen ? 'chevron-up' : 'chevron-down'}
-                      size={14}
-                      color={theme.colors.textSecondary}
-                    />
-                  ) : null}
-                </Row>
-                <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
-              </Pressable>
+              <Stack gap="xxs">
+                <Pressable
+                  onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
+                  disabled={workspaces.length <= 1}
+                >
+                  <Row gap="xs" align="center">
+                    <Text variant="caption" color="textSecondary">
+                      ÇALIŞMA ALANI
+                    </Text>
+                    {workspaces.length > 1 ? (
+                      <Ionicons
+                        name={switcherOpen ? 'chevron-up' : 'chevron-down'}
+                        size={14}
+                        color={theme.colors.textSecondary}
+                      />
+                    ) : null}
+                  </Row>
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    activeWorkspace &&
+                    router.push({ pathname: '/workspace/[id]/members', params: { id: activeWorkspace.id } })
+                  }
+                  disabled={!activeWorkspace}
+                >
+                  <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
+                </Pressable>
+              </Stack>
               <Row gap="xs">
                 <Pressable
                   onPress={() => router.push('/notifications')}
@@ -288,6 +326,27 @@ export default function HomeScreen() {
                   }}
                 >
                   <Ionicons name="settings-outline" size={22} color={theme.colors.textSecondary} />
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={theme.scheme === 'dark' ? 'Açık moda geç' : 'Koyu moda geç'}
+                  onPress={() => setThemePreference(theme.scheme === 'dark' ? 'light' : 'dark')}
+                  hitSlop={12}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: theme.radius.input,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.surfaceElevated,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Ionicons
+                    name={theme.scheme === 'dark' ? 'moon-outline' : 'sunny-outline'}
+                    size={22}
+                    color={theme.colors.textSecondary}
+                  />
                 </Pressable>
               </Row>
             </Row>
