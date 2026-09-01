@@ -55,6 +55,7 @@ PRD'nin tamamı (`Vademde_PRD_v1.3.pdf`) konu bazlı dosyalara bölündü. Göre
 | "MVP bitti mi?" kontrolü | `docs/12-mvp-kabul-kriterleri.md` |
 | Hangi aşamadayız, sıradaki iş ne | `docs/13-yol-haritasi.md` |
 | Terminoloji / değişmez kararlar | `docs/14-kararlar-ve-terminoloji.md` |
+| Mağaza yayını, sürüm geçmişi, EAS build/submit akışı | `docs/15-yayin-gunlugu.md` |
 
 Orijinal PDF (`Vademde_PRD_v1.3.pdf`) referans olarak korunmuştur; her `docs/*.md` dosyasının başında kaynak PDF bölüm numarası belirtilir.
 
