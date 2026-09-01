@@ -25,6 +25,8 @@ expo-env.d.ts
 .env.local
 .env*.local
 google-play-service-account.json
+google-service-account.json
+*service-account*.json
 
 # Logs
 npm-debug.*
