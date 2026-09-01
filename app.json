@@ -12,7 +12,9 @@
       "bundleIdentifier": "com.akintkaya.vademde",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "tr",
+        "CFBundleLocalizations": ["tr"]
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
