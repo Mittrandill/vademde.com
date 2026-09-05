@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import { Card, Divider, Pressable, Row, Stack, Text } from '@/components/primiti
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
 import { getMySubscription, getPlanLimits } from '@/features/subscriptions/api';
+import { exportWorkspaceJson } from '@/features/export/api';
+import { showErrorAlert } from '@/utils/alerts';
 import { getMyProfile } from '@/features/profile/api';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { queryKeys } from '@/services/queryKeys';
@@ -94,6 +96,21 @@ export default function SettingsScreen() {
   // Kilidi AÇARKEN bir kez doğrulama istenir: doğrulayamayan kullanıcı kilidi açarsa bir
   // daha uygulamaya giremezdi. Kapatırken de istenir ki telefonu eline geçiren biri kilidi
   // basitçe kapatamasın.
+  // docs/07-guvenlik-gizlilik.md — kullanıcı kendi verisinin tamamını her zaman dışa
+  // aktarabilmelidir (KVKK/GDPR veri taşınabilirliği); bu yüzden plana bağlı değildir.
+  const [isExportingData, setIsExportingData] = useState(false);
+  async function handleExportData() {
+    if (!activeWorkspaceId || isExportingData) return;
+    setIsExportingData(true);
+    try {
+      await exportWorkspaceJson(activeWorkspaceId, activeWorkspaceName ?? 'Çalışma Alanı');
+    } catch (error) {
+      showErrorAlert(error, 'Veriler dışa aktarılamadı.');
+    } finally {
+      setIsExportingData(false);
+    }
+  }
+
   async function handleToggleAppLock(next: boolean) {
     if (!planAllowsLock) {
       router.push('/paywall');
@@ -194,6 +211,13 @@ export default function SettingsScreen() {
               <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
             </>
           ) : null}
+          <SettingsRow
+            leading={<RowIcon name="download-outline" />}
+            title="Verilerimi Dışa Aktar"
+            subtitle={isExportingData ? 'Hazırlanıyor…' : 'JSON yedeği'}
+            onPress={handleExportData}
+          />
+          <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
           <SettingsRow
             leading={<RowIcon name="shield-checkmark-outline" />}
             title="Gizlilik Politikası ve KVKK"

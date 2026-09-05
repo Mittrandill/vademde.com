@@ -34,6 +34,7 @@ import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/a
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { toCsv } from '@/utils/csv';
+import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
 import { fromMinorUnits } from '@/utils/money';
 
 type Period = 'month' | '3m' | 'year' | 'all';
@@ -94,6 +95,18 @@ export default function ReportsScreen() {
   const [isExporting, setIsExporting] = useState(false);
 
   const range = useMemo(() => getPeriodRange(period), [period]);
+
+  const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
+  const planCode: PlanCode = (subscriptionQuery.data?.plan as PlanCode) ?? 'free';
+  const planLimitsQuery = useQuery({
+    queryKey: [...queryKeys.planLimits(), planCode],
+    queryFn: () => getPlanLimits(planCode),
+    enabled: subscriptionQuery.isSuccess,
+  });
+  // Limit bilgisi henüz gelmediyse engellenmez (fail-open) — plan sorgusu yüzünden
+  // kullanıcının raporunu alamaması, sızdırmaktan daha kötü bir hata olurdu.
+  const unlimitedExport = planLimitsQuery.data?.unlimited_export ?? true;
+  const canExportPeriod = unlimitedExport || period === 'month';
 
   const summaryQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.reportSummary(activeWorkspaceId, period) : ['reports', 'disabled'],
@@ -233,6 +246,24 @@ export default function ReportsScreen() {
   }
 
   function handleExportPress() {
+    // docs/10-abonelik-gelir-modeli.md — plan_limits.unlimited_export. Ücretsiz planda
+    // rapor çıktısı yalnızca içinde bulunulan ay için alınabilir; daha uzun dönemlerin
+    // analiz raporu Plus ve İşletme planlarının özelliğidir.
+    //
+    // Bu limit KULLANICININ KENDİ VERİSİNİ dışa aktarmasını engellemez — tam veri yedeği
+    // (Ayarlar → Verilerimi Dışa Aktar) her planda açıktır, KVKK/GDPR veri taşınabilirliği
+    // gereği. Burada sınırlanan yalnızca hazırlanmış ANALİZ raporudur.
+    if (!canExportPeriod) {
+      Alert.alert(
+        'Dönem raporu',
+        `"${PERIODS.find((p) => p.key === period)?.label}" raporu Plus planında dışa aktarılabilir. Ücretsiz planda bu ayın raporunu alabilir, tüm verilerinizi Ayarlar → Verilerimi Dışa Aktar'dan her zaman indirebilirsiniz.`,
+        [
+          { text: 'Vazgeç', style: 'cancel' },
+          { text: 'Planları gör', onPress: () => router.push('/paywall') },
+        ]
+      );
+      return;
+    }
     Alert.alert('Raporu Dışa Aktar', 'Hangi formatta paylaşmak istersiniz?', [
       { text: 'CSV', onPress: handleExportCsv },
       { text: 'PDF', onPress: handleExportPdf },
