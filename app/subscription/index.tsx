@@ -104,6 +104,8 @@ export default function SubscriptionScreen() {
     try {
       await restorePurchases();
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
+      // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
       Alert.alert('Satın alımlar geri yüklendi');
     } catch (err) {
       Alert.alert('Geri yükleme başarısız', err instanceof Error ? err.message : 'Bir hata oluştu');

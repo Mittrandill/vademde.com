@@ -36,6 +36,7 @@ import {
   type WorkspaceMember,
   type WorkspaceRole,
 } from '@/features/workspaces/members';
+import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { queryKeys } from '@/services/queryKeys';
 import { showErrorAlert } from '@/utils/alerts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -107,6 +108,17 @@ export default function WorkspaceDetailScreen() {
     queryFn: () => listWorkspaceInvites(workspaceId),
     enabled: !!workspaceId && isOwner,
   });
+
+  // docs/10-abonelik-gelir-modeli.md — ekip üyeliği İşletme planının özelliğidir
+  // (plan_limits.max_team_members free/plus'ta null). Sunucu da reddeder
+  // (create_workspace_invite → TEAM_PLAN_REQUIRED); buradaki kontrol yalnızca kullanıcıyı
+  // hataya düşürmeden önce durdurmak ve neyin kilitli olduğunu göstermek içindir.
+  // planQuery.data null gelirse (RPC henüz uygulanmamış bir ortam) hiçbir şey kilitlenmez —
+  // limit bilgisi yokken kullanıcıyı yanlışlıkla engellemek, engellememekten daha kötüdür.
+  const planQuery = usePlanEnforcement();
+  const planState = planQuery.data ?? null;
+  const teamLimit = planState?.teamMemberLimit ?? null;
+  const teamLocked = !!planState && teamLimit === null;
 
   function invalidateTeam() {
     queryClient.invalidateQueries({ queryKey: queryKeys.workspaceMembers(workspaceId) });
@@ -389,20 +401,38 @@ export default function WorkspaceDetailScreen() {
               YENİ ÜYE DAVET ET
             </Text>
             <Card>
-              <Stack gap="md">
-                <TextField
-                  placeholder="Davet etiketi (isteğe bağlı, ör. Muhasebe ekibi)"
-                  value={inviteLabel}
-                  onChangeText={setInviteLabel}
-                />
-                <SegmentedControl options={INVITE_ROLE_OPTIONS} value={inviteRole} onChange={setInviteRole} stretch />
-                <Button
-                  label="Davet kodu oluştur ve paylaş"
-                  icon="person-add-outline"
-                  onPress={() => createInviteMutation.mutate()}
-                  loading={createInviteMutation.isPending}
-                />
-              </Stack>
+              {teamLocked ? (
+                <Stack gap="sm">
+                  <Text variant="body">
+                    Ekip üyesi davet etmek İşletme planında kullanılabilir.
+                  </Text>
+                  <Text variant="caption" color="textSecondary">
+                    İşletme planında çalışma alanınızı 10 kişiye kadar paylaşabilir, üyelere
+                    düzenleyici veya görüntüleyici rolü verebilirsiniz.
+                  </Text>
+                  <Button label="İşletme planını gör" icon="people-outline" onPress={() => router.push('/paywall')} />
+                </Stack>
+              ) : (
+                <Stack gap="md">
+                  <TextField
+                    placeholder="Davet etiketi (isteğe bağlı, ör. Muhasebe ekibi)"
+                    value={inviteLabel}
+                    onChangeText={setInviteLabel}
+                  />
+                  <SegmentedControl options={INVITE_ROLE_OPTIONS} value={inviteRole} onChange={setInviteRole} stretch />
+                  <Button
+                    label="Davet kodu oluştur ve paylaş"
+                    icon="person-add-outline"
+                    onPress={() => createInviteMutation.mutate()}
+                    loading={createInviteMutation.isPending}
+                  />
+                  {teamLimit !== null ? (
+                    <Text variant="caption" color="textSecondary">
+                      Planınızda sahip dışında {teamLimit} üyeye kadar davet edebilirsiniz.
+                    </Text>
+                  ) : null}
+                </Stack>
+              )}
             </Card>
 
             {invites.length > 0 ? (

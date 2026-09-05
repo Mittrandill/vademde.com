@@ -29,6 +29,8 @@ import { listTransactions } from '@/features/transactions/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
 import { getMySubscription } from '@/features/subscriptions/api';
+import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
+import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -60,6 +62,11 @@ export default function HomeScreen() {
     queryKey: queryKeys.subscription(),
     queryFn: getMySubscription,
   });
+  // Plan limiti durumu. Bu sorgu aynı zamanda sunucuda limit aşımını ilk gördüğünde
+  // 14 günlük lütuf süresini başlatır (sync_plan_enforcement) — bu yüzden uygulamanın
+  // ilk açılan ekranında çağrılır: kullanıcı uyarıyı görmeden kilit devreye girmez.
+  const planEnforcementQuery = usePlanEnforcement();
+
   const paywallCheckedRef = useRef(false);
   useEffect(() => {
     if (paywallCheckedRef.current || !subscriptionQuery.isSuccess) return;
@@ -375,6 +382,8 @@ export default function HomeScreen() {
 
           {/* Borç/Alacak özeti ile Bu Ay Gelir-Gider artık ayrı kartlarda tekrarlanmıyor —
               hero'nun kendi iki sayfası (sağa kaydırarak geçilir) bu ikisini gösteriyor. */}
+          <PlanLimitBanner state={planEnforcementQuery.data} />
+
           <BalanceHero
             totalBalanceMinor={totalBalanceMinor}
             monthNetMinor={monthNetMinor}

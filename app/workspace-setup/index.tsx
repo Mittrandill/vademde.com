@@ -12,9 +12,11 @@ import { AmountField, Button, Card, Pressable, Row, SegmentedControl, Stack, Tex
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWorkspaceIllustration';
 import { setupInitialWorkspaces } from '@/features/workspaces/api';
+import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
+import { showErrorAlert } from '@/utils/alerts';
 
 type WorkspaceMode = 'personal' | 'business' | 'both';
 
@@ -55,9 +57,20 @@ export default function WorkspaceSetupScreen() {
   const [name, setName] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
 
+  // "Her ikisi" tek çağrıda iki çalışma alanı açar; ücretsiz planda tek alan hakkı olduğu
+  // için bu seçenek kilitlidir. Sunucu tarafı da ayrıca reddeder (setup_initial_workspaces
+  // içindeki WORKSPACE_LIMIT_REACHED) — buradaki kontrol yalnızca kullanıcıyı hataya
+  // düşürmeden önce durdurmak içindir.
+  const planQuery = usePlanEnforcement();
+  const planState = planQuery.data ?? null;
+  const remainingSlots = planState ? planState.workspaceLimit - planState.workspaceCount : null;
+  const bothLocked = remainingSlots !== null && remainingSlots < 2;
+  const singleLocked = remainingSlots !== null && remainingSlots < 1;
+
   const isBoth = mode === 'both';
   const trimmedName = name.trim();
-  const canSubmit = isBoth || trimmedName.length > 0;
+  const modeLocked = isBoth ? bothLocked : singleLocked;
+  const canSubmit = !modeLocked && (isBoth || trimmedName.length > 0);
 
   const setupMutation = useMutation({
     mutationFn: async () => {
@@ -70,6 +83,7 @@ export default function WorkspaceSetupScreen() {
         openingBalanceMinor: !isBoth && balance ? parseAmountToMinor(balance) ?? 0 : null,
       });
     },
+    onError: (error) => showErrorAlert(error),
     onSuccess: (primaryWorkspaceId: string) => {
       // review.tsx'teki aynı Fabric çakışması: invalidation ve navigasyon aynı anda/ters
       // sırada tetiklenirse ekran hâlâ mount'tayken arkadaki view çöküyor. Navigasyon hemen
@@ -152,8 +166,28 @@ export default function WorkspaceSetupScreen() {
                   <Text variant="caption" color="textSecondary">
                     NASIL KULLANACAKSINIZ?
                   </Text>
-                  <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} stretch />
+                  <SegmentedControl
+                    options={MODE_OPTIONS.map((option) => ({
+                      ...option,
+                      label:
+                        option.key === 'both' && bothLocked ? `${option.label} · Plus` : option.label,
+                    }))}
+                    value={mode}
+                    onChange={setMode}
+                    stretch
+                  />
                 </Stack>
+
+                {modeLocked ? (
+                  <Stack gap="sm" style={{ alignSelf: 'stretch' }}>
+                    <Text variant="caption" color="danger">
+                      {isBoth
+                        ? `"Her ikisi" iki ayrı çalışma alanı oluşturur. Planınızda ${remainingSlots ?? 0} alan hakkı kaldı — kişisel veya işletmeden birini seçebilir ya da planınızı yükseltebilirsiniz.`
+                        : 'Planınızdaki çalışma alanı hakkınızın tamamını kullandınız. Yeni bir alan için planınızı yükseltin.'}
+                    </Text>
+                    <Button label="Planları gör" onPress={() => router.push('/paywall')} />
+                  </Stack>
+                ) : null}
 
                 {isBoth ? (
                   <Text variant="caption" color="textSecondary" style={{ alignSelf: 'stretch' }}>
@@ -176,12 +210,6 @@ export default function WorkspaceSetupScreen() {
                     />
                   </Stack>
                 )}
-
-                {setupMutation.error ? (
-                  <Text variant="caption" color="danger">
-                    {setupMutation.error instanceof Error ? setupMutation.error.message : 'Bir hata oluştu'}
-                  </Text>
-                ) : null}
 
                 <Button
                   label="Çalışma Alanını Oluştur"

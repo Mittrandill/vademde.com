@@ -1396,6 +1396,23 @@ export type Database = {
         }
         Returns: string
       }
+      set_primary_workspace: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
+      sync_plan_enforcement: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          plan: string
+          workspace_count: number
+          workspace_limit: number
+          over_limit: boolean
+          grace_until: string | null
+          locked: boolean
+          primary_workspace_id: string | null
+          team_member_limit: number | null
+        }[]
+      }
       update_member_role: {
         Args: { p_role: string; p_user_id: string; p_workspace_id: string }
         Returns: undefined

@@ -1,4 +1,5 @@
 import { Alert, InteractionManager } from 'react-native';
+import { router } from 'expo-router';
 
 // Kayıt/güncelleme/silme sonrası tek tip başarı bildirimi. onOk içine ekran geçişi ve
 // önbellek geçersizleştirme konur (navigasyon hemen değil, kullanıcı "Tamam"a basınca
@@ -34,9 +35,52 @@ export function showSaveSuccess(message: string, navigate: () => void, deferred?
 // ihlali (kod 42501 / "row-level security") döndürür. Bu ham mesaj kullanıcıya anlamsız
 // geldiği için burada tek noktadan anlaşılır bir metne çevrilir — böylece her yazma yolunu
 // (hareket, borç, belge onayı vb.) ayrı ayrı gizlemeye gerek kalmadan tutarlı davranış olur.
+// Sunucu tarafındaki plan limiti kontrolleri (bkz. supabase/migrations/
+// 20260905130000_enforce_plan_limits.sql) hatayı makine tarafından ayırt edilebilir bir
+// önekle fırlatır. Ham Postgres mesajı kullanıcıya gösterilmez; burada başlık + anlaşılır
+// metin + doğrudan paywall'a giden bir eyleme çevrilir.
+const PLAN_ERROR_MESSAGES: { code: string; title: string; message: string }[] = [
+  {
+    code: 'WORKSPACE_LIMIT_REACHED',
+    title: 'Çalışma alanı limiti',
+    message:
+      'Ücretsiz planda tek çalışma alanı oluşturabilirsiniz. Birden fazla alan için planınızı yükseltin.',
+  },
+  {
+    code: 'WORKSPACE_READ_ONLY',
+    title: 'Çalışma alanı salt-okunur',
+    message:
+      'Ücretsiz planda tek çalışma alanı kullanılabilir. Bu alandaki verileriniz duruyor ve okunabiliyor; yeniden kayıt eklemek için planınızı yükseltin veya bu alanı birincil alan olarak seçin.',
+  },
+  {
+    code: 'TEAM_PLAN_REQUIRED',
+    title: 'Ekip özelliği',
+    message: 'Ekip üyesi davet etmek İşletme planında kullanılabilir.',
+  },
+  {
+    code: 'TEAM_LIMIT_REACHED',
+    title: 'Ekip üyesi limiti',
+    message: 'Bu çalışma alanı planınızın ekip üyesi limitine ulaştı.',
+  },
+];
+
+function findPlanError(rawMessage: string) {
+  return PLAN_ERROR_MESSAGES.find((entry) => rawMessage.includes(entry.code)) ?? null;
+}
+
 export function showErrorAlert(error: unknown, fallback = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.') {
   const err = error as { message?: string; code?: string } | null;
   const rawMessage = err?.message ?? '';
+
+  const planError = findPlanError(rawMessage);
+  if (planError) {
+    Alert.alert(planError.title, planError.message, [
+      { text: 'Vazgeç', style: 'cancel' },
+      { text: 'Planları gör', onPress: () => router.push('/paywall') },
+    ]);
+    return;
+  }
+
   const isRlsDenied = err?.code === '42501' || /row-level security/i.test(rawMessage);
   if (isRlsDenied) {
     Alert.alert(

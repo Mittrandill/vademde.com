@@ -12,8 +12,12 @@ import { Button, Card, Pressable, Row, Stack, Text, TextField } from '@/componen
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
 import { deleteWorkspace, listMyWorkspaces, updateWorkspaceName, type Workspace } from '@/features/workspaces/api';
+import { isWorkspaceReadOnly, setPrimaryWorkspace } from '@/features/subscriptions/api';
+import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
+import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
 import { queryKeys } from '@/services/queryKeys';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { showErrorAlert } from '@/utils/alerts';
 
 // Ayarlar'daki "Çalışma Alanları" satırından açılır: tüm çalışma alanlarını listeler, aralarında
 // geçiş (aktif çalışma alanını değiştirme), davet koduyla yeni birine katılma ve yeni çalışma
@@ -32,6 +36,22 @@ export default function WorkspacesScreen() {
   const workspacesQuery = useQuery({
     queryKey: queryKeys.workspaces(),
     queryFn: listMyWorkspaces,
+  });
+
+  // Plan durumu (limit aşımı, lütuf süresi, kilit) — bu ekran limitin en görünür olduğu
+  // yerdir, bu yüzden uyarı bandı ve birincil alan seçimi burada toplanır.
+  const planQuery = usePlanEnforcement();
+  const planState = planQuery.data ?? null;
+  const atWorkspaceLimit = !!planState && planState.workspaceCount >= planState.workspaceLimit;
+  const [choosingPrimary, setChoosingPrimary] = useState(false);
+
+  const primaryMutation = useMutation({
+    mutationFn: (id: string) => setPrimaryWorkspace(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
+      setChoosingPrimary(false);
+    },
+    onError: (error) => showErrorAlert(error),
   });
 
   const renameMutation = useMutation({
@@ -93,6 +113,17 @@ export default function WorkspacesScreen() {
           gap: theme.spacing.lg,
         }}
       >
+        <PlanLimitBanner
+          state={planState}
+          onChoosePrimary={planState?.overLimit ? () => setChoosingPrimary((v) => !v) : undefined}
+        />
+
+        {choosingPrimary ? (
+          <Text variant="caption" color="textSecondary">
+            Aktif kalacak çalışma alanını seçmek için aşağıdaki listeden bir alana dokunun.
+          </Text>
+        ) : null}
+
         {isEmpty ? (
           <Text variant="body" color="textSecondary">
             Henüz bir çalışma alanın yok. Yeni bir tane oluştur veya davet koduyla mevcut birine katıl.
@@ -107,6 +138,8 @@ export default function WorkspacesScreen() {
                 {workspaces.map((w) => {
                   const isOwner = w.owner_id === session?.user?.id;
                   const isActive = w.id === activeWorkspaceId;
+                  const isPrimary = w.id === planState?.primaryWorkspaceId;
+                  const readOnly = isWorkspaceReadOnly(planState, w.id);
 
                   if (editingWorkspaceId === w.id) {
                     return (
@@ -130,7 +163,12 @@ export default function WorkspacesScreen() {
                   }
 
                   return (
-                    <Pressable key={w.id} onPress={() => setActiveWorkspaceId(w.id)}>
+                    <Pressable
+                      key={w.id}
+                      onPress={() =>
+                        choosingPrimary && isOwner ? primaryMutation.mutate(w.id) : setActiveWorkspaceId(w.id)
+                      }
+                    >
                       <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
                         <View
                           style={{
@@ -152,8 +190,10 @@ export default function WorkspacesScreen() {
                           <Text variant="body" numberOfLines={1}>
                             {w.name}
                           </Text>
-                          <Text variant="caption" color="textSecondary">
+                          <Text variant="caption" color={readOnly ? 'danger' : 'textSecondary'}>
                             {w.type === 'business' ? 'İşletme' : 'Kişisel'}
+                            {readOnly ? ' · Salt-okunur' : ''}
+                            {planState?.overLimit && isPrimary ? ' · Birincil alan' : ''}
                           </Text>
                         </Stack>
                         <Pressable
@@ -199,12 +239,26 @@ export default function WorkspacesScreen() {
             icon="enter-outline"
             onPress={() => router.push('/workspace/join')}
           />
+          {/* Limit dolduğunda buton gizlenmez — kullanıcı neden oluşturamadığını görmeli ve
+              doğrudan planlara gidebilmeli. Sunucu tarafında da ayrıca engellenir
+              (enforce_workspace_plan_limit trigger'ı). */}
           <Button
-            label="Yeni Çalışma Alanı Oluştur"
+            label={atWorkspaceLimit ? 'Yeni Alan İçin Planı Yükselt' : 'Yeni Çalışma Alanı Oluştur'}
             variant="secondary"
-            icon="add-circle-outline"
-            onPress={() => router.push({ pathname: '/workspace-setup', params: { step: 'create' } })}
+            icon={atWorkspaceLimit ? 'lock-closed-outline' : 'add-circle-outline'}
+            onPress={() =>
+              atWorkspaceLimit
+                ? router.push('/paywall')
+                : router.push({ pathname: '/workspace-setup', params: { step: 'create' } })
+            }
           />
+          {atWorkspaceLimit ? (
+            <Text variant="caption" color="textSecondary">
+              {planState?.plan === 'free'
+                ? `Ücretsiz planda ${planState.workspaceLimit} çalışma alanı oluşturabilirsiniz.`
+                : `Planınızda ${planState?.workspaceLimit} çalışma alanı hakkınız var ve tamamı kullanılıyor.`}
+            </Text>
+          ) : null}
         </Stack>
       </ScrollView>
     </SafeAreaView>

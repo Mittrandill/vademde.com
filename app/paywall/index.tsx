@@ -172,6 +172,8 @@ export default function PaywallScreen() {
     try {
       await purchasePackage(selectedPackage);
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
+      // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
       router.back();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Satın alma tamamlanamadı';
@@ -188,6 +190,8 @@ export default function PaywallScreen() {
     try {
       await restorePurchases();
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
+      // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
       Alert.alert('Satın alımlar geri yüklendi');
       router.back();
     } catch (err) {

@@ -64,6 +64,7 @@ export const queryKeys = {
   profile: () => ['profile'] as const,
   subscription: () => ['subscription'] as const,
   planLimits: () => ['plan-limits'] as const,
+  planEnforcement: () => ['plan-enforcement'] as const,
   ocrUsage: (periodMonth: string) => ['ocr-usage', periodMonth] as const,
 };
 
