@@ -42,7 +42,7 @@ import {
   BANK_DOCUMENT_TYPES,
   COUNTERPARTY_LESS_DOCUMENT_TYPES,
 } from '@/features/obligations/documentTypes';
-import { matchBankByName } from '@/features/banks/banks';
+import { resolveBankFromDocument } from '@/features/banks/banks';
 import { VALUE_UNITS, getValueUnit } from '@/features/valueUnits/units';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
@@ -132,7 +132,7 @@ export default function DocumentReviewScreen() {
   const [counterpartyResolved, setCounterpartyResolved] = useState(false);
   const [direction, setDirection] = useState<Direction>('payable');
   const [documentType, setDocumentType] = useState<string | null>(paramDocumentType ?? null);
-  const [bankCode, setBankCode] = useState<string | null>(null);
+  const [selectedBankCode, setSelectedBankCode] = useState<string | null>(null);
   const [extractedBankName, setExtractedBankName] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [valueUnitCode, setValueUnitCode] = useState('TRY');
@@ -295,7 +295,10 @@ export default function DocumentReviewScreen() {
     // Kredi/kredi kartı ekstresi için Gemini'nin çıkardığı banka adını statik banka
     // listesiyle eşleştirip BankPicker'ı önceden doldur (kullanıcı yine değiştirebilir).
     // Eşleşme bulunamazsa ham ad, banka logosu yerine baş harfli avatar göstermek için saklanır.
-    if (document.document_type === 'kredi' || document.document_type === 'kredi_karti_ekstresi') {
+    // Banka eşleştirmesi daha önce yalnızca kredi ve kredi kartı ekstresinde çalışıyordu;
+    // çekte de bir düzenleyen banka vardır (BANK_DOCUMENT_TYPES) ve BANKA alanı gösterilir —
+    // orada alan her zaman boş açılıyordu.
+    if (document.document_type && BANK_DOCUMENT_TYPES.has(document.document_type)) {
       const summary = document.extracted_summary as {
         loan?: {
           bankName?: string | null;
@@ -311,8 +314,7 @@ export default function DocumentReviewScreen() {
       // buradan da düşülür — aksi halde başlıkta görünen banka adı BANKA alanıyla eşleşmiyordu.
       const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? document.counterparty_name ?? null;
       setExtractedBankName(ocrBankName);
-      const matchedBankCode = matchBankByName(ocrBankName);
-      if (matchedBankCode) setBankCode(matchedBankCode);
+
       if (summary?.card?.cardLastFourDigits) setCardLastFourFromOcr(summary.card.cardLastFourDigits);
       if (summary?.card?.statementDate) setCardStatementDateFromOcr(summary.card.statementDate);
 
@@ -337,6 +339,30 @@ export default function DocumentReviewScreen() {
         .catch(() => {});
     }
   }, [documentQuery.data, initialized]);
+
+  // Banka, efektle state'e yazılmak yerine TÜRETİLİR. Nedeni: en güvenilir sinyal olan
+  // IBAN, belge kaydından değil ayrı bir sorgudan (document_fields) gelir ve genelde bir
+  // tik sonra hazır olur — "yalnızca bir kez" çalışan form doldurma efektine bağlansaydı
+  // IBAN o an henüz yok olduğu için hiç kullanılamazdı. Türetilmiş değer, alanlar geldiği
+  // anda kendiliğinden doğrulanır ve efekt içinde setState gerekmez.
+  //
+  // Sinyaller güvenilirlik sırasıyla denenir (bkz. features/banks/banks.ts
+  // resolveBankFromDocument): IBAN -> OCR'ın çıkardığı banka adı -> alanların ham metni.
+  const autoBankCode = useMemo(() => {
+    const document = documentQuery.data;
+    if (!document?.document_type || !BANK_DOCUMENT_TYPES.has(document.document_type)) return null;
+    const ocrFields = fieldsQuery.data ?? [];
+    const ibanField = ocrFields.find((field) => /iban/i.test(field.field_name));
+    return resolveBankFromDocument({
+      bankName: extractedBankName,
+      iban: ibanField?.normalized_value ?? ibanField?.raw_value ?? null,
+      rawText: ocrFields.map((f) => `${f.raw_value ?? ''} ${f.normalized_value ?? ''}`).join(' '),
+    });
+  }, [documentQuery.data, fieldsQuery.data, extractedBankName]);
+
+  // Kullanıcı BANKA alanını elle seçtiyse onun seçimi kazanır; seçmediyse OCR'dan türetilen
+  // banka kullanılır.
+  const bankCode = selectedBankCode ?? autoBankCode;
 
   // docs/04-ocr-belge-isleme.md §6.6 — isim benzerliğiyle kişi/firma eşleştirme. Yalnızca
   // mevcut bir kayıtla TEK ve belirsiz olmayan bir eşleşme varsa önceden seçilir (DB'ye
@@ -1149,7 +1175,7 @@ export default function DocumentReviewScreen() {
                 <Row gap="sm" align="center">
                   <BankLogo bankCode={bankCode} fallbackName={!bankCode ? extractedBankName : null} size={36} />
                   <Stack style={{ flex: 1 }}>
-                    <BankPicker selectedId={bankCode} onSelect={setBankCode} />
+                    <BankPicker selectedId={bankCode} onSelect={setSelectedBankCode} />
                   </Stack>
                 </Row>
                 {!bankCode && extractedBankName ? (
