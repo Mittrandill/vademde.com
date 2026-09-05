@@ -86,6 +86,12 @@
           "remindersPermission": "Borç/alacak vadeleriniz için Hatırlatıcılar'da bir madde oluşturabilmek için erişim gerekir."
         }
       ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Vademde'yi açarken finansal verilerinizi korumak için Face ID kullanılır."
+        }
+      ],
       "expo-secure-store",
       "./plugins/withAndroidReleaseSigning.js",
       "./plugins/withNewerCmake.js",

@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Alert, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -11,10 +11,12 @@ import { withAlpha } from '@/theme/colors';
 import { Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
-import { getMySubscription } from '@/features/subscriptions/api';
+import { getMySubscription, getPlanLimits } from '@/features/subscriptions/api';
 import { getMyProfile } from '@/features/profile/api';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { queryKeys } from '@/services/queryKeys';
+import { useAppLockStore } from '@/store/appLockStore';
+import { authenticate, getBiometricSupport } from '@/services/appLock';
 import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -74,6 +76,38 @@ export default function SettingsScreen() {
 
   const planCode = subscriptionQuery.data?.plan ?? 'free';
   const planLabel = PLAN_LABELS[planCode] ?? planCode;
+
+  // Uygulama kilidi (docs/10 — face_id). Üç koşul da gerekir: cihaz destekliyor, plan izin
+  // veriyor, kullanıcı açmış.
+  const appLockEnabled = useAppLockStore((s) => s.enabled);
+  const setAppLockEnabled = useAppLockStore((s) => s.setEnabled);
+  const biometricSupportQuery = useQuery({ queryKey: ['biometric-support'], queryFn: getBiometricSupport });
+  const biometricSupport = biometricSupportQuery.data;
+  const biometricLabel = biometricSupport?.label ?? 'Biyometrik';
+  const planLimitsQuery = useQuery({
+    queryKey: [...queryKeys.planLimits(), planCode],
+    queryFn: () => getPlanLimits(planCode as 'free' | 'plus' | 'isletme'),
+    enabled: subscriptionQuery.isSuccess,
+  });
+  const planAllowsLock = planLimitsQuery.data?.face_id ?? false;
+
+  // Kilidi AÇARKEN bir kez doğrulama istenir: doğrulayamayan kullanıcı kilidi açarsa bir
+  // daha uygulamaya giremezdi. Kapatırken de istenir ki telefonu eline geçiren biri kilidi
+  // basitçe kapatamasın.
+  async function handleToggleAppLock(next: boolean) {
+    if (!planAllowsLock) {
+      router.push('/paywall');
+      return;
+    }
+    const confirmed = await authenticate(
+      next ? `${biometricLabel} kilidini aç` : `${biometricLabel} kilidini kapat`
+    );
+    if (!confirmed) {
+      Alert.alert('Doğrulanamadı', 'Kimlik doğrulaması tamamlanmadığı için ayar değiştirilmedi.');
+      return;
+    }
+    setAppLockEnabled(next);
+  }
   const email = session?.user?.email ?? null;
   const fullName = profileQuery.data?.full_name ?? null;
   const activeWorkspaceName = workspacesQuery.data?.find((w) => w.id === activeWorkspaceId)?.name;
@@ -139,6 +173,27 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="GİZLİLİK">
+          {/* docs/10-abonelik-gelir-modeli.md — Face ID kilidi Plus ve İşletme planlarının
+              özelliği. Cihaz desteklemiyorsa (donanım yok veya kullanıcı hiç yüz/parmak izi
+              kaydetmemiş) satır hiç gösterilmez: açılamayacak bir ayarı göstermek kafa
+              karıştırır. */}
+          {biometricSupport?.available ? (
+            <>
+              <SettingsToggleRow
+                leading={<RowIcon name="finger-print-outline" />}
+                title={`${biometricLabel} Kilidi`}
+                subtitle={
+                  planAllowsLock
+                    ? 'Uygulama açılışında kimlik doğrulama'
+                    : 'Plus planında kullanılabilir'
+                }
+                value={appLockEnabled && planAllowsLock}
+                disabled={!planAllowsLock}
+                onValueChange={handleToggleAppLock}
+              />
+              <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
+            </>
+          ) : null}
           <SettingsRow
             leading={<RowIcon name="shield-checkmark-outline" />}
             title="Gizlilik Politikası ve KVKK"
@@ -193,6 +248,46 @@ function SettingsRow({
         <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
       </Row>
     </Pressable>
+  );
+}
+
+// Ayarlar listesinde ekrana götürmeyen, yerinde açılıp kapanan satır (uygulama kilidi).
+// SettingsRow ile aynı yükseklik/hizalama dilini paylaşır ki liste tek bir ritimde kalsın.
+function SettingsToggleRow({
+  leading,
+  title,
+  subtitle,
+  value,
+  disabled,
+  onValueChange,
+}: {
+  leading: ReactNode;
+  title: string;
+  subtitle?: string;
+  value: boolean;
+  disabled?: boolean;
+  onValueChange: (value: boolean) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Row
+      gap="sm"
+      align="center"
+      style={{ paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.md }}
+    >
+      {leading}
+      <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+        <Text variant="body" numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </Stack>
+      <Switch value={value} disabled={disabled} onValueChange={onValueChange} />
+    </Row>
   );
 }
 

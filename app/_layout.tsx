@@ -14,6 +14,7 @@ import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Splash } from '@/components/brand/Splash';
+import { AppLockGate } from '@/components/auth/AppLockGate';
 
 function AppStatusBar() {
   const theme = useTheme();
@@ -22,10 +23,8 @@ function AppStatusBar() {
 
 function RootNavigator() {
   const { session, isLoading } = useSession();
-  const theme = useTheme();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
-  const hasSeenWelcome = useOnboardingStore((s) => s.hasSeenWelcome);
 
   useWorkspaceRealtime(session ? activeWorkspaceId : null);
 
@@ -49,6 +48,24 @@ function RootNavigator() {
   }, [session?.user?.id, setActiveWorkspaceId]);
 
   if (isLoading) return <Splash />;
+
+  // Uygulama kilidi yalnızca oturum açıkken anlamlıdır; giriş ekranında zaten veri yok
+  // (bkz. components/auth/AppLockGate.tsx).
+  if (session) {
+    return (
+      <AppLockGate>
+        <AppNavigatorStack />
+      </AppLockGate>
+    );
+  }
+
+  return <AppNavigatorStack />;
+}
+
+function AppNavigatorStack() {
+  const { session } = useSession();
+  const theme = useTheme();
+  const hasSeenWelcome = useOnboardingStore((s) => s.hasSeenWelcome);
 
   return (
     <Stack
