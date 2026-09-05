@@ -1,4 +1,3 @@
-// Bu dosya `mcp__supabase__generate_typescript_types` ile üretilir; elle düzenlenmez.
 export type Json =
   | string
   | number
@@ -831,6 +830,8 @@ export type Database = {
           full_name: string | null
           id: string
           locale: string
+          plan_grace_until: string | null
+          primary_workspace_id: string | null
           updated_at: string
         }
         Insert: {
@@ -840,6 +841,8 @@ export type Database = {
           full_name?: string | null
           id: string
           locale?: string
+          plan_grace_until?: string | null
+          primary_workspace_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -849,9 +852,19 @@ export type Database = {
           full_name?: string | null
           id?: string
           locale?: string
+          plan_grace_until?: string | null
+          primary_workspace_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_primary_workspace_id_fkey"
+            columns: ["primary_workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       push_tokens: {
         Row: {
@@ -989,6 +1002,45 @@ export type Database = {
           plan?: string
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      shopier_processed_orders: {
+        Row: {
+          amount_minor: number | null
+          billing_period: string | null
+          buyer_email: string
+          created_at: string
+          matched: boolean
+          order_id: string
+          owner_id: string | null
+          plan: string | null
+          product_id: string
+          raw_payload: Json | null
+        }
+        Insert: {
+          amount_minor?: number | null
+          billing_period?: string | null
+          buyer_email: string
+          created_at?: string
+          matched?: boolean
+          order_id: string
+          owner_id?: string | null
+          plan?: string | null
+          product_id: string
+          raw_payload?: Json | null
+        }
+        Update: {
+          amount_minor?: number | null
+          billing_period?: string | null
+          buyer_email?: string
+          created_at?: string
+          matched?: boolean
+          order_id?: string
+          owner_id?: string | null
+          plan?: string | null
+          product_id?: string
+          raw_payload?: Json | null
         }
         Relationships: []
       }
@@ -1353,6 +1405,7 @@ export type Database = {
           name: string
         }[]
       }
+      get_user_id_by_email: { Args: { p_email: string }; Returns: string }
       increment_ocr_usage: {
         Args: { target_owner: string; target_period: string }
         Returns: undefined
@@ -1375,6 +1428,8 @@ export type Database = {
           user_id: string
         }[]
       }
+      owned_workspace_count: { Args: { p_owner: string }; Returns: number }
+      plan_for_owner: { Args: { p_owner: string }; Returns: string }
       recompute_installment_progress: {
         Args: { target_installment_id: string }
         Returns: undefined
@@ -1388,6 +1443,11 @@ export type Database = {
         Args: { p_user_id: string; p_workspace_id: string }
         Returns: undefined
       }
+      resolve_primary_workspace: { Args: { p_owner: string }; Returns: string }
+      set_primary_workspace: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
       setup_initial_workspaces: {
         Args: {
           p_mode: string
@@ -1396,26 +1456,31 @@ export type Database = {
         }
         Returns: string
       }
-      set_primary_workspace: {
-        Args: { p_workspace_id: string }
-        Returns: undefined
-      }
       sync_plan_enforcement: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
+          grace_until: string
+          locked: boolean
+          over_limit: boolean
           plan: string
+          primary_workspace_id: string
+          team_member_limit: number
           workspace_count: number
           workspace_limit: number
-          over_limit: boolean
-          grace_until: string | null
-          locked: boolean
-          primary_workspace_id: string | null
-          team_member_limit: number | null
         }[]
+      }
+      team_member_limit_for_workspace: {
+        Args: { p_workspace_id: string }
+        Returns: number
       }
       update_member_role: {
         Args: { p_role: string; p_user_id: string; p_workspace_id: string }
         Returns: undefined
+      }
+      workspace_limit_for_owner: { Args: { p_owner: string }; Returns: number }
+      workspace_write_allowed: {
+        Args: { p_workspace_id: string }
+        Returns: boolean
       }
     }
     Enums: {
@@ -1435,12 +1500,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1464,11 +1529,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1489,11 +1554,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1514,11 +1579,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1531,11 +1596,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
