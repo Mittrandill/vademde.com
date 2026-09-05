@@ -19,12 +19,14 @@ import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Amount } from '@/components/finance/Amount';
 import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
 import { FinanceListHero } from '@/components/finance/FinanceListHero';
+import { DueBreakdown } from '@/components/finance/DueBreakdown';
 import { FinanceListEmptyState, FinanceListSurface } from '@/components/finance/FinanceListSurface';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { OBLIGATION_STATUS_LABEL, type ObligationStatus } from '@/components/finance/StatusBadge';
 import {
   listObligations,
   getObligationSummary,
+  getDueBreakdown,
   getObligationInstallmentSummaries,
   deleteObligation,
   ACTIVE_OBLIGATION_STATUSES,
@@ -150,6 +152,18 @@ export default function ObligationsByTypeScreen() {
     enabled,
   });
 
+  // docs/01-finansal-kayit-modeli.md §3.2.1 — hero'daki tek "toplam borç" rakamının
+  // gecikmiş / bu ay / toplam kırılımı. Hero gibi bu da yalnızca belge türüne bağlıdır,
+  // durum sekmesi ve aramadan etkilenmez.
+  const dueBreakdownQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? queryKeys.dueBreakdown(activeWorkspaceId, `type:${documentType ?? 'all'}`)
+      : ['due-breakdown', 'disabled'],
+    queryFn: () => getDueBreakdown({ workspaceId: activeWorkspaceId as string, documentType }),
+    enabled,
+  });
+  const breakdown = dueBreakdownQuery.data;
+
   const summary = summaryQuery.data;
   const totalCount = summary?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / LIST_PAGE_SIZE));
@@ -267,6 +281,13 @@ export default function ObligationsByTypeScreen() {
               { label: 'GECİKMİŞ', value: overdueCount, caption: 'Vadesi geçen', valueColor: overdueCount > 0 ? 'danger' : undefined },
             ]}
           />
+
+          {breakdown ? (
+            <DueBreakdown
+              data={showsPayable ? breakdown.payable : breakdown.receivable}
+              direction={showsPayable ? 'payable' : 'receivable'}
+            />
+          ) : null}
 
           <FinanceFilterCard
             title="KAYIT DURUMU"

@@ -30,6 +30,8 @@ export const queryKeys = {
     [workspaceId, 'obligations', 'by-type-overview', documentType] as const,
   obligationTotalsByType: (workspaceId: string) =>
     [workspaceId, 'obligations', 'type-totals'] as const,
+  dueBreakdown: (workspaceId: string, scopeKey: string) =>
+    [workspaceId, 'obligations', 'due-breakdown', scopeKey] as const,
   obligationInstallmentSummaries: (workspaceId: string, idsKey: string) =>
     [workspaceId, 'obligations', 'installment-summaries', idsKey] as const,
   document: (workspaceId: string, documentId: string) =>

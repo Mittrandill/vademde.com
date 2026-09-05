@@ -24,6 +24,7 @@ import {
 import { Amount } from '@/components/finance/Amount';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
+import { DueBreakdown } from '@/components/finance/DueBreakdown';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import {
   deleteCounterparty,
@@ -31,7 +32,12 @@ import {
   getCounterpartyLedger,
   getCounterpartyTypeLabel,
 } from '@/features/counterparties/api';
-import { listObligations, ACTIVE_OBLIGATION_STATUSES, type ObligationWithRelations } from '@/features/obligations/api';
+import {
+  listObligations,
+  getDueBreakdown,
+  ACTIVE_OBLIGATION_STATUSES,
+  type ObligationWithRelations,
+} from '@/features/obligations/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
@@ -145,6 +151,21 @@ export default function CounterpartyDetailScreen() {
   const counterparty = counterpartyQuery.data;
   const ledger = ledgerQuery.data;
 
+  // docs/01-finansal-kayit-modeli.md §3.2.1 — personel maaşı/kira gibi tekrarlayan
+  // kayıtlarda cari bakiyesi tüm gelecek vadeleri içerir. Kullanıcının "4 aylık maaşın
+  // tamamını bugünün borcu olarak görmek normal mi?" sorusunun cevabı: rakam doğru ama tek
+  // başına eksik — bu kırılım hangi kısmın gecikmiş, hangisinin bu ay ödeneceğini ayırır.
+  const dueBreakdownQuery = useQuery({
+    queryKey:
+      activeWorkspaceId && id
+        ? queryKeys.dueBreakdown(activeWorkspaceId, `counterparty:${id}`)
+        : ['due-breakdown', 'disabled'],
+    queryFn: () =>
+      getDueBreakdown({ workspaceId: activeWorkspaceId as string, counterpartyId: id as string }),
+    enabled: !!activeWorkspaceId && !!id,
+  });
+  const breakdown = dueBreakdownQuery.data;
+
   if (!counterparty) {
     return (
       <DetailScaffold
@@ -237,6 +258,24 @@ export default function CounterpartyDetailScreen() {
           },
         ]}
       />
+
+      {breakdown && breakdown.payable.remainingTotalMinor > 0 ? (
+        <Stack gap="sm">
+          <Text variant="caption" color="textSecondary">
+            ÖDENECEKLER
+          </Text>
+          <DueBreakdown data={breakdown.payable} direction="payable" />
+        </Stack>
+      ) : null}
+
+      {breakdown && breakdown.receivable.remainingTotalMinor > 0 ? (
+        <Stack gap="sm">
+          <Text variant="caption" color="textSecondary">
+            TAHSİL EDİLECEKLER
+          </Text>
+          <DueBreakdown data={breakdown.receivable} direction="receivable" />
+        </Stack>
+      ) : null}
 
       <FinanceDetailTabs options={tabOptions} value={tab} onChange={setTab} />
 

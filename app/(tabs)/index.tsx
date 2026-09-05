@@ -23,6 +23,7 @@ import {
   listObligations,
   listInstallmentsDue,
   ACTIVE_OBLIGATION_STATUSES,
+  getDueBreakdown,
   type ObligationDueItem,
 } from '@/features/obligations/api';
 import { listTransactions } from '@/features/transactions/api';
@@ -31,6 +32,7 @@ import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features
 import { getMySubscription } from '@/features/subscriptions/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
+import { DueBreakdown } from '@/components/finance/DueBreakdown';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -152,6 +154,17 @@ export default function HomeScreen() {
       ? queryKeys.dashboardMonthTransactions(activeWorkspaceId, monthKey)
       : ['month-totals', 'disabled'],
     queryFn: () => getMonthTransactionTotals(activeWorkspaceId as string, now),
+    enabled: !!activeWorkspaceId,
+  });
+
+  // Borcun/alacağın "gecikmiş / bu ay / toplam kalan" kırılımı (docs/01 §3.2.1). Hero'daki
+  // tek toplam rakamı, tekrarlayan kayıtlarda tek başına yanıltıcı kaldığı için hemen
+  // altında bu üç kırılım gösterilir.
+  const dueBreakdownQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? queryKeys.dueBreakdown(activeWorkspaceId, 'all')
+      : ['due-breakdown', 'disabled'],
+    queryFn: () => getDueBreakdown({ workspaceId: activeWorkspaceId as string }),
     enabled: !!activeWorkspaceId,
   });
 
@@ -394,6 +407,28 @@ export default function HomeScreen() {
             hidden={balanceHidden}
             onToggleHidden={toggleBalanceHidden}
           />
+
+          {/* docs/01-finansal-kayit-modeli.md §3.2.1 — hero'daki tek "borç" rakamının altında
+              hangi kısmının gecikmiş, hangisinin bu ay ödenecek olduğunu gösteren kırılım.
+              Alacak tarafı yalnızca gerçekten alacak varken gösterilir; olmayan bir tabloyu
+              her kullanıcıya göstermek dashboard'u gereksiz kalabalıklaştırır. */}
+          {dueBreakdownQuery.data && dueBreakdownQuery.data.payable.remainingTotalMinor > 0 ? (
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                ÖDENECEKLER
+              </Text>
+              <DueBreakdown data={dueBreakdownQuery.data.payable} direction="payable" />
+            </Stack>
+          ) : null}
+
+          {dueBreakdownQuery.data && dueBreakdownQuery.data.receivable.remainingTotalMinor > 0 ? (
+            <Stack gap="sm">
+              <Text variant="caption" color="textSecondary">
+                TAHSİL EDİLECEKLER
+              </Text>
+              <DueBreakdown data={dueBreakdownQuery.data.receivable} direction="receivable" />
+            </Stack>
+          ) : null}
 
           <QuickActions />
 

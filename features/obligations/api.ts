@@ -108,6 +108,117 @@ export interface ObligationSummary {
   overdueCount: number;
 }
 
+// docs/01-finansal-kayit-modeli.md §3.2.1 — maaş, kira, vergi/SGK gibi tekrarlayan kayıtlarda
+// "toplam kalan borç" tek başına yanıltıcıdır: 4 aylık maaş girer girmez dört ayın tamamı borç
+// gibi görünür, kullanıcının asıl merak ettiği "bu ay ne ödeyeceğim" ve "neyi geciktirdim"
+// bilgisi bu tek rakamın içinde kaybolur. Bu yüzden her borç/alacak yüzeyinde aynı üç rakam
+// gösterilir: gecikmiş / bu ay ödenecek / toplam kalan.
+//
+// Kırılım TAKSİT seviyesinden gelir — bir obligation'ın vadeleri farklı aylara dağılır, tek bir
+// obligations.due_date bu soruyu cevaplayamaz. Taksit planı olmayan kayıtlarda (tek seferlik
+// borç) obligation'ın kendi due_date/remaining değeri kullanılır.
+export interface DueBreakdown {
+  overdueMinor: number;
+  dueThisMonthMinor: number;
+  remainingTotalMinor: number;
+  overdueCount: number;
+}
+
+export interface DueBreakdownResult {
+  payable: DueBreakdown;
+  receivable: DueBreakdown;
+}
+
+const EMPTY_BREAKDOWN: DueBreakdown = {
+  overdueMinor: 0,
+  dueThisMonthMinor: 0,
+  remainingTotalMinor: 0,
+  overdueCount: 0,
+};
+
+export async function getDueBreakdown({
+  workspaceId,
+  counterpartyId,
+  documentType,
+}: {
+  workspaceId: string;
+  /** Cari/personel detayında yalnızca o tarafın kayıtları. */
+  counterpartyId?: string;
+  documentType?: string;
+}): Promise<DueBreakdownResult> {
+  let obligationsQuery = supabase
+    .from('obligations')
+    .select('id, direction, currency_code, remaining_amount_minor, due_date')
+    .eq('workspace_id', workspaceId)
+    .in('status', ACTIVE_OBLIGATION_STATUSES);
+  if (counterpartyId) obligationsQuery = obligationsQuery.eq('counterparty_id', counterpartyId);
+  if (documentType) obligationsQuery = obligationsQuery.eq('document_type', documentType);
+
+  const [{ data: obligationRows, error }, rates] = await Promise.all([obligationsQuery, listValueUnitRates()]);
+  if (error) throw error;
+
+  const obligations = obligationRows ?? [];
+  if (obligations.length === 0) {
+    return { payable: { ...EMPTY_BREAKDOWN }, receivable: { ...EMPTY_BREAKDOWN } };
+  }
+
+  const obligationIds = obligations.map((o) => o.id);
+  const { data: installmentRows, error: installmentError } = await supabase
+    .from('installments')
+    .select('obligation_id, due_date, remaining_amount_minor')
+    .eq('workspace_id', workspaceId)
+    .in('obligation_id', obligationIds)
+    .gt('remaining_amount_minor', 0);
+  if (installmentError) throw installmentError;
+
+  const byObligation = new Map<string, { dueDate: string; remainingMinor: number }[]>();
+  for (const row of installmentRows ?? []) {
+    const list = byObligation.get(row.obligation_id) ?? [];
+    list.push({ dueDate: row.due_date, remainingMinor: row.remaining_amount_minor });
+    byObligation.set(row.obligation_id, list);
+  }
+
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  // Ay sonu, ayın gün sayısı değişken olduğu için UTC ile hesaplanır (bkz.
+  // utils/installmentPlan.ts addMonthsToIsoDate — aynı gerekçe).
+  const monthEndIso = new Date(Date.UTC(today.getFullYear(), today.getMonth() + 1, 0))
+    .toISOString()
+    .slice(0, 10);
+
+  const result: DueBreakdownResult = {
+    payable: { ...EMPTY_BREAKDOWN },
+    receivable: { ...EMPTY_BREAKDOWN },
+  };
+
+  for (const obligation of obligations) {
+    const bucket = obligation.direction === 'receivable' ? result.receivable : result.payable;
+    // Taksit planı varsa vadeler taksitlerden, yoksa kaydın kendisinden gelir.
+    const dueRows = byObligation.get(obligation.id) ?? [
+      { dueDate: obligation.due_date ?? todayIso, remainingMinor: obligation.remaining_amount_minor },
+    ];
+
+    for (const row of dueRows) {
+      if (row.remainingMinor <= 0) continue;
+      // Farklı değer birimleri (TRY, USD, gram_altin...) doğrudan toplanamaz — bkz.
+      // getObligationSummary'deki aynı gerekçe.
+      const refMinor = sumToReferenceMinor(
+        [{ amountMinor: row.remainingMinor, unitCode: obligation.currency_code }],
+        rates
+      );
+      bucket.remainingTotalMinor += refMinor;
+      if (row.dueDate < todayIso) {
+        bucket.overdueMinor += refMinor;
+        bucket.overdueCount += 1;
+      } else if (row.dueDate <= monthEndIso) {
+        bucket.dueThisMonthMinor += refMinor;
+      }
+    }
+  }
+
+  return result;
+}
+
 // Liste sayfalandırıldığı için özet yüklenen sayfalardan hesaplanamaz (yalnızca ilk 30
 // kaydı toplar, yanlış rakam gösterir). Bu yüzden aynı filtrelerle, sadece toplanacak
 // kolonları çeken ayrı bir sorgu kullanılır.
