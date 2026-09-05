@@ -449,6 +449,9 @@ export interface UpdateInstallmentPlanRow {
 // tarafta (utils/installmentPlan.ts recomputeInstallmentAfterAmountEdit) önceden
 // hesaplanmış olarak gelir — installments UPDATE'inde bunu otomatik yeniden hesaplayan
 // bir trigger yoktur (yalnızca ödemeler değişince tetiklenir).
+// Dönüş: yeni eklenen taksit satırları. Çağıran taraf bunları "ödendi" işaretlemek için
+// (bkz. app/obligations/new.tsx toplu ödendi akışı) id'leriyle birlikte kullanır — insert
+// öncesi id bilinmediği için bu bilgi başka türlü elde edilemez.
 export async function updateInstallmentPlan({
   workspaceId,
   obligationId,
@@ -459,7 +462,7 @@ export async function updateInstallmentPlan({
   obligationId: string;
   rows: UpdateInstallmentPlanRow[];
   removedIds: string[];
-}): Promise<void> {
+}): Promise<Installment[]> {
   if (removedIds.length > 0) {
     const { error } = await supabase.from('installments').delete().in('id', removedIds);
     if (error) throw error;
@@ -468,6 +471,7 @@ export async function updateInstallmentPlan({
   const toInsert = rows.filter((r) => !r.id);
   const toUpdate = rows.filter((r): r is UpdateInstallmentPlanRow & { id: string } => !!r.id);
 
+  let inserted: Installment[] = [];
   if (toInsert.length > 0) {
     const insertRows: TablesInsert<'installments'>[] = toInsert.map((r) => ({
       workspace_id: workspaceId,
@@ -476,8 +480,9 @@ export async function updateInstallmentPlan({
       due_date: r.dueDate,
       amount_minor: r.amountMinor,
     }));
-    const { error } = await supabase.from('installments').insert(insertRows);
+    const { data, error } = await supabase.from('installments').insert(insertRows).select('*');
     if (error) throw error;
+    inserted = data ?? [];
   }
 
   for (const r of toUpdate) {
@@ -495,4 +500,6 @@ export async function updateInstallmentPlan({
       .eq('id', r.id);
     if (error) throw error;
   }
+
+  return inserted;
 }

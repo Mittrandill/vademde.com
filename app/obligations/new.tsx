@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -39,6 +39,7 @@ import {
   type UpdateInstallmentPlanRow,
 } from '@/features/obligations/api';
 import { createTransaction } from '@/features/transactions/api';
+import { recordPastInstallmentPayments } from '@/features/payments/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 import {
@@ -68,6 +69,9 @@ interface PlanRow {
   dueDate: string;
   amountStr: string;
   locked: boolean;
+  /** Kaydetmede bu vade geçmiş tarihiyle "ödendi" işaretlenecek (bkz. toplu ödendi akışı).
+   * Zaten tamamen ödenmiş satırlarda (locked) anlamsızdır ve gösterilmez. */
+  markPaid: boolean;
   original: Installment | null;
 }
 
@@ -201,6 +205,12 @@ function ObligationForm({
     getDefaultAmountMode(initial?.document_type ?? initialDocumentType ?? null)
   );
   const [amountModeTouched, setAmountModeTouched] = useState(false);
+  // Toplu "ödendi" işaretleme: uygulamayı ortada bir tarihte kurup geçmişe dönük plan giren
+  // kullanıcı (ör. Ocak'ta başlayan 12 aylık maaşı Eylül'de girmek) her vadeyi tek tek
+  // "Öde" ile işaretlemek zorunda kalmasın. Vadesi geçmiş satırlar varsayılan olarak ödendi
+  // gelir; kullanıcı tek tek geri alabilir. Aynı davranış OCR onay ekranında zaten vardı
+  // (bkz. app/documents/[id]/review.tsx) — elle giriş yolunda eksikti.
+  const [paidOverrides, setPaidOverrides] = useState<Record<number, boolean>>({});
   const [depositAccountId, setDepositAccountId] = useState<string | null>(null);
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
@@ -285,6 +295,7 @@ function ObligationForm({
         valueUnit.precision
       ),
       locked: inst.remaining_amount_minor <= 0,
+      markPaid: false,
       original: inst,
     }))
   );
@@ -326,10 +337,38 @@ function ObligationForm({
           dueDate: last ? addMonthsToIsoDate(last.dueDate, 1) : new Date().toISOString().slice(0, 10),
           amountStr: last?.amountStr ?? '',
           locked: false,
+          markPaid: false,
           original: null,
         },
       ];
     });
+  }
+
+  // "Planı uzat": mevcut planın sonuna bir kerede N vade ekler. Maaş zammı/kira artışı
+  // gibi durumlarda yeni tutar verilebilir; boş bırakılırsa son vadenin tutarı sürer.
+  // Tek tek "Taksit Ekle"ye basmanın yerini alır (12 aylık uzatma 12 dokunuş demekti).
+  function extendPlan(count: number, amountStr: string | null) {
+    if (count <= 0) return;
+    setPlanRows((rows) => {
+      const next = [...rows];
+      for (let i = 0; i < count; i += 1) {
+        const last = next[next.length - 1];
+        next.push({
+          id: null,
+          installmentNumber: (last?.installmentNumber ?? 0) + 1,
+          dueDate: last ? addMonthsToIsoDate(last.dueDate, 1) : new Date().toISOString().slice(0, 10),
+          amountStr: amountStr?.trim() ? amountStr : (last?.amountStr ?? ''),
+          locked: false,
+          markPaid: false,
+          original: null,
+        });
+      }
+      return next;
+    });
+  }
+
+  function togglePlanRowPaid(index: number, value: boolean) {
+    setPlanRows((rows) => rows.map((r, i) => (i === index ? { ...r, markPaid: value } : r)));
   }
 
   // Yalnızca kuyruktaki (en sondaki) taksit kaldırılabilir — numaralandırma böylece
@@ -408,6 +447,15 @@ function ObligationForm({
 
   const installmentPreview = isEditing ? [] : buildPlan();
 
+  const todayIso = new Date().toISOString().slice(0, 10);
+  function isPreviewPaid(item: InstallmentPlanItem): boolean {
+    return paidOverrides[item.installmentNumber] ?? item.dueDate < todayIso;
+  }
+  function togglePreviewPaid(installmentNumber: number, value: boolean) {
+    setPaidOverrides((prev) => ({ ...prev, [installmentNumber]: value }));
+  }
+  const paidPreviewCount = installmentPreview.filter(isPreviewPaid).length;
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId || !title.trim() || !documentType) {
@@ -464,14 +512,38 @@ function ObligationForm({
           const currentIds = new Set(planRows.map((r) => r.id).filter((rowId): rowId is string => !!rowId));
           const removedIds = installments.filter((inst) => !currentIds.has(inst.id)).map((inst) => inst.id);
 
+          let insertedRows: Installment[] = [];
           if (preparedRows.length > 0 || removedIds.length > 0) {
-            await updateInstallmentPlan({
+            insertedRows = await updateInstallmentPlan({
               workspaceId: activeWorkspaceId,
               obligationId: id as string,
               rows: preparedRows,
               removedIds,
             });
           }
+
+          // Toplu "ödendi" işaretleme: hem mevcut hem yeni eklenen (uzatılan) vadeler için
+          // geçerlidir. Yeni satırların id'si insert öncesi bilinmediği için
+          // updateInstallmentPlan eklenen satırları geri döndürür.
+          const paidRows = planRows
+            .filter((row) => row.markPaid && !row.locked)
+            .map((row) => {
+              const installmentId =
+                row.id ?? insertedRows.find((i) => i.installment_number === row.installmentNumber)?.id ?? null;
+              const amountMinor = parseValueUnitAmountToMinor(row.amountStr, valueUnitCode) ?? 0;
+              return installmentId && amountMinor > 0
+                ? {
+                    workspace_id: activeWorkspaceId,
+                    obligation_id: id as string,
+                    installment_id: installmentId,
+                    amount_minor: amountMinor,
+                    paid_at: row.dueDate,
+                    notes: 'Geçmiş vade, plan düzenlenirken ödendi işaretlendi',
+                  }
+                : null;
+            })
+            .filter((row): row is NonNullable<typeof row> => !!row);
+          if (paidRows.length > 0) await recordPastInstallmentPayments(paidRows);
         }
 
         const obligation = await updateObligation(id, {
@@ -516,12 +588,28 @@ function ObligationForm({
       });
 
       if (installmentPlanItems.length > 0) {
-        await createInstallmentPlan({
+        const createdInstallments = await createInstallmentPlan({
           workspaceId: activeWorkspaceId,
           obligationId: obligation.id,
           totalAmountMinor: obligationTotalMinor,
           installments: installmentPlanItems,
         });
+
+        // "Ödendi" işaretlenen vadeler geçmiş tarihiyle, hiçbir hesaba bağlanmadan kaydedilir
+        // (bkz. recordPastInstallmentPayments) — mevcut hesap bakiyeleri etkilenmez, yalnızca
+        // taksit/borç durumu "ödendi" olur. Tamamı tek insert'te yazılır.
+        const paidNumbers = new Set(installmentPlanItems.filter(isPreviewPaid).map((i) => i.installmentNumber));
+        const paidRows = createdInstallments
+          .filter((installment) => paidNumbers.has(installment.installment_number))
+          .map((installment) => ({
+            workspace_id: activeWorkspaceId,
+            obligation_id: obligation.id,
+            installment_id: installment.id,
+            amount_minor: installment.amount_minor,
+            paid_at: installment.due_date,
+            notes: 'Geçmiş vade, kayıt oluşturulurken ödendi işaretlendi',
+          }));
+        if (paidRows.length > 0) await recordPastInstallmentPayments(paidRows);
       }
 
       // Nakit avans gerçekten çekilen nakittir — kesinti tutarı kart borcuna (yukarıdaki
@@ -712,6 +800,8 @@ function ObligationForm({
                 onAmountChange={updatePlanRowAmount}
                 onAdd={addPlanRow}
                 onRemoveLast={removeLastPlanRow}
+                onTogglePaid={togglePlanRowPaid}
+                onExtend={extendPlan}
               />
             ) : null}
 
@@ -889,9 +979,22 @@ function ObligationForm({
                     Toplam {formatMinorAmount(installmentPreview.reduce((sum, i) => sum + i.amountMinor, 0))}
                   </Text>
                 </Row>
+                {/* Geçmişe dönük plan girenler için toplu işaretleme özeti — kullanıcı kaç
+                    vadenin ödendi sayılacağını kaydetmeden önce görür. */}
+                {paidPreviewCount > 0 ? (
+                  <Text variant="caption" style={{ color: theme.colors.success }}>
+                    {paidPreviewCount} {periodLabels.unit} ödendi olarak kaydedilecek (
+                    {formatMinorAmount(
+                      installmentPreview.filter(isPreviewPaid).reduce((sum, i) => sum + i.amountMinor, 0)
+                    )}
+                    ). Bu ödemeler geçmiş tarihli işlenir ve hesap bakiyelerinizi değiştirmez.
+                  </Text>
+                ) : null}
                 <InstallmentPreviewTimeline
                   items={installmentPreview}
                   unitLabel={periodLabels.unit}
+                  isPaid={isPreviewPaid}
+                  onTogglePaid={togglePreviewPaid}
                 />
               </Stack>
             ) : null}
@@ -937,6 +1040,8 @@ interface InstallmentPlanEditorProps {
   onAmountChange: (index: number, value: string) => void;
   onAdd: () => void;
   onRemoveLast: () => void;
+  onTogglePaid: (index: number, value: boolean) => void;
+  onExtend: (count: number, amountStr: string | null) => void;
 }
 
 // Mevcut bir taksit planını düzenleme UI'ı: aynı "taksit zaman çizgisi" görsel dili
@@ -956,11 +1061,17 @@ function InstallmentPlanEditor({
   onAmountChange,
   onAdd,
   onRemoveLast,
+  onTogglePaid,
+  onExtend,
 }: InstallmentPlanEditorProps) {
   const theme = useTheme();
   const firstRow = rows[0] ?? null;
   const lastIndex = rows.length - 1;
   const canRemoveLast = rows.length > minCount && lastIndex >= 0 && !rows[lastIndex].locked;
+  const [extendCountStr, setExtendCountStr] = useState('');
+  const [extendAmountStr, setExtendAmountStr] = useState('');
+  const extendCount = Math.max(0, Math.min(60, parseInt(extendCountStr, 10) || 0));
+  const markedPaidCount = rows.filter((row) => row.markPaid && !row.locked).length;
 
   return (
     <Stack gap="sm">
@@ -985,8 +1096,11 @@ function InstallmentPlanEditor({
       <Stack gap="xxs">
         {rows.map((row, index) => {
           const isLast = index === lastIndex;
-          const markerBg = row.locked ? theme.colors.success : 'transparent';
-          const markerBorder = row.locked ? theme.colors.success : theme.colors.border;
+          // Kaydedilince ödenmiş olacak satırlar da yeşil görünür — kullanıcı kaydetmeden
+          // önce sonucu görür.
+          const showsPaid = row.locked || row.markPaid;
+          const markerBg = showsPaid ? theme.colors.success : 'transparent';
+          const markerBorder = showsPaid ? theme.colors.success : theme.colors.border;
 
           return (
             <Row
@@ -1001,14 +1115,14 @@ function InstallmentPlanEditor({
                     width: 32,
                     height: 32,
                     borderRadius: 16,
-                    borderWidth: row.locked ? 0 : 1.5,
+                    borderWidth: showsPaid ? 0 : 1.5,
                     borderColor: markerBorder,
                     backgroundColor: markerBg,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  {row.locked ? (
+                  {showsPaid ? (
                     <Ionicons name="checkmark" size={16} color={theme.colors.brandPrimaryText} />
                   ) : (
                     <Text variant="caption" style={{ color: theme.colors.textSecondary, fontWeight: '700' }}>
@@ -1022,7 +1136,7 @@ function InstallmentPlanEditor({
                       flex: 1,
                       width: 2,
                       borderRadius: 1,
-                      backgroundColor: row.locked ? theme.colors.success : theme.colors.border,
+                      backgroundColor: showsPaid ? theme.colors.success : theme.colors.border,
                     }}
                   />
                 ) : null}
@@ -1068,6 +1182,21 @@ function InstallmentPlanEditor({
                         value={row.amountStr}
                         onChangeText={(value) => onAmountChange(index, value)}
                       />
+                      <Row gap="sm" align="center">
+                        <Text
+                          variant="caption"
+                          style={{
+                            flex: 1,
+                            color: row.markPaid ? theme.colors.success : theme.colors.textSecondary,
+                          }}
+                        >
+                          {row.markPaid ? 'Ödendi olarak kaydedilecek' : 'Ödenmedi'}
+                        </Text>
+                        <Switch
+                          value={row.markPaid}
+                          onValueChange={(value) => onTogglePaid(index, value)}
+                        />
+                      </Row>
                     </Stack>
                   )}
                 </Card>
@@ -1077,19 +1206,75 @@ function InstallmentPlanEditor({
         })}
       </Stack>
 
+      {markedPaidCount > 0 ? (
+        <Text variant="caption" style={{ color: theme.colors.success }}>
+          {markedPaidCount} {unitLabel.toLocaleLowerCase('tr-TR')} ödendi olarak kaydedilecek. Bu ödemeler
+          vade tarihiyle işlenir ve hesap bakiyelerinizi değiştirmez.
+        </Text>
+      ) : null}
+
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Taksit ekle"
+        accessibilityLabel={`${unitLabel} ekle`}
         onPress={onAdd}
         style={{ alignSelf: 'flex-start', paddingVertical: theme.spacing.xs }}
       >
         <Row gap="xs" align="center">
           <Ionicons name="add-circle-outline" size={18} color={theme.colors.brandPrimary} />
           <Text variant="body" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
-            Taksit Ekle
+            {unitLabel} Ekle
           </Text>
         </Row>
       </Pressable>
+
+      {/* Planı uzat: sözleşme yenilendiğinde (maaş zammı, kira artışı) plana tek seferde
+          N vade eklemek için. Tutar boş bırakılırsa son vadenin tutarı sürer. */}
+      <Card>
+        <Stack gap="sm">
+          <Text variant="caption" color="textSecondary">
+            PLANI UZAT
+          </Text>
+          <Row gap="sm" align="center">
+            <View style={{ flex: 1 }}>
+              <TextField
+                label={`KAÇ ${unitLabel.toLocaleUpperCase('tr-TR')}`}
+                placeholder="12"
+                keyboardType="number-pad"
+                value={extendCountStr}
+                onChangeText={setExtendCountStr}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AmountField
+                label="YENİ TUTAR"
+                placeholder={rows[lastIndex]?.amountStr || (precision === 0 ? '1' : '0,00')}
+                precision={precision}
+                value={extendAmountStr}
+                onChangeText={setExtendAmountStr}
+              />
+            </View>
+          </Row>
+          <Text variant="caption" color="textSecondary">
+            Tutar boş bırakılırsa son {unitLabel.toLocaleLowerCase('tr-TR')} tutarı ({
+              formatValueUnitAmount(
+                parseValueUnitAmountToMinor(rows[lastIndex]?.amountStr ?? '', currencyCode) ?? 0,
+                currencyCode
+              )
+            }) devam eder.
+          </Text>
+          <Button
+            label="Planı Uzat"
+            variant="secondary"
+            icon="calendar-outline"
+            disabled={extendCount <= 0}
+            onPress={() => {
+              onExtend(extendCount, extendAmountStr.trim() || null);
+              setExtendCountStr('');
+              setExtendAmountStr('');
+            }}
+          />
+        </Stack>
+      </Card>
     </Stack>
   );
 }
@@ -1099,17 +1284,36 @@ function InstallmentPlanEditor({
 // dikey çizgi + kart satırları aynı görsel dilde, ama bunlar henüz kaydedilmemiş taslak
 // veri olduğu için ödendi/sıradaki durumu yok: yalnızca ilk taksit vurgulanır (bir sonraki
 // ödeme olacağı için), diğerleri nötr anahat kalır.
-function InstallmentPreviewTimeline({ items, unitLabel }: { items: InstallmentPlanItem[]; unitLabel: string }) {
+function InstallmentPreviewTimeline({
+  items,
+  unitLabel,
+  isPaid,
+  onTogglePaid,
+}: {
+  items: InstallmentPlanItem[];
+  unitLabel: string;
+  /** Verilirse her satırda "Ödendi" anahtarı gösterilir (bkz. toplu ödendi akışı). */
+  isPaid?: (item: InstallmentPlanItem) => boolean;
+  onTogglePaid?: (installmentNumber: number, value: boolean) => void;
+}) {
   const theme = useTheme();
+  const editable = !!isPaid && !!onTogglePaid;
 
   return (
     <Stack gap="xxs">
       {items.map((item, index) => {
-        const isFirst = index === 0;
         const isLast = index === items.length - 1;
-        const markerBg = isFirst ? theme.colors.brandPrimary : 'transparent';
-        const markerBorder = isFirst ? theme.colors.brandPrimary : theme.colors.border;
-        const markerTextColor = isFirst ? theme.colors.brandPrimaryText : theme.colors.textSecondary;
+        const paid = isPaid?.(item) ?? false;
+        // Ödendi işaretlenen satır yeşil dolu; işaretlenmemişlerde ilk satır "sıradaki"
+        // olarak Saffron vurgulanır (gerçek taksit listesiyle aynı görsel dil).
+        const isNext = !paid && items.findIndex((i) => !(isPaid?.(i) ?? false)) === index;
+        const markerBg = paid ? theme.colors.success : isNext ? theme.colors.brandPrimary : 'transparent';
+        const markerBorder = paid
+          ? theme.colors.success
+          : isNext
+            ? theme.colors.brandPrimary
+            : theme.colors.border;
+        const markerTextColor = paid || isNext ? theme.colors.brandPrimaryText : theme.colors.textSecondary;
 
         return (
           <Row
@@ -1124,39 +1328,63 @@ function InstallmentPreviewTimeline({ items, unitLabel }: { items: InstallmentPl
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  borderWidth: isFirst ? 0 : 1.5,
+                  borderWidth: paid || isNext ? 0 : 1.5,
                   borderColor: markerBorder,
                   backgroundColor: markerBg,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Text variant="caption" style={{ color: markerTextColor, fontWeight: '700' }}>
-                  {item.installmentNumber}
-                </Text>
+                {paid ? (
+                  <Ionicons name="checkmark" size={16} color={theme.colors.brandPrimaryText} />
+                ) : (
+                  <Text variant="caption" style={{ color: markerTextColor, fontWeight: '700' }}>
+                    {item.installmentNumber}
+                  </Text>
+                )}
               </View>
               {!isLast ? (
-                <View style={{ flex: 1, width: 2, borderRadius: 1, backgroundColor: theme.colors.border }} />
+                <View
+                  style={{
+                    flex: 1,
+                    width: 2,
+                    borderRadius: 1,
+                    backgroundColor: paid ? theme.colors.success : theme.colors.border,
+                  }}
+                />
               ) : null}
             </Stack>
 
             <View style={{ flex: 1 }}>
-              <Card elevated={isFirst}>
-                <Row gap="sm" align="center">
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle" numberOfLines={1}>
-                      {item.installmentNumber}. {unitLabel} — {shortDateFormatter.format(new Date(item.dueDate))}
-                    </Text>
-                    {item.interestMinor > 0 ? (
-                      <Text variant="caption" color="textSecondary">
-                        Anapara {formatMinorAmount(item.principalMinor)} · Faiz {formatMinorAmount(item.interestMinor)}
+              <Card elevated={isNext}>
+                <Stack gap="sm">
+                  <Row gap="sm" align="center">
+                    <Stack gap="xxs" style={{ flex: 1 }}>
+                      <Text variant="cardTitle" numberOfLines={1}>
+                        {item.installmentNumber}. {unitLabel} — {shortDateFormatter.format(new Date(item.dueDate))}
                       </Text>
-                    ) : null}
-                  </Stack>
-                  <Text variant="body" tabular>
-                    {formatMinorAmount(item.amountMinor)}
-                  </Text>
-                </Row>
+                      {item.interestMinor > 0 ? (
+                        <Text variant="caption" color="textSecondary">
+                          Anapara {formatMinorAmount(item.principalMinor)} · Faiz {formatMinorAmount(item.interestMinor)}
+                        </Text>
+                      ) : null}
+                    </Stack>
+                    <Text variant="body" tabular>
+                      {formatMinorAmount(item.amountMinor)}
+                    </Text>
+                  </Row>
+                  {editable ? (
+                    <Row gap="sm" align="center">
+                      <Text
+                        variant="caption"
+                        style={{ flex: 1, color: paid ? theme.colors.success : theme.colors.textSecondary }}
+                      >
+                        {paid ? 'Ödendi' : 'Ödenmedi'}
+                      </Text>
+                      <Switch value={paid} onValueChange={(value) => onTogglePaid?.(item.installmentNumber, value)} />
+                    </Row>
+                  ) : null}
+                </Stack>
               </Card>
             </View>
           </Row>
