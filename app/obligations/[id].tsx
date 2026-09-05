@@ -44,7 +44,11 @@ import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, formatMinorAmount, formatValueUnitAmount, parseValueUnitAmountToMinor } from '@/utils/money';
-import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
+import {
+  DOCUMENT_TYPE_LABEL,
+  INTEREST_DOCUMENT_TYPES,
+  getInstallmentUnitLabels,
+} from '@/features/obligations/documentTypes';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { listValueUnitRates } from '@/features/valueUnits/api';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
@@ -208,9 +212,13 @@ export default function ObligationDetailScreen() {
   // (docs/08-tasarim-sistemi.md §12.3 — kart içinde mikro grafikler/zaman çizgisi).
   const nextInstallment = installments.find((i) => i.remaining_amount_minor > 0) ?? null;
   const bankName = obligation.bank_code ? (BANK_NAME[obligation.bank_code] ?? null) : null;
-  const isSubscription = obligation.document_type === 'abonelik';
   const serviceName = obligation.service_code ? (SERVICE_NAME[obligation.service_code] ?? null) : null;
-  const unitLabel = isSubscription ? 'Ay' : 'Taksit';
+  // Vade birimi ve tutar etiketi belge türünden gelir (bkz. features/obligations/documentTypes.ts):
+  // maaş/kira/abonelik/vergi gibi tekrarlayan kayıtlarda "Ay", kredi/çek/senette "Taksit".
+  const unitLabel = getInstallmentUnitLabels(obligation.document_type).unitTitle;
+  // Faizli türlerde TUTAR anaparadır, ödenecek toplam taksitlerden türer — diğer tüm
+  // türlerde total_amount_minor zaten toplamın kendisidir.
+  const isInterestBearing = INTEREST_DOCUMENT_TYPES.has(obligation.document_type);
 
   // Hero yüzeyi her zaman temanın nötr "elevated" tonundadır (açıkta beyaza yakın,
   // koyuda grafit) — sabit sarı/renkli kart tema değişince kırılıyordu. Durum anlamı
@@ -311,7 +319,7 @@ export default function ObligationDetailScreen() {
               { label: 'Kategori', value: obligation.category?.name ?? '—' },
               ...(obligation.counterparty?.name ? [{ label: 'Taraf', value: obligation.counterparty.name }] : []),
               {
-                label: isSubscription ? 'Toplam Tutar' : 'Başlangıç Tutarı',
+                label: isInterestBearing ? 'Başlangıç Tutarı' : 'Toplam Tutar',
                 value: formatValueUnitAmount(obligation.total_amount_minor, obligation.currency_code),
               },
               ...(effectiveRatio !== null

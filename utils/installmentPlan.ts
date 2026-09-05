@@ -6,12 +6,32 @@ export interface InstallmentPlanItem {
   interestMinor: number;
 }
 
+function daysInMonth(year: number, monthIndex: number): number {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
 // Taksit planı düzenlemesinde "başlangıç tarihi" değiştiğinde tüm ödenmemiş taksitleri
-// aynı aylık kadansla yeniden dizmek için (bkz. app/obligations/new.tsx InstallmentPlanEditor).
+// aynı aylık kadansla yeniden dizmek için (bkz. app/obligations/new.tsx InstallmentPlanEditor)
+// ve vade planı üretirken (buildFixedInstallments/buildAmortizedInstallments) kullanılır.
+//
+// Date.setMonth bilerek kullanılmaz, iki nedenle:
+// 1) setMonth ayın son gününü taşırır: 31 Ocak + 1 ay = 3 Mart olur ve Şubat tamamen atlanır.
+//    Maaş/kira gibi ay sonunda ödenen tekrarlayan kayıtlarda plan bu yüzden bozuluyordu.
+//    Burada gün, hedef ayın gün sayısına kırpılır (31 Ocak + 1 ay = 28/29 Şubat).
+// 2) new Date('YYYY-MM-DD') UTC gece yarısı olarak ayrıştırılır ama setMonth/toISOString
+//    yerel saate göre çalışır; UTC farkı negatif olan cihazlarda tarih bir gün geri kayardı.
+//    Aşağıdaki hesap tamamen tam sayı aritmetiğidir, saat diliminden etkilenmez.
 export function addMonthsToIsoDate(isoDate: string, months: number): string {
-  const date = new Date(isoDate);
-  date.setMonth(date.getMonth() + months);
-  return date.toISOString().slice(0, 10);
+  const [year, month, day] = isoDate.slice(0, 10).split('-').map(Number);
+  const target = new Date(Date.UTC(year, month - 1 + months, 1));
+  const targetYear = target.getUTCFullYear();
+  const targetMonthIndex = target.getUTCMonth();
+  const clampedDay = Math.min(day, daysInMonth(targetYear, targetMonthIndex));
+  return [
+    String(targetYear).padStart(4, '0'),
+    String(targetMonthIndex + 1).padStart(2, '0'),
+    String(clampedDay).padStart(2, '0'),
+  ].join('-');
 }
 
 export interface InstallmentEditRecompute {
@@ -71,7 +91,6 @@ export function buildAmortizedInstallments(
   monthlyInterestRatePercent = 0
 ): InstallmentPlanItem[] {
   const rate = monthlyInterestRatePercent / 100;
-  const firstDate = new Date(firstDueDate);
 
   const fixedPaymentMinor =
     rate === 0
@@ -81,8 +100,7 @@ export function buildAmortizedInstallments(
   let remainingMinor = principalMinor;
 
   return Array.from({ length: count }, (_, index) => {
-    const due = new Date(firstDate);
-    due.setMonth(due.getMonth() + index);
+    const dueDate = addMonthsToIsoDate(firstDueDate, index);
     const isLast = index === count - 1;
 
     const interestMinor = Math.round(remainingMinor * rate);
@@ -93,10 +111,30 @@ export function buildAmortizedInstallments(
 
     return {
       installmentNumber: index + 1,
-      dueDate: due.toISOString().slice(0, 10),
+      dueDate,
       amountMinor: principalMinorForInstallment + interestMinor,
       principalMinor: principalMinorForInstallment,
       interestMinor,
     };
   });
+}
+
+// Maaş, kira, abonelik, vergi/SGK gibi tekrarlayan kayıtlarda girilen tutar TOPLAM değil
+// HER VADENİN tutarıdır: 4 ay × 28.075,50 ₺ dört ayrı 28.075,50 ₺ vade demektir, toplamın
+// dörde bölünmesi değil (bkz. app/obligations/new.tsx amountMode). buildAmortizedInstallments'tan
+// ayrı bir fonksiyon olmasının nedeni: orada tutar bölündüğü için son vadeye kuruş artığı
+// bindirilir — burada her vade birebir aynı kalmalıdır, yuvarlama artığı hiç oluşmaz.
+// Faiz kavramı yoktur (tekrarlayan sabit ödeme anapara/faize ayrılmaz), principal = tutar.
+export function buildFixedInstallments(
+  amountPerInstallmentMinor: number,
+  count: number,
+  firstDueDate: string
+): InstallmentPlanItem[] {
+  return Array.from({ length: count }, (_, index) => ({
+    installmentNumber: index + 1,
+    dueDate: addMonthsToIsoDate(firstDueDate, index),
+    amountMinor: amountPerInstallmentMinor,
+    principalMinor: amountPerInstallmentMinor,
+    interestMinor: 0,
+  }));
 }

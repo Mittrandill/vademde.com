@@ -15,7 +15,13 @@ import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { ServicePicker } from '@/components/finance/ServicePicker';
 import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
-import { BANK_DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
+import {
+  BANK_DOCUMENT_TYPES,
+  INTEREST_DOCUMENT_TYPES,
+  getDefaultAmountMode,
+  getInstallmentUnitLabels,
+  type ObligationAmountMode,
+} from '@/features/obligations/documentTypes';
 import { listAccounts } from '@/features/accounts/api';
 import { listCategories } from '@/features/categories/api';
 import { listCounterparties } from '@/features/counterparties/api';
@@ -37,6 +43,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 import {
   buildAmortizedInstallments,
+  buildFixedInstallments,
   addMonthsToIsoDate,
   recomputeInstallmentAfterAmountEdit,
   type InstallmentPlanItem,
@@ -185,6 +192,15 @@ function ObligationForm({
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
   const [interestRateStr, setInterestRateStr] = useState('');
+  // TUTAR alanının anlamı: 'total' → girilen tutar toplam borçtur ve vadelere bölünür
+  // (kredi, çek, senet…); 'per_installment' → girilen tutar HER VADENİN tutarıdır ve
+  // toplam, tutar × vade sayısıdır (maaş, kira, abonelik, vergi/SGK…). Varsayılan belge
+  // türünden gelir (getDefaultAmountMode) ama kullanıcı elle değiştirebilir; elle
+  // değiştirdikten sonra tür değişse bile seçimi korunur (amountModeTouched).
+  const [amountMode, setAmountMode] = useState<ObligationAmountMode>(() =>
+    getDefaultAmountMode(initial?.document_type ?? initialDocumentType ?? null)
+  );
+  const [amountModeTouched, setAmountModeTouched] = useState(false);
   const [depositAccountId, setDepositAccountId] = useState<string | null>(null);
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
@@ -250,7 +266,11 @@ function ObligationForm({
   // detayındaki Ekstreler sekmesinde ve kart ödemesi akışında hiç görünmez (bkz.
   // app/accounts/[id].tsx statementsQuery, features/payments/api.ts recordCardPayment).
   const isCardStatementType = documentType === 'kredi_karti_ekstresi';
-  const unitLabel = isSubscriptionType ? 'Ay' : 'Taksit';
+  // Personel maaşı: karşı taraf müşteri/tedarikçi değil personeldir — cari seçici bu bağlamda
+  // "PERSONEL" olarak etiketlenir ve yeni kayıt doğrudan 'personel' türüyle oluşturulur.
+  const isSalaryType = documentType === 'maas';
+  const periodLabels = getInstallmentUnitLabels(documentType);
+  const unitLabel = periodLabels.unitTitle;
 
   // Mevcut bir taksit planı olan kaydı düzenlerken TUTAR/VADE/TAKSİT SAYISI alanları
   // yerine aşağıdaki taksit planı editörü (BAŞLANGIÇ TARİHİ + numaralı taksit satırları)
@@ -349,24 +369,44 @@ function ObligationForm({
   // kesirli birimler için genelleştirilmemiş. Taksit sayısı fiat dışında 1'e sabitlenir.
   const installmentCount = isFiatUnit ? Math.max(1, Math.min(60, parseInt(installmentCountStr, 10) || 1)) : 1;
   const enteredAmountMinor = parseValueUnitAmountToMinor(totalAmount, valueUnitCode) ?? 0;
-  // Aboneliklerde TUTAR alanı aylık ödemeyi temsil eder; toplam, aylık × ay sayısıdır.
-  // Diğer türlerde (nakit avans dahil) TUTAR zaten çekilen/anapara tutarın kendisidir —
-  // taksitliyse ödenecek toplam faizle birlikte aşağıdaki installments'tan türer, TUTAR
-  // alanının kendisi değişmez (bkz. showInterestField/obligationTotalMinor).
-  const totalAmountMinor =
-    isSubscriptionType && installmentCount > 1 ? enteredAmountMinor * installmentCount : enteredAmountMinor;
+  // "Her vade tutarı" modu yalnızca birden fazla vade varken anlamlıdır; tek vadede iki mod da
+  // aynı sonucu verir ve seçim gizlenir (bkz. showAmountModeSelector).
+  const isPerInstallmentMode = amountMode === 'per_installment' && installmentCount > 1;
+  const showAmountModeSelector = !isEditing && isFiatUnit && installmentCount > 1;
+  // Maaş/kira/abonelik gibi tekrarlayan kayıtlarda TUTAR alanı her vadenin tutarıdır; toplam,
+  // tutar × vade sayısıdır. Kredi/çek/senet gibi türlerde TUTAR zaten toplam borcun kendisidir
+  // (nakit avansta çekilen anapara) — vadeliyse ödenecek toplam faizle birlikte aşağıdaki
+  // installments'tan türer, TUTAR alanının kendisi değişmez (bkz. obligationTotalMinor).
+  const totalAmountMinor = isPerInstallmentMode
+    ? enteredAmountMinor * installmentCount
+    : enteredAmountMinor;
   // Faiz oranı kredi VE nakit avansta, birden fazla taksitte istenir — TUTAR alanı bu
   // durumda anaparayı (nakit avansta çekilen tutarı) temsil eder, taksitler azalan bakiye
   // üzerinden hesaplanır ve obligation'ın toplamı anapara+toplam faiz olur (banka kredisi/nakit
   // avans faizi gibi). Tek taksitte (peşin) faiz uygulanmaz, TUTAR = toplam borç kalır.
+  // "Her vade tutarı" modunda girilen tutar zaten ödenecek nihai tutardır — üzerine amortisman
+  // uygulanmaz, bu yüzden faiz alanı da gösterilmez.
   const showInterestField =
-    !isEditing && isFiatUnit && (documentType === 'kredi' || isCashAdvanceType) && installmentCount > 1;
+    !isEditing &&
+    isFiatUnit &&
+    !!documentType &&
+    INTEREST_DOCUMENT_TYPES.has(documentType) &&
+    !isPerInstallmentMode &&
+    installmentCount > 1;
   const interestRatePercent =
     showInterestField && interestRateStr ? Number(interestRateStr.replace(',', '.')) || 0 : 0;
-  const installmentPreview =
-    !isEditing && installmentCount > 1 && totalAmountMinor > 0
-      ? buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent)
-      : [];
+
+  // Tek yer: hem önizleme hem kayıt aynı planı üretsin (aksi halde önizlemede görünenle
+  // kaydedilen taksitler ayrışabilir). "Her vade" modunda tutar bölünmez, her satır birebir
+  // aynıdır — yuvarlama artığı hiç oluşmaz (bkz. utils/installmentPlan.ts buildFixedInstallments).
+  function buildPlan(): InstallmentPlanItem[] {
+    if (installmentCount <= 1 || enteredAmountMinor <= 0) return [];
+    return isPerInstallmentMode
+      ? buildFixedInstallments(enteredAmountMinor, installmentCount, dueDate)
+      : buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent);
+  }
+
+  const installmentPreview = isEditing ? [] : buildPlan();
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -453,10 +493,7 @@ function ObligationForm({
       // Faiz oranı girildiyse taksitler azalan bakiye üzerinden hesaplanır; obligation'ın
       // toplamı taksitlerin gerçek toplamı (anapara+faiz) olmalı ki kalan borç/ilerleme
       // hesapları doğru kalsın.
-      const installmentPlanItems =
-        installmentCount > 1
-          ? buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent)
-          : [];
+      const installmentPlanItems = buildPlan();
       const obligationTotalMinor =
         installmentPlanItems.length > 0
           ? installmentPlanItems.reduce((sum, item) => sum + item.amountMinor, 0)
@@ -613,7 +650,9 @@ function ObligationForm({
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                {isSubscriptionType ? `AYLIK ÖDEME (${valueUnit.quantityLabel})` : `TUTAR (${valueUnit.quantityLabel})`}
+                {isPerInstallmentMode
+                  ? `${periodLabels.unitTitle.toLocaleUpperCase('tr-TR')} BAŞINA TUTAR (${valueUnit.quantityLabel})`
+                  : `TUTAR (${valueUnit.quantityLabel})`}
               </Text>
               {isPlanEditing ? (
                 <Text variant="body" color="textSecondary">
@@ -627,6 +666,30 @@ function ObligationForm({
                   onChangeText={setTotalAmount}
                 />
               )}
+              {/* Girilen tutarın toplam mı yoksa her vadenin tutarı mı olduğu, kullanıcının
+                  gördüğü ilk şey olmalı — maaş/kira gibi kayıtlarda toplamın vadelere
+                  bölünmesi sessiz ve fark edilmesi güç bir hataya yol açıyordu. */}
+              {showAmountModeSelector ? (
+                <Stack gap="xs">
+                  <SegmentedControl
+                    options={[
+                      { key: 'total', label: 'Toplam tutar' },
+                      { key: 'per_installment', label: `Her ${periodLabels.unit} tutarı` },
+                    ]}
+                    value={amountMode}
+                    onChange={(value) => {
+                      setAmountMode(value);
+                      setAmountModeTouched(true);
+                    }}
+                    stretch
+                  />
+                  <Text variant="caption" color="textSecondary">
+                    {isPerInstallmentMode
+                      ? `Girilen tutar her ${periodLabels.unit} için ayrı ayrı işlenir; toplam ${formatValueUnitAmount(totalAmountMinor, valueUnitCode)} olur.`
+                      : `Girilen tutar toplam borçtur; ${installmentCount} ${periodLabels.unitDative} bölünür.`}
+                  </Text>
+                </Stack>
+              ) : null}
             </Stack>
 
             {isPlanEditing ? null : (
@@ -661,7 +724,7 @@ function ObligationForm({
             {isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
-                  KİŞİ / FİRMA
+                  {isSalaryType ? 'PERSONEL' : 'KİŞİ / FİRMA'}
                 </Text>
                 {activeWorkspaceId ? (
                   <CounterpartyPicker
@@ -669,6 +732,10 @@ function ObligationForm({
                     counterparties={counterpartiesQuery.data ?? []}
                     selectedId={counterpartyId}
                     onSelect={setCounterpartyId}
+                    // Maaş kaydında listede olmayan bir isim yazılıp oluşturulursa doğrudan
+                    // personel olarak kaydedilir; müşteri/tedarikçi listesine karışmaz.
+                    defaultType={isSalaryType ? 'personel' : 'individual'}
+                    placeholder={isSalaryType ? 'Personel seçin' : 'Kişi / firma seçin'}
                     onCreated={() => {
                       queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
                     }}
@@ -685,6 +752,9 @@ function ObligationForm({
                 selectedId={documentType}
                 onSelect={(value) => {
                   setDocumentType(value);
+                  // Tutar modu belge türünün doğal anlamını izler (kredide toplam, maaş/kirada
+                  // her vade) — kullanıcı seçimi elle değiştirmediyse tür değişince güncellenir.
+                  if (!amountModeTouched) setAmountMode(getDefaultAmountMode(value));
                   // Nakit avans/kredi kartı ekstresinde HESAP yalnızca kredi kartı olabilir —
                   // önceden seçilmiş bir kart-dışı hesap varsa (veya tersi yönde geçilirken)
                   // geçersiz kalmasın diye temizlenir.
@@ -782,7 +852,7 @@ function ObligationForm({
                 installmentCount hesaplaması); taksitlendirme yalnızca fiat'ta gösterilir. */}
             {isEditing || !isFiatUnit ? null : (
               <TextField
-                label={isSubscriptionType ? 'KAÇ AY' : 'TAKSİT SAYISI'}
+                label={periodLabels.countLabel}
                 placeholder="1"
                 keyboardType="number-pad"
                 value={installmentCountStr}
@@ -813,7 +883,7 @@ function ObligationForm({
               <Stack gap="sm">
                 <Row align="center">
                   <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    {isSubscriptionType ? 'AY ÖNİZLEME' : 'TAKSİT ÖNİZLEME'}
+                    {`${periodLabels.unitTitle.toLocaleUpperCase('tr-TR')} ÖNİZLEME`}
                   </Text>
                   <Text variant="caption" color="textSecondary">
                     Toplam {formatMinorAmount(installmentPreview.reduce((sum, i) => sum + i.amountMinor, 0))}
@@ -821,7 +891,7 @@ function ObligationForm({
                 </Row>
                 <InstallmentPreviewTimeline
                   items={installmentPreview}
-                  unitLabel={isSubscriptionType ? 'ay' : 'taksit'}
+                  unitLabel={periodLabels.unit}
                 />
               </Stack>
             ) : null}

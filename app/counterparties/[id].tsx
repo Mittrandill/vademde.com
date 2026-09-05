@@ -25,7 +25,12 @@ import { Amount } from '@/components/finance/Amount';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { StatusBadge } from '@/components/finance/StatusBadge';
-import { deleteCounterparty, getCounterparty, getCounterpartyLedger } from '@/features/counterparties/api';
+import {
+  deleteCounterparty,
+  getCounterparty,
+  getCounterpartyLedger,
+  getCounterpartyTypeLabel,
+} from '@/features/counterparties/api';
 import { listObligations, ACTIVE_OBLIGATION_STATUSES, type ObligationWithRelations } from '@/features/obligations/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -75,7 +80,7 @@ export default function CounterpartyDetailScreen() {
   const deleteCounterpartyMutation = useMutation({
     mutationFn: () => deleteCounterparty(id as string),
     onSuccess: () => {
-      showSuccessAlert('Kişi/Firma başarıyla silindi.', () => {
+      showSuccessAlert('Cari kaydı başarıyla silindi.', () => {
         router.replace('/counterparties');
         InteractionManager.runAfterInteractions(() => {
           if (activeWorkspaceId) {
@@ -187,7 +192,7 @@ export default function CounterpartyDetailScreen() {
     { key: 'hareketler', label: 'Hareketler' },
   ];
   const infoRows = [
-    { label: 'Tür', value: counterparty.type === 'company' ? 'Firma' : 'Kişi' },
+    { label: 'Tür', value: getCounterpartyTypeLabel(counterparty.type) },
     ...(counterparty.phone ? [{ label: 'Telefon', value: counterparty.phone }] : []),
     ...(counterparty.email ? [{ label: 'E-posta', value: counterparty.email }] : []),
     ...(counterparty.tax_number ? [{ label: 'Vergi No', value: counterparty.tax_number }] : []),
@@ -216,7 +221,7 @@ export default function CounterpartyDetailScreen() {
       <FinanceDetailHero
         icon={<PersonAvatar name={counterparty.name} size={44} />}
         eyebrow="CARİ DURUM"
-        title={`${counterparty.name} · ${counterparty.type === 'company' ? 'Firma' : 'Kişi'}`}
+        title={`${counterparty.name} · ${getCounterpartyTypeLabel(counterparty.type)}`}
         amountLabel="CARİ BAKİYE"
         amount={formatMinorAmount(Math.abs(netMinor))}
         amountColor={netColor}

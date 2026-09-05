@@ -38,9 +38,12 @@ const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// features/obligations/documentTypes.ts DOCUMENT_TYPES ve obligations_document_type_check
+// kısıtıyla birebir aynı tutulmalıdır (bkz. supabase/migrations/
+// 20260905121000_extend_obligation_document_types.sql).
 const DOCUMENT_TYPES = [
-  'kredi', 'kredi_karti_ekstresi', 'cek', 'senet', 'fatura', 'abonelik', 'kira',
-  'vergi_sgk', 'tedarikci_borcu', 'musteri_alacagi', 'banka_dekontu', 'makbuz_fis',
+  'kredi', 'kredi_karti_ekstresi', 'nakit_avans', 'cek', 'senet', 'fatura', 'abonelik', 'kira',
+  'maas', 'vergi_sgk', 'tedarikci_borcu', 'musteri_alacagi', 'banka_dekontu', 'makbuz_fis',
   'sozlesme_odeme_plani', 'diger',
 ];
 

@@ -1,5 +1,5 @@
 import { SearchablePicker } from '@/components/primitives';
-import { createCounterparty, type Counterparty } from '@/features/counterparties/api';
+import { createCounterparty, type Counterparty, type CounterpartyType } from '@/features/counterparties/api';
 import { PersonAvatar } from './PersonAvatar';
 
 export interface CounterpartyPickerProps {
@@ -8,6 +8,10 @@ export interface CounterpartyPickerProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCreated?: (counterparty: Counterparty) => void;
+  /** Listede olmayan bir isim yazılıp anında oluşturulduğunda atanacak cari türü.
+   * Maaş kaydı gibi bağlamlarda 'personel' verilir; aksi halde 'individual'. */
+  defaultType?: CounterpartyType;
+  placeholder?: string;
 }
 
 export function CounterpartyPicker({
@@ -16,6 +20,8 @@ export function CounterpartyPicker({
   selectedId,
   onSelect,
   onCreated,
+  defaultType = 'individual',
+  placeholder = 'Kişi / firma seçin',
 }: CounterpartyPickerProps) {
   return (
     <SearchablePicker
@@ -23,11 +29,11 @@ export function CounterpartyPicker({
       selectedId={selectedId}
       onSelect={onSelect}
       renderLeading={(item) => <PersonAvatar name={item.name} size={36} />}
-      placeholder="Kişi / firma seçin"
-      title="Kişi / Firma Seç"
-      emptyLabel="Eşleşen kişi/firma bulunamadı."
+      placeholder={placeholder}
+      title="Cari Seç"
+      emptyLabel="Eşleşen cari bulunamadı."
       onCreateNew={async (name) => {
-        const created = await createCounterparty({ workspace_id: workspaceId, name, type: 'individual' });
+        const created = await createCounterparty({ workspace_id: workspaceId, name, type: defaultType });
         onSelect(created.id);
         onCreated?.(created);
       }}

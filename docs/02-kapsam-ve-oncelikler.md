@@ -60,6 +60,7 @@
 - POS sistemi
 - e-Fatura kesme
 - Resmî muhasebe ve vergi danışmanlığı
-- Stok, maaş ve personel yönetimi
+- Stok yönetimi
+- Bordro ve personel yönetimi (İK): puantaj, izin, kıdem/ihbar hesabı, SGK bildirimi ve resmî bordro üretimi. **Kapsam içinde olan:** personelin cari olarak tanımlanması (`counterparties.type = 'personel'`) ve maaş ödemesinin tekrarlayan bir finansal kayıt olarak izlenmesi (`document_type = 'maas'`) — yani ödemenin takibi, hesaplanması değil.
 - Yatırım veya kripto portföyü
 - Kredi başvurusu veya finans ürünü satışı

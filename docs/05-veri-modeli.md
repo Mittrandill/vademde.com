@@ -12,7 +12,7 @@
 | workspace_members | Üyelik ve rol |
 | accounts | Nakit, banka ve cüzdan hesapları |
 | categories | Gelir/gider kategorileri |
-| counterparties | Kişi, müşteri ve tedarikçiler |
+| counterparties | Cariler: kişi, firma ve personel (`type` = `individual` \| `company` \| `personel`) |
 | transactions | Gerçekleşmiş para hareketleri |
 | obligations | Vadeli borç ve alacaklar |
 | installments | Taksit satırları |

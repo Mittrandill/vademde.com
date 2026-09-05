@@ -5,6 +5,39 @@ import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/a
 
 export type Counterparty = Tables<'counterparties'>;
 
+// counterparties.type'ın tek kaynağı. DB tarafında enum değil `text` + CHECK constraint
+// olarak tutulur (bkz. supabase/migrations/20260905120000_add_personel_counterparty_type.sql);
+// bu union ile CHECK listesi birlikte değiştirilmelidir.
+//
+// 'personel' ayrı bir tür olarak vardır çünkü personel, müşteri/tedarikçi ile aynı listede
+// karışınca maaş takibi yapılamıyordu — ayrı filtre sekmesi, ayrı ikon ve TC kimlik alanı
+// için tür bilgisi gerekir (bkz. app/counterparties/index.tsx TYPE_FILTERS).
+export type CounterpartyType = 'individual' | 'company' | 'personel';
+
+export const COUNTERPARTY_TYPES: CounterpartyType[] = ['individual', 'company', 'personel'];
+
+export const COUNTERPARTY_TYPE_LABEL: Record<CounterpartyType, string> = {
+  individual: 'Kişi',
+  company: 'Firma',
+  personel: 'Personel',
+};
+
+// Türkçe çoğul eki programatik türetilemez (bkz. features/obligations/documentTypes.ts
+// DOCUMENT_TYPE_LABEL_PLURAL) — liste filtresi başlıkları elle yazılır.
+export const COUNTERPARTY_TYPE_LABEL_PLURAL: Record<CounterpartyType, string> = {
+  individual: 'Kişiler',
+  company: 'Firmalar',
+  personel: 'Personel',
+};
+
+export function getCounterpartyType(type: string | null | undefined): CounterpartyType {
+  return type === 'company' || type === 'personel' ? type : 'individual';
+}
+
+export function getCounterpartyTypeLabel(type: string | null | undefined): string {
+  return COUNTERPARTY_TYPE_LABEL[getCounterpartyType(type)];
+}
+
 export async function listCounterparties(workspaceId: string): Promise<Counterparty[]> {
   const { data, error } = await supabase
     .from('counterparties')

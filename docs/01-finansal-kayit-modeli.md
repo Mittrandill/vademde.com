@@ -24,6 +24,7 @@ Kredi, kredi kartı, çek, senet ve fatura gider kategorisi değildir. Bunlar fi
 - Fatura ve e-Fatura
 - Abonelik faturası
 - Kira
+- Personel maaşı
 - Vergi ve SGK ödemesi
 - Tedarikçi borcu
 - Müşteri alacağı
@@ -31,6 +32,25 @@ Kredi, kredi kartı, çek, senet ve fatura gider kategorisi değildir. Bunlar fi
 - Makbuz ve fiş
 - Sözleşme ve ödeme planı
 - Diğer
+
+#### 3.2.1 Tutarın anlamı: toplam mı, her vade mi?
+
+Belge türü, girilen TUTAR alanının ne ifade ettiğini belirler. İki farklı kayıt sınıfı vardır
+ve bunların karıştırılması sessiz ama ciddi bir veri hatasıdır:
+
+| Sınıf | Türler | TUTAR alanı | Vade planı |
+|---|---|---|---|
+| Toplam tutarlı | Kredi, nakit avans, kredi kartı ekstresi, çek, senet, banka dekontu, makbuz/fiş | Ödenecek **toplam** borç (kredide anapara) | Toplam, vade sayısına bölünür; faizli türlerde azalan bakiye üzerinden amortisman uygulanır |
+| Tekrarlayan (dönemsel) | Personel maaşı, kira, abonelik, vergi/SGK, fatura, sözleşme ödeme planı, tedarikçi borcu, müşteri alacağı, diğer | **Her vadenin** tutarı | Her vade birebir aynı tutarı taşır; toplam = tutar × vade sayısı |
+
+Örnek: 4 ay boyunca aylık 28.075,50 ₺ maaş, dört ayrı 28.075,50 ₺ vade demektir (toplam
+112.302,00 ₺) — 28.075,50 ₺'nin dörde bölünmesi değil.
+
+Bu bir **varsayılan**dır, kilit değil: kullanıcı kayıt formunda "Toplam tutar / Her vade tutarı"
+seçimini her zaman değiştirebilir. Toplamı belli olup taksitlere bölünmüş bir kira sözleşmesi de,
+her ay sabit tutarlı bir taahhüt de aynı formla girilebilir.
+
+Tekrarlayan sınıfta faiz sorulmaz — girilen tutar zaten ödenecek nihai tutardır.
 
 ### 3.3 Gelir ve gider kategorileri
 
@@ -103,7 +123,8 @@ Bir borç veya alacak yalnızca fiat para biriminde değil, kıymetli maden cins
 - **Değer birimi kodla saklanır**: fiat için ISO 4217 kodu (TRY, USD, EUR), kıymetli maden için Vademde'nin tanımladığı sabit birim kodu (gram_altin, ceyrek_altin, yarim_altin, tam_altin, cumhuriyet_altini) kullanılır — ISO 4217'nin kıymetli maden karşılığı (XAU) ons bazlıdır ve Türkiye'deki gram/sikke pratiğine uymadığı için kullanılmaz.
 - Bir kaydın "en küçük ölçü birimi" kavramı değer birimine göre değişir: fiat için kuruş/cent (1/100), gram_altin için santigram (1/100 gram), sikke birimleri için 1 adet (ondalık yoktur).
 - Tarih yerel gösterilir, veritabanında standart formatla tutulur.
-- Taksit toplamı ana toplamla uyuşmuyorsa son taksit düzeltmesi veya kullanıcı onayı gerekir.
+- Taksit toplamı ana toplamla uyuşmuyorsa son taksit düzeltmesi veya kullanıcı onayı gerekir. Bu kural yalnızca toplamın bölündüğü türler için geçerlidir; tekrarlayan kayıtlarda (bkz. §3.2.1) bölme yapılmadığı için yuvarlama artığı hiç oluşmaz.
+- Aylık vade tarihleri üretilirken ayın son günü taşırılmaz: 31 Ocak + 1 ay = 28/29 Şubat'tır, 3 Mart değil. Ay sonunda ödenen maaş ve kira kayıtları bu kurala bağlıdır.
 - Rakamla/yazıyla çek ve senet tutarı uyuşmuyorsa kayıt zorunlu incelemeye alınır.
 
 ### 8.2 Çoklu değer birimi toplama kuralı

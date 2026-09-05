@@ -9,21 +9,23 @@ import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import {
+  COUNTERPARTY_TYPES,
+  COUNTERPARTY_TYPE_LABEL,
   createCounterparty,
   deleteCounterparty,
   getCounterparty,
+  getCounterpartyType,
   updateCounterparty,
   type Counterparty,
+  type CounterpartyType,
 } from '@/features/counterparties/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 
-type PartyType = 'individual' | 'company';
-
-const TYPES: Array<{ value: PartyType; label: string }> = [
-  { value: 'individual', label: 'Kişi' },
-  { value: 'company', label: 'Firma' },
-];
+const TYPES: { value: CounterpartyType; label: string }[] = COUNTERPARTY_TYPES.map((value) => ({
+  value,
+  label: COUNTERPARTY_TYPE_LABEL[value],
+}));
 
 export default function NewCounterpartyScreen() {
   const theme = useTheme();
@@ -60,12 +62,13 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const isEditing = !!id;
 
-  const [type, setType] = useState<PartyType>((initial?.type as PartyType) ?? 'individual');
+  const [type, setType] = useState<CounterpartyType>(getCounterpartyType(initial?.type));
   const [name, setName] = useState(initial?.name ?? '');
   const [phone, setPhone] = useState(initial?.phone ?? '');
   const [email, setEmail] = useState(initial?.email ?? '');
   const [taxNumber, setTaxNumber] = useState(initial?.tax_number ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const typeLabel = COUNTERPARTY_TYPE_LABEL[type];
 
   function invalidate() {
     if (activeWorkspaceId) {
@@ -89,7 +92,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
     },
     onSuccess: () => {
       showSaveSuccess(
-        isEditing ? 'Kişi/Firma başarıyla güncellendi.' : 'Kişi/Firma başarıyla oluşturuldu.',
+        isEditing ? `${typeLabel} başarıyla güncellendi.` : `${typeLabel} başarıyla oluşturuldu.`,
         () => router.back(),
         invalidate
       );
@@ -100,18 +103,18 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
   const deleteMutation = useMutation({
     mutationFn: () => deleteCounterparty(id as string),
     onSuccess: () => {
-      showSaveSuccess('Kişi/Firma başarıyla silindi.', () => router.back(), invalidate);
+      showSaveSuccess(`${typeLabel} başarıyla silindi.`, () => router.back(), invalidate);
     },
     onError: () => {
       Alert.alert(
         'Silinemedi',
-        'Bu kişi/firma işlem veya borç/alacak kayıtlarında kullanılıyor. Önce ilişkili kayıtları güncelleyin.'
+        'Bu cari işlem veya borç/alacak kayıtlarında kullanılıyor. Önce ilişkili kayıtları güncelleyin.'
       );
     },
   });
 
   function confirmDelete() {
-    Alert.alert('Kişi/Firmayı Sil', 'Bu kayıt kalıcı olarak silinecek. Emin misiniz?', [
+    Alert.alert(`${typeLabel} Kaydını Sil`, 'Bu kayıt kalıcı olarak silinecek. Emin misiniz?', [
       { text: 'Vazgeç', style: 'cancel' },
       { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
     ]);
@@ -126,7 +129,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
               <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
             </Pressable>
             <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-              {isEditing ? 'Kişi/Firmayı Düzenle' : 'Yeni Kişi/Firma'}
+              {isEditing ? `${typeLabel} Kaydını Düzenle` : 'Yeni Cari'}
             </Text>
           </Row>
 
@@ -162,7 +165,13 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
           />
 
           <TextField
-            label={type === 'company' ? 'VERGİ NUMARASI (İSTEĞE BAĞLI)' : 'TC/VERGİ NUMARASI (İSTEĞE BAĞLI)'}
+            label={
+              type === 'company'
+                ? 'VERGİ NUMARASI (İSTEĞE BAĞLI)'
+                : type === 'personel'
+                  ? 'TC KİMLİK NUMARASI (İSTEĞE BAĞLI)'
+                  : 'TC/VERGİ NUMARASI (İSTEĞE BAĞLI)'
+            }
             placeholder="Numara"
             value={taxNumber}
             onChangeText={setTaxNumber}

@@ -22,9 +22,14 @@ import {
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import {
+  COUNTERPARTY_TYPES,
+  COUNTERPARTY_TYPE_LABEL_PLURAL,
   getCounterpartyBalances,
+  getCounterpartyType,
+  getCounterpartyTypeLabel,
   listCounterparties,
   type Counterparty,
+  type CounterpartyType,
 } from '@/features/counterparties/api';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
@@ -35,12 +40,11 @@ import { formatMinorAmount } from '@/utils/money';
 
 const PAGE_SIZE = 10;
 
-type TypeFilterKey = 'all' | 'individual' | 'company';
+type TypeFilterKey = 'all' | CounterpartyType;
 
 const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
   { key: 'all', label: 'Tümü' },
-  { key: 'individual', label: 'Kişiler' },
-  { key: 'company', label: 'Firmalar' },
+  ...COUNTERPARTY_TYPES.map((key) => ({ key, label: COUNTERPARTY_TYPE_LABEL_PLURAL[key] })),
 ];
 
 export default function CounterpartiesScreen() {
@@ -69,7 +73,7 @@ export default function CounterpartiesScreen() {
   const filtered = useMemo(() => {
     const query = normalizeForSearch(search);
     return counterparties.filter((counterparty) => {
-      if (typeFilter !== 'all' && counterparty.type !== typeFilter) return false;
+      if (typeFilter !== 'all' && getCounterpartyType(counterparty.type) !== typeFilter) return false;
       return (
         matchesSearch(counterparty.name, query) ||
         matchesSearch(counterparty.phone, query) ||
@@ -93,23 +97,22 @@ export default function CounterpartiesScreen() {
   const totals = useMemo(() => {
     let receivableMinor = 0;
     let payableMinor = 0;
-    let individualCount = 0;
-    let companyCount = 0;
+    // Tür sayacı COUNTERPARTY_TYPES üzerinden kurulur; yeni bir tür eklendiğinde
+    // "diğer her şey kişidir" varsayımıyla yanlış kovaya düşmez.
+    const typeCounts: Record<CounterpartyType, number> = { individual: 0, company: 0, personel: 0 };
 
     for (const counterparty of counterparties) {
       const net = balances?.[counterparty.id] ?? 0;
       if (net > 0) receivableMinor += net;
       if (net < 0) payableMinor += -net;
-      if (counterparty.type === 'company') companyCount += 1;
-      else individualCount += 1;
+      typeCounts[getCounterpartyType(counterparty.type)] += 1;
     }
 
     return {
       receivableMinor,
       payableMinor,
       netMinor: receivableMinor - payableMinor,
-      individualCount,
-      companyCount,
+      typeCounts,
     };
   }, [counterparties, balances]);
 
@@ -134,7 +137,7 @@ export default function CounterpartiesScreen() {
       >
         <Stack gap="lg">
           <ScreenHeader
-            title="Kişi / Firmalar"
+            title="Cariler"
             left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
             right={{
               icon: 'add',
@@ -146,8 +149,7 @@ export default function CounterpartiesScreen() {
 
           <CounterpartyHero
             totalCount={counterparties.length}
-            individualCount={totals.individualCount}
-            companyCount={totals.companyCount}
+            typeCounts={totals.typeCounts}
             receivableMinor={totals.receivableMinor}
             payableMinor={totals.payableMinor}
             netMinor={totals.netMinor}
@@ -155,7 +157,7 @@ export default function CounterpartiesScreen() {
 
           <FinanceFilterCard
             title="CARİ TÜRÜ"
-            description="Listede görmek istediğiniz kişi veya firma türünü seçin."
+            description="Listede görmek istediğiniz cari türünü seçin."
             options={TYPE_FILTERS}
             value={typeFilter}
             onChange={setTypeFilter}
@@ -259,8 +261,7 @@ export default function CounterpartiesScreen() {
 
 interface CounterpartyHeroProps {
   totalCount: number;
-  individualCount: number;
-  companyCount: number;
+  typeCounts: Record<CounterpartyType, number>;
   receivableMinor: number;
   payableMinor: number;
   netMinor: number;
@@ -268,8 +269,7 @@ interface CounterpartyHeroProps {
 
 function CounterpartyHero({
   totalCount,
-  individualCount,
-  companyCount,
+  typeCounts,
   receivableMinor,
   payableMinor,
   netMinor,
@@ -376,7 +376,11 @@ function CounterpartyHero({
             valueColor="danger"
             right
           />
-          <HeroMetric label="KİŞİ / FİRMA" value={`${individualCount} / ${companyCount}`} caption="Cari dağılımı" />
+          <HeroMetric
+            label="KİŞİ / FİRMA / PERSONEL"
+            value={`${typeCounts.individual} / ${typeCounts.company} / ${typeCounts.personel}`}
+            caption="Cari dağılımı"
+          />
         </View>
       </Stack>
     </Card>
@@ -432,7 +436,6 @@ function HeroMetric({ label, value, caption, valueColor, right, bottom }: HeroMe
 
 function CounterpartyRow({ counterparty, netMinor }: { counterparty: Counterparty; netMinor: number }) {
   const theme = useTheme();
-  const isCompany = counterparty.type === 'company';
   const detail = counterparty.phone || counterparty.email || 'Bilgi eklenmedi';
   const amountPrefix = netMinor > 0 ? '+' : netMinor < 0 ? '-' : '';
   const amountColor = netMinor > 0 ? theme.colors.success : netMinor < 0 ? theme.colors.danger : theme.colors.textSecondary;
@@ -458,7 +461,7 @@ function CounterpartyRow({ counterparty, netMinor }: { counterparty: Counterpart
           {counterparty.name}
         </Text>
         <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {isCompany ? 'Firma' : 'Kişi'} · {detail}
+          {getCounterpartyTypeLabel(counterparty.type)} · {detail}
         </Text>
       </Stack>
 
