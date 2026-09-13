@@ -141,9 +141,9 @@
           "clientToken": "5a4778ab051f8c37b9048bc3ec5c0f69",
           "displayName": "Vademde",
           "scheme": "fb1606561071252139",
-          "isAutoInitEnabled": true,
-          "autoLogAppEventsEnabled": true,
-          "advertiserIDCollectionEnabled": true
+          "isAutoInitEnabled": false,
+          "autoLogAppEventsEnabled": false,
+          "advertiserIDCollectionEnabled": false
         }
       ],
       [
