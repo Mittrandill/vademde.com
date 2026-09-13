@@ -12,9 +12,11 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | build 27 | App Store Connect'e yüklendi, işleniyor | 2026-09-13 |
+| iOS | build 28 | App Store Connect'te, incelemeye hazır | 2026-09-13 |
 
 1.0.2 yayındayken (build 26) alınan sürüm — Android için ayrı bir build alınmadı.
+**Build 27 kullanılmadı**: App Store Connect tarafından "Invalid Binary" (ITMS-91064)
+olarak reddedildi, build 28 ile devam edildi (bkz. aşağıdaki teknik değişiklikler).
 
 ### Kullanıcıya görünen değişiklikler
 
@@ -28,8 +30,7 @@ Bu sürümde arayüzde görünen bir değişiklik yok.
   için seçilebilir app listesine almıyordu.
   - `app.json`: `react-native-fbsdk-next` plugin'i (appID, clientToken, scheme),
     `expo-tracking-transparency` plugin'i (Türkçe ATT izin metni), `SKAdNetworkItems`
-    (Meta'nın iki resmi kimliği), `privacyManifests.NSPrivacyTracking: true` +
-    reklam amaçlı Device ID toplama beyanı.
+    (Meta'nın iki resmi kimliği).
   - `services/metaAds.ts` (yeni) — App Tracking Transparency izni uygulama açılışında
     isteniyor, sonuç `Settings.setAdvertiserTrackingEnabled`/`setAdvertiserIDCollectionEnabled`
     ile SDK'ya bildiriliyor. `isAutoInitEnabled`/`autoLogAppEventsEnabled`/
@@ -39,14 +40,23 @@ Bu sürümde arayüzde görünen bir değişiklik yok.
     Kuralları 5.1.2 ihlali riski), commit `4651473` ile düzeltildi.
   - Client token App Dashboard > Settings > Advanced'dan alındı; App Secret'ten farklı
     olarak client-side/public bir değer, koda gömülmesi Meta'nın kendi tasarımı.
+- **ITMS-91064 düzeltmesi** (`ed9a3f3`) — build 27, `app.json`'daki
+  `privacyManifests.NSPrivacyTracking: true` + boş `NSPrivacyTrackingDomains`
+  kombinasyonu yüzünden "Invalid Binary" aldı. FBSDK pod'u zaten kendi geçerli
+  `PrivacyInfo.xcprivacy`'sinde kendi tracking/domain beyanını taşıyor; bunu kendi
+  üst seviye manifest'imizde tekrar deklare etmeye gerek yoktu.
+  `NSPrivacyTracking` build 27 öncesindeki haline (`false`) döndürüldü, eklenen
+  Device ID veri tipi girdisi kaldırıldı. Kullanıcıya gösterilen asıl tracking beyanı
+  zaten App Store Connect'teki App Privacy formu (nutrition label) — o formdan
+  bağımsız, ondan etkilenmedi.
 - Meta App ID: `1606561071252139`.
 
 ### Açık takip maddeleri
 
-- [ ] App Store Connect'te sürüm 1.0.3 oluşturulup build 27 seçilecek, "Yenilikler"
-      girilip incelemeye gönderilecek (`eas submit` yalnızca yükler, göndermez).
-- [ ] **App Privacy (nutrition label) formu güncellenmeli** — artık IDFA toplanıyor,
-      "Verileriniz sizi takip etmek için kullanılıyor" beyanı eklenmeden Apple reddedebilir.
+- [x] App Store Connect'te sürüm 1.0.3 oluşturulup build 28 seçildi, incelemeye
+      hazır duruma getirildi.
+- [x] App Privacy (nutrition label) formu güncellendi — Device ID / Third-Party
+      Advertising / Tracking: Yes, Linked: Hayır.
 - [ ] Android tarafında `advertiserTrackingEnabled` şu an koşulsuz `true` — KVKK/GDPR
       için ayarlarda açık bir onay anahtarı yok. Android'de de Meta reklamı verilecekse
       bu eklenmeli.
