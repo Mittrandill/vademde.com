@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vademde",
     "slug": "vademde",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "vademde",
@@ -14,23 +14,41 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "tr",
-        "CFBundleLocalizations": ["tr"]
+        "CFBundleLocalizations": [
+          "tr"
+        ],
+        "SKAdNetworkItems": [
+          { "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork" },
+          { "SKAdNetworkIdentifier": "n38lu8286q.skadnetwork" }
+        ]
       },
       "privacyManifests": {
-        "NSPrivacyTracking": false,
+        "NSPrivacyTracking": true,
         "NSPrivacyTrackingDomains": [],
         "NSPrivacyCollectedDataTypes": [
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
-            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
           },
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeFinancialInfo",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
-            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": true,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising"
+            ]
           }
         ]
       }
@@ -42,8 +60,12 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.CAMERA"],
-      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -110,6 +132,24 @@
             "ios": "./assets/app-icons/mor.png",
             "android": "./assets/app-icons/mor.png"
           }
+        }
+      ],
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "1606561071252139",
+          "clientToken": "5a4778ab051f8c37b9048bc3ec5c0f69",
+          "displayName": "Vademde",
+          "scheme": "fb1606561071252139",
+          "isAutoInitEnabled": true,
+          "autoLogAppEventsEnabled": true,
+          "advertiserIDCollectionEnabled": true
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "Size daha uygun reklamlar gösterebilmemiz ve reklam performansını ölçebilmemiz için bu izne ihtiyacımız var."
         }
       ]
     ],

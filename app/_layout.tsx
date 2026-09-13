@@ -8,6 +8,7 @@ import { useSession } from '@/features/auth/useSession';
 import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
 import { configurePurchases, logOutPurchases } from '@/services/purchases';
+import { initMetaAds } from '@/services/metaAds';
 import { registerPushToken, unregisterCurrentPushToken } from '@/services/pushToken';
 import { useWorkspaceRealtime } from '@/services/realtime';
 import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
@@ -130,6 +131,9 @@ export default function RootLayout() {
     });
     const detachFocusManager = attachFocusManager();
     const detachAuthDeepLinks = attachAuthDeepLinkHandler();
+    initMetaAds().catch((error) => {
+      console.warn('Meta Ads SDK başlatılamadı', error);
+    });
     return () => {
       detachFocusManager();
       detachAuthDeepLinks();
