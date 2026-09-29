@@ -100,6 +100,10 @@ Elektrik, su, internet ve telefon belgelerinde kurum, abone/tesisat no, dönem, 
 
 Banka, gönderen, alıcı, IBAN'lar, tarih/saat, tutar, açıklama, referans ve masraf çıkarılır. Dekont gelecekteki borç değil, gerçekleşmiş gelir/gider veya borç ödeme/tahsilat hareketidir.
 
+**Sonuç ekranı ve kayıt akışı:** Sınıflandırma `banka_dekontu` çıktığında uygulama kredi/fiş inceleme ekranı yerine ödeme sonuç ekranını (`app/documents/[id]/receipt.tsx`) açar: okunan alanlar (`extracted_summary.receipt`), yön (yaptığım/aldığım ödeme), tutar ve tarih düzenlenebilir. `features/receipts/api.ts findReceiptMatches` açık borç/alacaklar arasından tutar (taksit ya da kalan) ve karşı taraf adıyla en fazla 3 eşleşme önerir. Kullanıcı bir eşleşmeyi seçerse `recordPayment` ile ödeme yazılır; "Eşleşme yok" seçerse hesap seçilerek bağımsız gider/gelir hareketi yazılır. Kullanıcı "Ödeme olarak kaydet"e basmadan hiçbir kayıt oluşmaz.
+
+**Dekont arşivi (Plus):** Plus/İşletme planında dekont dosyası "işlem sonrası sakla" tercihine bakılmadan saklanır ve `payments.receipt_document_id` ile ödemeye bağlanır; ödeme satırındaki ataç simgesi dosyayı tek dokunuşla açar. Tüm dekontlar **Belge Arşivi** ekranında (`app/documents/archive.tsx`, Daha Fazla menüsü) aylara göre listelenir ve aranabilir; cari sayfasının Genel sekmesinde o cariye ait son dekontlar ve "Tümünü gör" bağlantısı bulunur. Ücretsiz planda dekont yine okunup ödeme olarak kaydedilebilir ama dosya silinir ve ödemeye bağlanmaz. Ödeme eklerken/düzenlerken isteğe bağlı dekont (fotoğraf, galeri, PDF) elle de eklenebilir (`components/finance/ReceiptAttachField.tsx`).
+
 ### 7.8 Makbuz ve fiş
 
 İşletme, tarih, saat, toplam, KDV, ödeme yöntemi, ürün/hizmet satırları, fiş no ve vergi no çıkarılır; gerçekleşmiş gelir veya gider taslağı hazırlanır.

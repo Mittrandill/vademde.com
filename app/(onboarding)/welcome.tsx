@@ -1,36 +1,65 @@
 import { useRef, useState } from 'react';
 import { Dimensions, ScrollView, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Pressable, Row, Stack, Text } from '@/components/primitives';
-import { OnboardingScanIllustration } from '@/components/brand/OnboardingScanIllustration';
-import { OnboardingReminderIllustration } from '@/components/brand/OnboardingReminderIllustration';
-import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWorkspaceIllustration';
+import { Button, Pressable, Row, Stack, Text } from '@/components/primitives';
+import {
+  ReviewScene,
+  ScanHeroScene,
+  ScanningScene,
+  TeamScene,
+  TrialScene,
+  type SceneProps,
+} from '@/components/onboarding/scenes';
 import { useOnboardingStore } from '@/store/onboardingStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// docs/03-bilgi-mimarisi-ekranlar.md §5.2 — "Üç kısa değer önerisi ekranı". Her sayfa
-// tek bir özgün illüstrasyon + kısa mesajla tek bir yeteneği anlatır (docs/08 §12.3).
-const PAGES = [
+interface OnboardingPage {
+  Scene: (props: SceneProps) => React.JSX.Element;
+  eyebrow: string;
+  title: string;
+  body: string;
+}
+
+// docs/03-bilgi-mimarisi-ekranlar.md §5.2 — kısa değer önerisi ekranları yalnızca ilk açılışta
+// gösterilir. OCR ürünün ana kayıt yöntemidir (docs/00), bu yüzden akış taramayla açılır:
+// tara → okunur → sen onaylarsın; ardından çalışma alanı/ekip ve 7 gün ücretsiz deneme.
+// Son sahne yalnızca teklifi anlatır: satın alma oturum gerektirdiği için fiyatlar ve satın
+// alma, kayıttan sonra açılan paywall'da (app/paywall/index.tsx) RevenueCat fiyatlarıyla sunulur.
+const PAGES: OnboardingPage[] = [
   {
-    Illustration: OnboardingScanIllustration,
-    title: 'Belgeni Tara',
-    body: 'Çek, senet, fatura ve kredi ödeme planlarını otomatik okuruz.',
+    Scene: ScanHeroScene,
+    eyebrow: 'Belge Tara',
+    title: 'Fotoğrafını çek, yazmayı unut.',
+    body: 'Çek, senet veya fatura. Tek dokunuşla kamera açılır, gerisini Vademde okur.',
   },
   {
-    Illustration: OnboardingReminderIllustration,
-    title: 'Vadelerini Kaçırma',
-    body: 'Yaklaşan ödemeleri hatırlatalım, gecikmeleri önleyelim.',
+    Scene: ScanningScene,
+    eyebrow: 'Akıllı okuma',
+    title: 'Saniyeler içinde okunur.',
+    body: 'Tutar, vade ve karşı taraf kendiliğinden ayrıştırılır. Elle yazmak yok.',
   },
   {
-    Illustration: OnboardingWorkspaceIllustration,
-    title: 'Borcun da Alacağın da Tek Yerde',
-    body: 'Kişisel ve işletme hesaplarını ayrı çalışma alanlarında, net bir bakiyeyle takip et.',
+    Scene: ReviewScene,
+    eyebrow: 'Senin onayınla',
+    title: 'Okunan her şey önüne gelir.',
+    body: 'Alanları sen görür, gerekirse düzeltir, onaylarsın. Okuma tutmazsa manuel giriş hep açık.',
+  },
+  {
+    Scene: TeamScene,
+    eyebrow: 'Çalışma alanları ve ekip',
+    title: 'Kişisel ve iş, ayrı ayrı.',
+    body: 'Her çalışma alanının verisi tamamen ayrıdır. Ekibini davet et, kimin düzenleyeceğini sen seç.',
+  },
+  {
+    Scene: TrialScene,
+    eyebrow: 'Vademde Plus',
+    title: 'İlk 7 gün bizden.',
+    body: 'Tüm Plus özellikleri açık. Deneme süresince ücret alınmaz.',
   },
 ];
 
@@ -64,7 +93,7 @@ export default function WelcomeScreen() {
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Row style={{ justifyContent: 'flex-end', paddingHorizontal: theme.screenEdge.standard, height: theme.touchTarget.minimum }}>
         {!isLastPage ? (
-          <Pressable onPress={finish} hitSlop={8}>
+          <Pressable accessibilityRole="button" onPress={finish} hitSlop={8}>
             <Text variant="body" color="textSecondary">
               Atla
             </Text>
@@ -80,67 +109,63 @@ export default function WelcomeScreen() {
         onMomentumScrollEnd={handleScroll}
         style={{ flex: 1 }}
       >
-        {PAGES.map(({ Illustration, title, body }, index) => (
-          <Stack
-            key={index}
-            align="center"
-            gap="xl"
-            style={{ width: SCREEN_WIDTH, paddingHorizontal: theme.screenEdge.standard, justifyContent: 'center' }}
+        {PAGES.map(({ Scene, eyebrow, title, body }, index) => (
+          // Sahne + metin küçük ekranlara ya da büyük yazı tipine sığmazsa dikey kaydırılır;
+          // yer varsa içerik dikeyde ortalanır. Alttaki buton her koşulda erişilebilir kalır.
+          <ScrollView
+            key={title}
+            style={{ width: SCREEN_WIDTH }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: 'center',
+              gap: theme.spacing.lg,
+              paddingHorizontal: theme.screenEdge.standard,
+              paddingVertical: theme.spacing.sm,
+            }}
           >
-            <Illustration size={200} />
-            <Stack gap="xs" align="center">
-              <Text variant="pageTitle" style={{ textAlign: 'center' }}>
-                {title}
+            <Scene active={page === index} />
+            <Stack gap="xs">
+              <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '700', letterSpacing: 1.2 }}>
+                {eyebrow.toLocaleUpperCase('tr-TR')}
               </Text>
-              <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
+              <Text variant="pageTitle">{title}</Text>
+              <Text variant="body" color="textSecondary">
                 {body}
               </Text>
             </Stack>
-          </Stack>
+          </ScrollView>
         ))}
       </ScrollView>
 
-      <Row
+      <Stack
+        gap="sm"
         style={{
-          justifyContent: 'space-between',
-          alignItems: 'center',
           paddingHorizontal: theme.screenEdge.standard,
-          paddingBottom: theme.spacing.lg,
-          paddingTop: theme.spacing.md,
+          paddingBottom: theme.spacing.md,
+          paddingTop: theme.spacing.sm,
         }}
       >
-        <Row gap="xs">
+        <Row gap="xs" style={{ justifyContent: 'center' }}>
           {PAGES.map((_, index) => (
             <Stack
               key={index}
               style={{
-                width: index === page ? 20 : 8,
-                height: 8,
+                width: index === page ? 22 : 6,
+                height: 6,
                 borderRadius: theme.radius.pill,
                 backgroundColor: index === page ? theme.colors.brandPrimary : theme.colors.border,
               }}
             />
           ))}
         </Row>
-
-        <Pressable
-          onPress={goNext}
-          accessibilityRole="button"
-          accessibilityLabel={isLastPage ? 'Başla' : 'Sonraki'}
-          style={{
-            width: theme.buttonHeight.primary,
-            height: theme.buttonHeight.primary,
-            borderRadius: theme.radius.pill,
-            backgroundColor: theme.colors.surfaceElevated,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="arrow-forward" size={theme.iconSize.xl} color={theme.colors.textPrimary} />
-        </Pressable>
-      </Row>
+        <Button label={isLastPage ? 'Başla' : 'Devam'} onPress={goNext} />
+        {isLastPage ? (
+          <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
+            Deneme teklifi hesabını oluşturduktan sonra sunulur.
+          </Text>
+        ) : null}
+      </Stack>
     </SafeAreaView>
   );
 }

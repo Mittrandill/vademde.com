@@ -58,6 +58,11 @@ const PLAN_ERROR_MESSAGES: { code: string; title: string; message: string }[] = 
     message: 'Ekip üyesi davet etmek İşletme planında kullanılabilir.',
   },
   {
+    code: 'RECEIPT_ARCHIVE_PLAN_REQUIRED',
+    title: 'Belge arşivi',
+    message: 'Ödemelere dekont eklemek ve arşivlemek Plus planında kullanılabilir.',
+  },
+  {
     code: 'TEAM_LIMIT_REACHED',
     title: 'Ekip üyesi limiti',
     message: 'Bu çalışma alanı planınızın ekip üyesi limitine ulaştı.',

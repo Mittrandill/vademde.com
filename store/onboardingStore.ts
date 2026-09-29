@@ -5,6 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 interface OnboardingState {
   hasSeenWelcome: boolean;
   setHasSeenWelcome: (value: boolean) => void;
+  // Kayıttan sonra ilk çalışma alanı kurulunca paywall (7 gün ücretsiz deneme teklifi) bir kez
+  // açılır (bkz. app/workspace-setup/index.tsx); bu bayrak teklifin tekrar tekrar çıkmasını önler.
+  hasSeenTrialOffer: boolean;
+  setHasSeenTrialOffer: (value: boolean) => void;
 }
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.2 — üç kısa değer önerisi ekranı yalnızca ilk
@@ -16,6 +20,8 @@ export const useOnboardingStore = create<OnboardingState>()(
     (set) => ({
       hasSeenWelcome: false,
       setHasSeenWelcome: (value) => set({ hasSeenWelcome: value }),
+      hasSeenTrialOffer: false,
+      setHasSeenTrialOffer: (value) => set({ hasSeenTrialOffer: value }),
     }),
     {
       name: 'vademde-onboarding',

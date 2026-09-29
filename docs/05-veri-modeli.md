@@ -16,7 +16,7 @@
 | transactions | Gerçekleşmiş para hareketleri |
 | obligations | Vadeli borç ve alacaklar |
 | installments | Taksit satırları |
-| payments | Kısmi/tam ödeme ve tahsilatlar |
+| payments | Kısmi/tam ödeme ve tahsilatlar (`receipt_document_id` → `financial_documents`, ON DELETE SET NULL: ödemeye bağlı dekont; birden çok ödeme aynı dekonta bağlanabilir) |
 | recurrence_rules | Düzenli işlem kuralları |
 | reminders | Vade bildirimleri |
 | tags / entity_tags | Etiketleme |

@@ -25,6 +25,8 @@ export interface RecordPaymentInput {
   // Geçmiş tarihli taksitleri OCR sırasında otomatik "ödendi" işaretlerken (bkz.
   // review.tsx) gerçek vade tarihiyle kaydetmek için; verilmezse DB varsayılanı (şimdi) kullanılır.
   paid_at?: string;
+  // Ödemeye bağlı dekont (financial_documents.id) — Plus'a özeldir, bkz. features/receipts/api.ts.
+  receipt_document_id?: string | null;
   // Hesap seçildiyse hesabın bakiyesine yansısın diye ilişkili bir transaction
   // oluşturmak için gereken bağlam (bkz. accounts bakiyesi transactions'tan hesaplanır).
   obligationDirection: 'payable' | 'receivable';
@@ -103,6 +105,8 @@ export interface UpdatePaymentInput {
   paid_at: string;
   notes?: string | null;
   account_id?: string | null;
+  /** undefined = mevcut dekont bağlantısı değişmez; null = dekontu ödemeden ayırır. */
+  receipt_document_id?: string | null;
   obligationDirection: 'payable' | 'receivable';
   obligationTitle: string;
   obligationCategoryId?: string | null;
@@ -155,6 +159,7 @@ export async function updatePayment(payment: Payment, input: UpdatePaymentInput)
       notes: input.notes ?? null,
       account_id: input.account_id ?? null,
       transaction_id: transactionId,
+      ...(input.receipt_document_id !== undefined ? { receipt_document_id: input.receipt_document_id } : {}),
     })
     .eq('id', payment.id)
     .select('*')

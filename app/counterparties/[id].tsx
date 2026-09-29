@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, InteractionManager } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -22,6 +23,7 @@ import {
   FinanceDetailTabs,
 } from '@/components/finance/FinanceDetailBlocks';
 import { Amount } from '@/components/finance/Amount';
+import { ReceiptRow } from '@/components/finance/ReceiptRow';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { DueBreakdown } from '@/components/finance/DueBreakdown';
@@ -39,6 +41,7 @@ import {
   type ObligationWithRelations,
 } from '@/features/obligations/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
+import { listReceiptArchive, useDocumentArchiveAccess } from '@/features/receipts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
@@ -147,6 +150,15 @@ export default function CounterpartyDetailScreen() {
       listTransactions({ workspaceId: activeWorkspaceId as string, counterpartyId: id as string, pageSize: 20 }),
     enabled,
   });
+
+  // Belge arşivi (Plus): bu cariyle ilgili ödemelere eklenmiş dekontlar (bkz. features/receipts/api.ts).
+  const archive = useDocumentArchiveAccess();
+  const receiptsQuery = useQuery({
+    queryKey: [activeWorkspaceId, 'receipt-archive', id],
+    queryFn: () => listReceiptArchive({ workspaceId: activeWorkspaceId as string, counterpartyId: id as string }),
+    enabled: enabled && archive.allowed,
+  });
+  const receipts = receiptsQuery.data ?? [];
 
   const counterparty = counterpartyQuery.data;
   const ledger = ledgerQuery.data;
@@ -280,11 +292,47 @@ export default function CounterpartyDetailScreen() {
       <FinanceDetailTabs options={tabOptions} value={tab} onChange={setTab} />
 
       {tab === 'genel' ? (
-        <FinanceDetailInfoCard
-          title="Cari Bilgileri"
-          description="İletişim, tür ve finansal özet"
-          rows={infoRows}
-        />
+        <Stack gap="md">
+          {!archive.allowed && !archive.isLoading ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')}>
+              <Card>
+                <Row gap="sm" align="center">
+                  <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="cardTitle">Ödeme dekontları</Text>
+                    <Text variant="caption" color="textSecondary">
+                      Dekontları ödemeye ekleyip arşivlemek Plus planında.
+                    </Text>
+                  </Stack>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                </Row>
+              </Card>
+            </Pressable>
+          ) : receipts.length > 0 ? (
+            <Stack gap="xs">
+              <SectionHeader title="Ödeme Dekontları" />
+              {receipts.slice(0, 3).map((item) => (
+                <ReceiptRow key={item.documentId} item={item} hideCounterparty />
+              ))}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/documents/archive', params: { counterpartyId: id as string } })}
+              >
+                <Row gap="xs" align="center" style={{ justifyContent: 'center', paddingVertical: theme.spacing.xs }}>
+                  <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+                    Tümünü gör ({receipts.length})
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={theme.colors.brandPrimary} />
+                </Row>
+              </Pressable>
+            </Stack>
+          ) : null}
+          <FinanceDetailInfoCard
+            title="Cari Bilgileri"
+            description="İletişim, tür ve finansal özet"
+            rows={infoRows}
+          />
+        </Stack>
       ) : tab === 'kayitlar' ? (
         <Stack gap="md">
           {openObligations.length === 0 ? (

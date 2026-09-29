@@ -8,6 +8,54 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.4 — Hazırlanıyor (2026-09-29)
+
+| Platform | Build | Durum | Gönderim |
+|---|---|---|---|
+| iOS | build 30 | EAS build tamam, App Store Connect'e otomatik yükleme başlatıldı; TestFlight'ta işlenmesi bekleniyor | 2026-09-29 |
+
+Build 29 iptal edildi (dashboard halkası düzeltmesinin eski hâlini taşıyordu, `--auto-submit`
+ile gönderilmeden önce durduruldu). 1.0.3 (build 28) yayında, dokunulmadı.
+
+### Kullanıcıya görünen değişiklikler
+
+- **Yeni karşılama akışı:** 5 sahneli, animasyonlu (tara → okunur → sen onaylarsın → çalışma
+  alanı ve ekip → 7 gün ücretsiz).
+- **Yeni paywall:** aylık/yıllık geçişi, plan seçimi, karşılaştırma tablosu; fiyatlar RevenueCat'ten.
+  7 gün ücretsiz deneme yalnızca App Store kullanıcıya uygun bulursa gösterilir. Kayıttan sonra
+  ilk çalışma alanı kurulunca paywall bir kez açılır.
+- **Ödeme dekontu (Plus):** ödemeye dekont/fotoğraf/PDF eklenir, ödeme satırındaki ataçla açılır;
+  taranan banka dekontu için "Ödeme Dekontu" sonuç ekranı (eşleşme önerisi, onayla kaydet).
+- **Belge Arşivi (Plus):** Daha Fazla → Belge Arşivi ve cari sayfasında o cariye ait dekontlar.
+- **Yeni sürüm uyarısı:** App Store'da daha yeni sürüm varsa uygulama açılışında bildirir (yalnızca iOS).
+- **Düzeltmeler:** altın (çeyrek/yarım/tam) birimli tutarlar artık doğru gösterilip kaydediliyor;
+  dashboard bakiye kartında büyük tutar/yazı tipinde halka taşması giderildi.
+
+### Teknik değişiklikler (release notes'a girmez)
+
+- `payments.receipt_document_id` + `enforce_payment_receipt_plan` trigger'ı
+  (`RECEIPT_ARCHIVE_PLAN_REQUIRED`); migration `20260929120000_add_payment_receipts.sql` canlıya
+  uygulandı. Yardımcı fonksiyonların RPC erişimi kapatıldı (ikinci migration
+  `revoke_workspace_has_document_archive_rpc`, repodaki dosyaya katlandı).
+- `process-document` Edge Function v21: `receiptDetails` şeması, dekont prompt kuralları, Plus
+  planında dekont dosyasının saklanması. Gemini dekont sınıflandırması gerçek dekontla henüz test edilmedi.
+- `utils/money.ts formatMinorAmount` kıymetli maden kodlarını `formatValueUnitAmount`'a yönlendirir;
+  hareket ve hesap formları birim hassasiyetine göre ayrıştırır (sikkelerde ×100 hatası giderildi).
+- `services/appUpdate.ts`: iTunes Lookup ile sürüm kontrolü, aynı sürüm için 24 saatte bir uyarı.
+- `services/purchases.ts`: `getTrialEligibility` (RevenueCat uygunluk kontrolü) ve `freeTrialDays`.
+- App Store Connect'te dört aboneliğe (Plus/İşletme, aylık/yıllık) "1 hafta ücretsiz" tanıtım teklifi
+  eklendi (29 Eylül 2026'dan itibaren, 175 ülke, bitiş yok). Tek abonelik grubu olduğu için deneme
+  kullanıcı başına bir kez sunulur.
+
+### Açık takip maddeleri
+
+- [ ] TestFlight'ta dashboard halkasını %100 ve %135 yazı tipinde doğrula.
+- [ ] Gerçek bir banka dekontuyla Gemini sınıflandırmasını ve dekont sonuç ekranını dene.
+- [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
+- [ ] App Store Connect'te 1.0.4 sürümünü oluştur, build 30'u seç, "Yenilikler" ve ekran görüntülerini gir.
+
+---
+
 ## 1.0.3 — İncelemede (2026-09-13)
 
 | Platform | Build | Durum | Gönderim |

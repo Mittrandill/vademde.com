@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Alert, Animated, Platform, ScrollView, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -9,7 +9,7 @@ import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, Divider, Pressable, Row, SectionHeader, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import {
   currentPeriodMonth,
   getAllPlanLimits,
@@ -18,7 +18,13 @@ import {
   type PlanCode,
   type PlanLimits,
 } from '@/features/subscriptions/api';
-import { getOfferings, purchasePackage, restorePurchases } from '@/services/purchases';
+import {
+  freeTrialDays,
+  getOfferings,
+  getTrialEligibility,
+  purchasePackage,
+  restorePurchases,
+} from '@/services/purchases';
 import { queryKeys } from '@/services/queryKeys';
 
 type BillingPeriod = 'monthly' | 'yearly';
@@ -29,7 +35,6 @@ const PLAN_LABELS: Record<PlanCode, string> = {
   isletme: 'Vademde İşletme',
 };
 
-// Merdivendeki dar etiket sütunu için kısa ad.
 const PLAN_SHORT_LABELS: Record<PlanCode, string> = {
   free: 'Ücretsiz',
   plus: 'Plus',
@@ -49,28 +54,19 @@ const PLAN_CTA_LABELS: Record<PlanCode, string> = {
   isletme: "İşletme'ye geç",
 };
 
-// Merdivende ücretsiz planın çubuğu (20 belge) İşletme'nin yanında görünmez olurdu;
-// oran doğru kalsın diye ölçek doğrusal tutulur, yalnızca alt sınır uygulanır.
-const MIN_BAR_RATIO = 0.04;
+const TABLE_LABEL_WIDTH_FLEX = 1;
+const TABLE_COLUMN_WIDTH = 64;
 
-// docs/10-abonelik-gelir-modeli.md — özellik listesi plan_limits alanlarından türetilir.
-// Etiketler kullanıcının tanıdığı adlarla yazılır (ör. "audit log" değil, "değişiklik günlüğü").
-function buildFeatures(limits: PlanLimits): string[] {
-  const features: string[] = [`Ayda ${limits.monthly_ocr_quota} belge okuma`];
-  features.push(
-    limits.max_personal_workspaces > 1
-      ? `${limits.max_personal_workspaces} çalışma alanı`
-      : '1 kişisel çalışma alanı'
-  );
-  if (limits.max_team_members) features.push(`${limits.max_team_members} ekip üyesi`);
-  if (limits.advanced_reports) features.push('Gelişmiş raporlar');
-  if (limits.document_archive) features.push('Belge arşivi');
-  if (limits.recurring_transactions) features.push('Düzenli işlemler');
-  if (limits.unlimited_export) features.push('Sınırsız dışa aktarma');
-  if (limits.face_id) features.push('Face ID kilidi');
-  if (limits.audit_log) features.push('Değişiklik günlüğü');
-  return features;
-}
+// Karşılaştırma tablosu plan_limits alanlarından türetilir (docs/10-abonelik-gelir-modeli.md);
+// etiketler kullanıcının tanıdığı adlarla yazılır (ör. "audit log" değil).
+const COMPARISON_ROWS: { label: string; value: (limits: PlanLimits) => string }[] = [
+  { label: 'Belge tarama / ay', value: (l) => String(l.monthly_ocr_quota) },
+  { label: 'Çalışma alanı', value: (l) => String(l.max_personal_workspaces) },
+  { label: 'Ekip üyesi', value: (l) => (l.max_team_members ? String(l.max_team_members) : '—') },
+  { label: 'Gelişmiş raporlar', value: (l) => (l.advanced_reports ? 'Var' : '—') },
+  { label: 'Belge arşivi', value: (l) => (l.document_archive ? 'Var' : '—') },
+  { label: 'Manuel giriş', value: () => 'Var' },
+];
 
 function formatPrice(value: number, currencyCode: string): string {
   return new Intl.NumberFormat('tr-TR', {
@@ -80,33 +76,14 @@ function formatPrice(value: number, currencyCode: string): string {
   }).format(value);
 }
 
-// Yıllık planın aylık plana göre kazancı; ikisi de mağazadan gelmediyse gösterilmez.
+// Yıllık planın aylık plana göre kazancı; oran sabit yazılmaz, mağaza fiyatlarından hesaplanır
+// (fiyat değişirse rozet de kendiliğinden doğru kalır). İkisi de yoksa gösterilmez.
 function yearlySavingPercent(offering: PurchasesOffering | undefined): number | null {
   const monthly = offering?.monthly?.product.price;
   const annual = offering?.annual?.product.price;
   if (!monthly || !annual) return null;
   const percent = Math.round((1 - annual / (monthly * 12)) * 100);
   return percent > 0 ? percent : null;
-}
-
-// docs/08-tasarim-sistemi.md §12.19 — hareket bilgi taşımaz, destekler; sistem
-// ayarında hareket azaltma açıksa çubuklar animasyonsuz son haliyle çizilir.
-function useReduceMotion(): boolean {
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (mounted) setReduceMotion(enabled);
-    });
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
-
-  return reduceMotion;
 }
 
 export default function PaywallScreen() {
@@ -149,9 +126,6 @@ export default function PaywallScreen() {
     | undefined;
   const selectedPlan = chosenPlan ?? defaultPlan ?? null;
 
-  const selectedLimits = paidPlans.find((limits) => limits.plan === selectedPlan);
-  const maxQuota = planLimits.reduce((max, limits) => Math.max(max, limits.monthly_ocr_quota), 0);
-
   function resolvePackage(plan: PlanCode): PurchasesPackage | null {
     if (plan === 'free') return null;
     const offering = offeringsQuery.data?.all[plan];
@@ -162,6 +136,26 @@ export default function PaywallScreen() {
   const selectedPackage = selectedPlan ? resolvePackage(selectedPlan) : null;
   const savingPercent = selectedPlan ? yearlySavingPercent(offeringsQuery.data?.all[selectedPlan]) : null;
   const isCurrentSelected = selectedPlan === currentPlan;
+  const product = selectedPackage?.product;
+
+  // Tüm ücretli paketlerin deneme uygunluğu tek sorguda alınır; kullanıcı dönem/plan değiştirdikçe
+  // yeniden ağ çağrısı yapılmaz.
+  const paidProductIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const [key, offering] of Object.entries(offeringsQuery.data?.all ?? {})) {
+      if (key === 'free') continue;
+      if (offering.monthly) ids.push(offering.monthly.product.identifier);
+      if (offering.annual) ids.push(offering.annual.product.identifier);
+    }
+    return ids;
+  }, [offeringsQuery.data]);
+  const trialEligibilityQuery = useQuery({
+    queryKey: ['trial-eligibility', paidProductIds.join(',')],
+    queryFn: () => getTrialEligibility(paidProductIds),
+    enabled: paidProductIds.length > 0,
+  });
+  const trialDays =
+    product && trialEligibilityQuery.data?.[product.identifier] ? freeTrialDays(product) : null;
 
   async function handlePurchase() {
     if (!selectedPlan || !selectedPackage) {
@@ -174,6 +168,7 @@ export default function PaywallScreen() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
       // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
       await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
+      await queryClient.invalidateQueries({ queryKey: ['document-archive-access'] });
       router.back();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Satın alma tamamlanamadı';
@@ -192,6 +187,7 @@ export default function PaywallScreen() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
       // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
       await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
+      await queryClient.invalidateQueries({ queryKey: ['document-archive-access'] });
       Alert.alert('Satın alımlar geri yüklendi');
       router.back();
     } catch (err) {
@@ -200,6 +196,14 @@ export default function PaywallScreen() {
       setIsRestoring(false);
     }
   }
+
+  const priceSubline = !product
+    ? null
+    : billingPeriod === 'yearly'
+      ? `/ yıl · ayda ${formatPrice(product.price / 12, product.currencyCode)}`
+      : '/ ay';
+
+  const storeName = Platform.OS === 'android' ? 'Google Play' : 'App Store';
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -255,17 +259,14 @@ export default function PaywallScreen() {
               padding: theme.screenEdge.standard,
               paddingTop: theme.spacing.sm,
               paddingBottom: theme.spacing.xl,
-              gap: theme.spacing.xl,
+              gap: theme.spacing.lg,
             }}
           >
-            <Stack gap="sm">
-              <Text variant="pageTitle">
-                Ayda{' '}
-                <Text variant="pageTitle" tabular style={{ color: theme.colors.brandPrimary }}>
-                  {selectedLimits?.monthly_ocr_quota ?? '—'}
-                </Text>{' '}
-                belge tarayın,{'\n'}vadeleri Vademde hatırlatsın.
+            <Stack gap="xs">
+              <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '700', letterSpacing: 1.2 }}>
+                VADEMDE PREMIUM
               </Text>
+              <Text variant="pageTitle">Tarayan hiç yazmaz.</Text>
               <Text variant="body" color="textSecondary">
                 {PLAN_STATUS_LABELS[currentPlan] ?? PLAN_STATUS_LABELS.free}
                 {ocrUsageQuery.data
@@ -274,76 +275,66 @@ export default function PaywallScreen() {
               </Text>
             </Stack>
 
-            <Stack gap="sm">
-              <SectionHeader title="Aylık belge kapasitesi" />
-              <Card>
-                <Stack gap="md">
-                  {planLimits.map((limits, index) => (
-                    <QuotaRow
-                      key={limits.plan}
-                      label={PLAN_SHORT_LABELS[limits.plan as PlanCode] ?? limits.plan}
-                      quota={limits.monthly_ocr_quota}
-                      ratio={maxQuota > 0 ? Math.max(limits.monthly_ocr_quota / maxQuota, MIN_BAR_RATIO) : 0}
-                      highlighted={limits.plan === selectedPlan}
-                      delay={index * 80}
-                    />
-                  ))}
+            {trialDays ? (
+              <Row
+                gap="sm"
+                align="center"
+                style={{
+                  padding: theme.spacing.sm,
+                  borderRadius: theme.radius.widget,
+                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.12),
+                  borderWidth: 1,
+                  borderColor: withAlpha(theme.colors.brandPrimary, 0.4),
+                }}
+              >
+                <Ionicons name="gift-outline" size={22} color={theme.colors.brandPrimary} />
+                <Stack gap="xxs" style={{ flex: 1 }}>
+                  <Text variant="cardTitle">{trialDays} gün ücretsiz dene</Text>
+                  <Text variant="caption" color="textSecondary">
+                    Deneme bitmeden iptal edersen ücret ödemezsin.
+                  </Text>
                 </Stack>
-              </Card>
-            </Stack>
+              </Row>
+            ) : null}
 
             <Stack gap="sm">
               <SegmentedControl
                 stretch
                 options={[
                   { key: 'monthly', label: 'Aylık' },
-                  { key: 'yearly', label: 'Yıllık' },
+                  { key: 'yearly', label: savingPercent ? `Yıllık · -%${savingPercent}` : 'Yıllık' },
                 ]}
                 value={billingPeriod}
                 onChange={setBillingPeriod}
               />
-              {savingPercent ? (
-                <Text variant="caption" color="textSecondary">
-                  Yıllık ödemede %{savingPercent} daha az ödersiniz.
+              <SegmentedControl
+                stretch
+                options={paidPlans.map((limits) => ({
+                  key: limits.plan,
+                  label: PLAN_SHORT_LABELS[limits.plan as PlanCode] ?? limits.plan,
+                }))}
+                value={selectedPlan ?? ''}
+                onChange={(plan) => setChosenPlan(plan as PlanCode)}
+              />
+            </Stack>
+
+            <Stack gap="xxs" align="center">
+              <Text variant="caption" color="textSecondary">
+                {selectedPlan ? PLAN_LABELS[selectedPlan] : ''}
+              </Text>
+              <Text variant="displayBalance" tabular>
+                {product?.priceString ?? '—'}
+              </Text>
+              {priceSubline ? (
+                <Text variant="caption" color="textSecondary" tabular>
+                  {priceSubline}
                 </Text>
               ) : null}
             </Stack>
 
-            <Stack gap="sm">
-              {paidPlans.map((limits) => {
-                const plan = limits.plan as PlanCode;
-                return (
-                  <PlanOption
-                    key={plan}
-                    plan={plan}
-                    limits={limits}
-                    pkg={resolvePackage(plan)}
-                    billingPeriod={billingPeriod}
-                    selected={plan === selectedPlan}
-                    isCurrent={plan === currentPlan}
-                    onSelect={() => setChosenPlan(plan)}
-                  />
-                );
-              })}
-            </Stack>
-
-            {selectedLimits ? (
-              <Stack gap="sm">
-                <SectionHeader title={`${PLAN_SHORT_LABELS[selectedPlan as PlanCode]} planında`} />
-                <Card>
-                  <Stack gap="sm">
-                    {buildFeatures(selectedLimits).map((feature) => (
-                      <Row key={feature} gap="sm">
-                        <Ionicons name="checkmark" size={18} color={theme.colors.success} />
-                        <Text variant="body" style={{ flex: 1 }}>
-                          {feature}
-                        </Text>
-                      </Row>
-                    ))}
-                  </Stack>
-                </Card>
-              </Stack>
-            ) : null}
+            <Card style={{ padding: 0, overflow: 'hidden' }}>
+              <ComparisonTable planLimits={planLimits} selectedPlan={selectedPlan} />
+            </Card>
           </ScrollView>
 
           <Divider />
@@ -360,7 +351,9 @@ export default function PaywallScreen() {
                 isCurrentSelected
                   ? 'Mevcut planınız'
                   : selectedPackage
-                    ? `${PLAN_CTA_LABELS[selectedPlan as PlanCode]} · ${selectedPackage.product.priceString}`
+                    ? trialDays
+                      ? `${trialDays} gün ücretsiz başlat`
+                      : `${PLAN_CTA_LABELS[selectedPlan as PlanCode]} · ${selectedPackage.product.priceString}`
                     : PLAN_CTA_LABELS[selectedPlan as PlanCode] ?? 'Planı seçin'
               }
               onPress={handlePurchase}
@@ -370,9 +363,9 @@ export default function PaywallScreen() {
             <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
               {!selectedPackage && !isCurrentSelected
                 ? 'Mağaza fiyatları şu anda alınamıyor.'
-                : Platform.OS === 'android'
-                  ? 'Google Play üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.'
-                  : 'App Store üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.'}
+                : trialDays && product
+                  ? `${trialDays} gün ücretsiz, sonra ${product.priceString}${billingPeriod === 'yearly' ? ' / yıl' : ' / ay'}. İstediğiniz zaman iptal edebilirsiniz. ${storeName} üzerinden faturalanır.`
+                  : `${storeName} üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.`}
             </Text>
             {/* App Store Review Guideline 3.1.2 — otomatik yenilenen abonelik satan ekranda
                 Gizlilik Politikası ve Kullanım Koşulları'na işlevsel bağlantı zorunludur. */}
@@ -395,179 +388,75 @@ export default function PaywallScreen() {
   );
 }
 
-interface QuotaRowProps {
-  label: string;
-  quota: number;
-  ratio: number;
-  highlighted: boolean;
-  delay: number;
-}
-
-// Ekranın imzası: planlar arasındaki fark, uygulamanın kendi biriminde (ayda okunan
-// belge) gerçek plan_limits verisinden çizilir. Seçili plan Saffron'a döner; ekranda
-// tek vurgu rengi kalır (docs/08-tasarim-sistemi.md §12.4).
-function QuotaRow({ label, quota, ratio, highlighted, delay }: QuotaRowProps) {
+function ComparisonTable({ planLimits, selectedPlan }: { planLimits: PlanLimits[]; selectedPlan: PlanCode | null }) {
   const theme = useTheme();
-  const reduceMotion = useReduceMotion();
-  const [grow] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    if (reduceMotion) {
-      grow.setValue(1);
-      return undefined;
-    }
-    const animation = Animated.timing(grow, {
-      toValue: 1,
-      duration: theme.motion.chartEntryMs,
-      delay,
-      useNativeDriver: false,
-    });
-    animation.start();
-    return () => animation.stop();
-  }, [grow, reduceMotion, delay, theme.motion.chartEntryMs]);
+  // Sütun sırası plan_limits'in kota sırasıdır (Ücretsiz, Plus, İşletme).
+  const columns = planLimits.map((limits) => limits.plan as PlanCode);
 
   return (
-    <Row gap="sm">
-      <Text
-        variant="caption"
-        color={highlighted ? 'textPrimary' : 'textSecondary'}
-        numberOfLines={1}
-        style={{ width: 62, fontWeight: highlighted ? '600' : '400' }}
-      >
-        {label}
-      </Text>
-      <View
-        style={{
-          flex: 1,
-          height: 10,
-          borderRadius: 999,
-          backgroundColor: theme.colors.backgroundPrimary,
-          overflow: 'hidden',
-        }}
-      >
-        <Animated.View
-          style={{
-            height: '100%',
-            borderRadius: 999,
-            backgroundColor: highlighted
-              ? theme.colors.brandPrimary
-              : withAlpha(theme.colors.textSecondary, 0.35),
-            width: grow.interpolate({
-              inputRange: [0, 1],
-              outputRange: ['0%', `${Math.round(ratio * 100)}%`],
-            }),
-          }}
-        />
-      </View>
-      <Text
-        variant="cardTitle"
-        tabular
-        color={highlighted ? 'textPrimary' : 'textSecondary'}
-        style={{ minWidth: 52, textAlign: 'right' }}
-      >
-        {quota}
-      </Text>
-    </Row>
-  );
-}
-
-interface PlanOptionProps {
-  plan: PlanCode;
-  limits: PlanLimits;
-  pkg: PurchasesPackage | null;
-  billingPeriod: BillingPeriod;
-  selected: boolean;
-  isCurrent: boolean;
-  onSelect: () => void;
-}
-
-function PlanOption({ plan, limits, pkg, billingPeriod, selected, isCurrent, onSelect }: PlanOptionProps) {
-  const theme = useTheme();
-  const product = pkg?.product;
-  const monthlyEquivalent =
-    billingPeriod === 'yearly' && product ? formatPrice(product.price / 12, product.currencyCode) : null;
-
-  // Kart özeti: kapasite dışındaki en ayırt edici iki alan.
-  const summary = [
-    limits.max_team_members ? `${limits.max_team_members} ekip üyesi` : null,
-    limits.max_personal_workspaces > 1 ? `${limits.max_personal_workspaces} çalışma alanı` : null,
-    limits.advanced_reports ? 'Gelişmiş raporlar' : null,
-  ]
-    .filter(Boolean)
-    .slice(0, 2)
-    .join(' · ');
-
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={PLAN_LABELS[plan]}
-      onPress={onSelect}
-    >
-      <Card
-        elevated={selected}
-        style={{
-          borderWidth: 1.5,
-          borderColor: selected ? theme.colors.brandPrimary : theme.colors.border,
-        }}
-      >
-        <Row gap="sm">
+    <View>
+      <Row align="center" style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs }}>
+        <View style={{ flex: TABLE_LABEL_WIDTH_FLEX }} />
+        {columns.map((plan) => (
           <View
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              borderWidth: 2,
-              borderColor: selected ? theme.colors.brandPrimary : theme.colors.border,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            key={plan}
+            style={{ width: TABLE_COLUMN_WIDTH, alignItems: 'center', paddingVertical: 2 }}
           >
-            {selected ? (
-              <View
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 5,
-                  backgroundColor: theme.colors.brandPrimary,
-                }}
-              />
-            ) : null}
+            <Text
+              variant="caption"
+              numberOfLines={1}
+              style={{
+                fontWeight: plan === selectedPlan ? '700' : '500',
+                color: plan === selectedPlan ? theme.colors.brandPrimary : theme.colors.textSecondary,
+              }}
+            >
+              {PLAN_SHORT_LABELS[plan]}
+            </Text>
           </View>
-
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Row gap="xs">
-              <Text variant="cardTitle">{PLAN_LABELS[plan]}</Text>
-              {isCurrent ? (
+        ))}
+      </Row>
+      {COMPARISON_ROWS.map((row) => (
+        <View key={row.label}>
+          <Divider />
+          <Row align="center" style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs }}>
+            <Text variant="caption" style={{ flex: TABLE_LABEL_WIDTH_FLEX }}>
+              {row.label}
+            </Text>
+            {planLimits.map((limits) => {
+              const selected = limits.plan === selectedPlan;
+              const value = row.value(limits);
+              return (
                 <View
+                  key={limits.plan}
                   style={{
-                    paddingHorizontal: theme.spacing.xs,
-                    paddingVertical: 2,
-                    borderRadius: 999,
-                    backgroundColor: withAlpha(theme.colors.success, 0.16),
+                    width: TABLE_COLUMN_WIDTH,
+                    alignItems: 'center',
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    backgroundColor: selected ? withAlpha(theme.colors.brandPrimary, 0.1) : 'transparent',
                   }}
                 >
-                  <Text variant="caption" style={{ color: theme.colors.success, fontWeight: '600' }}>
-                    Mevcut
+                  <Text
+                    variant="caption"
+                    tabular
+                    style={{
+                      fontWeight: selected ? '700' : '400',
+                      color:
+                        value === '—'
+                          ? theme.colors.textSecondary
+                          : selected
+                            ? theme.colors.brandPrimary
+                            : theme.colors.textPrimary,
+                    }}
+                  >
+                    {value}
                   </Text>
                 </View>
-              ) : null}
-            </Row>
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {summary || `Ayda ${limits.monthly_ocr_quota} belge`}
-            </Text>
-          </Stack>
-
-          <Stack gap="xxs" align="flex-end">
-            <Text variant="cardTitle" tabular>
-              {product?.priceString ?? '—'}
-            </Text>
-            <Text variant="caption" color="textSecondary" tabular>
-              {monthlyEquivalent ? `ayda ${monthlyEquivalent}` : billingPeriod === 'yearly' ? 'yıllık' : 'aylık'}
-            </Text>
-          </Stack>
-        </Row>
-      </Card>
-    </Pressable>
+              );
+            })}
+          </Row>
+        </View>
+      ))}
+    </View>
   );
 }

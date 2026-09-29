@@ -15,7 +15,8 @@ import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
 import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatAmountInput, parseAmount, parseAmountToMinor } from '@/utils/money';
+import { formatAmountInput, parseAmount, parseAmountToMinor, parseValueUnitAmountToMinor } from '@/utils/money';
+import { getValueUnit } from '@/features/valueUnits/units';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
@@ -101,7 +102,13 @@ export default function NewAccountScreen() {
     setType(account.type as Account['type']);
     setBankCode(account.bank_code);
     setIban(account.iban ?? '');
-    setOpeningBalance(formatAmountInput((account.opening_balance_minor / 100).toFixed(2).replace('.', ',')));
+    const openingUnitPrecision = getValueUnit(account.currency_code).precision;
+    setOpeningBalance(
+      formatAmountInput(
+        (account.opening_balance_minor / 10 ** openingUnitPrecision).toFixed(openingUnitPrecision).replace('.', ','),
+        openingUnitPrecision
+      )
+    );
     setStatementDay(account.statement_day != null ? String(account.statement_day) : '');
     setPaymentDueDay(account.payment_due_day != null ? String(account.payment_due_day) : '');
     setCardLastFour(account.card_last_four ?? '');
@@ -122,6 +129,7 @@ export default function NewAccountScreen() {
     setInitialized(true);
   }, [accountQuery.data, initialized]);
 
+  const openingPrecision = getValueUnit(valueUnitCode).precision;
   const normalizedIban = normalizeIban(iban);
   const ibanHasError = normalizedIban.length > 0 && !isValidIbanFormat(normalizedIban);
 
@@ -132,7 +140,7 @@ export default function NewAccountScreen() {
         type,
         bank_code: type === 'bank' || isCreditCard || isPos ? bankCode : null,
         iban: type === 'bank' && normalizedIban ? normalizedIban : null,
-        opening_balance_minor: parseAmountToMinor(openingBalance) ?? 0,
+        opening_balance_minor: parseValueUnitAmountToMinor(openingBalance, isCash ? valueUnitCode : 'TRY') ?? 0,
         statement_day: isCreditCard && statementDay ? Number(statementDay) : null,
         payment_due_day: isCreditCard && paymentDueDay ? Number(paymentDueDay) : null,
         card_last_four: isCreditCard && cardLastFour ? cardLastFour : null,
@@ -463,7 +471,8 @@ export default function NewAccountScreen() {
               ) : (
                 <AmountField
                   label="AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)"
-                  placeholder="0,00"
+                  placeholder={isCash && openingPrecision === 0 ? '1' : '0,00'}
+                  precision={isCash ? openingPrecision : 2}
                   value={openingBalance}
                   onChangeText={setOpeningBalance}
                 />

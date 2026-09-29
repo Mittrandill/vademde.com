@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import {
+  ScrollView,
+  View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
@@ -19,9 +25,17 @@ export interface BalanceHeroProps {
 }
 
 const HIDDEN_MASK = '••••••';
-const RING_SIZE = 112;
-const RING_STROKE = 12;
 const PAGE_COUNT = 2;
+
+// Halka sabit 112pt idi: büyük Dynamic Type ölçeklerinde tutar sütununa yer kalmıyor, halkanın
+// içindeki etiket de halkadan taşıyordu. Halka artık yazı tipi ölçeğine göre küçülür ve dar
+// halkada yalnızca ikon gösterilir; böylece hiçbir ölçekte tutar ya da etiket halkayla çakışmaz.
+function useRingMetrics() {
+  const { fontScale } = useWindowDimensions();
+  if (fontScale >= 1.3) return { size: 72, stroke: 9, icon: 20, showLabel: false };
+  if (fontScale >= 1.15) return { size: 92, stroke: 10, icon: 22, showLabel: false };
+  return { size: 112, stroke: 12, icon: 24, showLabel: true };
+}
 
 export function BalanceHero({
   totalBalanceMinor,
@@ -34,8 +48,14 @@ export function BalanceHero({
   onToggleHidden,
 }: BalanceHeroProps) {
   const theme = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const [pageWidth, setPageWidth] = useState(0);
   const [page, setPage] = useState(0);
+  // onLayout gelene kadar sayfa genişliği bilinmiyordu (width: undefined); yatay ScrollView'da bu,
+  // içeriği sınırsız genişlikte ölçüp uzun tutarların küçülemeden halkayı kartın dışına iterdi.
+  // Ölçüm gelene kadar ekran genişliğinden türetilmiş güvenli bir tahmin kullanılır.
+  const fallbackPageWidth = windowWidth - theme.screenEdge.standard * 2 - theme.spacing.lg * 2;
+  const effectivePageWidth = pageWidth || fallbackPageWidth;
 
   // Halka, toplam bakiyenin değil borç/alacak dengesinin görselidir: dolu kısım
   // alacağın toplam içindeki payı. Kayıt yoksa halka boş kalır.
@@ -71,8 +91,9 @@ export function BalanceHero({
             scrollEventThrottle={16}
             scrollEnabled={pageWidth > 0}
           >
-            <View style={{ width: pageWidth || undefined }}>
+            <View style={{ width: effectivePageWidth }}>
               <BalancePage
+                width={effectivePageWidth}
                 totalBalanceMinor={totalBalanceMinor}
                 monthNetMinor={monthNetMinor}
                 receivableMinor={receivableMinor}
@@ -82,8 +103,9 @@ export function BalanceHero({
                 onToggleHidden={onToggleHidden}
               />
             </View>
-            <View style={{ width: pageWidth || undefined }}>
+            <View style={{ width: effectivePageWidth }}>
               <MonthPage
+                width={effectivePageWidth}
                 incomeMinor={monthIncomeMinor}
                 expenseMinor={monthExpenseMinor}
                 netMinor={monthNetMinor}
@@ -112,7 +134,16 @@ export function BalanceHero({
   );
 }
 
+// Tutar sütununun genişliği flex'e bırakılmaz, açıkça hesaplanır: flex:1 sütun, uzun tutarın
+// doğal genişliğinin altına inmiyor, tutar küçülmeden halkayı sayfanın dışına itiyor ve yatay
+// ScrollView halkayı kesiyordu (cihazda %100 ve %135 yazı tipinde bu hata görüldü). Genişlik sabit
+// olunca adjustsFontSizeToFit tutarı gerçekten sığdırır.
+function amountColumnWidth(pageWidth: number, ringSize: number, gap: number): number {
+  return Math.max(0, pageWidth - ringSize - gap);
+}
+
 interface BalancePageProps {
+  width: number;
   totalBalanceMinor: number;
   monthNetMinor: number;
   receivableMinor: number;
@@ -123,6 +154,7 @@ interface BalancePageProps {
 }
 
 function BalancePage({
+  width,
   totalBalanceMinor,
   monthNetMinor,
   receivableMinor,
@@ -132,6 +164,7 @@ function BalancePage({
   onToggleHidden,
 }: BalancePageProps) {
   const theme = useTheme();
+  const ring = useRingMetrics();
 
   return (
     <Stack gap="md">
@@ -163,7 +196,7 @@ function BalancePage({
       </Row>
 
       <Row gap="md" align="center">
-        <Stack gap="xs" style={{ flex: 1 }}>
+        <Stack gap="xs" style={{ width: amountColumnWidth(width, ring.size, theme.spacing.md), overflow: 'hidden' }}>
           {hidden ? (
             <Text variant="displayAmount">{HIDDEN_MASK}</Text>
           ) : (
@@ -198,21 +231,25 @@ function BalancePage({
           </Row>
         </Stack>
 
-        <ProgressRing
-          size={RING_SIZE}
-          strokeWidth={RING_STROKE}
-          progress={receivableShare}
-          color={theme.colors.brandPrimary}
-          trackColor={withAlpha(theme.colors.brandPrimary, 0.18)}
-          cap
-        >
-          <Stack gap="xxs" align="center">
-            <Ionicons name="wallet-outline" size={24} color={theme.colors.textSecondary} />
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              Bakiye
-            </Text>
-          </Stack>
-        </ProgressRing>
+        <View style={{ flexShrink: 0 }}>
+          <ProgressRing
+            size={ring.size}
+            strokeWidth={ring.stroke}
+            progress={receivableShare}
+            color={theme.colors.brandPrimary}
+            trackColor={withAlpha(theme.colors.brandPrimary, 0.18)}
+            cap
+          >
+            <Stack gap="xxs" align="center" style={{ maxWidth: ring.size - ring.stroke * 2 - 8 }}>
+              <Ionicons name="wallet-outline" size={ring.icon} color={theme.colors.textSecondary} />
+              {ring.showLabel ? (
+                <Text variant="caption" color="textSecondary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  Bakiye
+                </Text>
+              ) : null}
+            </Stack>
+          </ProgressRing>
+        </View>
       </Row>
 
       <Divider />
@@ -239,6 +276,7 @@ function BalancePage({
 }
 
 interface MonthPageProps {
+  width: number;
   incomeMinor: number;
   expenseMinor: number;
   netMinor: number;
@@ -252,8 +290,9 @@ interface MonthPageProps {
 // boyutuna göre organize et"). Önceki sürümde burada üç küçük (56pt) halka vardı; kartın
 // asıl boyutunu belirleyen BalancePage'deki tek büyük (112pt) halkayla eşleşmediği için
 // bu sayfa gözle görülür şekilde daha kısa/boş duruyordu.
-function MonthPage({ incomeMinor, expenseMinor, netMinor, share, hidden }: MonthPageProps) {
+function MonthPage({ width, incomeMinor, expenseMinor, netMinor, share, hidden }: MonthPageProps) {
   const theme = useTheme();
+  const ring = useRingMetrics();
   const isPositive = netMinor >= 0;
 
   return (
@@ -278,7 +317,7 @@ function MonthPage({ incomeMinor, expenseMinor, netMinor, share, hidden }: Month
       </Row>
 
       <Row gap="md" align="center">
-        <Stack gap="xs" style={{ flex: 1 }}>
+        <Stack gap="xs" style={{ width: amountColumnWidth(width, ring.size, theme.spacing.md), overflow: 'hidden' }}>
           {hidden ? (
             <Text variant="displayAmount">{HIDDEN_MASK}</Text>
           ) : (
@@ -296,21 +335,25 @@ function MonthPage({ incomeMinor, expenseMinor, netMinor, share, hidden }: Month
           </Text>
         </Stack>
 
-        <ProgressRing
-          size={RING_SIZE}
-          strokeWidth={RING_STROKE}
-          progress={share(incomeMinor)}
-          color={theme.colors.brandPrimary}
-          trackColor={withAlpha(theme.colors.brandPrimary, 0.18)}
-          cap
-        >
-          <Stack gap="xxs" align="center">
-            <Ionicons name="swap-vertical-outline" size={24} color={theme.colors.textSecondary} />
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              Dağılım
-            </Text>
-          </Stack>
-        </ProgressRing>
+        <View style={{ flexShrink: 0 }}>
+          <ProgressRing
+            size={ring.size}
+            strokeWidth={ring.stroke}
+            progress={share(incomeMinor)}
+            color={theme.colors.brandPrimary}
+            trackColor={withAlpha(theme.colors.brandPrimary, 0.18)}
+            cap
+          >
+            <Stack gap="xxs" align="center" style={{ maxWidth: ring.size - ring.stroke * 2 - 8 }}>
+              <Ionicons name="swap-vertical-outline" size={ring.icon} color={theme.colors.textSecondary} />
+              {ring.showLabel ? (
+                <Text variant="caption" color="textSecondary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  Dağılım
+                </Text>
+              ) : null}
+            </Stack>
+          </ProgressRing>
+        </View>
       </Row>
 
       <Divider />

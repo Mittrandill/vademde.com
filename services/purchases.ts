@@ -57,3 +57,29 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<CustomerIn
 export async function restorePurchases(): Promise<CustomerInfo> {
   return Purchases.restorePurchases();
 }
+
+// App Store, ücretsiz deneme teklifini yalnızca bu abonelik grubunda daha önce deneme kullanmamış
+// kullanıcıya sunar. Uygun olmayan (ya da RevenueCat'in kesin hesaplayamadığı, UNKNOWN) kullanıcıya
+// "7 gün ücretsiz" vaat etmek yanıltıcı olur; RevenueCat de bu durumda deneme fiyatını değil normal
+// fiyatı göstermeyi önerir. Android her zaman UNKNOWN döndürür, bu yüzden orada deneme etiketi çıkmaz.
+export async function getTrialEligibility(productIds: string[]): Promise<Record<string, boolean>> {
+  if (!configured || productIds.length === 0) return {};
+  try {
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+    const eligible = Purchases.INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE;
+    return Object.fromEntries(Object.entries(result).map(([id, value]) => [id, value.status === eligible]));
+  } catch {
+    return {};
+  }
+}
+
+// Ürünün ücretsiz deneme süresini gün olarak döndürür; deneme yoksa (ya da ücretli bir tanıtım
+// fiyatıysa) null. Etiket mağazadaki gerçek tanımdan üretilir, "7 gün" koda gömülmez.
+export function freeTrialDays(product: PurchasesPackage['product']): number | null {
+  const intro = product.introPrice;
+  if (!intro || intro.price !== 0) return null;
+  const unitDays: Record<string, number> = { DAY: 1, WEEK: 7, MONTH: 30, YEAR: 365 };
+  const perUnit = unitDays[intro.periodUnit];
+  if (!perUnit) return null;
+  return intro.periodNumberOfUnits * intro.cycles * perUnit;
+}

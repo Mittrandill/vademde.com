@@ -223,6 +223,13 @@ export default function MoreScreen() {
             />
             <RowDivider />
             <ListRow
+              icon="folder-open-outline"
+              label="Belge Arşivi"
+              detail="Ödemelere eklediğiniz dekontlar"
+              href="/documents/archive"
+            />
+            <RowDivider />
+            <ListRow
               icon="sparkles-outline"
               label="Abonelik Ayarları"
               detail={planLabel}

@@ -9,6 +9,7 @@ import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
 import { configurePurchases, logOutPurchases } from '@/services/purchases';
 import { initMetaAds } from '@/services/metaAds';
+import { useAppUpdatePrompt } from '@/services/appUpdate';
 import { registerPushToken, unregisterCurrentPushToken } from '@/services/pushToken';
 import { useWorkspaceRealtime } from '@/services/realtime';
 import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
@@ -28,6 +29,7 @@ function RootNavigator() {
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
 
   useWorkspaceRealtime(session ? activeWorkspaceId : null);
+  useAppUpdatePrompt(!!session);
 
   useEffect(() => {
     const userId = session?.user?.id;
@@ -97,6 +99,8 @@ function AppNavigatorStack() {
         <Stack.Screen name="obligations/index" />
         <Stack.Screen name="obligations/[id]" />
         <Stack.Screen name="documents/[id]/review" />
+        <Stack.Screen name="documents/[id]/receipt" />
+        <Stack.Screen name="documents/archive" />
         <Stack.Screen name="settings/index" />
         <Stack.Screen name="profile/index" />
         <Stack.Screen name="subscription/index" />

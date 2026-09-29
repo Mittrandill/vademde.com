@@ -40,6 +40,15 @@ import {
 } from '@/features/obligations/api';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { deletePayment, listPaymentsForObligation, recordPayment, updatePayment, type Payment } from '@/features/payments/api';
+import { ReceiptAttachField } from '@/components/finance/ReceiptAttachField';
+import {
+  attachReceiptFile,
+  discardReceiptFile,
+  linkReceiptDocument,
+  openReceipt,
+  useDocumentArchiveAccess,
+  type PendingReceipt,
+} from '@/features/receipts/api';
 import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -613,6 +622,22 @@ function PaymentRow({
           {dateFormatter.format(new Date(payment.paid_at))}
         </Text>
         <Amount amountMinor={payment.amount_minor} currencyCode={currencyCode} variant="body" />
+        {payment.receipt_document_id ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dekontu aç"
+            onPress={async () => {
+              try {
+                await openReceipt(payment.receipt_document_id as string);
+              } catch {
+                Alert.alert('Dekont açılamadı', 'Dosya bulunamadı ya da bağlantı kurulamadı.');
+              }
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="attach" size={20} color={theme.colors.brandPrimary} />
+          </Pressable>
+        ) : null}
         <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi düzenle" onPress={onEdit} hitSlop={8}>
           <Ionicons name="create-outline" size={18} color={theme.colors.textSecondary} />
         </Pressable>
@@ -670,9 +695,15 @@ function PaymentForm({
   const [dateStr, setDateStr] = useState(
     editingPayment ? editingPayment.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
+  // Dekont (Plus): yeni seçilen dosya ya da düzenlemede mevcut bağlantı. removedExisting,
+  // kullanıcı kayıtlı dekontu ödemeden ayırdıysa true olur.
+  const archive = useDocumentArchiveAccess();
+  const [receipt, setReceipt] = useState<PendingReceipt | null>(null);
+  const [removedExisting, setRemovedExisting] = useState(false);
+  const existingReceiptId = removedExisting ? null : (editingPayment?.receipt_document_id ?? null);
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!workspaceId || !amount) throw new Error('Eksik alan var');
       const amountMinor = parseValueUnitAmountToMinor(amount, obligation.currency_code);
       if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
@@ -680,32 +711,59 @@ function PaymentForm({
       if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
       const paidAt = parsedDate.toISOString();
 
-      if (editingPayment) {
-        return updatePayment(editingPayment, {
-          amount_minor: amountMinor,
-          paid_at: paidAt,
-          account_id: accountId,
-          obligationDirection: obligation.direction as 'payable' | 'receivable',
+      // Dekont önce yüklenir ki ödeme satırı tek insert/update'te ona bağlanabilsin; ödeme
+      // yazılamazsa yüklenen dosya temizlenir (öksüz dekont kalmaz).
+      const receiptDocument = receipt
+        ? await attachReceiptFile({
+            workspaceId,
+            ...receipt,
+            obligationId: obligation.id,
+            amountMinor,
+            currencyCode: obligation.currency_code,
+          })
+        : null;
+
+      try {
+        const payment = editingPayment
+          ? await updatePayment(editingPayment, {
+              amount_minor: amountMinor,
+              paid_at: paidAt,
+              account_id: accountId,
+              receipt_document_id: receiptDocument ? receiptDocument.id : removedExisting ? null : undefined,
+              obligationDirection: obligation.direction as 'payable' | 'receivable',
           obligationTitle: obligation.title,
           obligationCategoryId: obligation.category_id,
           obligationCounterpartyId: obligation.counterparty_id,
           obligationCurrencyCode: obligation.currency_code,
-        });
-      }
+        })
+          : await recordPayment({
+              workspace_id: workspaceId,
+              obligation_id: obligation.id,
+              installment_id: installment?.id ?? null,
+              account_id: accountId,
+              amount_minor: amountMinor,
+              paid_at: paidAt,
+              receipt_document_id: receiptDocument?.id ?? null,
+              obligationDirection: obligation.direction as 'payable' | 'receivable',
+              obligationTitle: obligation.title,
+              obligationCategoryId: obligation.category_id,
+              obligationCounterpartyId: obligation.counterparty_id,
+              obligationCurrencyCode: obligation.currency_code,
+            });
 
-      return recordPayment({
-        workspace_id: workspaceId,
-        obligation_id: obligation.id,
-        installment_id: installment?.id ?? null,
-        account_id: accountId,
-        amount_minor: amountMinor,
-        paid_at: paidAt,
-        obligationDirection: obligation.direction as 'payable' | 'receivable',
-        obligationTitle: obligation.title,
-        obligationCategoryId: obligation.category_id,
-        obligationCounterpartyId: obligation.counterparty_id,
-        obligationCurrencyCode: obligation.currency_code,
-      });
+        // Belge → borç/hareket bağlantısı (docs/00 kural 6). Ödeme zaten kaydedildiği için bu
+        // adımın başarısızlığı kaydı geri almaz; dekont ödemeye bağlı kalır.
+        if (receiptDocument) {
+          await linkReceiptDocument(receiptDocument.id, {
+            obligationId: obligation.id,
+            transactionId: payment.transaction_id,
+          }).catch(() => undefined);
+        }
+        return payment;
+      } catch (error) {
+        if (receiptDocument) await discardReceiptFile(receiptDocument);
+        throw error;
+      }
     },
     onSuccess,
   });
@@ -750,6 +808,18 @@ function PaymentForm({
             <AccountPicker accounts={payableAccounts} selectedId={accountId} onSelect={setAccountId} />
           </Stack>
         ) : null}
+
+        <ReceiptAttachField
+          value={receipt}
+          onChange={setReceipt}
+          existingReceiptId={existingReceiptId}
+          onRemoveExisting={() => setRemovedExisting(true)}
+          allowed={archive.allowed}
+          onUpgrade={() => {
+            onClose();
+            setTimeout(() => router.push('/paywall'), 400);
+          }}
+        />
 
         {mutation.error ? (
           <Text variant="caption" color="danger">

@@ -82,6 +82,12 @@ export function formatMinorAmount(
   currencyCode: string = 'TRY',
   locale: string = 'tr-TR'
 ): string {
+  // Kıymetli maden kodları (gram_altin, ceyrek_altin...) ISO 4217 değildir ve sikkelerde
+  // minor = adet'tir (÷100 değil). Kod doğrudan geçirilen tüm çağıranlar (liste, detay,
+  // bildirim) için burada birim adıyla ("1 Çeyrek Altın") biçimlenir.
+  if (getValueUnit(currencyCode).unitType === 'kiymetli_maden') {
+    return formatValueUnitAmount(Number.isFinite(amountMinor) ? amountMinor : 0, currencyCode, locale);
+  }
   const value = fromMinorUnits(Number.isFinite(amountMinor) ? amountMinor : 0);
   // Intl.NumberFormat({style:'currency'}) geçersiz/desteklenmeyen bir ISO kodunda ya da
   // tam Intl verisi olmayan bir ortamda (Hermes) RangeError fırlatabilir. Bu fonksiyon

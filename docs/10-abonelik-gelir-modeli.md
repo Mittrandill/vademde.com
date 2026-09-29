@@ -22,7 +22,8 @@ nerede zorunlu kılındığını kaydeder — yeni bir limit eklenirken bu tablo
 | `monthly_ocr_quota` | Sunucu — `supabase/functions/process-document/index.ts` |
 | `max_personal_workspaces` | Sunucu — `workspaces` üzerinde `enforce_workspace_plan_limit` trigger'ı + `setup_initial_workspaces`; istemcide `app/workspace/index.tsx` ve `app/workspace-setup/index.tsx` |
 | `max_team_members` | Sunucu — `create_workspace_invite` / `redeem_workspace_invite`; istemcide `app/workspace/[id]/members.tsx` |
-| `advanced_reports`, `unlimited_export`, `document_archive`, `recurring_transactions`, `face_id`, `audit_log` | **Henüz uygulanmıyor — bu özellikler bugün hiç yok, yalnızca paywall metni olarak vaat ediliyor.** |
+| `document_archive` | Yalnızca **ödeme dekontu arşivi** için: sunucu — `payments` üzerinde `enforce_payment_receipt_plan` trigger'ı (`RECEIPT_ARCHIVE_PLAN_REQUIRED`) + `process-document` dekont dosyasını yalnızca bu planda saklar; istemcide `features/receipts/api.ts` `useDocumentArchiveAccess`. Arşiv listesi `app/documents/archive.tsx` (Daha Fazla → Belge Arşivi; cari sayfasından `counterpartyId` filtresiyle de açılır). |
+| `advanced_reports`, `unlimited_export`, `recurring_transactions`, `face_id`, `audit_log` | **Henüz uygulanmıyor — bu özellikler bugün hiç yok, yalnızca paywall metni olarak vaat ediliyor.** |
 
 ### Limit üzerindeki mevcut kullanıcılar
 

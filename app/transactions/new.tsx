@@ -24,7 +24,8 @@ import {
 } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
-import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
+import { formatAmountInput, formatMinorAmount, parseValueUnitAmountToMinor } from '@/utils/money';
+import { getValueUnit } from '@/features/valueUnits/units';
 import { queryKeys } from '@/services/queryKeys';
 
 type Direction = 'income' | 'expense' | 'transfer';
@@ -133,8 +134,15 @@ function TransactionForm({
     initial?.transfer_to_account_id ?? null
   );
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
+  // Sikke birimli hesaplarda (ceyrek_altin vb.) minor = adet'tir; ÷100/×100 uygulanmaz.
+  const initialPrecision = getValueUnit(initial?.currency_code).precision;
   const [amount, setAmount] = useState(
-    initial ? formatAmountInput((initial.amount_minor / 100).toFixed(2).replace('.', ',')) : ''
+    initial
+      ? formatAmountInput(
+          (initial.amount_minor / 10 ** initialPrecision).toFixed(initialPrecision).replace('.', ','),
+          initialPrecision
+        )
+      : ''
   );
   const [dateStr, setDateStr] = useState(
     initial ? initial.occurred_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
@@ -163,6 +171,8 @@ function TransactionForm({
   // (kasaya nakit çekme gibi) POS yine seçilebilir kalır.
   const payableAccounts = accounts.filter((a) => a.type !== 'pos');
   const accountsForDirection = direction === 'expense' ? payableAccounts : accounts;
+  const unitCode = accounts.find((a) => a.id === accountId)?.currency_code ?? initial?.currency_code ?? 'TRY';
+  const unitPrecision = getValueUnit(unitCode).precision;
 
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId
@@ -182,7 +192,7 @@ function TransactionForm({
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId || !accountId || !amount) throw new Error('Eksik alan var');
-      const amountMinor = parseAmountToMinor(amount);
+      const amountMinor = parseValueUnitAmountToMinor(amount, unitCode);
       if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
       // Geçersiz tarihte new Date(...).toISOString() RangeError fırlatıp kaydı düşürürdü.
       const parsedDate = new Date(dateStr);
@@ -270,7 +280,7 @@ function TransactionForm({
   // yorumu), burası yalnızca kullanıcıya bilgi verir, hiçbir girdi/onay istemez.
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const posCommissionRate = selectedAccount?.type === 'pos' ? selectedAccount.pos_commission_rate : null;
-  const amountMinorPreview = parseAmountToMinor(amount);
+  const amountMinorPreview = parseValueUnitAmountToMinor(amount, unitCode);
   const showPosCommissionPreview =
     direction === 'income' && !!posCommissionRate && amountMinorPreview !== null && amountMinorPreview > 0;
   const posCommissionFeeMinor = showPosCommissionPreview
@@ -309,7 +319,13 @@ function TransactionForm({
               stretch
             />
 
-            <AmountField label="TUTAR" placeholder="0,00" value={amount} onChangeText={setAmount} />
+            <AmountField
+              label="TUTAR"
+              placeholder={unitPrecision === 0 ? '1' : '0,00'}
+              precision={unitPrecision}
+              value={amount}
+              onChangeText={setAmount}
+            />
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">

@@ -165,6 +165,25 @@ const RESPONSE_SCHEMA = {
         required: ['description', 'lineTotal'],
       },
     },
+    // docs §7.7 — yalnızca documentType "banka_dekontu" olduğunda doldurulur. Dekont gelecekteki
+    // bir borç değil, gerçekleşmiş bir para hareketidir; istemci bu alanlarla "Ödeme sonucu"
+    // ekranını çizer ve mevcut borç/alacakla eşleştirme önerir (bkz. app/documents/[id]/receipt.tsx).
+    receiptDetails: {
+      type: 'OBJECT',
+      nullable: true,
+      properties: {
+        bankName: { type: 'STRING', nullable: true },
+        senderName: { type: 'STRING', nullable: true },
+        senderIban: { type: 'STRING', nullable: true },
+        recipientName: { type: 'STRING', nullable: true },
+        recipientIban: { type: 'STRING', nullable: true },
+        transferType: { type: 'STRING', nullable: true, enum: ['havale', 'eft', 'fast', 'diger'] },
+        referenceNo: { type: 'STRING', nullable: true },
+        description: { type: 'STRING', nullable: true },
+        fee: { type: 'NUMBER', nullable: true },
+        transactionDateTime: { type: 'STRING', nullable: true },
+      },
+    },
     // docs §7.5 — fatura özel alanları.
     invoiceDetails: {
       type: 'OBJECT',
@@ -214,7 +233,8 @@ Belge türüne özel kurallar:
 - documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Her satıra transactionType ata: normal alışveriş "purchase"; "ÖDEME", "KART ÖDEMESİ", "TAHSİLAT", "ÖDEME - TEŞEKKÜRLER" benzeri geçmiş dönem borç kapatma satırları "payment"; işyeri/ürün iadesi "refund"; üyelik/yıllık kart/komisyon/BSMV gibi ücretler "fee"; akdi/gecikme faizi "interest"; nakit çekim/avans "cash_advance"; güvenle ayıramadığın satır "unknown". Ödeme ve iadeleri ASLA purchase olarak sınıflandırma. Satır amount değerlerini işaret kullanmadan pozitif sayı döndür; yön transactionType ile belirlenir. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz. Ekstreyi veren bankanın adını HEM cardStatement.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz (kredi kartı ekstresinde de "kişi/firma" tarafı bankadır).
 - documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur; counterpartyName alanına SATICI (invoiceDetails.sellerName ile birebir aynı) adını yaz — alıcı değil.
 - documentType "makbuz_fis" ise lineItems alanını doldur (varsa); counterpartyName alanına fişi/makbuzu düzenleyen İŞLETMENİN (market, mağaza, restoran vb. — fişin başlığında/kaşesinde geçen ad) adını yaz, alıcı/müşteri değil.
-- Diğer türlerde installmentPlan, cardStatement, lineItems, invoiceDetails alanlarını null/boş bırak.
+- documentType "banka_dekontu" ise receiptDetails alanını doldur: bankName dekontu düzenleyen banka; senderName/senderIban parayı GÖNDEREN (hesabından çıkan) taraf; recipientName/recipientIban parayı ALAN taraf; transferType havale/eft/fast (belirtilmemişse "diger"); referenceNo dekontun referans/işlem/sıra numarası; description gönderim açıklaması; fee varsa işlem masrafı (ana para biriminde); transactionDateTime işlem tarihi ve saati (ISO 8601, saat yoksa yalnızca tarih). totalAmount gönderilen tutardır (masraf HARİÇ). direction: dekont gerçekleşmiş bir para hareketidir; belgeyi tarayan kullanıcının parayı GÖNDEREN taraf olduğu varsayılır ve direction "expense" olur; kullanıcının parayı ALDIĞI belli ise (alıcı olarak kendi adı/IBAN'ı görünüyorsa) "income". Hesaplar arası kendi hesapları arasındaki transferde "transfer". counterpartyName karşı tarafın adıdır (gönderen değil alıcı; kullanıcı alıcıysa gönderen). Dekont bir borç DEĞİLDİR: dueDate'i null bırak ve issueDate'e işlem tarihini yaz. Bu bir dekonttur, makbuz/fiş veya fatura ile karıştırma: "gönderen", "alıcı", "IBAN", "EFT/Havale/FAST", "referans no" ibareleri dekonta işaret eder.
+- Diğer türlerde installmentPlan, cardStatement, lineItems, invoiceDetails, receiptDetails alanlarını null/boş bırak.
 - Yalnızca şemaya uyan JSON döndür, başka açıklama ekleme.`;
 
 interface ProcessRequest {
@@ -423,7 +443,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: planLimits, error: planLimitsError } = await adminClient
     .from('plan_limits')
-    .select('monthly_ocr_quota')
+    .select('monthly_ocr_quota, document_archive')
     .eq('plan', plan)
     .single();
   if (planLimitsError || !planLimits) {
@@ -697,6 +717,12 @@ Deno.serve(async (req: Request) => {
         totalSpendingMinor: toMinor(parsed.cardStatement.totalSpending),
       };
     }
+    if (parsed.receiptDetails) {
+      extractedSummary.receipt = {
+        ...parsed.receiptDetails,
+        feeMinor: toMinor(parsed.receiptDetails.fee),
+      };
+    }
     if (parsed.invoiceDetails) {
       extractedSummary.invoice = {
         ...parsed.invoiceDetails,
@@ -748,11 +774,16 @@ Deno.serve(async (req: Request) => {
     // Ham belge saklanmayacaksa önce Storage'dan kaldırılır. Bu tamamlanmadan durumun
     // ready_for_review olması, poll eden istemcinin silinmek üzere olan belgeyi açmasına
     // neden oluyordu.
-    await deleteOriginalIfNotRetained();
+    // Dekont, Plus planındaki "Belge arşivi"nin parçasıdır: kullanıcı "işlem sonrası sakla"yı
+    // kapatmış olsa bile dekont dosyası silinmez, ödeme kaydına tek dokunuşla açılabilsin diye
+    // saklanır. Ücretsiz planda dekont yine okunur ama dosya silinir (arşiv özelliği yoktur).
+    const keepReceiptFile = parsed.documentType === 'banka_dekontu' && planLimits.document_archive === true;
+    if (!keepReceiptFile) await deleteOriginalIfNotRetained();
 
     await adminClient
       .from('financial_documents')
       .update({
+        ...(keepReceiptFile ? { retain_original: true } : {}),
         status: 'ready_for_review',
         document_type: parsed.documentType,
         direction: parsed.direction,

@@ -84,4 +84,6 @@ export function invalidatePaymentRelatedQueries(queryClient: QueryClient, worksp
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'transactions'] });
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'account-balances'] });
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'reports'] });
+  // Ödemeye eklenen/kaldırılan dekont Belge arşivi'ni de etkiler (bkz. features/receipts/api.ts).
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'receipt-archive'] });
 }

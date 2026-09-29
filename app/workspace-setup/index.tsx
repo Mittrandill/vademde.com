@@ -14,6 +14,7 @@ import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWo
 import { setupInitialWorkspaces } from '@/features/workspaces/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useOnboardingStore } from '@/store/onboardingStore';
 import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 import { showErrorAlert } from '@/utils/alerts';
@@ -42,6 +43,8 @@ export default function WorkspaceSetupScreen() {
   const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
+  const hasSeenTrialOffer = useOnboardingStore((s) => s.hasSeenTrialOffer);
+  const setHasSeenTrialOffer = useOnboardingStore((s) => s.setHasSeenTrialOffer);
   // /workspace ekranındaki "Yeni Çalışma Alanı Oluştur" gibi kullanıcının niyeti zaten
   // belliyken bu route'a girenler, seçim ekranını atlayıp doğrudan forma düşer. Bu durumda
   // "Geri" de seçim ekranına değil, geldikleri ekrana (router.back) döner — aksi halde
@@ -90,8 +93,14 @@ export default function WorkspaceSetupScreen() {
       // (senkron), invalidation bir sonraki etkileşim turuna ertelenir.
       setActiveWorkspaceId(primaryWorkspaceId);
       router.replace('/(tabs)');
+      // İlk kurulumdan (onboarding'den gelen yeni kullanıcı) sonra 7 gün ücretsiz deneme teklifi
+      // bir kez sunulur. Mevcut kullanıcının ek çalışma alanı açması (skippedChoice) buna girmez.
+      // Paywall, navigasyon ve önbellek işi bittikten sonra açılır — aynı Fabric çakışması.
+      const showTrialOffer = !skippedChoice && !hasSeenTrialOffer;
+      if (showTrialOffer) setHasSeenTrialOffer(true);
       InteractionManager.runAfterInteractions(() => {
         queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
+        if (showTrialOffer) router.push('/paywall');
       });
     },
   });

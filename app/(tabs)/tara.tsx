@@ -161,6 +161,14 @@ export default function TaraScreen() {
   useFocusEffect(
     useCallback(() => {
       if (documentQuery.data?.status === 'ready_for_review' && documentId) {
+        // Banka dekontu gelecekteki bir borç değil gerçekleşmiş bir ödemedir; kredi/fiş gibi
+        // kendi "sonuç ekranına" gider (bkz. app/documents/[id]/receipt.tsx). Kullanıcı tür
+        // seçerek geldiyse (ör. hesap detayından ekstre) o niyet bozulmaz, inceleme ekranı açılır.
+        if (documentQuery.data.document_type === 'banka_dekontu' && !incomingDocumentType) {
+          router.push({ pathname: '/documents/[id]/receipt', params: { id: documentId } });
+          reset();
+          return;
+        }
         router.push({
           pathname: '/documents/[id]/review',
           params: {
@@ -172,7 +180,14 @@ export default function TaraScreen() {
         });
         reset();
       }
-    }, [documentQuery.data?.status, documentId, incomingAccountId, incomingDocumentType, incomingExpectedDueDate])
+    }, [
+      documentQuery.data?.status,
+      documentQuery.data?.document_type,
+      documentId,
+      incomingAccountId,
+      incomingDocumentType,
+      incomingExpectedDueDate,
+    ])
   );
 
   function reset() {

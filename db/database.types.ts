@@ -715,6 +715,7 @@ export type Database = {
           notes: string | null
           obligation_id: string | null
           paid_at: string
+          receipt_document_id: string | null
           transaction_id: string | null
           workspace_id: string
         }
@@ -727,6 +728,7 @@ export type Database = {
           notes?: string | null
           obligation_id?: string | null
           paid_at?: string
+          receipt_document_id?: string | null
           transaction_id?: string | null
           workspace_id: string
         }
@@ -739,6 +741,7 @@ export type Database = {
           notes?: string | null
           obligation_id?: string | null
           paid_at?: string
+          receipt_document_id?: string | null
           transaction_id?: string | null
           workspace_id?: string
         }
@@ -762,6 +765,13 @@ export type Database = {
             columns: ["obligation_id"]
             isOneToOne: false
             referencedRelation: "obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_receipt_document_id_fkey"
+            columns: ["receipt_document_id"]
+            isOneToOne: false
+            referencedRelation: "financial_documents"
             referencedColumns: ["id"]
           },
           {
