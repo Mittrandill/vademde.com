@@ -12,8 +12,9 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | build 32 | App Store Connect'e `eas submit` ile yüklendi; Apple işliyor, TestFlight'ta görünmesi bekleniyor | 2026-09-30 |
-| iOS | build 30 | Yüklendi ama dekontun manuel hareket formundaki hâlini içermiyor; test için build 32 kullanılır | 2026-09-29 |
+| iOS | build 33 | Hazırlanıyor — cari ödeme eşleştirme/hesap zorunluluğu düzeltmeleriyle birlikte tek build olarak gönderilecek, build 32'nin yerine geçecek | — |
+| iOS | build 32 | App Store Connect'e `eas submit` ile yüklendi; Apple işliyor, TestFlight'ta görünmesi bekleniyor — build 33 ile değiştirilecek | 2026-09-30 |
+| iOS | build 30 | Yüklendi ama dekontun manuel hareket formundaki hâlini içermiyor; test için build 32/33 kullanılır | 2026-09-29 |
 
 Build 29 iptal edildi (dashboard halkası düzeltmesinin eski hâlini taşıyordu). Build 31 numarası
 başarısız bir yükleme denemesinde tüketildi. Build 30 `--auto-submit` ile ilk denemede yüklendi;
@@ -21,6 +22,11 @@ aynı build için sonradan elle yapılan gönderimler "already submitted" hatas�
 Build 32 `eas build --no-wait` + ayrı `eas submit --id <build>` ile yüklendi. Bir gönderim "sessizce
 öldü" sanılmadan önce App Store Connect'te (TestFlight) ya da submission sayfasında sonucu
 doğrulamak gerekir. 1.0.3 (build 28) yayında, dokunulmadı.
+
+Build 33, aynı gün (2026-09-30) test hesabında (`test@user.com`) bulunan bir veri bütünlüğü
+sorunu üzerine eklenen düzeltmeleri taşır (bkz. aşağıdaki "Kullanıcıya görünen değişiklikler" —
+cari ödeme eşleştirme, hesap zorunluluğu, dekont sonuç ekranı, altın Para Birimi etiketi). Build 32
+bu düzeltmeleri içermez; TestFlight'a yalnızca build 33 ile devam edilecek.
 
 ### Kullanıcıya görünen değişiklikler
 
@@ -35,6 +41,18 @@ doğrulamak gerekir. 1.0.3 (build 28) yayında, dokunulmadı.
 - **Yeni sürüm uyarısı:** App Store'da daha yeni sürüm varsa uygulama açılışında bildirir (yalnızca iOS).
 - **Düzeltmeler:** altın (çeyrek/yarım/tam) birimli tutarlar artık doğru gösterilip kaydediliyor;
   dashboard bakiye kartında büyük tutar/yazı tipinde halka taşması giderildi.
+- **Cari ödeme eşleştirme (build 33):** "Tahsilat/Ödeme Ekle" ile girilen tutar artık o cariye ait
+  en eski açık borç/alacaktan başlayarak otomatik düşülüyor (tam kapatma/kısmi ödeme/ön ödeme) —
+  önceden bağımsız bir hareket olarak kaydediliyordu, ilgili borcu/alacağı hiç etkilemiyordu.
+- **Ödemede hesap zorunlu (build 33):** borç/alacak ve dekont ödeme formlarında HESAP artık
+  zorunlu — önceden isteğe bağlıydı, hesapsız kaydedilen ödemeler hiçbir hesap bakiyesini
+  etkilemiyor ve Hareketler'de görünmüyordu.
+- **Dekont sonuç ekranı yenilendi (build 33):** diğer belge onay ekranlarıyla tutarlı hâle
+  getirildi; eşleşme yoksa cari oluşturma, kayıtlı değilse banka hesabı ekleme önerilir.
+- **Altın Para Birimi etiketi (build 33):** hesap detayında bazen görünen ham kod (ör.
+  ceyrek_altin) düzeltildi, doğru adıyla gösteriliyor.
+- **Tarama kısayolları (build 33):** Yeni Hareket ve Yeni Borç/Alacak ekranlarına kameradan
+  taramaya yönlendiren bir kısayol eklendi.
 
 ### Teknik değişiklikler (release notes'a girmez)
 
@@ -58,7 +76,9 @@ doğrulamak gerekir. 1.0.3 (build 28) yayında, dokunulmadı.
 - [ ] TestFlight'ta dashboard halkasını %100 ve %135 yazı tipinde doğrula.
 - [ ] Gerçek bir banka dekontuyla Gemini sınıflandırmasını ve dekont sonuç ekranını dene.
 - [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
-- [ ] App Store Connect'te 1.0.4 sürümünü oluştur, build 32'yi seç, "Yenilikler" ve ekran görüntülerini gir.
+- [ ] `eas build` ile build 33'ü al ve gönder; App Store Connect'te 1.0.4 sürümünü oluştur,
+      build 33'ü seç, "Yenilikler" (`assets/appstore/whats-new-1.0.4.tr.txt`) ve ekran
+      görüntülerini gir.
 
 ---
 

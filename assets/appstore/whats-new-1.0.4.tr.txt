@@ -5,6 +5,11 @@ Vademde 1.0.4
 • Belge Arşivi (Plus): Tüm dekontların tek yerde. Ara, aya göre gör, cari sayfasından da ulaş.
 • Yeni paywall: Plus ve İşletme planlarını karşılaştır. Uygun hesaplarda 7 gün ücretsiz deneme sunulur.
 • Yeni sürüm bildirimi: Yeni bir sürüm çıktığında uygulama sana haber verir.
-• Altın kayıtları düzeltildi: Çeyrek, yarım ve tam altın birimleri artık doğru miktarla gösteriliyor ve kaydediliyor.
+• Cari ödemeleri artık doğru işleniyor: Bir kişiye/firmaya "Tahsilat/Ödeme Ekle" ile girdiğin tutar, o cariye ait en eski açık borç/alacaktan başlayarak otomatik düşülüyor — tam kapatma, kısmi ödeme ya da (borç yoksa) ön ödeme olarak. Cari bakiyen ve açık kayıtların artık gerçek durumu yansıtıyor.
+• Ödemelerde hesap seçimi zorunlu: Her ödeme artık gerçek bir hesap hareketi olarak işleniyor; hesap bakiyen ve Hareketler listesi ödemeyi doğru gösteriyor.
+• Dekont sonuç ekranı yenilendi: Diğer belge onay ekranlarıyla tutarlı hâle getirildi; dekonttaki kişi kayıtlı değilse yeni bir cari oluşturman, dekonttaki banka hesabın yoksa onu eklemen önerilir.
+• Belgeni yükle, formu doldurmakla uğraşma: Yeni Hareket ve Yeni Borç/Alacak ekranlarına, kameradan taramaya yönlendiren bir kısayol eklendi.
+• Altın kayıtları düzeltildi: Çeyrek, yarım ve tam altın birimleri artık doğru miktarla gösteriliyor ve kaydediliyor; hesap detayındaki Para Birimi alanında bazen görünen ham kod (ör. ceyrek_altin) da düzeltildi.
 • Ana sayfadaki bakiye kartı, büyük yazı boyutlarında da düzgün görünüyor.
+• Cari ve hesap bakiyeleri artık bir işlem kaydedildiğinde sayfadan çıkıp girmeye gerek kalmadan anında güncelleniyor.
 • Küçük iyileştirmeler ve hata düzeltmeleri.
