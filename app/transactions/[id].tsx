@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { ActionSheet, Card, Divider, Row, Stack, Text } from '@/components/primitives';
+import { useTheme } from '@/theme';
+import { ActionSheet, Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import { DetailHeroCard, DetailIdentityRow } from '@/components/finance/DetailHero';
 import { AccountIcon } from '@/components/finance/AccountIcon';
@@ -14,6 +15,7 @@ import { BankLogo } from '@/components/finance/BankLogo';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
 import { deleteTransaction, getTransactionWithRelations } from '@/features/transactions/api';
+import { getTransactionReceipt, openReceipt } from '@/features/receipts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
@@ -33,6 +35,7 @@ const DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function TransactionDetailScreen() {
+  const theme = useTheme();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -43,6 +46,22 @@ export default function TransactionDetailScreen() {
     queryFn: () => getTransactionWithRelations(id as string),
     enabled: !!id,
   });
+
+  // Bu harekete bağlı dekont (Plus). Yoksa ya da dosya saklanmıyorsa satır hiç görünmez.
+  const receiptQuery = useQuery({
+    queryKey: ['transaction-receipt', id],
+    queryFn: () => getTransactionReceipt(id as string),
+    enabled: !!id,
+  });
+
+  async function handleOpenReceipt() {
+    if (!receiptQuery.data) return;
+    try {
+      await openReceipt(receiptQuery.data.id);
+    } catch {
+      Alert.alert('Dekont açılamadı', 'Dosya bulunamadı ya da bağlantı kurulamadı.');
+    }
+  }
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTransaction(id as string),
@@ -220,6 +239,24 @@ export default function TransactionDetailScreen() {
                     <Text variant="body">{transaction.counterparty.name}</Text>
                   </Stack>
                 </Row>
+              </>
+            ) : null}
+
+            {receiptQuery.data ? (
+              <>
+                <Divider />
+                <Pressable accessibilityRole="button" accessibilityLabel="Dekontu aç" onPress={handleOpenReceipt}>
+                  <Row gap="sm" align="center">
+                    <Ionicons name="attach" size={24} color={theme.colors.brandPrimary} style={{ width: 36, textAlign: 'center' }} />
+                    <Stack gap="xxs" style={{ flex: 1 }}>
+                      <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
+                        DEKONT
+                      </Text>
+                      <Text variant="body">Dekontu aç</Text>
+                    </Stack>
+                    <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                  </Row>
+                </Pressable>
               </>
             ) : null}
           </Stack>

@@ -26,6 +26,14 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { formatAmountInput, formatMinorAmount, parseValueUnitAmountToMinor } from '@/utils/money';
 import { getValueUnit } from '@/features/valueUnits/units';
+import { ReceiptAttachField } from '@/components/finance/ReceiptAttachField';
+import {
+  attachReceiptFile,
+  getTransactionReceipt,
+  removeTransactionReceipts,
+  useDocumentArchiveAccess,
+  type PendingReceipt,
+} from '@/features/receipts/api';
 import { queryKeys } from '@/services/queryKeys';
 
 type Direction = 'income' | 'expense' | 'transfer';
@@ -174,6 +182,18 @@ function TransactionForm({
   const unitCode = accounts.find((a) => a.id === accountId)?.currency_code ?? initial?.currency_code ?? 'TRY';
   const unitPrecision = getValueUnit(unitCode).precision;
 
+  // Dekont (Plus): yeni seçilen dosya ya da düzenlemede mevcut bağlantı. Transfer hareketlerinde
+  // dekont alanı gösterilmez (iki hesabı kapsayan tek kanıt anlamsız).
+  const archive = useDocumentArchiveAccess();
+  const [receipt, setReceipt] = useState<PendingReceipt | null>(null);
+  const [removedExisting, setRemovedExisting] = useState(false);
+  const existingReceiptQuery = useQuery({
+    queryKey: ['transaction-receipt', id],
+    queryFn: () => getTransactionReceipt(id as string),
+    enabled: !!id && isEditing,
+  });
+  const existingReceiptId = removedExisting ? null : (existingReceiptQuery.data?.id ?? null);
+
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId
       ? queryKeys.categories(activeWorkspaceId, direction === 'transfer' ? undefined : direction)
@@ -189,6 +209,34 @@ function TransactionForm({
     enabled: !!activeWorkspaceId && direction !== 'transfer',
   });
 
+  // Hareket zaten kaydedildikten sonra dekontu senkronlar. Dekont yüklenemezse hareket geri
+  // alınmaz ve form hata durumuna düşürülmez (tekrar "Kaydet" yinelenen hareket oluştururdu);
+  // kullanıcıya ayrıca bildirilir, dekont hareketi düzenleyerek yeniden eklenebilir.
+  async function syncReceipt(transactionId: string, amountMinor: number) {
+    if (!activeWorkspaceId || direction === 'transfer') return;
+    try {
+      if (receipt) {
+        const document = await attachReceiptFile({
+          workspaceId: activeWorkspaceId,
+          ...receipt,
+          transactionId,
+          amountMinor,
+          currencyCode: unitCode,
+        });
+        await removeTransactionReceipts(transactionId, document.id);
+      } else if (removedExisting) {
+        await removeTransactionReceipts(transactionId);
+      }
+      queryClient.invalidateQueries({ queryKey: ['transaction-receipt', transactionId] });
+      queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'receipt-archive'] });
+    } catch (error) {
+      Alert.alert(
+        'Dekont eklenemedi',
+        `Hareket kaydedildi ama dekont yüklenemedi: ${error instanceof Error ? error.message : 'bilinmeyen hata'}. Hareketi düzenleyerek dekontu yeniden ekleyebilirsiniz.`
+      );
+    }
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId || !accountId || !amount) throw new Error('Eksik alan var');
@@ -201,7 +249,7 @@ function TransactionForm({
 
       if (isEditing) {
         if (direction === 'transfer' && !transferToAccountId) throw new Error('Hedef hesap seçin');
-        return updateTransaction(id, {
+        const updated = await updateTransaction(id, {
           account_id: accountId,
           transfer_to_account_id: direction === 'transfer' ? transferToAccountId : null,
           direction,
@@ -212,6 +260,8 @@ function TransactionForm({
           occurred_at: occurredAt,
           description: description.trim() || null,
         });
+        await syncReceipt(id, amountMinor);
+        return updated;
       }
 
       if (direction === 'transfer') {
@@ -225,7 +275,7 @@ function TransactionForm({
           description: description.trim() || undefined,
         });
       }
-      return createTransaction({
+      const created = await createTransaction({
         workspace_id: activeWorkspaceId,
         account_id: accountId,
         direction,
@@ -236,6 +286,8 @@ function TransactionForm({
         occurred_at: occurredAt,
         description: description.trim() || null,
       });
+      await syncReceipt(created.id, amountMinor);
+      return created;
     },
     onSuccess: () => {
       showSaveSuccess(
@@ -420,6 +472,16 @@ function TransactionForm({
             )}
 
             <DateField label="TARİH" value={dateStr} onChangeText={setDateStr} />
+
+            {direction !== 'transfer' ? (
+              <ReceiptAttachField
+                value={receipt}
+                onChange={setReceipt}
+                existingReceiptId={existingReceiptId}
+                onRemoveExisting={() => setRemovedExisting(true)}
+                allowed={archive.allowed}
+              />
+            ) : null}
 
             <TextField
               label="AÇIKLAMA (İSTEĞE BAĞLI)"

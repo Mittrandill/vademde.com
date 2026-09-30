@@ -415,3 +415,38 @@ export async function listReceiptArchive({
   const filtered = counterpartyId ? items.filter((item) => item.counterpartyId === counterpartyId) : items;
   return filtered.sort((a, b) => b.date.localeCompare(a.date));
 }
+
+// --- Hareket (transaction) dekontları ---------------------------------------------------------
+
+// Bir harekete bağlı dekont: belge → hareket bağlantısı financial_documents.transaction_id'de tutulur
+// (ödemeye bağlı dekontlar payments.receipt_document_id'yi kullanır, bkz. yukarısı). Aynı hareketin
+// birden çok dekontu olmaz; en yenisi döner. Dosyası saklanmayan (silinmiş) belge sayılmaz.
+export async function getTransactionReceipt(transactionId: string): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from('financial_documents')
+    .select('id')
+    .eq('transaction_id', transactionId)
+    .eq('document_type', RECEIPT_DOCUMENT_TYPE)
+    .eq('status', 'confirmed')
+    .eq('retain_original', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Harekete bağlı mevcut dekont dosyalarını (belge satırı + Storage dosyası) siler; yenisiyle
+// değiştirilirken ya da kullanıcı kaldırdığında çağrılır.
+export async function removeTransactionReceipts(transactionId: string, exceptDocumentId?: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('financial_documents')
+    .select('id, storage_path')
+    .eq('transaction_id', transactionId)
+    .eq('document_type', RECEIPT_DOCUMENT_TYPE);
+  if (error) throw error;
+  for (const document of data ?? []) {
+    if (document.id === exceptDocumentId) continue;
+    await discardReceiptFile(document);
+  }
+}
