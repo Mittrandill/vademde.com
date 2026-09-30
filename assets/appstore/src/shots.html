@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Vademde App Store görselleri</title>
+<style>
+/* App Store ekran görüntüleri — 1320×2868 (6.9"). Her görsel #s1…#s10 ile seçilir (:target).
+   Renkler theme/colors.ts (koyu) ile birebir; ekran içeriği 390pt genişlikte çizilip ölçeklenir. */
+:root{
+  --bg:#1F2126; --deep:#14151A; --surface:#2B2D31; --elevated:#393B3F; --text:#F6F5F1; --text2:#B1B2AA;
+  --brand:#FFB000; --brand-ink:#1F2126; --violet:#6B4DFF; --aqua:#86DDEB; --success:#52CE96; --danger:#FF625C; --border:#3D3F45;
+  --head:"Bahnschrift","Segoe UI",system-ui,sans-serif; --ui:"Segoe UI",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#000}
+.shot{display:none;position:relative;width:1320px;height:2868px;overflow:hidden;font-family:var(--ui);color:var(--text);
+  background:
+    radial-gradient(1200px 1200px at 105% -6%, rgba(255,176,0,.20), transparent 60%),
+    radial-gradient(1400px 1400px at -12% 96%, rgba(107,77,255,.30), transparent 62%),
+    linear-gradient(180deg,#191A1F 0%,#111216 100%);}
+.shot:target{display:block}
+.arc{position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,.06)}
+.arc.a1{width:1500px;height:1500px;right:-760px;top:-520px;border-color:rgba(255,176,0,.16)}
+.arc.a2{width:1100px;height:1100px;right:-560px;top:-320px;border-color:rgba(107,77,255,.22)}
+.arc.a3{width:900px;height:900px;left:-560px;bottom:520px;border-color:rgba(134,221,235,.12)}
+.copy{position:absolute;left:96px;right:96px;top:150px}
+.eyebrow{font-family:var(--head);font-size:44px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand);font-weight:600;margin-bottom:34px}
+h1{font-family:var(--head);font-weight:700;font-size:150px;line-height:1.0;letter-spacing:-.02em}
+h1 em{font-style:normal;color:var(--brand)}
+.sub{margin-top:44px;font-size:56px;line-height:1.28;color:var(--text2);max-width:1040px}
+
+/* telefon */
+.phone{position:absolute;left:110px;top:900px;width:1100px;height:2300px;border-radius:158px;background:#0A0A0B;padding:24px;
+  box-shadow:0 0 0 3px #2a2b2f, 0 -30px 120px rgba(255,176,0,.10), 0 60px 160px rgba(0,0,0,.65)}
+.display{position:relative;width:100%;height:100%;border-radius:134px;overflow:hidden;background:var(--bg)}
+.island{position:absolute;z-index:5;top:32px;left:50%;transform:translateX(-50%);width:300px;height:86px;border-radius:44px;background:#000}
+.ui{position:absolute;left:0;top:0;width:390px;height:860px;transform-origin:0 0;transform:scale(2.6871);background:var(--bg);font-size:16px;overflow:hidden}
+.status{height:54px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 30px 8px;font-size:16px;font-weight:600}
+.status .r{display:flex;gap:6px;align-items:center;font-size:13px}
+.bat{width:26px;height:12px;border-radius:4px;background:var(--text);display:inline-block}
+.page{padding:6px 20px 0;display:flex;flex-direction:column;gap:16px}
+.title{font-size:30px;line-height:36px;font-weight:700}
+.cap{font-size:13px;color:var(--text2);line-height:18px}
+.body{font-size:16px;line-height:22px}
+.card{background:var(--surface);border-radius:20px;padding:16px}
+.hero{background:var(--elevated);border-radius:30px;padding:22px 16px}
+.row{display:flex;align-items:center}
+.gap8{gap:8px}.gap12{gap:12px}.gap16{gap:16px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--text2)}
+.pill b{color:var(--brand)}
+.tab{position:absolute;left:16px;right:16px;bottom:22px;height:64px;border-radius:32px;background:var(--surface);display:flex;justify-content:space-around;align-items:center;font-size:20px;color:var(--text2)}
+.tab .c{position:relative;top:-18px;width:66px;height:66px;border-radius:50%;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;font-size:26px;border:5px solid var(--bg)}
+.tab .on{color:var(--brand)}
+.num{font-variant-numeric:tabular-nums}
+.ico{width:44px;height:44px;border-radius:15px;background:var(--elevated);display:grid;place-items:center;font-size:20px;color:var(--text2)}
+.seg{display:flex;background:var(--surface);border-radius:20px;padding:4px}
+.seg span{flex:1;text-align:center;padding:11px 0;border-radius:16px;font-size:14px;font-weight:600;color:var(--text2)}
+.seg span.on{background:var(--brand);color:var(--brand-ink)}
+.chip{padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.ok{color:var(--success);background:rgba(52,206,150,.14)}
+.divider{height:1px;background:var(--border)}
+.sep{width:1px;background:var(--border);align-self:stretch}
+
+/* 1 — canlı tarama */
+.cam{position:absolute;left:0;right:0;top:0;bottom:0;background:radial-gradient(120% 80% at 50% 30%,#3a3c40,#0b0b0c 75%)}
+.paper{position:absolute;left:52px;top:210px;width:286px;height:350px;background:#E9E7DF;border-radius:6px;transform:rotate(-3deg);padding:18px;color:#202226;box-shadow:0 30px 60px rgba(0,0,0,.6)}
+.paper small{display:block;font-size:9px;letter-spacing:.12em;color:#7B7A72}
+.paper b{display:block;font-size:15px;font-family:ui-monospace,Consolas,monospace;margin:2px 0 12px}
+.paper b.big{font-size:24px}
+.frame{position:absolute;left:55px;top:195px;width:280px;height:380px}
+.frame i{position:absolute;width:32px;height:32px;border:4px solid var(--brand)}
+.frame i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-top-left-radius:14px}
+.frame i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-top-right-radius:14px}
+.frame i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-bottom-left-radius:14px}
+.frame i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-bottom-right-radius:14px}
+.scan{position:absolute;left:10px;right:10px;top:210px;height:4px;border-radius:2px;background:var(--brand);box-shadow:0 0 30px 8px rgba(255,176,0,.5)}
+.prog{position:absolute;left:50%;transform:translateX(-50%);top:640px;background:rgba(0,0,0,.6);border-radius:999px;padding:10px 20px;font-size:15px;white-space:nowrap}
+.topbar{position:absolute;left:20px;right:20px;top:70px;display:flex;justify-content:space-between}
+.topbar span{width:40px;height:40px;border-radius:20px;background:rgba(0,0,0,.4);display:grid;place-items:center;font-size:18px}
+.shutter{position:absolute;left:50%;transform:translateX(-50%);bottom:110px;width:76px;height:76px;border-radius:50%;border:4px solid var(--brand);display:grid;place-items:center}
+.shutter i{width:58px;height:58px;border-radius:50%;background:var(--brand)}
+
+/* 3 — tara ekranı */
+.rings{position:relative;width:220px;height:220px;margin:0 auto;display:grid;place-items:center}
+.rings i{position:absolute;border-radius:50%}
+.rings .r1{inset:0;background:rgba(255,176,0,.10)}
+.rings .r2{inset:32px;background:rgba(255,176,0,.18)}
+.rings .btn{position:relative;width:124px;height:124px;border-radius:50%;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;font-size:52px}
+.src{display:flex;align-items:center;gap:12px}
+.src .ic{width:52px;height:52px;border-radius:15px;background:var(--bg);display:grid;place-items:center;font-size:22px;color:var(--text2)}
+
+/* 4 — takvim */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);row-gap:0;text-align:center;font-size:16px}
+.cal .d{height:40px;display:grid;place-items:center;position:relative;font-weight:500}
+.cal .d.m{color:#5c5e63}
+.cal .d.today span{background:var(--brand);color:var(--brand-ink);border-radius:12px;width:38px;height:34px;display:grid;place-items:center;font-weight:700}
+.cal .d u{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);display:flex;gap:3px;text-decoration:none}
+.cal .d u b{width:5px;height:5px;border-radius:50%;background:var(--danger)}
+.cal .d u b.g{background:var(--success)}
+.cal .dow{color:var(--text2);font-size:13px;height:34px}
+
+/* dekont */
+.field{padding:11px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.field:first-child{border-top:0}
+.field small{display:block;font-size:11px;letter-spacing:.08em;color:var(--text2);text-transform:uppercase}
+.field span.v{font-size:16px}
+.radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;flex:none}
+.radio.on{border-color:var(--brand)}
+.radio.on::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--brand)}
+.match{border:1.5px solid var(--border);border-radius:20px;background:var(--surface);padding:12px 14px;display:flex;gap:12px;align-items:center}
+.match.sel{border-color:var(--brand);background:var(--elevated)}
+.btnp{height:55px;border-radius:15px;background:var(--brand);color:var(--brand-ink);font-weight:700;font-size:17px;display:grid;place-items:center}
+
+/* arşiv */
+.file{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:20px;padding:14px}
+.file .th{width:40px;height:40px;border-radius:15px;display:grid;place-items:center;font-size:19px}
+.mh{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-top:2px}
+
+/* ekip */
+.avs{display:flex}
+.avs i{width:44px;height:44px;border-radius:50%;border:3px solid var(--surface);display:grid;place-items:center;font-style:normal;font-weight:700;margin-left:-12px}
+.avs i:first-child{margin-left:0}
+.wseg{display:flex;background:var(--bg);border-radius:20px;padding:4px}
+.wseg span{flex:1;text-align:center;padding:9px 0;border-radius:16px;font-size:13px;font-weight:600;color:var(--text2)}
+.wseg span.on{background:var(--brand);color:var(--brand-ink)}
+.role{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--bg);font-size:12px;color:var(--text2)}
+.role i{width:8px;height:8px;border-radius:4px}
+
+/* kurlar */
+.rate{display:flex;align-items:center;gap:12px;padding:6px 0}
+.rate .ri{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:17px}
+
+/* paywall */
+.trial{display:flex;gap:12px;align-items:center;padding:12px;border-radius:20px;background:rgba(255,176,0,.12);border:1px solid rgba(255,176,0,.4)}
+.cmp .r{display:flex;align-items:center;padding:8px 16px;border-top:1px solid var(--border);font-size:13px}
+.cmp .r:first-child{border-top:0}
+.cmp .r>span:first-child{flex:1}
+.cmp .r>span:not(:first-child){width:64px;text-align:center}
+.cmp .hl{color:var(--brand);font-weight:700;background:rgba(255,176,0,.1);border-radius:8px;padding:4px 0}
+.cmp .no{color:var(--text2)}
+
+h1{font-size:140px}
+.copy{top:190px}
+.brand{position:absolute;left:96px;top:70px;display:flex;align-items:center;gap:26px;font-family:var(--head);font-weight:700;font-size:52px;letter-spacing:.02em;color:var(--text)}
+.brand svg{width:96px;height:auto;display:block}
+.phone::before{content:"";position:absolute;inset:0;border-radius:158px;background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,0) 22%,rgba(255,255,255,0) 78%,rgba(255,176,0,.10));pointer-events:none;z-index:6}
+.float{position:absolute;z-index:8;display:flex;align-items:center;gap:30px;padding:34px 44px;border-radius:64px;background:rgba(43,45,49,.94);border:2px solid rgba(255,255,255,.10);box-shadow:0 40px 100px rgba(0,0,0,.55);font-size:48px;line-height:1.15;backdrop-filter:blur(30px)}
+.float small{display:block;font-size:36px;color:var(--text2);margin-top:6px}
+.float .fi{width:96px;height:96px;border-radius:32px;display:grid;place-items:center;font-size:52px;flex:none}
+.float .fi.g{background:rgba(82,206,150,.18);color:var(--success)}
+.float .fi.y{background:rgba(255,176,0,.18);color:var(--brand)}
+.float .fi.v{background:rgba(107,77,255,.28);color:#b3a4ff}
+.float b{font-weight:700}
+.float .big{font-size:80px;font-weight:700;letter-spacing:-.02em}
+.float.sm{gap:22px;padding:24px 32px;font-size:40px;border-radius:56px}
+.float.sm small{font-size:30px}
+.float.sm .fi{width:72px;height:72px;font-size:38px;border-radius:24px}
+.phone{top:930px}
+</style>
+</head>
+<body>
+
+<!-- 1 — canlı tarama -->
+<section class="shot" id="s1">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Akıllı okuma</p>
+    <h1>Fotoğrafını çek.<br><em>Vademde</em> okusun.</h1>
+    <p class="sub">Çek, senet ve faturadaki tutar, vade ve karşı taraf saniyeler içinde alanlara dolar.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="cam"></div>
+      <div class="status" style="position:relative"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="topbar"><span>‹</span><span style="width:auto;padding:0 6px;gap:8px;display:flex"><b style="font-size:16px">⚡</b><b style="font-size:16px">⟲</b></span></div>
+      <div class="paper"><small>ÇEK · NO 0004817</small><b class="big" style="margin-top:8px">185.000,00 TL</b><small>VADE</small><b>14.11.2026</b><small>KEŞİDECİ</small><b style="font-family:var(--ui);font-size:15px">Yıldız Ticaret A.Ş.</b>
+        <div style="margin-top:26px;border-bottom:1px solid #b9b7ad;height:44px;font-family:'Segoe Script','Snell Roundhand',cursive;font-size:24px;color:#3a4a7a">Y. Yıldız</div></div>
+      <div class="frame"><i></i><i></i><i></i><i></i><div class="scan"></div></div>
+      <div class="prog"><span style="color:var(--brand)">◐</span>&nbsp; Taranıyor... %65</div>
+      <div class="shutter"><i></i></div>
+    </div>
+  </div></div>
+<div class="float sm" style="left:96px;top:800px"><span class="fi g">✓</span><div><b>Tutar okundu</b><small>185.000,00 TL · %99</small></div></div><div class="float sm" style="right:96px;top:800px"><span class="fi y">◷</span><div><b>Vade okundu</b><small>14 Kasım 2026 · %98</small></div></div>
+</section>
+
+<!-- 2 — onay ekranı -->
+<section class="shot" id="s2">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Senin onayınla</p>
+    <h1>Okunan her şey<br><em>önüne gelir.</em></h1>
+    <p class="sub">Alanları sen görür, düzeltir, onaylarsın. Onaylamadan hiçbir kayıt oluşmaz.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="row"><div class="title" style="flex:1">Belge İnceleme</div><span class="ico" style="width:36px;height:36px;border-radius:18px;font-size:16px">✕</span></div>
+        <div style="height:120px;border-radius:20px;background:#E9E7DF;position:relative;overflow:hidden"><div style="position:absolute;left:24px;top:18px;color:#202226"><small style="font-size:9px;letter-spacing:.12em;color:#7B7A72">ÇEK · NO 0004817</small><div style="font:700 22px ui-monospace,Consolas,monospace;margin-top:4px">185.000,00 TL</div><div style="font:13px ui-monospace,Consolas,monospace;margin-top:8px">14.11.2026 · Yıldız Ticaret A.Ş.</div></div></div>
+        <div class="cap num">Genel güven: %98</div>
+        <div class="seg"><span>Ben Ödeyeceğim</span><span class="on">Ben Tahsil Edeceğim</span></div>
+        <div class="card" style="padding:4px 16px">
+          <div class="field"><div><small>Tutar</small><span class="v num" style="font-size:24px;font-weight:600">185.000,00 TL</span></div><span class="chip ok num">%99</span></div>
+          <div class="field"><div><small>Vade</small><span class="v num">14.11.2026</span></div><span class="chip ok num">%98</span></div>
+          <div class="field"><div><small>Tür</small><span class="v">Çek · Alacak</span></div><span class="chip ok num">%97</span></div>
+          <div class="field"><div><small>Keşideci</small><span class="v">Yıldız Ticaret A.Ş.</span></div><span class="chip ok num">%96</span></div>
+        </div>
+        <div class="btnp">Onayla ve vade oluştur</div>
+        <div class="cap" style="text-align:center">Okuma tutmazsa manuel girişe geçebilirsiniz.</div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="right:96px;top:790px"><span class="fi g">✓</span><div><b>Genel güven</b><small>Tüm alanlar yüksek</small></div><span class="big" style="color:var(--success);margin-left:16px">%98</span></div>
+</section>
+
+<!-- 3 — tara ekranı -->
+<section class="shot" id="s3">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Belge Tara</p>
+    <h1>Kamera, galeri<br>ya da <em>PDF.</em></h1>
+    <p class="sub">Belgeyi nereden eklersen ekle, Vademde aynı hızda okur.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="row"><div class="title" style="flex:1">Belge Tara</div><span class="ico" style="width:34px;height:34px;border-radius:17px;font-size:15px;border:1.5px solid var(--border);background:none">i</span></div>
+        <div class="body" style="color:var(--text2)">Çek, senet veya fatura ekleyin; Vademde belgeyi okuyup vadeli kaydı sizin onayınızla oluşturur.</div>
+        <div class="pill"><span>▤</span>Kalan OCR kotanız: <b class="num">87</b> / 100</div>
+        <div class="hero" style="text-align:center">
+          <div class="rings"><i class="r1"></i><i class="r2"></i><div class="btn">◉</div></div>
+          <div style="font-size:21px;font-weight:600;margin-top:10px">Kameradan Tara</div>
+          <div class="cap">Belgeyi kamerayla çekerek tara</div>
+          <div style="width:52px;height:52px;border-radius:26px;background:var(--bg);border:1px solid var(--border);margin:12px auto 0;display:grid;place-items:center;color:var(--brand);font-size:22px">→</div>
+        </div>
+        <div class="card src"><div class="ic">▣</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Galeriden Seç</div><div class="cap">Fotoğraf galerisinden bir belge seçin</div></div><span style="color:var(--text2)">›</span></div>
+        <div class="card src"><div class="ic">▤</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Dosyalardan Seç</div><div class="cap">Cihazınızdaki dosyalardan belge seçin</div></div><span style="color:var(--text2)">›</span></div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="left:96px;top:790px"><span class="fi y">▣</span><div><b>Fotoğraf, PDF, dosya</b><small>Hepsi aynı hızda okunur</small></div></div>
+</section>
+
+<!-- 4 — takvim -->
+<section class="shot" id="s4">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Vade takvimi</p>
+    <h1>Vade kaçmaz.<br><em>Takvim</em> hazır.</h1>
+    <p class="sub">Ödenecek ve tahsil edilecekler renk renk, hatırlatmalarla birlikte.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="title">Takvim</div>
+        <div class="seg" style="width:210px"><span class="on">Ay</span><span>Hafta</span><span>Liste</span></div>
+        <div class="card" style="padding:14px">
+          <div class="row" style="justify-content:space-between;padding-bottom:6px"><span class="ico" style="width:36px;height:36px;border-radius:18px">‹</span><b style="font-size:18px">Kasım 2026</b><span class="ico" style="width:36px;height:36px;border-radius:18px">›</span></div>
+          <div class="cal">
+            <div class="d dow">Pt</div><div class="d dow">Sa</div><div class="d dow">Ça</div><div class="d dow">Pe</div><div class="d dow">Cu</div><div class="d dow">Ct</div><div class="d dow">Pz</div>
+            <div class="d m">26</div><div class="d m">27</div><div class="d m">28</div><div class="d m">29</div><div class="d m">30</div><div class="d m">31</div><div class="d">1<u><b></b></u></div>
+            <div class="d">2</div><div class="d">3</div><div class="d">4</div><div class="d">5</div><div class="d">6</div><div class="d">7</div><div class="d">8</div>
+            <div class="d">9</div><div class="d">10<u><b></b></u></div><div class="d">11</div><div class="d">12</div><div class="d">13</div><div class="d">14<u><b class="g"></b><b></b></u></div><div class="d">15</div>
+            <div class="d">16</div><div class="d">17</div><div class="d">18</div><div class="d">19</div><div class="d">20<u><b></b></u></div><div class="d today"><span>21</span></div><div class="d">22</div>
+            <div class="d">23</div><div class="d">24</div><div class="d">25<u><b class="g"></b></u></div><div class="d">26</div><div class="d">27</div><div class="d">28<u><b></b></u></div><div class="d">29</div>
+            <div class="d">30</div>
+          </div>
+          <div class="row gap12 cap" style="margin-top:8px"><span><i style="display:inline-block;width:9px;height:9px;border-radius:5px;background:var(--danger)"></i> Ödenecek</span><span><i style="display:inline-block;width:9px;height:9px;border-radius:5px;background:var(--success)"></i> Tahsil edilecek</span><span><i style="display:inline-block;width:9px;height:9px;border-radius:5px;border:2px solid var(--violet)"></i> Çek / Senet</span></div>
+        </div>
+        <div style="font-size:21px;font-weight:600">14 Kasım Cumartesi</div>
+        <div class="card row gap12"><span class="ico" style="background:rgba(255,176,0,.16);color:var(--brand)">▭</span><div style="flex:1"><div style="font-size:17px;font-weight:600">Yıldız Ticaret</div><div class="cap">Çek · Tahsil edilecek</div></div><b class="num" style="color:var(--success)">185.000,00 ₺</b></div>
+        <div class="card row gap12"><span class="ico">▤</span><div style="flex:1"><div style="font-size:17px;font-weight:600">Kredi taksiti</div><div class="cap">Ödenecek</div></div><b class="num">12.480,00 ₺</b></div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="right:96px;top:790px"><span class="fi y">🔔&#xFE0E;</span><div><b>Yarın vadesi geliyor</b><small>Yıldız Ticaret · 185.000 ₺</small></div></div>
+</section>
+
+<!-- 5 — dekont sonucu -->
+<section class="shot" id="s5">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Ödeme dekontu</p>
+    <h1>Dekontu tara,<br>ödemeye <em>bağla.</em></h1>
+    <p class="sub">Gönderen, alıcı, IBAN ve tutar okunur; uygun borç otomatik önerilir.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="row"><div class="title" style="flex:1">Ödeme Dekontu</div><span class="ico" style="width:36px;height:36px;border-radius:18px;font-size:16px;background:none">✕</span></div>
+        <div class="hero" style="border-radius:30px"><div class="cap">GÖNDERİLEN TUTAR</div><div class="num" style="font-size:34px;font-weight:700;line-height:40px;margin-top:4px">₺12.480,00</div><div class="cap" style="margin-top:4px">21 Kasım 2026 · Garanti BBVA</div></div>
+        <div class="card" style="padding:4px 16px">
+          <div class="field"><div><small>Gönderen</small><span class="v">Ayşe Kaya<br><span class="cap num">TR33 0006 1005 1978 6457 8413 26</span></span></div></div>
+          <div class="field"><div><small>Alıcı</small><span class="v">Yıldız Kredi A.Ş.</span></div></div>
+          <div class="field"><div><small>İşlem türü</small><span class="v">EFT</span></div><div style="text-align:right"><small>Referans no</small><span class="v num">2611048817</span></div></div>
+        </div>
+        <div class="cap" style="letter-spacing:.06em">BU ÖDEME HANGİ KAYITLA İLGİLİ?</div>
+        <div class="match sel"><span class="radio on"></span><div style="flex:1"><div style="font-size:16px;font-weight:600">Konut kredisi</div><div class="cap">3. taksit · Taksit tutarı eşleşti</div></div><div style="text-align:right"><b class="num">12.480,00 ₺</b><div class="cap">kalan</div></div></div>
+        <div class="match"><span class="radio"></span><div style="flex:1"><div style="font-size:16px;font-weight:600">Eşleşme yok</div><div class="cap">Bağımsız gider hareketi olarak kaydet</div></div></div>
+        <div class="btnp">Ödeme olarak kaydet</div>
+        <div class="cap" style="text-align:center">Siz onaylamadan hiçbir kayıt oluşmaz.</div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="left:96px;top:790px"><span class="fi g">⇄</span><div><b>Taksit eşleşti</b><small>Konut kredisi · 3. taksit</small></div></div>
+</section>
+
+<!-- 6 — belge arşivi -->
+<section class="shot" id="s6">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Belge arşivi</p>
+    <h1>Tüm dekontlar<br><em>tek arşivde.</em></h1>
+    <p class="sub">Ödemeye ekle, ara, tek dokunuşla aç. Cari sayfasından da ulaş.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="row"><span class="ico" style="width:36px;height:36px;border-radius:18px">‹</span><div class="title" style="flex:1;text-align:center;font-size:20px">Belge Arşivi</div><span style="width:36px"></span></div>
+        <div style="height:50px;border-radius:15px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;padding:0 14px;color:var(--text2);font-size:16px">⌕&nbsp; Kişi, firma veya kayıt ara</div>
+        <div class="mh">Kasım 2026</div>
+        <div class="file"><div class="th" style="background:rgba(255,176,0,.16);color:var(--brand)">▣</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Konut kredisi</div><div class="cap">Yıldız Kredi A.Ş. · 21 Kas 2026</div></div><b class="num">12.480,00 ₺</b><span style="color:var(--text2)">⛓</span></div>
+        <div class="file"><div class="th" style="background:rgba(107,77,255,.18);color:var(--violet)">▤</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Ofis kirası</div><div class="cap">Anadolu Emlak · 14 Kas 2026</div></div><b class="num">22.500,00 ₺</b><span style="color:var(--text2)">⛓</span></div>
+        <div class="file"><div class="th" style="background:rgba(255,176,0,.16);color:var(--brand)">▣</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Tedarikçi ödemesi</div><div class="cap">Boztaş Gıda · 6 Kas 2026</div></div><b class="num">8.940,00 ₺</b><span style="color:var(--text2)">⛓</span></div>
+        <div class="mh" style="margin-top:6px">Ekim 2026</div>
+        <div class="file"><div class="th" style="background:rgba(255,176,0,.16);color:var(--brand)">▣</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Elektrik faturası</div><div class="cap">Enerjisa · 28 Eki 2026</div></div><b class="num">2.316,40 ₺</b><span style="color:var(--text2)">⛓</span></div>
+        <div class="file"><div class="th" style="background:rgba(107,77,255,.18);color:var(--violet)">▤</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Kredi kartı ödemesi</div><div class="cap">Ziraat · 19 Eki 2026</div></div><b class="num">15.200,00 ₺</b><span style="color:var(--text2)">⛓</span></div>
+        <div class="file"><div class="th" style="background:rgba(255,176,0,.16);color:var(--brand)">▣</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Personel maaşı</div><div class="cap">Eki 2026</div></div><b class="num">31.000,00 ₺</b><span style="color:var(--text2)">⛓</span></div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="right:96px;top:790px"><span class="fi v">⛓</span><div><b>Ödemeye bağlı</b><small>Tek dokunuşla aç</small></div></div>
+</section>
+
+<!-- 7 — dashboard -->
+<section class="shot" id="s7">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Ana sayfa</p>
+    <h1>Borç, alacak,<br><em>net bakiye.</em></h1>
+    <p class="sub">Tek bakışta ne ödeyeceğini, neyi tahsil edeceğini gör.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="row" style="align-items:flex-end"><div style="flex:1"><div class="cap" style="letter-spacing:.06em">ÇALIŞMA ALANI</div><div class="title" style="font-size:34px;line-height:40px">Kişisel</div></div><span class="ico" style="width:46px;height:46px;border-radius:15px;margin-left:8px">♢</span><span class="ico" style="width:46px;height:46px;border-radius:15px;margin-left:8px">⚙</span></div>
+        <div class="card" style="border-radius:30px;padding:16px">
+          <div class="row"><div class="cap" style="flex:1;letter-spacing:.06em">TOPLAM BAKİYE</div><span class="ico" style="width:34px;height:34px;border-radius:17px;background:none;border:1px solid var(--border);font-size:15px">◉</span></div>
+          <div class="row gap16" style="margin-top:8px">
+            <div style="flex:1"><div class="num" style="font-size:34px;font-weight:700;line-height:40px">₺148.320,75</div><div class="cap" style="margin-top:6px">Bu ay: <span style="color:var(--success)" class="num">+₺24.500,00</span></div></div>
+            <div style="width:112px;height:112px;border-radius:56px;border:12px solid rgba(255,176,0,.18);border-top-color:var(--brand);border-right-color:var(--brand);display:grid;place-items:center;text-align:center"><div class="cap" style="line-height:22px"><div style="font-size:22px">▭</div>Bakiye</div></div>
+          </div>
+          <div class="divider" style="margin:14px 0"></div>
+          <div class="row" style="align-items:stretch"><div style="flex:1"><div class="cap">● Alacak</div><div class="num" style="font-size:20px;font-weight:600;color:var(--success);margin-top:4px">₺245.000,00</div></div><div class="sep"></div><div style="flex:1;padding-left:16px"><div class="cap">● Borç</div><div class="num" style="font-size:20px;font-weight:600;margin-top:4px">₺96.679,25</div></div></div>
+        </div>
+        <div class="cap" style="letter-spacing:.08em">ÖDENECEKLER</div>
+        <div class="card row" style="padding:14px 12px;gap:0">
+          <div style="flex:1;padding:0 8px"><div class="cap">GECİKMİŞ</div><div class="num" style="color:var(--danger);font-weight:600;margin:6px 0 2px">₺4.200,00</div><div class="cap">2 vade</div></div><div class="sep"></div>
+          <div style="flex:1;padding:0 12px"><div class="cap">BU AY</div><div class="num" style="font-weight:600;margin:6px 0 2px">₺27.480,00</div><div class="cap">Ödenecek</div></div><div class="sep"></div>
+          <div style="flex:1;padding:0 12px"><div class="cap">TOPLAM</div><div class="num" style="font-weight:600;margin:6px 0 2px">₺96.679,25</div><div class="cap">Tüm vadeler</div></div>
+        </div>
+        <div class="cap" style="letter-spacing:.08em;display:flex;justify-content:space-between"><span>HIZLI İŞLEMLER</span><span style="text-transform:none;letter-spacing:0;font-size:14px;color:var(--text)">Düzenle ›</span></div>
+      </div>
+      <div class="tab"><span class="on">⌂</span><span>⇄</span><span class="c">▣</span><span>▦</span><span>▥</span></div>
+    </div>
+  </div></div>
+<div class="float" style="left:96px;top:790px"><span class="fi g">↗</span><div><b>Bu ay net</b><small class="num">+₺24.500,00</small></div></div>
+</section>
+
+<!-- 8 — çalışma alanı ve ekip -->
+<section class="shot" id="s8">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Çalışma alanları ve ekip</p>
+    <h1>Kişisel ve iş,<br><em>ayrı ayrı.</em></h1>
+    <p class="sub">Her alanın verisi ayrıdır. Ekibini davet et, kimin düzenleyeceğini sen seç.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="row gap12" style="padding:12px;border-radius:20px;border:1px solid var(--border);background:var(--elevated)"><span style="width:34px;height:34px;border-radius:17px;background:var(--violet);display:grid;place-items:center;font-weight:700">Y</span><div style="flex:1"><div style="font-size:17px;font-weight:600">Yıldız Ticaret</div><div class="cap">seni ekibe davet etti</div></div></div>
+        <div class="card" style="border-radius:30px;padding:16px;display:flex;flex-direction:column;gap:16px">
+          <div class="wseg"><span>Kişisel</span><span class="on">Yıldız Tic.</span><span>Market</span></div>
+          <div class="row" style="justify-content:space-between"><div class="avs"><i style="background:var(--brand);color:var(--brand-ink)">A</i><i style="background:var(--violet)">M</i><i style="background:var(--aqua);color:#06232A">S</i><i style="background:var(--elevated)">B</i><i style="background:none;border:2px dashed var(--brand);color:var(--brand);font-weight:400;font-size:22px">+</i></div><div style="text-align:right"><div class="num" style="font-size:21px;font-weight:600">4 / 10</div><div class="cap">ekip üyesi</div></div></div>
+          <div class="row gap8" style="flex-wrap:wrap"><span class="role"><i style="background:var(--brand)"></i>Sahip</span><span class="role"><i style="background:var(--violet)"></i>Düzenleyici</span><span class="role"><i style="background:var(--text2)"></i>Görüntüleyici</span></div>
+        </div>
+        <div class="cap" style="letter-spacing:.08em">ÇALIŞMA ALANLARI</div>
+        <div class="card row gap12" style="border:1.5px solid var(--brand);background:var(--elevated)"><span class="ico" style="background:var(--brand);color:var(--brand-ink);font-weight:700">Y</span><div style="flex:1"><div style="font-size:17px;font-weight:600">Yıldız Ticaret</div><div class="cap">İşletme · 4 kişi</div></div><span class="chip ok">Aktif</span></div>
+        <div class="card row gap12"><span class="ico" style="font-weight:700">K</span><div style="flex:1"><div style="font-size:17px;font-weight:600">Kişisel Bütçe</div><div class="cap">Kişisel · Sadece sen</div></div></div>
+        <div class="card row gap12"><span class="ico" style="font-weight:700">M</span><div style="flex:1"><div style="font-size:17px;font-weight:600">Market Cari</div><div class="cap">İşletme · 2 kişi</div></div></div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="right:96px;top:790px"><span class="fi v">◍</span><div><b>Ekip üyesi</b><small>Düzenleyici · Görüntüleyici</small></div></div>
+</section>
+
+<!-- 9 — kurlar -->
+<section class="shot" id="s9">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Döviz ve altın</p>
+    <h1>Altın ve dövizle<br><em>de hesaplı.</em></h1>
+    <p class="sub">Gram, çeyrek, yarım, tam altın ve döviz kayıtlarını güncel kurla TL'ye çevir.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page">
+        <div class="row"><span class="ico" style="width:44px;height:44px">✕</span><div class="title" style="flex:1;text-align:center">Raporlar</div><span class="ico" style="width:44px;height:44px">⇪</span></div>
+        <div class="seg"><span class="on">Bu Ay</span><span>Son 3 Ay</span><span>Bu Yıl</span></div>
+        <div class="card" style="padding:16px 16px 10px">
+          <div style="font-size:22px;font-weight:700;margin-bottom:8px">Güncel Kurlar</div>
+          <div class="rate"><span class="ri" style="background:#4C8DFF">$</span><span style="flex:1;font-size:17px">Amerikan Doları</span><b class="num">₺48,99</b></div>
+          <div class="rate"><span class="ri" style="background:#3457D5">€</span><span style="flex:1;font-size:17px">Euro</span><b class="num">₺55,73</b></div>
+          <div class="rate"><span class="ri" style="background:#F0B429;color:#3a2a00">▰</span><span style="flex:1;font-size:17px">Gram Altın</span><b class="num">₺6.556,89</b></div>
+          <div class="rate"><span class="ri" style="background:#C97B4A">◍</span><span style="flex:1;font-size:17px">Çeyrek Altın</span><b class="num">₺10.719,00</b></div>
+          <div class="rate"><span class="ri" style="background:#B98450">◍</span><span style="flex:1;font-size:17px">Yarım Altın</span><b class="num">₺21.431,00</b></div>
+          <div class="rate"><span class="ri" style="background:#E8985E">◍</span><span style="flex:1;font-size:17px">Tam Altın</span><b class="num">₺42.738,00</b></div>
+        </div>
+        <div class="card">
+          <div class="cap" style="letter-spacing:.06em">BU AY GELİR-GİDER</div>
+          <div class="row" style="margin-top:12px;text-align:center">
+            <div style="flex:1"><div class="cap">GELİR</div><div style="width:64px;height:64px;border-radius:32px;border:7px solid rgba(82,206,150,.25);border-top-color:var(--success);border-left-color:var(--success);margin:8px auto;display:grid;place-items:center;color:var(--success)">↗</div><b class="num" style="color:var(--success)">+₺55.700</b></div>
+            <div class="sep"></div>
+            <div style="flex:1"><div class="cap">GİDER</div><div style="width:64px;height:64px;border-radius:32px;border:7px solid rgba(255,255,255,.12);border-top-color:#b1b2aa;margin:8px auto;display:grid;place-items:center;color:var(--text2)">↘</div><b class="num">-₺31.200</b></div>
+            <div class="sep"></div>
+            <div style="flex:1"><div class="cap">NET</div><div style="width:64px;height:64px;border-radius:32px;border:7px solid rgba(82,206,150,.25);border-top-color:var(--success);border-left-color:var(--success);margin:8px auto;display:grid;place-items:center;color:var(--success)">↗</div><b class="num" style="color:var(--success)">+₺24.500</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="left:96px;top:790px"><span class="fi y">▰</span><div><b>Gram altın</b><small class="num">1,50 gr = ₺9.835,34</small></div></div>
+</section>
+
+<!-- 10 — paywall -->
+<section class="shot" id="s10">
+  <div class="brand"><svg viewBox="0 0 1024 980"><path fill="#F6F5F1" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><rect fill="#6B4DFF" x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect fill="#6B4DFF" x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect fill="#6B4DFF" x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/><rect fill="#FFB000" x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect fill="#FFB000" x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path fill="#FFB000" d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></svg>Vademde</div><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i>
+  <div class="copy">
+    <p class="eyebrow">Vademde Plus</p>
+    <h1>İlk <em>7 gün</em><br>ücretsiz dene.</h1>
+    <p class="sub">İstediğin zaman iptal et. Deneme bitmeden iptal edersen ücret ödemezsin.</p>
+  </div>
+  <div class="phone"><div class="display"><div class="island"></div>
+    <div class="ui">
+      <div class="status"><span>9:41</span><span class="r"><span class="bat"></span></span></div>
+      <div class="page" style="gap:14px">
+        <div class="row" style="justify-content:space-between"><span style="font-size:24px">✕</span><span style="color:var(--text2);font-size:16px">Geri yükle</span></div>
+        <div><div class="cap" style="color:var(--brand);font-weight:700;letter-spacing:.12em">VADEMDE PREMIUM</div><div class="title" style="margin-top:4px">Tarayan hiç yazmaz.</div></div>
+        <div class="trial"><span style="font-size:22px;color:var(--brand)">🎁&#xFE0E;</span><div><div style="font-size:17px;font-weight:600">7 gün ücretsiz dene</div><div class="cap">Deneme bitmeden iptal edersen ücret ödemezsin.</div></div></div>
+        <div class="seg"><span>Aylık</span><span class="on">Yıllık · -%17</span></div>
+        <div class="seg"><span class="on">Plus</span><span>İşletme</span></div>
+        <div style="text-align:center"><div class="cap">Vademde Plus</div><div class="num" style="font-size:44px;font-weight:700;line-height:52px">₺1.499,99</div><div class="cap num">/ yıl · ayda ₺125,00</div></div>
+        <div class="card cmp" style="padding:0;overflow:hidden">
+          <div class="r" style="font-size:12px"><span></span><span class="no">Ücretsiz</span><span style="color:var(--brand);font-weight:700">Plus</span><span class="no">İşletme</span></div>
+          <div class="r"><span>Belge tarama / ay</span><span class="no">5</span><span class="hl">100</span><span>500</span></div>
+          <div class="r"><span>Çalışma alanı</span><span class="no">1</span><span class="hl">10</span><span>25</span></div>
+          <div class="r"><span>Gelişmiş raporlar</span><span class="no">—</span><span class="hl">Var</span><span>Var</span></div>
+          <div class="r"><span>Belge arşivi</span><span class="no">—</span><span class="hl">Var</span><span>Var</span></div>
+        </div>
+        <div class="btnp">7 gün ücretsiz başlat</div>
+      </div>
+    </div>
+  </div></div>
+<div class="float" style="right:96px;top:790px"><span class="fi y">🎁&#xFE0E;</span><div><b>7 gün ücretsiz</b><small>Sonra ₺1.499,99 / yıl</small></div></div>
+</section>
+
+</body>
+</html>

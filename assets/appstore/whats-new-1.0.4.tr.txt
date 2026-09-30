@@ -1,0 +1,10 @@
+Vademde 1.0.4
+
+• Yenilenen karşılama: Belgeni nasıl taratacağını ve neler yapabileceğini anlatan yeni, animasyonlu başlangıç akışı.
+• Ödeme dekontu (Plus): Ödemelerine dekont, fotoğraf veya PDF ekle; ödeme satırındaki ataçla tek dokunuşta aç. Banka dekontunu tarattığında Vademde gönderen, alıcı, IBAN ve tutarı okur, uygun borcu önerir; sen onaylayınca ödeme kaydedilir.
+• Belge Arşivi (Plus): Tüm dekontların tek yerde. Ara, aya göre gör, cari sayfasından da ulaş.
+• Yeni paywall: Plus ve İşletme planlarını karşılaştır. Uygun hesaplarda 7 gün ücretsiz deneme sunulur.
+• Yeni sürüm bildirimi: Yeni bir sürüm çıktığında uygulama sana haber verir.
+• Altın kayıtları düzeltildi: Çeyrek, yarım ve tam altın birimleri artık doğru miktarla gösteriliyor ve kaydediliyor.
+• Ana sayfadaki bakiye kartı, büyük yazı boyutlarında da düzgün görünüyor.
+• Küçük iyileştirmeler ve hata düzeltmeleri.
