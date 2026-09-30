@@ -191,16 +191,23 @@ interface FindReceiptMatchesInput {
   /** Dekonttaki para yönü: 'expense' borç ödemesi (payable), 'income' tahsilat (receivable). */
   direction: 'expense' | 'income';
   amountMinor: number;
+  /** Kullanıcının KİŞİ/FİRMA alanından seçtiği/eşlediği cari — verildiğinde isim benzerliğinden
+   * çok daha güvenilirdir: o kişiyle açık HER kayıt (tutar tutmasa bile) öneri listesine girer,
+   * kullanıcı kısmi/tam ödeme olarak seçebilsin diye (bkz. app/documents/[id]/receipt.tsx). */
+  counterpartyId?: string | null;
   counterpartyName: string | null;
 }
 
 // docs/09-kullanici-akislari.md "Dekont eşleştirme" — dekont, mevcut açık borç/alacaklardan
 // hangisine ait olabilir? Öneri üretir, hiçbir şeyi kendi başına kaydetmez: kullanıcı seçer ve
-// onaylar (docs/00 kural 1). Tutar (taksit ya da kalan) ve karşı taraf adı üzerinden puanlanır.
+// onaylar (docs/00 kural 1). Bir cari kesin olarak eşleşmişse (counterpartyId) o kişiyle açık
+// her kayıt tutar farkı gözetmeksizin önerilir; aksi halde tutar (taksit/kalan) ve karşı taraf
+// adı benzerliği üzerinden puanlanır.
 export async function findReceiptMatches({
   workspaceId,
   direction,
   amountMinor,
+  counterpartyId,
   counterpartyName,
 }: FindReceiptMatchesInput): Promise<ReceiptMatch[]> {
   const obligations = await listObligations({
@@ -226,19 +233,25 @@ export async function findReceiptMatches({
   const matches: ReceiptMatch[] = [];
 
   for (const obligation of obligations) {
-    const nameHit = Math.max(nameScore(target, obligation.counterparty?.name), nameScore(target, obligation.title));
+    const counterpartyHit = !!counterpartyId && obligation.counterparty_id === counterpartyId;
+    const nameHit = counterpartyId
+      ? 0
+      : Math.max(nameScore(target, obligation.counterparty?.name), nameScore(target, obligation.title));
     const exactInstallment = (installments ?? []).find(
       (installment) =>
         installment.obligation_id === obligation.id && installment.remaining_amount_minor === amountMinor
     );
     const amountHit = exactInstallment || obligation.remaining_amount_minor === amountMinor;
 
-    const score = nameHit + (amountHit ? 3 : 0);
+    // Kesin cari eşleşmesi (counterpartyHit) tek başına eşiği geçer: bu kişiyle açık her kayıt
+    // önerilir, tutar tutmasa bile — kısmi ödeme/borç kapatma seçimini kullanıcı yapar.
+    const score = (counterpartyHit ? 4 : nameHit) + (amountHit ? 3 : 0);
     if (score < 3) continue;
 
     const reasons: string[] = [];
     if (amountHit) reasons.push(exactInstallment ? 'Taksit tutarı eşleşti' : 'Kalan tutar eşleşti');
-    if (nameHit >= 2) reasons.push('Karşı taraf eşleşti');
+    if (counterpartyHit) reasons.push('Bu kişiyle açık kaydınız var');
+    else if (nameHit >= 2) reasons.push('Karşı taraf eşleşti');
     else if (nameHit === 1) reasons.push('Karşı taraf benziyor');
 
     const nextInstallment = (installments ?? []).find((installment) => installment.obligation_id === obligation.id);

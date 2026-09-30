@@ -153,7 +153,7 @@ export default function ObligationDetailScreen() {
         }
         InteractionManager.runAfterInteractions(() => {
           if (activeWorkspaceId) {
-            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+            invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
           }
           queryClient.removeQueries({ queryKey: ['obligation', id] });
           queryClient.removeQueries({ queryKey: ['obligation', id, 'payments'] });
@@ -801,9 +801,16 @@ function PaymentForm({
         <DateField label="ÖDEME TARİHİ" value={dateStr} onChangeText={setDateStr} />
 
         {payableAccounts.length > 0 ? (
+          // Önceden "İSTEĞE BAĞLI" idi ve recordPayment hesapsız çağrıldığında (bkz.
+          // features/payments/api.ts) hiçbir transaction oluşturmuyordu — ödeme borcu kapatıyor
+          // ("açık bakiye" doğru düşüyor) ama hiçbir hesabın bakiyesini etkilemiyor ve Hareketler'de
+          // hiç görünmüyordu; kullanıcı parayı nereden ödediğini unutsa bile fark etmiyordu. Bu
+          // form yalnızca canlı/yeni bir ödeme için kullanılır (geçmiş taksitlerin hesapsız toplu
+          // "ödendi" işaretlenmesi ayrı bir yoldan gider, bkz. recordPastInstallmentPayments) —
+          // burada hesap artık zorunlu.
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
-              HESAP (İSTEĞE BAĞLI)
+              HESAP
             </Text>
             <AccountPicker accounts={payableAccounts} selectedId={accountId} onSelect={setAccountId} />
           </Stack>
@@ -833,7 +840,7 @@ function PaymentForm({
           label={isEditing ? 'Güncelle' : 'Kaydet'}
           onPress={() => mutation.mutate()}
           loading={mutation.isPending}
-          disabled={!amount}
+          disabled={!amount || (payableAccounts.length > 0 && !accountId)}
         />
       </Stack>
     </SafeAreaView>

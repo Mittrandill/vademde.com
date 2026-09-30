@@ -86,4 +86,9 @@ export function invalidatePaymentRelatedQueries(queryClient: QueryClient, worksp
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'reports'] });
   // Ödemeye eklenen/kaldırılan dekont Belge arşivi'ni de etkiler (bkz. features/receipts/api.ts).
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'receipt-archive'] });
+  // counterpartyLedger/counterpartyObligations/counterpartyTransactions bu prefix altında
+  // yaşar (bkz. yukarıdaki counterpartyLedger vb.) — bir borç/alacak veya ödeme değiştiğinde
+  // bu da tazelenmezse cari detayındaki bakiye, sayfadan çıkıp tekrar girene kadar eski
+  // kalırdı (React Query yalnızca o an stale değilse yeniden istek atmaz).
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'counterparties'] });
 }

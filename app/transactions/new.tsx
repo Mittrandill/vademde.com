@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,7 +7,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { AmountField, Button, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
+import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -22,11 +23,14 @@ import {
   updateTransaction,
   type Transaction,
 } from '@/features/transactions/api';
+import { ACTIVE_OBLIGATION_STATUSES, listObligations, type ObligationWithRelations } from '@/features/obligations/api';
+import { recordPayment } from '@/features/payments/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { formatAmountInput, formatMinorAmount, parseValueUnitAmountToMinor } from '@/utils/money';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { ReceiptAttachField } from '@/components/finance/ReceiptAttachField';
+import { ScanPromptBanner } from '@/components/finance/ScanPromptBanner';
 import {
   attachReceiptFile,
   getTransactionReceipt,
@@ -34,7 +38,7 @@ import {
   useDocumentArchiveAccess,
   type PendingReceipt,
 } from '@/features/receipts/api';
-import { queryKeys } from '@/services/queryKeys';
+import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 
 type Direction = 'income' | 'expense' | 'transfer';
 type PaymentMethod = 'nakit' | 'havale' | 'kredi_karti' | 'online_odeme' | 'diger';
@@ -162,6 +166,11 @@ function TransactionForm({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>(
     (initial?.payment_method as PaymentMethod | null) ?? initialPaymentMethod ?? ''
   );
+  // Kullanıcının tarifiyle: "illa fiş/fatura eşleşecek diye bir şey yok, ön ödeme olabilir,
+  // kısmi ödeme olabilir" — yani hareket tek bir borca elle eşlenmez, kişinin en eski açık
+  // kayıtlarından başlayarak otomatik düşülür (bkz. aşağıdaki allocatePaymentAcrossObligations).
+  // Kullanıcı isterse bunu kapatıp tamamen bağımsız bir hareket olarak kaydedebilir.
+  const [applyToOpenObligations, setApplyToOpenObligations] = useState(true);
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -208,6 +217,44 @@ function TransactionForm({
     queryFn: () => listCounterparties(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId && direction !== 'transfer',
   });
+
+  // Gider → o kişiye olan BORCUNUZ (payable), gelir → o kişiden ALACAĞINIZ (receivable) kapanır.
+  const obligationDirection = direction === 'expense' ? 'payable' : direction === 'income' ? 'receivable' : null;
+  const openObligationsQuery = useQuery({
+    queryKey:
+      activeWorkspaceId && counterpartyId && obligationDirection
+        ? [activeWorkspaceId, 'obligations', 'counterparty-open', counterpartyId, obligationDirection]
+        : ['open-obligations', 'disabled'],
+    queryFn: () =>
+      listObligations({
+        workspaceId: activeWorkspaceId as string,
+        counterpartyId: counterpartyId as string,
+        direction: obligationDirection as 'payable' | 'receivable',
+        statuses: ACTIVE_OBLIGATION_STATUSES,
+        pageSize: 50,
+      }),
+    enabled: !isEditing && !!activeWorkspaceId && !!counterpartyId && !!obligationDirection,
+  });
+  // Farklı para birimindeki bir borca bu hareketi yazmak anlamsız — yalnızca girilen hesabın
+  // birimiyle aynı olanlar önerilir (bkz. app/documents/[id]/receipt.tsx aynı filtre).
+  const openObligations: ObligationWithRelations[] = (openObligationsQuery.data ?? []).filter(
+    (o) => o.currency_code === unitCode
+  );
+  // "İlla fiş/fatura eşleşecek diye bir şey yok" — girilen tutar, kişinin en eski açık
+  // kaydından başlayarak (listObligations varsayılanı: vadeye göre artan) sırayla düşülür.
+  // Bir kaydı tam kapatır, bir sonrakine kısmi öder ya da hepsini kapatıp artanı bağımsız bir
+  // "ön ödeme" hareketi olarak bırakır — tek bir kayda elle eşleme zorunluluğu yoktur.
+  function allocatePaymentAcrossObligations(amountMinor: number) {
+    let remainingMinor = amountMinor;
+    const allocations: { obligation: ObligationWithRelations; amountMinor: number }[] = [];
+    for (const obligation of openObligations) {
+      if (remainingMinor <= 0) break;
+      const take = Math.min(remainingMinor, obligation.remaining_amount_minor);
+      if (take > 0) allocations.push({ obligation, amountMinor: take });
+      remainingMinor -= take;
+    }
+    return { allocations, leftoverMinor: remainingMinor };
+  }
 
   // Hareket zaten kaydedildikten sonra dekontu senkronlar. Dekont yüklenemezse hareket geri
   // alınmaz ve form hata durumuna düşürülmez (tekrar "Kaydet" yinelenen hareket oluştururdu);
@@ -275,30 +322,69 @@ function TransactionForm({
           description: description.trim() || undefined,
         });
       }
-      const created = await createTransaction({
-        workspace_id: activeWorkspaceId,
-        account_id: accountId,
-        direction,
-        category_id: categoryId,
-        counterparty_id: counterpartyId,
-        payment_method: paymentMethod || null,
-        amount_minor: amountMinor,
-        occurred_at: occurredAt,
-        description: description.trim() || null,
-      });
-      await syncReceipt(created.id, amountMinor);
-      return created;
+
+      // "İlla fiş/fatura eşleşecek diye bir şey yok, ön ödeme olabilir, kısmi ödeme olabilir" —
+      // hareket tek bir kayda elle eşlenmez; kişinin en eski açık kaydından başlayarak otomatik
+      // düşülür (bkz. yukarıdaki allocatePaymentAcrossObligations). Her dilim gerçek bir ödeme
+      // olarak yazılır (recordPayment → obligations.remaining_amount_minor azalır ve kendi
+      // ilişkili transaction'ını oluşturur); borçlar tükenip tutardan bir şey artarsa kalan,
+      // bağımsız bir hareket (ön ödeme) olarak kaydedilir. Önceden bu ekran hep bağımsız bir
+      // hareket oluşturuyordu; girilen tutar hiçbir zaman ilgili faturanın/senedin kalan
+      // tutarını azaltmıyordu.
+      const { allocations, leftoverMinor } =
+        applyToOpenObligations && openObligations.length > 0
+          ? allocatePaymentAcrossObligations(amountMinor)
+          : { allocations: [], leftoverMinor: amountMinor };
+
+      let lastTransactionId: string | null = null;
+      for (const allocation of allocations) {
+        const payment = await recordPayment({
+          workspace_id: activeWorkspaceId,
+          obligation_id: allocation.obligation.id,
+          installment_id: null,
+          account_id: accountId,
+          amount_minor: allocation.amountMinor,
+          paid_at: occurredAt,
+          obligationDirection: allocation.obligation.direction as 'payable' | 'receivable',
+          obligationTitle: allocation.obligation.title,
+          obligationCategoryId: allocation.obligation.category_id,
+          obligationCounterpartyId: allocation.obligation.counterparty_id,
+          obligationCurrencyCode: allocation.obligation.currency_code,
+        });
+        if (payment.transaction_id) lastTransactionId = payment.transaction_id;
+      }
+
+      if (leftoverMinor > 0) {
+        const created = await createTransaction({
+          workspace_id: activeWorkspaceId,
+          account_id: accountId,
+          direction,
+          category_id: categoryId,
+          counterparty_id: counterpartyId,
+          payment_method: paymentMethod || null,
+          amount_minor: leftoverMinor,
+          occurred_at: occurredAt,
+          description:
+            description.trim() ||
+            (allocations.length > 0 ? 'Ön ödeme' : null),
+        });
+        lastTransactionId = created.id;
+      }
+
+      if (lastTransactionId) await syncReceipt(lastTransactionId, amountMinor);
+      return { allocations, leftoverMinor };
     },
-    onSuccess: () => {
-      showSaveSuccess(
-        isEditing ? 'Hareket başarıyla güncellendi.' : 'Hareket başarıyla oluşturuldu.',
-        () => router.back(),
-        () => {
-          if (activeWorkspaceId) {
-            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
-          }
-        }
-      );
+    onSuccess: (result) => {
+      const message = isEditing
+        ? 'Hareket başarıyla güncellendi.'
+        : result && 'allocations' in result && result.allocations.length > 0
+          ? result.leftoverMinor > 0
+            ? 'Hareket kaydedildi: bir kısmı açık kayıtlara uygulandı, kalanı ön ödeme olarak eklendi.'
+            : 'Ödeme kaydedildi ve ilgili açık kayda uygulandı.'
+          : 'Hareket başarıyla oluşturuldu.';
+      showSaveSuccess(message, () => router.back(), () => {
+        if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      });
     },
     onError: (error) => showErrorAlert(error),
   });
@@ -307,9 +393,7 @@ function TransactionForm({
     mutationFn: () => deleteTransaction(id as string),
     onSuccess: () => {
       showSaveSuccess('Hareket başarıyla silindi.', () => router.back(), () => {
-        if (activeWorkspaceId) {
-          queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
-        }
+        if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
       });
     },
     onError: (error) => showErrorAlert(error),
@@ -326,6 +410,14 @@ function TransactionForm({
     !!accountId &&
     !!amount &&
     (direction !== 'transfer' || (!!transferToAccountId && transferToAccountId !== accountId));
+
+  // Kaydetmeden önce kullanıcıya ne olacağını gösteren önizleme — bkz. yukarıdaki
+  // allocatePaymentAcrossObligations ve saveMutation.
+  const allocationAmountMinor = parseValueUnitAmountToMinor(amount, unitCode);
+  const allocationPreview =
+    !isEditing && applyToOpenObligations && openObligations.length > 0 && allocationAmountMinor && allocationAmountMinor > 0
+      ? allocatePaymentAcrossObligations(allocationAmountMinor)
+      : null;
 
   // POS hesabına girilen tahsilattan otomatik düşülecek komisyonun önizlemesi — gerçek
   // kesinti Supabase'teki maintain_pos_commission trigger'ında olur (bkz. o migration'ın
@@ -353,6 +445,10 @@ function TransactionForm({
                 {isEditing ? 'Hareketi Düzenle' : 'Yeni Hareket'}
               </Text>
             </Row>
+
+            {!isEditing ? (
+              <ScanPromptBanner description="Dekont, fiş veya fatura fotoğrafını tara; tutar, tarih ve hesap otomatik dolsun." />
+            ) : null}
 
             <SegmentedControl
               options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
@@ -456,6 +552,44 @@ function TransactionForm({
                     />
                   ) : null}
                 </Stack>
+
+                {!isEditing && counterpartyId && openObligations.length > 0 ? (
+                  <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
+                    <Stack gap="sm">
+                      <Row align="center">
+                        <Stack gap="xxs" style={{ flex: 1 }}>
+                          <Text variant="cardTitle">Açık kayıtlara uygula</Text>
+                          <Text variant="caption" color="textSecondary">
+                            Bu kişinin açık borç/alacaklarından en eskisi öncelikli düşülür. Tutar hepsini kapatırsa
+                            kalan bağımsız bir ön ödeme olarak kaydedilir.
+                          </Text>
+                        </Stack>
+                        <Switch value={applyToOpenObligations} onValueChange={setApplyToOpenObligations} />
+                      </Row>
+                      {applyToOpenObligations && allocationPreview ? (
+                        <Stack gap="xs">
+                          {allocationPreview.allocations.map(({ obligation, amountMinor: allocatedMinor }) => (
+                            <Row key={obligation.id} style={{ justifyContent: 'space-between' }}>
+                              <Text variant="caption" numberOfLines={1} style={{ flex: 1 }}>
+                                {obligation.title}
+                              </Text>
+                              <Text variant="caption" tabular>
+                                {formatMinorAmount(allocatedMinor, obligation.currency_code)}
+                                {allocatedMinor >= obligation.remaining_amount_minor ? ' (kapanır)' : ' (kısmi)'}
+                              </Text>
+                            </Row>
+                          ))}
+                          {allocationPreview.leftoverMinor > 0 ? (
+                            <Text variant="caption" color="textSecondary">
+                              Kalan {formatMinorAmount(allocationPreview.leftoverMinor, unitCode)} bağımsız bir ön
+                              ödeme hareketi olarak kaydedilir.
+                            </Text>
+                          ) : null}
+                        </Stack>
+                      ) : null}
+                    </Stack>
+                  </Card>
+                ) : null}
 
                 <Stack gap="sm">
                   <Text variant="caption" color="textSecondary">

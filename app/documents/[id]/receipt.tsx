@@ -10,6 +10,7 @@ import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { AccountPicker } from '@/components/finance/AccountPicker';
+import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import {
   discardDocument,
   getDocument,
@@ -18,7 +19,7 @@ import {
   markDocumentConfirmed,
 } from '@/features/documents/api';
 import { listAccounts } from '@/features/accounts/api';
-import { listCounterparties } from '@/features/counterparties/api';
+import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
 import { recordPayment } from '@/features/payments/api';
 import { createTransaction } from '@/features/transactions/api';
 import {
@@ -27,6 +28,7 @@ import {
   useDocumentArchiveAccess,
   type ReceiptMatch,
 } from '@/features/receipts/api';
+import { resolveBankFromDocument } from '@/features/banks/banks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
@@ -50,8 +52,6 @@ const TRANSFER_TYPE_LABEL: Record<string, string> = {
   fast: 'FAST',
   diger: 'Diğer',
 };
-
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
 
 interface ReceiptSummary {
   bankName?: string | null;
@@ -98,12 +98,19 @@ export default function ReceiptResultScreen() {
     queryFn: () => listAccounts(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
+  const counterpartiesQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.counterparties(activeWorkspaceId) : ['counterparties', 'disabled'],
+    queryFn: () => listCounterparties(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
 
   const [initialized, setInitialized] = useState(false);
   const [direction, setDirection] = useState<MoneyDirection>('expense');
   const [amount, setAmount] = useState('');
   const [dateStr, setDateStr] = useState(new Date().toISOString().slice(0, 10));
   const [accountId, setAccountId] = useState<string | null>(null);
+  const [counterpartyId, setCounterpartyId] = useState<string | null>(null);
+  const [counterpartyResolved, setCounterpartyResolved] = useState(false);
   // 'none' = eşleşme yok, bağımsız hareket olarak kaydet. Aksi halde seçilen borç/alacağın id'si.
   const [selectedMatch, setSelectedMatch] = useState<string | 'none' | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -136,13 +143,50 @@ export default function ReceiptResultScreen() {
     return document.counterparty_name ?? (direction === 'expense' ? summary?.recipientName : summary?.senderName) ?? null;
   }, [document, summary, direction]);
 
+  // Dekontta hangi taraf "biz"iz? Ödemede GÖNDEREN, tahsilatta ALICI — o tarafın IBAN'ı/banka
+  // adı bizim hesabımızın bankasıdır. Kayıtlı hesaplarda o bankadan hiçbiri yoksa kullanıcı
+  // her seferinde bir sonraki adımda hesap ekleme akışını manuel bulmak zorunda kalıyordu —
+  // burada doğrudan önerilir.
+  const ownSideBankCode = useMemo(() => {
+    if (!summary) return null;
+    const iban = direction === 'expense' ? summary.senderIban : summary.recipientIban;
+    return resolveBankFromDocument({ bankName: summary.bankName ?? null, iban: iban ?? null });
+  }, [summary, direction]);
+  const hasMatchingBankAccount = ownSideBankCode
+    ? (accountsQuery.data ?? []).some((a) => a.bank_code === ownSideBankCode)
+    : true;
+
+  // docs/04-ocr-belge-isleme.md §6.6 ile aynı desen (bkz. app/documents/[id]/review.tsx) —
+  // dekonttaki isim mevcut bir cariyle TEK ve belirsiz olmayan bir eşleşme kuruyorsa önceden
+  // seçilir. Eşleşme yoksa kullanıcı aşağıdaki KİŞİ/FİRMA alanından mevcut bir cariyle eşleştirir
+  // ya da "Ali Kaya" gibi hiç kayıtlı olmayan bir isim için yeni bir cari oluşturur — faturada/
+  // fişte OCR'ın önerdiği isimle aynı şekilde (bkz. saveMutation, DB'ye yalnızca kayıt onaylanınca yazar).
+  useEffect(() => {
+    if (!counterpartyName || !counterpartiesQuery.isSuccess || counterpartyResolved) return;
+    setCounterpartyResolved(true);
+    const target = normalizeName(counterpartyName);
+    if (!target) return;
+    const exact = counterpartiesQuery.data.find((c) => normalizeName(c.name) === target);
+    if (exact) {
+      setCounterpartyId(exact.id);
+      return;
+    }
+    if (target.length < 3) return;
+    const similar = counterpartiesQuery.data.filter((c) => {
+      const normalizedName = normalizeName(c.name);
+      return normalizedName.length >= 3 && (normalizedName.includes(target) || target.includes(normalizedName));
+    });
+    if (similar.length === 1) setCounterpartyId(similar[0]!.id);
+  }, [counterpartyName, counterpartiesQuery.isSuccess, counterpartiesQuery.data, counterpartyResolved]);
+
   const matchesQuery = useQuery({
-    queryKey: ['receipt-matches', id, direction, amountMinor, counterpartyName],
+    queryKey: ['receipt-matches', id, direction, amountMinor, counterpartyId, counterpartyName],
     queryFn: () =>
       findReceiptMatches({
         workspaceId: activeWorkspaceId as string,
         direction,
         amountMinor: amountMinor as number,
+        counterpartyId,
         counterpartyName,
       }),
     enabled: !!activeWorkspaceId && !!document && amountMinor !== null && amountMinor > 0,
@@ -203,19 +247,28 @@ export default function ReceiptResultScreen() {
       }
 
       if (!accountId) throw new Error('Hareketi kaydetmek için bir hesap seçin');
-      // Kayıtlı bir kişi/firma adıyla birebir eşleşiyorsa hareket ona bağlanır; eşleşme yoksa
-      // yeni kişi OLUŞTURULMAZ (iptal edilen taramalar cari kirliliği yaratmasın).
-      let counterpartyId: string | null = null;
-      if (counterpartyName) {
-        const target = normalizeName(counterpartyName);
-        const counterparties = await listCounterparties(activeWorkspaceId);
-        counterpartyId = counterparties.find((c) => normalizeName(c.name) === target)?.id ?? null;
+      // KİŞİ/FİRMA alanından kullanıcı zaten bir cariyle eşleştiyse (elle ya da otomatik) o
+      // kullanılır. Eşleşmediyse ve OCR bir isim okuduysa (ör. "Ali Kaya" kayıtlı değil), bu
+      // isimle yeni bir cari — faturada/fişte olduğu gibi (bkz. app/documents/[id]/review.tsx
+      // confirmMutation) — ancak kayıt gerçekten onaylanırken oluşturulur; iptal edilen bir
+      // dekont tarama sahipsiz cari biriktirmesin diye önceden değil, burada açılır. Ne bir
+      // borç eşleşmesi ne de kayıtlı bir cari varsa bu, o kişiyle bağımsız bir hareket/ön ödeme
+      // olarak kaydedilmiş olur (docs/00 kural 3 — cari yine de workspace'e bağlı kalır).
+      let resolvedCounterpartyId = counterpartyId;
+      if (!resolvedCounterpartyId && counterpartyName) {
+        const created = await createCounterparty({
+          workspace_id: activeWorkspaceId,
+          name: counterpartyName.trim(),
+          type: 'individual',
+        });
+        resolvedCounterpartyId = created.id;
+        queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
       }
       const transaction = await createTransaction({
         workspace_id: activeWorkspaceId,
         account_id: accountId,
         direction,
-        counterparty_id: counterpartyId,
+        counterparty_id: resolvedCounterpartyId,
         amount_minor: amountMinor,
         currency_code: currency,
         occurred_at: paidAt,
@@ -290,33 +343,13 @@ export default function ReceiptResultScreen() {
           contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}
         >
           <Row align="center">
-            <Text variant="pageTitle" style={{ flex: 1 }}>
-              Ödeme Dekontu
-            </Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Kapat" onPress={confirmDiscard} hitSlop={12}>
-              <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+            <Pressable onPress={() => router.back()} hitSlop={12}>
+              <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
             </Pressable>
+            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
+              Dekontu Onayla
+            </Text>
           </Row>
-
-          <Card elevated style={{ borderRadius: theme.radius.heroWidget }}>
-            <Stack gap="xs">
-              <Text variant="caption" color="textSecondary">
-                {direction === 'expense' ? 'GÖNDERİLEN TUTAR' : 'ALINAN TUTAR'}
-              </Text>
-              <Text variant="displayAmount" tabular>
-                {amountMinor !== null ? formatMinorAmount(amountMinor, currency) : '—'}
-              </Text>
-              <Text variant="caption" color="textSecondary">
-                {dateFormatter.format(new Date(dateStr))}
-                {summary?.bankName ? ` · ${summary.bankName}` : ''}
-              </Text>
-              {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
-                <Text variant="caption" color="textSecondary">
-                  Genel güven: %{Math.round((document.overall_confidence ?? 0) * 100)}
-                </Text>
-              ) : null}
-            </Stack>
-          </Card>
 
           {imageUrl ? (
             <Image
@@ -335,6 +368,12 @@ export default function ReceiptResultScreen() {
                 {document.file_name}
               </Text>
             </Row>
+          ) : null}
+
+          {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
+            <Text variant="caption" color="textSecondary">
+              Genel güven: %{Math.round((document.overall_confidence ?? 0) * 100)}
+            </Text>
           ) : null}
 
           {!archive.allowed && !archive.isLoading ? (
@@ -398,6 +437,8 @@ export default function ReceiptResultScreen() {
                 setDirection(value);
                 setSelectedMatch(null);
                 setAccountId(null);
+                setCounterpartyId(null);
+                setCounterpartyResolved(false);
               }}
             />
           </Stack>
@@ -410,6 +451,23 @@ export default function ReceiptResultScreen() {
           </Stack>
 
           <DateField label="İŞLEM TARİHİ" value={dateStr} onChangeText={setDateStr} />
+
+          <Stack gap="sm">
+            <Text variant="caption" color="textSecondary">
+              KİŞİ / FİRMA
+            </Text>
+            {activeWorkspaceId ? (
+              <CounterpartyPicker
+                workspaceId={activeWorkspaceId}
+                counterparties={counterpartiesQuery.data ?? []}
+                selectedId={counterpartyId}
+                onSelect={(value) => {
+                  setCounterpartyId(value);
+                  setSelectedMatch(null);
+                }}
+              />
+            ) : null}
+          </Stack>
 
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary">
@@ -442,7 +500,9 @@ export default function ReceiptResultScreen() {
                       <Stack gap="xxs" style={{ flex: 1 }}>
                         <Text variant="cardTitle">Eşleşme yok</Text>
                         <Text variant="caption" color="textSecondary">
-                          Bağımsız bir {direction === 'expense' ? 'gider' : 'gelir'} hareketi olarak kaydet
+                          {counterpartyId
+                            ? `Bu kişiyle açık bir borç/alacak yok; ön ödeme olarak bağımsız bir ${direction === 'expense' ? 'gider' : 'gelir'} kaydedilir.`
+                            : `Bağımsız bir ${direction === 'expense' ? 'gider' : 'gelir'} hareketi olarak kaydet`}
                         </Text>
                       </Stack>
                     </Row>
@@ -462,13 +522,43 @@ export default function ReceiptResultScreen() {
             ) : null}
           </Stack>
 
+          {ownSideBankCode && !hasMatchingBankAccount && !accountsQuery.isPending ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/accounts/new', params: { type: 'bank' } })}
+            >
+              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.4) }}>
+                <Row gap="sm" align="center">
+                  <Ionicons name="business-outline" size={20} color={theme.colors.brandPrimary} />
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="cardTitle">Bu banka hesabınız kayıtlı değil</Text>
+                    <Text variant="caption" color="textSecondary">
+                      Dekonttaki hesabı eklemek için dokunun; ekledikten sonra aşağıdaki HESAP alanından seçebilirsiniz.
+                    </Text>
+                  </Stack>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                </Row>
+              </Card>
+            </Pressable>
+          ) : null}
+
           {selectableAccounts.length > 0 ? (
+            // Bir dekont zaten gerçekleşmiş bir banka hareketidir — eşleşen bir borca ödeme
+            // olarak yazılırken de HESAP hiçbir zaman isteğe bağlı olmamalı: aksi halde
+            // recordPayment hesapsız çağrılır (bkz. features/payments/api.ts), borç kapanır
+            // ama hiçbir hesabın bakiyesi değişmez ve Hareketler'de hiç görünmez.
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                {isStandalone ? 'HESAP' : 'HESAP (İSTEĞE BAĞLI)'}
+                HESAP
               </Text>
               <AccountPicker accounts={selectableAccounts} selectedId={accountId} onSelect={setAccountId} />
             </Stack>
+          ) : null}
+
+          {saveMutation.error ? (
+            <Text variant="caption" color="danger">
+              {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt oluşturulamadı'}
+            </Text>
           ) : null}
 
           <Stack gap="sm">
@@ -477,13 +567,16 @@ export default function ReceiptResultScreen() {
               onPress={() => saveMutation.mutate()}
               loading={saveMutation.isPending}
               disabled={
-                selectedMatch === null || amountMinor === null || amountMinor <= 0 || (isStandalone && !accountId)
+                selectedMatch === null ||
+                amountMinor === null ||
+                amountMinor <= 0 ||
+                (selectableAccounts.length > 0 && !accountId)
               }
             />
             <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
               Siz onaylamadan hiçbir kayıt oluşmaz.
             </Text>
-            <Button label="Vazgeç" variant="secondary" onPress={confirmDiscard} loading={discardMutation.isPending} />
+            <Button label="İptal Et" variant="danger" onPress={confirmDiscard} loading={discardMutation.isPending} />
           </Stack>
         </ScrollView>
       </KeyboardAvoidingView>

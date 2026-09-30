@@ -49,9 +49,10 @@ import {
   recomputeInstallmentAfterAmountEdit,
   type InstallmentPlanItem,
 } from '@/utils/installmentPlan';
-import { queryKeys } from '@/services/queryKeys';
+import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert } from '@/utils/alerts';
+import { ScanPromptBanner } from '@/components/finance/ScanPromptBanner';
 
 type Direction = 'payable' | 'receivable';
 
@@ -640,8 +641,11 @@ function ObligationForm({
       showSuccessAlert(isEditing ? 'Kayıt başarıyla güncellendi.' : 'Kayıt başarıyla oluşturuldu.', () => {
         router.back();
         InteractionManager.runAfterInteractions(() => {
+          // Yalnızca [workspaceId, 'obligations'] tazelenirse cari detayındaki bakiye
+          // ([workspaceId, 'counterparties', id, 'ledger']) sayfadan çıkıp tekrar girene kadar
+          // eski kalıyordu — bkz. invalidatePaymentRelatedQueries'in artık kapsadığı prefix'ler.
           if (activeWorkspaceId) {
-            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+            invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
           }
         });
       });
@@ -663,7 +667,7 @@ function ObligationForm({
         router.replace('/(tabs)/hareketler');
         InteractionManager.runAfterInteractions(() => {
           if (activeWorkspaceId) {
-            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+            invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
           }
           queryClient.removeQueries({ queryKey: ['obligation', id] });
         });
@@ -705,6 +709,10 @@ function ObligationForm({
                 {isEditing ? 'Borç / Alacağı Düzenle' : 'Yeni Borç / Alacak'}
               </Text>
             </Row>
+
+            {!isEditing ? (
+              <ScanPromptBanner description="Çek, senet, fatura veya kredi belgesini tara; tür, tutar ve vade otomatik dolsun." />
+            ) : null}
 
             <SegmentedControl
               options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}

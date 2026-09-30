@@ -36,6 +36,7 @@ import { listTransactions, type TransactionWithRelations } from '@/features/tran
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
 import { formatMinorAmount } from '@/utils/money';
+import { getValueUnit } from '@/features/valueUnits/units';
 import { queryKeys } from '@/services/queryKeys';
 import { showSaveSuccess, showSuccessAlert, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
@@ -528,7 +529,7 @@ export default function AccountDetailScreen() {
   const overdraftProgress = hasOverdraft ? overdraftUsedMinor / overdraftLimitMinor : undefined;
   const accountInfoRows = [
     { label: 'Hesap Türü', value: TYPE_LABEL[type] },
-    { label: 'Para Birimi', value: account.currency_code },
+    { label: 'Para Birimi', value: getValueUnit(account.currency_code).name },
     ...(account.iban ? [{ label: 'IBAN', value: maskIban(account.iban) }] : []),
     { label: 'Açılış Bakiyesi', value: formatMinorAmount(account.opening_balance_minor, account.currency_code) },
     ...(hasOverdraft
@@ -575,7 +576,7 @@ export default function AccountDetailScreen() {
           progressColor={overdraftProgress !== undefined && overdraftProgress >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary}
           stats={[
             { label: 'HESAP TÜRÜ', value: TYPE_LABEL[type] },
-            { label: 'PARA BİRİMİ', value: account.currency_code },
+            { label: 'PARA BİRİMİ', value: getValueUnit(account.currency_code).name },
             { label: 'HAREKET', value: String(allTransactions.length) },
           ]}
         />
