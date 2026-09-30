@@ -12,6 +12,7 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
+| iOS | build 37 | `eas build --no-wait --auto-submit` ile alındı (build ID `8bf8acb5-6019-495c-b67c-8c520ffa4e7f`, commit `be3783c`, `finished`); submission `1a374237-76e4-4711-9f9b-9000a2a35ca8` planlandı — çek ciro, avans/mahsup, anapara ayrımı, cari ekstresi. **1.0.4 için bu build seçilmeli** | 2026-10-01 |
 | iOS | build 36 | `eas build --no-wait --auto-submit` ile alındı (build ID `7d62261f-2951-4a8c-9e4d-7921922499d8`, commit `051774b`, `finished`); submission `ddc26ed8-46d2-4447-8b05-ef5b05e1cdc5` planlandı — TestFlight'ta doğrulanacak | 2026-09-30 |
 | iOS | build 33 | `eas build --auto-submit` ile gönderildi; build 36 ile değiştirildi (çek/senet ve Ödeme Yap/Tahsilat Al düzeltmelerini içermez) | 2026-09-30 |
 | iOS | build 32 | App Store Connect'e `eas submit` ile yüklendi; build 33 ile değiştirildi, artık kullanılmıyor | 2026-09-30 |
@@ -72,26 +73,26 @@ edildi, TestFlight'a çift kayıt gitmedi.
   başlayarak dağıtılır — önceden yalnızca kaydın toplamı düşüyor, taksitler ödenmemiş kalıyordu.
 - **Takvim "Öde" (build 36):** artık doğrudan ödeme yazmaz, hesap seçtiren ödeme formunu açar;
   kart ekstresi/nakit avans kart sayfasına gider (önceden karta gider yazılıp kart borcu artıyordu).
-- **Çek ciro (sonraki build):** Ödeme Yap'ta "Çek Ciro" yöntemi ve alınan çek/senet detayında
+- **Çek ciro (build 37):** Ödeme Yap'ta "Çek Ciro" yöntemi ve alınan çek/senet detayında
   "Ciro Et". Portföydeki alınmış çek/senet tam tutarıyla tedarikçiye verilir: çek alacağı ve
   seçilen faturalar karşılıklı kapanır (hesapsız ödeme satırları, `settled_by_obligation_id` ile
   çapraz bağlı); çek faturaları aşarsa fark tedarikçiden avans alacağı olur. Fatura ya da avans
   silinirse çek (ilgili kısmıyla) portföye döner.
-- **Ön ödeme / avans cari bakiyesinde (sonraki build):** ödemeyi aşan tutar artık bağımsız hareket
+- **Ön ödeme / avans cari bakiyesinde (build 37):** ödemeyi aşan tutar artık bağımsız hareket
   değil, ters yönde `avans` kaydı olur (hesap hareketi `source_obligation_id` ile ona bağlı) ve
   cari bakiyesine girer. Ödeme Yap/Tahsilat Al'da "Mahsup" yöntemi ve avans detayında "Faturadan
   Mahsup Et" ile sonraki faturadan düşülür. Avansın vadesi yoktur; gecikmiş/bu ay ödenecek
   hesaplarına ve hatırlatmalara girmez.
-- **Anapara gelir/gider değil (sonraki build):** `transactions.financing_minor`. Nakit avansın hesaba
+- **Anapara gelir/gider değil (build 37):** `transactions.financing_minor`. Nakit avansın hesaba
   yatan tutarı, ödünç verilen para ve kredi/nakit avans/borç verme geri ödemelerinin anapara payı
   (taksitte anapara/faiz kırılımı varsa orantılı, yoksa tamamı) raporlarda ve dashboard'daki
   gelir-gider analizinde sayılmaz; hesap bakiyeleri değişmez. Mevcut veri geriye dönük dolduruldu.
-- **Borç Verme kaydı çalışıyor (sonraki build):** `obligations_document_type_check` listesinde
+- **Borç Verme kaydı çalışıyor (build 37):** `obligations_document_type_check` listesinde
   `borc_verme` yoktu, kayıt veritabanında reddediliyordu (canlıda hiç borç verme kaydı yoktu).
-- **Cari Hareketler sekmesi = cari ekstresi (sonraki build):** faturalar/fişler, çek/senet/avans
+- **Cari Hareketler sekmesi = cari ekstresi (build 37):** faturalar/fişler, çek/senet/avans
   kayıtları, bunlara yapılan ödeme/tahsilatlar (hesaptan, çek/senetle, mahsup, ciro) ve kayda bağlı
   olmayan hareketler tek listede, yürüyen cari bakiyesiyle (`getCounterpartyStatement`).
-- **Takvim "Öde" nakit avansı kart sayfasına göndermiyor (sonraki build):** build 36'da nakit avans
+- **Takvim "Öde" nakit avansı kart sayfasına göndermiyor (build 37):** build 36'da nakit avans
   kart ödeme akışına gidiyordu; nakit avans kart bakiyesine dahil olmadığı için kart borcunu
   olduğundan az gösterirdi. Artık kayıt detayındaki ödeme formu açılır (kart hesapları listelenmez).
 - **Ödemeye bağlı hareketler kilitli (build 36):** hareket detayında düzenle/sil yerine "Bağlı
@@ -134,12 +135,12 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
 - [x] `eas build` ile build 33'ü al ve gönder (2026-09-30, tamamlandı).
 - [x] Build 36'yı al ve gönder (2026-09-30; build 35 numarası EAS tarafında tüketilmiş, 36 kullanıldı).
-- [ ] App Store Connect'te 1.0.4 için build 33 yerine **build 36**'yı seç.
+- [ ] App Store Connect'te 1.0.4 için **build 37**'yi seç (build 33 ve 36 bu düzeltmeleri içermez).
 - [ ] TestFlight'ta doğrula: 30.000 fatura + 20.000 çek → fatura 10.000 kısmen ödendi, cari borç
       30.000; çek vadesinde "Öde" → hesap bakiyesi 20.000 düşer; çek silinince fatura 30.000'e döner.
 - [x] Fazla ödeme/avansın cari bakiyesine dahil edilmesi, anaparanın gelir/gider sayılmaması,
       çek ciro, cari ekstresi — kodlandı; migration'lar `20260930150000_advances_financing_document_types.sql`
-      ve `20260930160000_obligation_parent_link.sql` canlıya uygulandı. Build alınacak.
+      ve `20260930160000_obligation_parent_link.sql` canlıya uygulandı; build 37 ile gönderildi.
 - [ ] TestFlight'ta doğrula: A'dan alınan 20.000 çek → B'nin 15.000 faturasına ciro → fatura kapanır,
       B'den 5.000 avans alacağı; B'ye 10.000 peşin ödeme → cari bakiyesi +10.000, sonra 30.000 fatura
       → Mahsup → cari borç 20.000; cari Hareketler sekmesinde tüm satırlar ve yürüyen bakiye.
