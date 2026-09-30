@@ -12,9 +12,9 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | build 33 | Hazırlanıyor — cari ödeme eşleştirme/hesap zorunluluğu düzeltmeleriyle birlikte tek build olarak gönderilecek, build 32'nin yerine geçecek | — |
-| iOS | build 32 | App Store Connect'e `eas submit` ile yüklendi; Apple işliyor, TestFlight'ta görünmesi bekleniyor — build 33 ile değiştirilecek | 2026-09-30 |
-| iOS | build 30 | Yüklendi ama dekontun manuel hareket formundaki hâlini içermiyor; test için build 32/33 kullanılır | 2026-09-29 |
+| iOS | build 33 | `eas build --auto-submit` ile gönderildi; Apple işliyor (TestFlight'ta "İşleniyor" olarak görünüyor) | 2026-09-30 |
+| iOS | build 32 | App Store Connect'e `eas submit` ile yüklendi; build 33 ile değiştirildi, artık kullanılmıyor | 2026-09-30 |
+| iOS | build 30 | Yüklendi ama dekontun manuel hareket formundaki hâlini içermiyor; test için build 33 kullanılır | 2026-09-29 |
 
 Build 29 iptal edildi (dashboard halkası düzeltmesinin eski hâlini taşıyordu). Build 31 numarası
 başarısız bir yükleme denemesinde tüketildi. Build 30 `--auto-submit` ile ilk denemede yüklendi;
@@ -26,7 +26,11 @@ doğrulamak gerekir. 1.0.3 (build 28) yayında, dokunulmadı.
 Build 33, aynı gün (2026-09-30) test hesabında (`test@user.com`) bulunan bir veri bütünlüğü
 sorunu üzerine eklenen düzeltmeleri taşır (bkz. aşağıdaki "Kullanıcıya görünen değişiklikler" —
 cari ödeme eşleştirme, hesap zorunluluğu, dekont sonuç ekranı, altın Para Birimi etiketi). Build 32
-bu düzeltmeleri içermez; TestFlight'a yalnızca build 33 ile devam edilecek.
+bu düzeltmeleri içermez. `eas build --platform ios --profile production --no-wait --auto-submit`
+ile gönderildi (build ID `cecb50ec-90cd-4c05-88ee-0f8944bff91d`, submission ID
+`38325f68-40af-4c1b-9d6a-89f3165bd041`, ikisi de `finished`). Aynı anda elle çalıştırılan ikinci
+bir `eas build` komutu build 34'ü kuyruğa aldı — submit edilmeden `eas build:cancel` ile iptal
+edildi, TestFlight'a çift kayıt gitmedi.
 
 ### Kullanıcıya görünen değişiklikler
 
@@ -76,9 +80,10 @@ bu düzeltmeleri içermez; TestFlight'a yalnızca build 33 ile devam edilecek.
 - [ ] TestFlight'ta dashboard halkasını %100 ve %135 yazı tipinde doğrula.
 - [ ] Gerçek bir banka dekontuyla Gemini sınıflandırmasını ve dekont sonuç ekranını dene.
 - [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
-- [ ] `eas build` ile build 33'ü al ve gönder; App Store Connect'te 1.0.4 sürümünü oluştur,
-      build 33'ü seç, "Yenilikler" (`assets/appstore/whats-new-1.0.4.tr.txt`) ve ekran
-      görüntülerini gir.
+- [x] `eas build` ile build 33'ü al ve gönder (2026-09-30, tamamlandı).
+- [ ] App Store Connect'te 1.0.4 sürümünü oluştur, build 33'ü seç, "Yenilikler"
+      (`assets/appstore/whats-new-1.0.4.tr.txt`) ve ekran görüntülerini
+      (`assets/appstore/v2/vademde-01.png`…`vademde-10.png`) gir.
 
 ---
 
