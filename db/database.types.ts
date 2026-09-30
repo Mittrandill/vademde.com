@@ -602,6 +602,7 @@ export type Database = {
           due_date: string | null
           id: string
           notes: string | null
+          parent_obligation_id: string | null
           remaining_amount_minor: number
           service_code: string | null
           status: string
@@ -623,6 +624,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           notes?: string | null
+          parent_obligation_id?: string | null
           remaining_amount_minor?: number
           service_code?: string | null
           status?: string
@@ -644,6 +646,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           notes?: string | null
+          parent_obligation_id?: string | null
           remaining_amount_minor?: number
           service_code?: string | null
           status?: string
@@ -1108,6 +1111,7 @@ export type Database = {
           created_at: string
           currency_code: string
           description: string | null
+          financing_minor: number
           direction: string
           id: string
           occurred_at: string
@@ -1126,6 +1130,7 @@ export type Database = {
           created_at?: string
           currency_code?: string
           description?: string | null
+          financing_minor?: number
           direction: string
           id?: string
           occurred_at?: string
@@ -1144,6 +1149,7 @@ export type Database = {
           created_at?: string
           currency_code?: string
           description?: string | null
+          financing_minor?: number
           direction?: string
           id?: string
           occurred_at?: string

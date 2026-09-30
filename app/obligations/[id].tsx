@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Alert, InteractionManager, Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -84,8 +84,10 @@ export default function ObligationDetailScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const [payingInstallment, setPayingInstallment] = useState<Installment | 'obligation' | null>(null);
-  const [payParamHandled, setPayParamHandled] = useState(false);
+  const [manualPaying, setPayingInstallment] = useState<Installment | 'obligation' | null>(null);
+  // Takvimden "Öde" ile gelindiyse (pay=1) form veri yüklenince kendiliğinden açılır; kullanıcı
+  // kapatınca bir daha açılmaz.
+  const [payParamDismissed, setPayParamDismissed] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<DetailTab>('genel');
@@ -121,12 +123,11 @@ export default function ObligationDetailScreen() {
     enabled: !!id && isInstrumentRecord,
   });
 
-  useEffect(() => {
-    if (payParamHandled || pay !== '1' || !detailQuery.data) return;
-    setPayParamHandled(true);
-    const target = installmentId ? detailQuery.data.installments.find((i) => i.id === installmentId) : null;
-    setPayingInstallment(target ?? 'obligation');
-  }, [payParamHandled, pay, installmentId, detailQuery.data]);
+  const autoPaying: Installment | 'obligation' | null =
+    !payParamDismissed && pay === '1' && detailQuery.data
+      ? ((installmentId ? detailQuery.data.installments.find((i) => i.id === installmentId) : null) ?? 'obligation')
+      : null;
+  const payingInstallment = manualPaying ?? autoPaying;
 
   // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydının TL karşılığı
   // kalıcı saklanmaz, her görüntülemede canlı fiyattan hesaplanır; yalnızca TRY dışı
@@ -459,7 +460,36 @@ export default function ObligationDetailScreen() {
                   // Çek/senet vadeli bir ödeme aracıdır: bu kayıt tutar kadar kapanır, vadeli bir
                   // çek/senet kaydı açılır (bkz. app/payments/new.tsx). Çek/senedin kendisi başka
                   // bir çek/senetle kapatılmaz; karşı tarafı olmayan kayıtlarda (kredi vb.) yoktur.
-                  ...(obligation.counterparty_id && !isInstrumentRecord
+                  // Alınmış çek/senet tahsil edilmeden bir tedarikçiye verilebilir (ciro).
+                  ...(isInstrumentRecord && !isPayable
+                    ? [
+                        {
+                          key: 'endorse',
+                          label: 'Ciro Et',
+                          description: 'Bu çek/senedi bir tedarikçiye vererek borcunu kapat',
+                          icon: 'swap-horizontal-outline' as const,
+                          onPress: () =>
+                            router.push({ pathname: '/payments/new', params: { endorseId: obligation.id } }),
+                        },
+                      ]
+                    : []),
+                  // Avans (ön ödeme / alınan avans) sonraki faturadan düşülür.
+                  ...(obligation.document_type === 'avans' && obligation.counterparty_id
+                    ? [
+                        {
+                          key: 'offset',
+                          label: 'Faturadan Mahsup Et',
+                          description: 'Bu avansı cariyle açık fatura/borçtan düş',
+                          icon: 'git-compare-outline' as const,
+                          onPress: () =>
+                            router.push({
+                              pathname: '/payments/new',
+                              params: { obligationId: obligation.id, method: 'mahsup' },
+                            }),
+                        },
+                      ]
+                    : []),
+                  ...(obligation.counterparty_id && !isInstrumentRecord && obligation.document_type !== 'avans'
                     ? [
                         {
                           key: 'instrument',
@@ -502,6 +532,7 @@ export default function ObligationDetailScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => {
           setPayingInstallment(null);
+          setPayParamDismissed(true);
           setEditingPayment(null);
         }}
       >
@@ -521,6 +552,7 @@ export default function ObligationDetailScreen() {
             editingPayment={editingPayment}
             onClose={() => {
               setPayingInstallment(null);
+              setPayParamDismissed(true);
               setEditingPayment(null);
             }}
             onSuccess={() => {
@@ -531,6 +563,7 @@ export default function ObligationDetailScreen() {
               // review.tsx'teki InteractionManager.runAfterInteractions ile aynı düzeltme).
               showSuccessAlert(editingPayment ? 'Ödeme başarıyla güncellendi.' : 'Ödeme başarıyla kaydedildi.', () => {
                 setPayingInstallment(null);
+                setPayParamDismissed(true);
                 setEditingPayment(null);
                 afterPaymentChange();
               });

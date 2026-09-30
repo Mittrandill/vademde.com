@@ -17,8 +17,16 @@ export interface IncomeExpenseTotals {
   expenseMinor: number;
 }
 
+// Hareketin gelir-gider raporuna giren kısmı: anapara payı (kredi/nakit avans/borç verme, bkz.
+// transactions.financing_minor) hesap bakiyesini etkiler ama gelir ya da gider değildir. Pay tutarı
+// aşamaz (eski sürümler tutarı düşürürken bu kolonu güncellemez — bkz. ilgili migration).
+export function profitAndLossMinor(row: { amount_minor: number; financing_minor?: number | null }): number {
+  return Math.max(0, row.amount_minor - Math.min(row.financing_minor ?? 0, row.amount_minor));
+}
+
 type RangeTransactionRow = {
   amount_minor: number;
+  financing_minor: number;
   direction: string;
   currency_code: string;
   account_id: string;
@@ -29,7 +37,7 @@ type RangeTransactionRow = {
 async function listRangeTransactions(workspaceId: string, range: DateRange): Promise<RangeTransactionRow[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, direction, currency_code, account_id, transfer_to_account_id, occurred_at')
+    .select('amount_minor, financing_minor, direction, currency_code, account_id, transfer_to_account_id, occurred_at')
     .eq('workspace_id', workspaceId);
   if (range.from) query = query.gte('occurred_at', range.from);
   if (range.to) query = query.lt('occurred_at', range.to);
@@ -46,7 +54,7 @@ export async function getIncomeExpenseTotals(
   const [rows, rates] = await Promise.all([listRangeTransactions(workspaceId, range), listValueUnitRates()]);
   return rows.reduce<IncomeExpenseTotals>(
     (totals, row) => {
-      const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+      const refMinor = sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
       if (row.direction === 'income') totals.incomeMinor += refMinor;
       else if (row.direction === 'expense') totals.expenseMinor += refMinor;
       return totals;
@@ -86,7 +94,7 @@ export async function getMonthlyComparison(workspaceId: string, monthsBack = 6):
     const key = `${occurred.getFullYear()}-${String(occurred.getMonth() + 1).padStart(2, '0')}`;
     const bucket = buckets.get(key);
     if (!bucket) continue;
-    const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+    const refMinor = sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
     if (row.direction === 'income') bucket.incomeMinor += refMinor;
     else bucket.expenseMinor += refMinor;
   }
@@ -105,6 +113,7 @@ export interface CategoryBreakdownItem {
 
 type CategoryTransactionRow = {
   amount_minor: number;
+  financing_minor: number;
   currency_code: string;
   category: { id: string; name: string; icon: string | null; color: string | null } | null;
 };
@@ -117,7 +126,7 @@ export async function getCategoryBreakdown(
 ): Promise<CategoryBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, currency_code, category:categories(id, name, icon, color)')
+    .select('amount_minor, financing_minor, currency_code, category:categories(id, name, icon, color)')
     .eq('workspace_id', workspaceId)
     .eq('direction', direction);
   if (range.from) query = query.gte('occurred_at', range.from);
@@ -129,11 +138,12 @@ export async function getCategoryBreakdown(
   const totals = new Map<string, { name: string; icon: string | null; color: string | null; amountMinor: number }>();
   let grandTotal = 0;
   for (const row of data as unknown as CategoryTransactionRow[]) {
+    if (profitAndLossMinor(row) <= 0) continue;
     const key = row.category?.id ?? 'uncategorized';
     const name = row.category?.name ?? 'Kategorisiz';
     const existing =
       totals.get(key) ?? { name, icon: row.category?.icon ?? null, color: row.category?.color ?? null, amountMinor: 0 };
-    const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+    const refMinor = sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
     existing.amountMinor += refMinor;
     totals.set(key, existing);
     grandTotal += refMinor;
@@ -160,6 +170,7 @@ export interface CounterpartyBreakdownItem {
 
 type CounterpartyTransactionRow = {
   amount_minor: number;
+  financing_minor: number;
   currency_code: string;
   counterparty: { id: string; name: string } | null;
 };
@@ -171,7 +182,7 @@ export async function getCounterpartyBreakdown(
 ): Promise<CounterpartyBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, currency_code, counterparty:counterparties(id, name)')
+    .select('amount_minor, financing_minor, currency_code, counterparty:counterparties(id, name)')
     .eq('workspace_id', workspaceId)
     .in('direction', ['income', 'expense'])
     .not('counterparty_id', 'is', null);
@@ -183,14 +194,14 @@ export async function getCounterpartyBreakdown(
 
   const totals = new Map<string, CounterpartyBreakdownItem>();
   for (const row of data as unknown as CounterpartyTransactionRow[]) {
-    if (!row.counterparty) continue;
+    if (!row.counterparty || profitAndLossMinor(row) <= 0) continue;
     const existing = totals.get(row.counterparty.id) ?? {
       counterpartyId: row.counterparty.id,
       name: row.counterparty.name,
       amountMinor: 0,
       count: 0,
     };
-    existing.amountMinor += sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+    existing.amountMinor += sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
     existing.count += 1;
     totals.set(row.counterparty.id, existing);
   }

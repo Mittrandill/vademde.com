@@ -10,6 +10,8 @@ export interface DocumentTypeOption {
   // components/finance/BankLogo.tsx fallbackColor) her belge türü tek bir paylaşılan
   // mor yerine kendi rengiyle ayrışır; kategorilerdeki aynı ilke (categoryIcons.ts).
   color: string;
+  /** Yalnızca uygulamanın kendisinin oluşturduğu türler (ör. avans) — Belge Türü seçicide listelenmez. */
+  systemOnly?: boolean;
 }
 
 export const DOCUMENT_TYPES: DocumentTypeOption[] = [
@@ -19,6 +21,9 @@ export const DOCUMENT_TYPES: DocumentTypeOption[] = [
   { id: 'cek', name: 'Çek', icon: 'document-text', color: '#2FA9C9' },
   { id: 'senet', name: 'Senet', icon: 'reader', color: '#7C6FF0' },
   { id: 'borc_verme', name: 'Borç Verme', icon: 'hand-left-outline', color: '#8C6F4E' },
+  // Ödeme/tahsilat fazlasından doğan ön ödeme / alınan avans (bkz. features/payments/api.ts
+  // createAdvanceObligation). Elle açılmaz; sonraki faturadan Mahsup ile düşülür.
+  { id: 'avans', name: 'Avans / Ön Ödeme', icon: 'wallet-outline', color: '#A0845C', systemOnly: true },
   { id: 'fatura', name: 'Fatura', icon: 'receipt', color: '#F0B429' },
   { id: 'abonelik', name: 'Abonelik', icon: 'repeat', color: '#8B6BE0' },
   { id: 'kira', name: 'Kira', icon: 'home', color: '#C97B4A' },
@@ -56,6 +61,7 @@ export const DOCUMENT_TYPE_LABEL_PLURAL: Record<string, string> = {
   cek: 'Çeklerim',
   senet: 'Senetlerim',
   borc_verme: 'Verdiğim Borçlar',
+  avans: 'Avanslar / Ön Ödemeler',
   fatura: 'Faturalarım',
   abonelik: 'Aboneliklerim',
   kira: 'Kira Ödemelerim',

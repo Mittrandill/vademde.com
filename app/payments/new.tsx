@@ -36,6 +36,7 @@ import {
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import {
   allocateAcrossObligations,
+  isCashlessMethod,
   isInstrumentMethod,
   settleObligations,
   type SettlementMethod,
@@ -58,6 +59,9 @@ const METHODS: { key: SettlementMethod; label: string }[] = [
   { key: 'online_odeme', label: 'Online' },
   { key: 'cek', label: 'Çek' },
   { key: 'senet', label: 'Senet' },
+  // Yalnızca uygun kayıt varken gösterilir (bkz. availableMethods).
+  { key: 'ciro', label: 'Çek Ciro' },
+  { key: 'mahsup', label: 'Mahsup' },
 ];
 
 // Kısa tarih etiketi — kayıt satırlarında vade gösterimi için.
@@ -90,7 +94,10 @@ export default function SettlementScreen() {
     accountId?: string;
     date?: string;
     description?: string;
+    /** Alınmış bir çek/senedin detayından "Ciro Et": o çek seçili, yöntem Çek Ciro. */
+    endorseId?: string;
   }>();
+  const endorseId = typeof params.endorseId === 'string' ? params.endorseId : undefined;
   const preselectedObligationId = typeof params.obligationId === 'string' ? params.obligationId : undefined;
 
   // Kayıt detayından gelindiyse (obligationId) cari, yön ve para birimi o kayıttan okunur.
@@ -105,10 +112,15 @@ export default function SettlementScreen() {
   }
 
   const preselected = preselectedQuery.data ?? null;
-  const direction: SettlementDirection =
-    (preselected?.direction as SettlementDirection | undefined) ??
-    (params.direction === 'receivable' ? 'receivable' : 'payable');
-  const method = METHODS.some((m) => m.key === params.method) ? (params.method as SettlementMethod) : undefined;
+  const direction: SettlementDirection = endorseId
+    ? 'payable'
+    : ((preselected?.direction as SettlementDirection | undefined) ??
+      (params.direction === 'receivable' ? 'receivable' : 'payable'));
+  const method = endorseId
+    ? 'ciro'
+    : METHODS.some((m) => m.key === params.method)
+      ? (params.method as SettlementMethod)
+      : undefined;
   const amountMinor = params.amountMinor ? Number(params.amountMinor) : undefined;
 
   return (
@@ -123,6 +135,7 @@ export default function SettlementScreen() {
       initialAccountId={typeof params.accountId === 'string' ? params.accountId : undefined}
       initialDate={typeof params.date === 'string' ? params.date : undefined}
       initialDescription={typeof params.description === 'string' ? params.description : undefined}
+      initialSourceIds={endorseId ? [endorseId] : undefined}
     />
   );
 }
@@ -137,6 +150,7 @@ interface SettlementFormProps {
   initialAccountId?: string;
   initialDate?: string;
   initialDescription?: string;
+  initialSourceIds?: string[];
 }
 
 function SettlementForm({
@@ -149,6 +163,7 @@ function SettlementForm({
   initialAccountId,
   initialDate,
   initialDescription,
+  initialSourceIds,
 }: SettlementFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -166,6 +181,8 @@ function SettlementForm({
   const [description, setDescription] = useState(initialDescription ?? '');
   // null = kullanıcı henüz seçim yapmadı → varsayılan seçim uygulanır (aşağıda).
   const [selectedIds, setSelectedIds] = useState<string[] | null>(preselectedObligationId ? [preselectedObligationId] : null);
+  // Mahsupta ters yöndeki kayıtlar, ciroda portföydeki çek/senetler. null = varsayılan seçim.
+  const [sourceIds, setSourceIds] = useState<string[] | null>(initialSourceIds ?? null);
 
   // Çek/senet alanları
   const [instrumentNo, setInstrumentNo] = useState('');
@@ -203,7 +220,56 @@ function SettlementForm({
     enabled: !!activeWorkspaceId && !!counterpartyId,
   });
 
+  // Mahsup: bu cariyle ters yöndeki açık kayıtlar (ör. tedarikçiye yapılmış ön ödeme/avans).
+  const oppositeDirection: SettlementDirection = isPayable ? 'receivable' : 'payable';
+  const oppositeQuery = useQuery({
+    queryKey:
+      activeWorkspaceId && counterpartyId
+        ? [activeWorkspaceId, 'obligations', 'settlement-open', counterpartyId, oppositeDirection]
+        : ['settlement-open-opposite', 'disabled'],
+    queryFn: () =>
+      listObligations({
+        workspaceId: activeWorkspaceId as string,
+        counterpartyId: counterpartyId as string,
+        direction: oppositeDirection,
+        statuses: ACTIVE_OBLIGATION_STATUSES,
+        pageSize: 100,
+      }),
+    enabled: !!activeWorkspaceId && !!counterpartyId,
+  });
+  // Ciro: portföydeki (tahsil edilmemiş) alınmış çek/senetler — hangi müşteriden alındığı fark etmez.
+  const portfolioQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'obligations', 'cheque-portfolio'] : ['cheque-portfolio', 'disabled'],
+    queryFn: () =>
+      listObligations({
+        workspaceId: activeWorkspaceId as string,
+        direction: 'receivable',
+        statuses: ACTIVE_OBLIGATION_STATUSES,
+        pageSize: 200,
+      }),
+    enabled: !!activeWorkspaceId && isPayable,
+  });
+  const offsetSources = (oppositeQuery.data ?? []).filter(
+    (o) => o.currency_code === currencyCode && o.remaining_amount_minor > 0
+  );
+  const portfolio = (portfolioQuery.data ?? []).filter(
+    (o) =>
+      (o.document_type === 'cek' || o.document_type === 'senet') &&
+      o.currency_code === currencyCode &&
+      o.remaining_amount_minor > 0
+  );
+  const availableMethods = METHODS.filter((m) =>
+    m.key === 'mahsup' ? offsetSources.length > 0 : m.key === 'ciro' ? isPayable && portfolio.length > 0 : true
+  );
+
   const instrument = isInstrumentMethod(method);
+  const cashless = isCashlessMethod(method);
+  const sourceList = method === 'mahsup' ? offsetSources : method === 'ciro' ? portfolio : [];
+  // Mahsupta ters yöndeki tüm kayıtlar varsayılan seçilidir; ciroda hangi çekin verileceğini
+  // kullanıcı seçer.
+  const effectiveSourceIds = sourceIds ?? (method === 'mahsup' ? offsetSources.map((o) => o.id) : []);
+  const selectedSources = sourceList.filter((o) => effectiveSourceIds.includes(o.id));
+  const sourceTotalMinor = selectedSources.reduce((sum, o) => sum + o.remaining_amount_minor, 0);
   // Aynı para birimindeki açık kayıtlar (en eski vade önce — listObligations varsayılanı).
   // Çek/senetle ödemede başka bir çek/senet kapatılmaz (çek yenileme ayrı bir akıştır).
   const openRecords: ObligationWithRelations[] = (openQuery.data ?? []).filter(
@@ -219,12 +285,24 @@ function SettlementForm({
   const selectedRecords = openRecords.filter((o) => effectiveSelectedIds.includes(o.id));
   const selectedRemainingMinor = selectedRecords.reduce((sum, o) => sum + o.remaining_amount_minor, 0);
 
-  const displayAmount = amountTouched
-    ? amount
-    : selectedRemainingMinor > 0
-      ? minorToInput(selectedRemainingMinor, currencyCode)
-      : '';
-  const amountMinor = parseValueUnitAmountToMinor(displayAmount, currencyCode);
+  // Ciroda tutar seçilen çeklerin toplamıdır (çek bölünerek verilmez). Mahsupta en fazla iki
+  // tarafın küçüğü kadar kapatılabilir.
+  const offsetCapMinor = Math.min(selectedRemainingMinor, sourceTotalMinor);
+  const suggestedMinor =
+    method === 'ciro' ? sourceTotalMinor : method === 'mahsup' ? offsetCapMinor : selectedRemainingMinor;
+  const displayAmount =
+    method === 'ciro'
+      ? sourceTotalMinor > 0
+        ? minorToInput(sourceTotalMinor, currencyCode)
+        : ''
+      : amountTouched
+        ? amount
+        : suggestedMinor > 0
+          ? minorToInput(suggestedMinor, currencyCode)
+          : '';
+  const parsedAmountMinor = parseValueUnitAmountToMinor(displayAmount, currencyCode);
+  const amountMinor =
+    method === 'mahsup' && parsedAmountMinor ? Math.min(parsedAmountMinor, offsetCapMinor) : parsedAmountMinor;
   const allocation =
     amountMinor && amountMinor > 0 ? allocateAcrossObligations(amountMinor, selectedRecords) : null;
 
@@ -273,12 +351,14 @@ function SettlementForm({
         workspaceId: activeWorkspaceId,
         direction,
         counterpartyId,
+        counterpartyName,
         currencyCode,
         amountMinor,
         paidAt: parsedDate.toISOString(),
         method,
         targets: selectedRecords,
-        accountId: instrument ? null : accountId,
+        sources: selectedSources,
+        accountId: cashless ? null : accountId,
         description: description.trim() || null,
         instrument: instrument
           ? {
@@ -294,7 +374,7 @@ function SettlementForm({
       if (result.instrumentObligation) {
         await syncObligationReminder(activeWorkspaceId, result.instrumentObligation).catch(() => undefined);
       }
-      for (const { obligation } of result.allocations) {
+      for (const { obligation } of [...result.allocations, ...selectedSources.map((o) => ({ obligation: o }))]) {
         const fresh = await getObligation(obligation.id).catch(() => null);
         if (fresh) await syncObligationReminder(activeWorkspaceId, fresh).catch(() => undefined);
       }
@@ -302,7 +382,7 @@ function SettlementForm({
       // Dekont yalnızca gerçek para hareketinde (ilk harekete) bağlanır; yüklenemezse ödeme geri
       // alınmaz, kullanıcıya bildirilir.
       let receiptFailed = false;
-      if (receipt && !instrument && result.transactionIds[0]) {
+      if (receipt && !cashless && result.transactionIds[0]) {
         try {
           await attachReceiptFile({
             workspaceId: activeWorkspaceId,
@@ -320,9 +400,18 @@ function SettlementForm({
     },
     onSuccess: (result) => {
       const closedCount = result.allocations.length;
-      const base = instrument
-        ? `${instrumentLabel} kaydedildi${closedCount > 0 ? ` ve ${closedCount} kayıt bu tutar kadar kapatıldı` : ''}. Para, ${instrumentLabel.toLocaleLowerCase('tr-TR')} vadesinde ${isPayable ? 'ödendiğinde hesaptan çıkar' : 'tahsil edildiğinde hesaba girer'}.`
-        : `${isPayable ? 'Ödeme' : 'Tahsilat'} kaydedildi${closedCount > 0 ? `, ${closedCount} kayda uygulandı` : ''}${result.leftoverMinor > 0 ? `; ${formatMinorAmount(result.leftoverMinor, currencyCode)} ${isPayable ? 'ön ödeme' : 'avans'} olarak eklendi` : ''}.`;
+      const advanceText =
+        result.leftoverMinor > 0
+          ? ` Artan ${formatMinorAmount(result.leftoverMinor, currencyCode)} cariye ${isPayable ? 'ön ödeme (alacak)' : 'alınan avans (borç)'} olarak yazıldı; sonraki faturadan Mahsup ile düşebilirsin.`
+          : '';
+      const base =
+        method === 'mahsup'
+          ? `${closedCount} kayıt mahsup edildi. Para hareketi oluşmadı.`
+          : method === 'ciro'
+            ? `${selectedSources.length} çek/senet ciro edildi${closedCount > 0 ? `, ${closedCount} kayıt kapatıldı` : ''}.${advanceText}`
+            : instrument
+              ? `${instrumentLabel} kaydedildi${closedCount > 0 ? ` ve ${closedCount} kayıt bu tutar kadar kapatıldı` : ''}. Para, ${instrumentLabel.toLocaleLowerCase('tr-TR')} vadesinde ${isPayable ? 'ödendiğinde hesaptan çıkar' : 'tahsil edildiğinde hesaba girer'}.${advanceText}`
+              : `${isPayable ? 'Ödeme' : 'Tahsilat'} kaydedildi${closedCount > 0 ? `, ${closedCount} kayda uygulandı` : ''}.${advanceText}`;
       const message = result.receiptFailed ? `${base} Dekont yüklenemedi; hareketi düzenleyerek yeniden ekleyebilirsiniz.` : base;
       showSaveSuccess(message, () => router.back(), () => {
         InteractionManager.runAfterInteractions(() => {
@@ -340,11 +429,24 @@ function SettlementForm({
     });
   }
 
+  function toggleSource(id: string) {
+    setSourceIds((prev) => {
+      const current = prev ?? effectiveSourceIds;
+      return current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    });
+  }
+
   const canSubmit =
     !!counterpartyId &&
     !!amountMinor &&
     amountMinor > 0 &&
-    (instrument ? dueRows.length > 0 : !!accountId);
+    (method === 'ciro'
+      ? selectedSources.length > 0
+      : method === 'mahsup'
+        ? selectedSources.length > 0 && selectedRecords.length > 0
+        : instrument
+          ? dueRows.length > 0
+          : !!accountId);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -375,7 +477,10 @@ function SettlementForm({
                   onSelect={(value) => {
                     setCounterpartyId(value);
                     setSelectedIds(null);
+                    setSourceIds(null);
                     setAmountTouched(false);
+                    // Mahsup kaynakları cariye bağlıdır; yeni caride olmayabilir.
+                    if (method === 'mahsup') setMethod('havale');
                   }}
                   onCreated={() => {
                     queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
@@ -420,27 +525,69 @@ function SettlementForm({
                 {isPayable ? 'ÖDEME YÖNTEMİ' : 'TAHSİLAT YÖNTEMİ'}
               </Text>
               <SegmentedControl<SettlementMethod>
-                options={METHODS}
+                options={availableMethods}
                 value={method}
                 onChange={(value) => {
                   setMethod(value);
                   setAccountId(null);
+                  setSourceIds(null);
+                  setAmountTouched(false);
                   setSelectedIds(preselectedObligationId ? [preselectedObligationId] : null);
                 }}
                 scrollable
               />
+              {method === 'mahsup' ? (
+                <Text variant="caption" color="textSecondary">
+                  Bu cariyle ters yöndeki kayıtlar (ör. önceden yapılmış ön ödeme/avans) karşılıklı kapatılır; para hareketi oluşmaz.
+                </Text>
+              ) : method === 'ciro' ? (
+                <Text variant="caption" color="textSecondary">
+                  Müşteriden aldığın çek/senedi bu cariye verirsin: çek portföyden çıkar, seçilen borçlar kapanır; hesaptan para çıkmaz.
+                </Text>
+              ) : null}
             </Stack>
 
-            <AmountField
-              label="TUTAR"
-              placeholder={precision === 0 ? '1' : '0,00'}
-              precision={precision}
-              value={displayAmount}
-              onChangeText={(value) => {
-                setAmount(value);
-                setAmountTouched(true);
-              }}
-            />
+            {method === 'mahsup' || method === 'ciro' ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  {method === 'ciro' ? 'CİRO EDİLECEK ÇEK / SENETLER' : isPayable ? 'MAHSUP EDİLECEK ALACAKLAR' : 'MAHSUP EDİLECEK BORÇLAR'}
+                </Text>
+                <Stack gap="xs">
+                  {sourceList.map((record) => (
+                    <RecordOption
+                      key={record.id}
+                      record={record}
+                      selected={effectiveSourceIds.includes(record.id)}
+                      appliedMinor={0}
+                      showCounterparty={method === 'ciro'}
+                      onToggle={() => toggleSource(record.id)}
+                    />
+                  ))}
+                </Stack>
+              </Stack>
+            ) : null}
+
+            {method === 'ciro' ? (
+              <Stack gap="xxs">
+                <Text variant="caption" color="textSecondary">
+                  TUTAR
+                </Text>
+                <Text variant="cardTitle" tabular>
+                  {sourceTotalMinor > 0 ? formatMinorAmount(sourceTotalMinor, currencyCode) : 'Çek/senet seçin'}
+                </Text>
+              </Stack>
+            ) : (
+              <AmountField
+                label="TUTAR"
+                placeholder={precision === 0 ? '1' : '0,00'}
+                precision={precision}
+                value={displayAmount}
+                onChangeText={(value) => {
+                  setAmount(value);
+                  setAmountTouched(true);
+                }}
+              />
+            )}
 
             {allocation && selectedRecords.length > 0 ? (
               <Text variant="caption" color="textSecondary">
@@ -449,15 +596,13 @@ function SettlementForm({
                   : allocation.allocations.every((a) => a.amountMinor >= a.obligation.remaining_amount_minor)
                     ? `${allocation.allocations.length} kayıt tamamen kapanır.`
                     : 'Son kayıt kısmen kapanır, kalan tutarı açık kalır.'}
-                {allocation.leftoverMinor > 0
-                  ? instrument
-                    ? ` Seçili kayıtları ${formatMinorAmount(allocation.leftoverMinor, currencyCode)} aşıyor; ${instrumentLabel.toLocaleLowerCase('tr-TR')} tam tutarıyla kaydedilir.`
-                    : ` Artan ${formatMinorAmount(allocation.leftoverMinor, currencyCode)} ${isPayable ? 'ön ödeme' : 'avans'} olarak kaydedilir.`
+                {allocation.leftoverMinor > 0 && method !== 'mahsup'
+                  ? ` Artan ${formatMinorAmount(allocation.leftoverMinor, currencyCode)} cariye ${isPayable ? 'ön ödeme (alacak)' : 'alınan avans (borç)'} olarak yazılır ve cari bakiyesine girer.`
                   : ''}
               </Text>
             ) : null}
 
-            {instrument ? (
+            {method === 'mahsup' || method === 'ciro' ? null : instrument ? (
               <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
                 <Stack gap="md">
                   <Stack gap="xxs">
@@ -564,11 +709,11 @@ function SettlementForm({
 
             <DateField label="İŞLEM TARİHİ" value={dateStr} onChangeText={setDateStr} />
 
-            {!instrument ? (
+            {!cashless ? (
               <ReceiptAttachField value={receipt} onChange={setReceipt} allowed={archive.allowed} onUpgrade={() => router.push('/paywall')} />
             ) : null}
 
-            {!instrument ? (
+            {!cashless ? (
               <TextField
                 label="AÇIKLAMA (İSTEĞE BAĞLI)"
                 placeholder={isPayable ? 'Örn. Mart faturası ödemesi' : 'Örn. Mart tahsilatı'}
@@ -594,11 +739,14 @@ function RecordOption({
   record,
   selected,
   appliedMinor,
+  showCounterparty = false,
   onToggle,
 }: {
   record: ObligationWithRelations;
   selected: boolean;
   appliedMinor: number;
+  /** Ciro listesinde çekin hangi müşteriden alındığı gösterilir. */
+  showCounterparty?: boolean;
   onToggle: () => void;
 }) {
   const theme = useTheme();
@@ -627,6 +775,7 @@ function RecordOption({
               {record.title}
             </Text>
             <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {showCounterparty && record.counterparty?.name ? `${record.counterparty.name} · ` : ''}
               {DOCUMENT_TYPE_LABEL[record.document_type] ?? 'Kayıt'}
               {record.due_date ? ` · ${shortDateFormatter.format(new Date(record.due_date))}` : ''}
             </Text>

@@ -630,6 +630,9 @@ function ObligationForm({
           account_id: depositAccountId,
           direction: 'income',
           amount_minor: enteredAmountMinor,
+          // Çekilen nakit borçtur, gelir değil: hesap bakiyesine girer, gelir raporuna girmez.
+          financing_minor: enteredAmountMinor,
+          source_obligation_id: obligation.id,
           currency_code: valueUnitCode,
           occurred_at: new Date().toISOString(),
           description: `Nakit avans — ${title.trim()}`,
@@ -648,6 +651,9 @@ function ObligationForm({
           account_id: accountId,
           direction: 'expense',
           amount_minor: enteredAmountMinor,
+          // Ödünç verilen para gider değildir (geri alınacak): bakiyeden düşer, gider raporuna girmez.
+          financing_minor: enteredAmountMinor,
+          source_obligation_id: obligation.id,
           currency_code: valueUnitCode,
           occurred_at: new Date().toISOString(),
           description: `Ödünç verildi — ${title.trim()}`,

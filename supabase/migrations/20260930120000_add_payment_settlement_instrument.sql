@@ -30,7 +30,7 @@ security definer
 set search_path to 'public'
 as $$
 begin
-  delete from public.payments where settled_by_obligation_id = old.id;
+  delete from public.payments where settled_by_obligation_id = old.id and workspace_id = old.workspace_id;
   return old;
 end;
 $$;

@@ -22,6 +22,8 @@ import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+const LOCKED_SOURCE_TYPES = new Set(['avans', 'nakit_avans', 'borc_verme']);
+
 const DIRECTION_LABEL: Record<string, string> = {
   income: 'Gelir',
   expense: 'Gider',
@@ -118,7 +120,14 @@ export default function TransactionDetailScreen() {
     transaction.description?.trim() || transaction.category?.name || DIRECTION_LABEL[transaction.direction] || 'Hareket';
   const isObligationPayment = (transaction.payments?.length ?? 0) > 0;
   const linkedPayment = transaction.payments?.[0];
-  const linkedObligationId = linkedPayment?.obligation_id ?? null;
+  // Avans / nakit avans / borç verme hareketi kaydın kendisiyle birlikte doğar ve silinir (bkz.
+  // source_obligation_id); tek başına değişirse kayıt ile hesap bakiyesi kopar. Ekstreden
+  // kategorilere ayrılmış kart harcamaları ise serbestçe düzenlenebilir kalır.
+  const lockedSource =
+    transaction.sourceObligation && LOCKED_SOURCE_TYPES.has(transaction.sourceObligation.document_type)
+      ? transaction.sourceObligation.id
+      : null;
+  const linkedObligationId = linkedPayment?.obligation_id ?? lockedSource;
 
   return (
     <>

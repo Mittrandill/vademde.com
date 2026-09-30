@@ -13,6 +13,8 @@ export const queryKeys = {
     [workspaceId, 'counterparties', counterpartyId, 'obligations'] as const,
   counterpartyTransactions: (workspaceId: string, counterpartyId: string) =>
     [workspaceId, 'counterparties', counterpartyId, 'transactions'] as const,
+  counterpartyStatement: (workspaceId: string, counterpartyId: string) =>
+    [workspaceId, 'counterparties', counterpartyId, 'statement'] as const,
   bankSummaries: (workspaceId: string) => [workspaceId, 'banks', 'summaries'] as const,
   bankLoanLedger: (workspaceId: string, bankCode: string) =>
     [workspaceId, 'banks', bankCode, 'ledger'] as const,

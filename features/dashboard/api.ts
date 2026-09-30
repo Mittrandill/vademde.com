@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
 import { listValueUnitRates, sumToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
+import { profitAndLossMinor } from '@/features/reports/api';
 
 export interface IncomeExpenseTotals {
   incomeMinor: number;
@@ -19,7 +20,7 @@ export async function getMonthTransactionTotals(
   const [{ data, error }, rates] = await Promise.all([
     supabase
       .from('transactions')
-      .select('amount_minor, direction, currency_code')
+      .select('amount_minor, financing_minor, direction, currency_code')
       .eq('workspace_id', workspaceId)
       .in('direction', ['income', 'expense'])
       .gte('occurred_at', start.toISOString())
@@ -28,7 +29,10 @@ export async function getMonthTransactionTotals(
   ]);
 
   if (error) throw error;
-  return sumByDirection(data, rates);
+  return sumByDirection(
+    data.map((row) => ({ ...row, amount_minor: profitAndLossMinor(row) })),
+    rates
+  );
 }
 
 // docs/01-finansal-kayit-modeli.md §8 — Bakiye Hero: açılış bakiyesi + tamamlanan

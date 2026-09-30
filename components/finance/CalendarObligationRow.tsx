@@ -19,18 +19,18 @@ export interface CalendarObligationRowProps {
 // - hesabı olmayan fatura/senet/maaşta borç kapanıyor ama hiçbir hesaptan para çıkmıyordu;
 // - kredi kartı ekstresi ve nakit avansta o hesap kartın kendisi olduğu için karta gider yazılıyor,
 //   kart borcu düşmek yerine artıyordu.
-// Bu yüzden kısayol, hesap seçtiren ödeme formunu açar (bkz. app/obligations/[id].tsx pay=1);
-// kart borçları kart sayfasındaki ödeme akışına gider (transferle ödenir, ekstreye dağıtılır).
+// Bu yüzden kısayol, hesap seçtiren ödeme formunu açar (bkz. app/obligations/[id].tsx pay=1; nakit
+// avansta form kart hesaplarını listelemez). Kart ekstresi kart sayfasındaki ödeme akışına gider
+// (transferle ödenir, ekstreye dağıtılır). Nakit avans oraya gitmez: kart bakiyesine dahil değildir,
+// kart ödemesiyle kapatılırsa kart borcu olduğundan az görünür.
 export function CalendarObligationRow({ obligation }: CalendarObligationRowProps) {
   const theme = useTheme();
   const isPayable = obligation.direction === 'payable';
   const isTerminal = obligation.status === 'odendi' || obligation.status === 'tahsil_edildi' || obligation.status === 'iptal_edildi';
   const isInstallment = !!obligation.installment_id;
-  const isCardDebt =
-    obligation.document_type === 'kredi_karti_ekstresi' || obligation.document_type === 'nakit_avans';
 
   function handleMarkPaid() {
-    if (isCardDebt && obligation.account_id) {
+    if (obligation.document_type === 'kredi_karti_ekstresi' && obligation.account_id) {
       router.push(`/accounts/${obligation.account_id}`);
       return;
     }

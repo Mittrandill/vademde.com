@@ -150,7 +150,10 @@ export async function getDueBreakdown({
     .from('obligations')
     .select('id, direction, currency_code, remaining_amount_minor, due_date')
     .eq('workspace_id', workspaceId)
-    .in('status', ACTIVE_OBLIGATION_STATUSES);
+    .in('status', ACTIVE_OBLIGATION_STATUSES)
+    // Avansın (ön ödeme/alınan avans) vadesi yoktur: gecikmiş/bu ay ödenecek sayılmaz, yalnızca
+    // cari bakiyesine girer (bkz. features/payments/api.ts createAdvanceObligation).
+    .neq('document_type', 'avans');
   if (counterpartyId) obligationsQuery = obligationsQuery.eq('counterparty_id', counterpartyId);
   if (documentType) obligationsQuery = obligationsQuery.eq('document_type', documentType);
 

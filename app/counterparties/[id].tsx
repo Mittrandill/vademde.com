@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Alert, InteractionManager } from 'react-native';
+import { Alert, InteractionManager, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { withAlpha } from '@/theme/colors';
 import {
   ActionSheet,
   Card,
@@ -32,7 +33,9 @@ import {
   deleteCounterparty,
   getCounterparty,
   getCounterpartyLedger,
+  getCounterpartyStatement,
   getCounterpartyTypeLabel,
+  type StatementEntry,
 } from '@/features/counterparties/api';
 import {
   listObligations,
@@ -40,7 +43,6 @@ import {
   ACTIVE_OBLIGATION_STATUSES,
   type ObligationWithRelations,
 } from '@/features/obligations/api';
-import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { listReceiptArchive, useDocumentArchiveAccess } from '@/features/receipts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
@@ -58,6 +60,8 @@ const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
 
 const TAB_PAGE_SIZE = 10;
+// Ekstre satırları kısa ve günlere gruplu olduğundan sayfa başına daha fazlası gösterilir.
+const STATEMENT_PAGE_SIZE = 25;
 type DetailTab = 'genel' | 'kayitlar' | 'hareketler';
 
 // app/obligations/[id].tsx'teki hero + sekme deseninin cari karşılığı (DetailScaffold/
@@ -130,13 +134,14 @@ export default function CounterpartyDetailScreen() {
     enabled,
   });
 
-  const transactionsQuery = useQuery({
+  // Hareketler sekmesi: faturalar/fişler, çek/senet/avans kayıtları, bunlara yapılan ödeme ve
+  // tahsilatlar ve kayda bağlı olmayan hareketler — yürüyen cari bakiyesiyle (bkz. getCounterpartyStatement).
+  const statementQuery = useQuery({
     queryKey: activeWorkspaceId
-      ? queryKeys.counterpartyTransactions(activeWorkspaceId, id as string)
-      : ['counterparty-transactions', 'disabled'],
-    queryFn: () =>
-      listTransactions({ workspaceId: activeWorkspaceId as string, counterpartyId: id as string, pageSize: 20 }),
-    enabled,
+      ? queryKeys.counterpartyStatement(activeWorkspaceId, id as string)
+      : ['counterparty-statement', 'disabled'],
+    queryFn: () => getCounterpartyStatement(activeWorkspaceId as string, id as string),
+    enabled: enabled && tab === 'hareketler',
   });
 
   // Belge arşivi (Plus): bu cariyle ilgili ödemelere eklenmiş dekontlar (bkz. features/receipts/api.ts).
@@ -187,14 +192,14 @@ export default function CounterpartyDetailScreen() {
     effectiveObligationsPage * TAB_PAGE_SIZE + TAB_PAGE_SIZE
   );
 
-  const allTransactions = transactionsQuery.data ?? [];
-  const transactionsTotalPages = Math.max(1, Math.ceil(allTransactions.length / TAB_PAGE_SIZE));
+  const allEntries = statementQuery.data ?? [];
+  const transactionsTotalPages = Math.max(1, Math.ceil(allEntries.length / STATEMENT_PAGE_SIZE));
   const effectiveTransactionsPage = Math.min(transactionsPage, transactionsTotalPages - 1);
-  const pagedTransactions = allTransactions.slice(
-    effectiveTransactionsPage * TAB_PAGE_SIZE,
-    effectiveTransactionsPage * TAB_PAGE_SIZE + TAB_PAGE_SIZE
+  const pagedEntries = allEntries.slice(
+    effectiveTransactionsPage * STATEMENT_PAGE_SIZE,
+    effectiveTransactionsPage * STATEMENT_PAGE_SIZE + STATEMENT_PAGE_SIZE
   );
-  const transactionSections = groupByDay(pagedTransactions, (item) => item.occurred_at);
+  const transactionSections = groupByDay(pagedEntries, (item) => item.date);
 
   // Cari bakiye işaretlidir: pozitif = bu cari size borçlu, negatif = siz borçlusunuz.
   const netMinor = ledger?.netMinor ?? 0;
@@ -338,7 +343,7 @@ export default function CounterpartyDetailScreen() {
         </Stack>
       ) : (
         <Stack gap="md">
-          {transactionSections.length === 0 ? (
+          {statementQuery.isPending ? null : transactionSections.length === 0 ? (
             <EmptyState icon="receipt-outline" message="Bu cariyle henüz hareket yok." />
           ) : (
             <Stack gap="md">
@@ -347,7 +352,7 @@ export default function CounterpartyDetailScreen() {
                   <SectionHeader title={section.title} />
                   <Stack gap="xs">
                     {section.data.map((item) => (
-                      <TransactionRow key={item.id} transaction={item} />
+                      <StatementRow key={item.key} entry={item} />
                     ))}
                   </Stack>
                 </Stack>
@@ -463,25 +468,78 @@ function OpenObligationRow({ obligation }: { obligation: ObligationWithRelations
   );
 }
 
-function TransactionRow({ transaction }: { transaction: TransactionWithRelations }) {
+// Cari ekstresi satırı. Fatura/borç kaydı kendi belge ikonuyla, ödeme/tahsilat ok ikonuyla,
+// kayda bağlı olmayan hareket nötr ikonla gösterilir. Tutarın işareti cari bakiyesine etkisidir;
+// altındaki "Bakiye" satırı o satırdan sonraki cari durumudur (tek para birimli ekstrede).
+function StatementRow({ entry }: { entry: StatementEntry }) {
+  const theme = useTheme();
+  const effect = entry.balanceEffectMinor;
+  const amountColor =
+    effect > 0 ? theme.colors.success : effect < 0 ? theme.colors.textPrimary : theme.colors.textSecondary;
+  const sign = effect > 0 ? '+' : effect < 0 ? '−' : '';
+  const running = entry.runningBalanceMinor;
+
+  function open() {
+    if (entry.obligationId) router.push(`/obligations/${entry.obligationId}`);
+    else if (entry.transactionId) router.push(`/transactions/${entry.transactionId}`);
+  }
+
   return (
-    <Pressable onPress={() => router.push(`/transactions/${transaction.id}`)}>
+    <Pressable onPress={open}>
       <Card>
         <Row gap="sm" align="center">
+          {entry.kind === 'document' && entry.documentType ? (
+            <ObligationIcon documentType={entry.documentType} fallbackName={entry.title} size={32} />
+          ) : (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: withAlpha(entry.kind === 'payment' ? theme.colors.success : theme.colors.textSecondary, 0.14),
+              }}
+            >
+              <Ionicons
+                name={
+                  entry.kind === 'payment'
+                    ? entry.direction === 'receivable'
+                      ? 'arrow-down'
+                      : 'arrow-up'
+                    : 'swap-vertical'
+                }
+                size={16}
+                color={entry.kind === 'payment' ? theme.colors.success : theme.colors.textSecondary}
+              />
+            </View>
+          )}
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="body" numberOfLines={1}>
-              {transaction.description?.trim() || transaction.category?.name || 'Hareket'}
+              {entry.title}
             </Text>
-            <Text variant="caption" color="textSecondary">
-              {transaction.account?.name ?? 'Hareket'}
-            </Text>
+            {entry.subtitle ? (
+              <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                {entry.subtitle}
+              </Text>
+            ) : null}
           </Stack>
-          <Amount
-            amountMinor={transaction.amount_minor}
-            currencyCode={transaction.currency_code}
-            direction={transaction.direction as 'income' | 'expense' | 'transfer'}
-            variant="body"
-          />
+          <Stack gap="xxs" align="flex-end">
+            <Text variant="body" tabular style={{ color: amountColor, fontWeight: '600' }}>
+              {sign}
+              {formatMinorAmount(entry.amountMinor, entry.currencyCode)}
+            </Text>
+            {running !== null ? (
+              <Text variant="caption" color="textSecondary" tabular>
+                Bakiye {running < 0 ? '−' : ''}
+                {formatMinorAmount(Math.abs(running), entry.currencyCode)}
+              </Text>
+            ) : entry.balanceEffectMinor === 0 ? (
+              <Text variant="caption" color="textSecondary">
+                bakiyeyi etkilemez
+              </Text>
+            ) : null}
+          </Stack>
         </Row>
       </Card>
     </Pressable>

@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import { ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 
 export type Counterparty = Tables<'counterparties'>;
@@ -155,6 +156,212 @@ export async function getCounterpartyBalances(workspaceId: string): Promise<Reco
     balances[row.counterparty_id] = (balances[row.counterparty_id] ?? 0) + sign * refMinor;
   }
   return balances;
+}
+
+// --- Cari ekstresi ------------------------------------------------------------------------------
+
+export type StatementEntryKind = 'document' | 'payment' | 'transaction';
+
+export interface StatementEntry {
+  /** Liste anahtarı — türle önekli, benzersiz. */
+  key: string;
+  kind: StatementEntryKind;
+  date: string;
+  title: string;
+  subtitle: string | null;
+  amountMinor: number;
+  currencyCode: string;
+  /**
+   * Cari bakiyesine etkisi (pozitif = cari bize daha çok borçlu / biz daha az borçluyuz).
+   * Fatura/borç kaydı ve ödeme/tahsilat bakiyeyi değiştirir; kayda bağlı olmayan bir hareket
+   * (ör. peşin alışveriş) değiştirmez (0).
+   */
+  balanceEffectMinor: number;
+  /** Tek para birimli ekstrede bu satırdan sonraki cari bakiyesi; karışık birimde null. */
+  runningBalanceMinor: number | null;
+  obligationId: string | null;
+  transactionId: string | null;
+  documentType: string | null;
+  /** 'payable' | 'receivable' (kayıt/ödeme) ya da 'income' | 'expense' (hareket). */
+  direction: string;
+}
+
+const METHOD_LABEL: Record<string, string> = {
+  nakit: 'Nakit',
+  havale: 'Havale/EFT',
+  kredi_karti: 'Kredi kartı',
+  online_odeme: 'Online',
+  diger: 'Diğer',
+};
+
+interface StatementObligationRow {
+  id: string;
+  title: string;
+  document_type: string;
+  direction: string;
+  total_amount_minor: number;
+  currency_code: string;
+  created_at: string;
+  status: string;
+}
+
+interface StatementPaymentRow {
+  id: string;
+  obligation_id: string;
+  amount_minor: number;
+  paid_at: string;
+  notes: string | null;
+  settled_by_obligation_id: string | null;
+  transaction_id: string | null;
+  account: { name: string } | null;
+  transaction: { payment_method: string | null } | null;
+}
+
+interface StatementTransactionRow {
+  id: string;
+  direction: string;
+  amount_minor: number;
+  currency_code: string;
+  occurred_at: string;
+  description: string | null;
+  payment_method: string | null;
+  source_obligation_id: string | null;
+  account: { name: string } | null;
+  payments: { id: string }[] | null;
+}
+
+// Cari detayındaki Hareketler sekmesi: bu cariyle ilgili her şey tek zaman çizelgesinde — fatura/
+// fiş/çek/senet/avans kayıtları, bunlara yapılan ödeme ve tahsilatlar (hesaptan, çek/senetle,
+// mahsup ya da ciro ile) ve kayda bağlı olmayan hareketler. Önceden yalnızca counterparty_id'li
+// hareketler listeleniyordu: faturalar ve çek/senetle yapılan (hesap hareketi oluşturmayan)
+// ödemeler hiç görünmüyordu.
+export async function getCounterpartyStatement(
+  workspaceId: string,
+  counterpartyId: string
+): Promise<StatementEntry[]> {
+  const [obligationsResult, transactionsResult] = await Promise.all([
+    supabase
+      .from('obligations')
+      .select('id, title, document_type, direction, total_amount_minor, currency_code, created_at, status')
+      .eq('workspace_id', workspaceId)
+      .eq('counterparty_id', counterpartyId)
+      .neq('status', 'iptal_edildi')
+      .limit(1000),
+    supabase
+      .from('transactions')
+      .select(
+        'id, direction, amount_minor, currency_code, occurred_at, description, payment_method, source_obligation_id, account:accounts!transactions_account_id_fkey(name), payments(id)'
+      )
+      .eq('workspace_id', workspaceId)
+      .eq('counterparty_id', counterpartyId)
+      .in('direction', ['income', 'expense'])
+      .limit(1000),
+  ]);
+  if (obligationsResult.error) throw obligationsResult.error;
+  if (transactionsResult.error) throw transactionsResult.error;
+
+  const obligations = (obligationsResult.data ?? []) as StatementObligationRow[];
+  const obligationById = new Map(obligations.map((o) => [o.id, o]));
+
+  let payments: StatementPaymentRow[] = [];
+  if (obligations.length > 0) {
+    const { data, error } = await supabase
+      .from('payments')
+      .select(
+        'id, obligation_id, amount_minor, paid_at, notes, settled_by_obligation_id, transaction_id, account:accounts(name), transaction:transactions(payment_method)'
+      )
+      .in(
+        'obligation_id',
+        obligations.map((o) => o.id)
+      )
+      .limit(5000);
+    if (error) throw error;
+    payments = (data ?? []) as unknown as StatementPaymentRow[];
+  }
+
+  const entries: StatementEntry[] = [];
+
+  for (const o of obligations) {
+    const isReceivable = o.direction === 'receivable';
+    entries.push({
+      key: `o:${o.id}`,
+      kind: 'document',
+      date: o.created_at,
+      title: o.title,
+      subtitle: `${DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt'} · ${isReceivable ? 'Alacak' : 'Borç'}`,
+      amountMinor: o.total_amount_minor,
+      currencyCode: o.currency_code,
+      balanceEffectMinor: isReceivable ? o.total_amount_minor : -o.total_amount_minor,
+      runningBalanceMinor: null,
+      obligationId: o.id,
+      transactionId: null,
+      documentType: o.document_type,
+      direction: o.direction,
+    });
+  }
+
+  for (const p of payments) {
+    const obligation = obligationById.get(p.obligation_id);
+    if (!obligation) continue;
+    const isReceivable = obligation.direction === 'receivable';
+    const verb = isReceivable ? 'Tahsilat' : 'Ödeme';
+    const method = p.transaction?.payment_method ? METHOD_LABEL[p.transaction.payment_method] : null;
+    const title = p.settled_by_obligation_id
+      ? (p.notes ?? `${verb} (para hareketi yok)`)
+      : p.transaction_id
+        ? `${verb}${method ? ` — ${method}` : ''}`
+        : `${verb} (hesapsız işaretlendi)`;
+    entries.push({
+      key: `p:${p.id}`,
+      kind: 'payment',
+      date: p.paid_at,
+      title,
+      subtitle: [obligation.title, p.account?.name].filter(Boolean).join(' · ') || null,
+      amountMinor: p.amount_minor,
+      currencyCode: obligation.currency_code,
+      balanceEffectMinor: isReceivable ? -p.amount_minor : p.amount_minor,
+      runningBalanceMinor: null,
+      obligationId: obligation.id,
+      transactionId: p.transaction_id,
+      documentType: obligation.document_type,
+      direction: obligation.direction,
+    });
+  }
+
+  // Kayda bağlı olmayan hareketler (peşin alış/satış vb.) bakiyeyi değiştirmez. Ödemeden doğan
+  // hareketler (yukarıda ödeme satırı olarak var) ve bir kaydın parçası olan hareketler (avansın
+  // parası — avans kaydıyla birlikte gösterilir) tekrar listelenmez.
+  for (const t of (transactionsResult.data ?? []) as unknown as StatementTransactionRow[]) {
+    if ((t.payments?.length ?? 0) > 0) continue;
+    if (t.source_obligation_id && obligationById.has(t.source_obligation_id)) continue;
+    const method = t.payment_method ? METHOD_LABEL[t.payment_method] : null;
+    entries.push({
+      key: `t:${t.id}`,
+      kind: 'transaction',
+      date: t.occurred_at,
+      title: t.description?.trim() || (t.direction === 'income' ? 'Gelir' : 'Gider'),
+      subtitle: [t.account?.name, method].filter(Boolean).join(' · ') || null,
+      amountMinor: t.amount_minor,
+      currencyCode: t.currency_code,
+      balanceEffectMinor: 0,
+      runningBalanceMinor: null,
+      obligationId: null,
+      transactionId: t.id,
+      documentType: null,
+      direction: t.direction,
+    });
+  }
+
+  // Yürüyen bakiye eskiden yeniye hesaplanır; aynı anda oluşan kayıt ödemesinden önce gelir.
+  const kindOrder: Record<StatementEntryKind, number> = { document: 0, payment: 1, transaction: 2 };
+  entries.sort((a, b) => a.date.localeCompare(b.date) || kindOrder[a.kind] - kindOrder[b.kind]);
+  const singleCurrency = new Set(entries.map((e) => e.currencyCode)).size <= 1;
+  let running = 0;
+  for (const entry of entries) {
+    running += entry.balanceEffectMinor;
+    entry.runningBalanceMinor = singleCurrency ? running : null;
+  }
+  return entries.reverse();
 }
 
 // Kişi/firma işlem/borç kayıtlarında kullanılıyorsa FK NO ACTION nedeniyle silme başarısız olur;

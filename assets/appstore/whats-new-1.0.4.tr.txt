@@ -7,6 +7,10 @@ Vademde 1.0.4
 • Yeni sürüm bildirimi: Yeni bir sürüm çıktığında uygulama sana haber verir.
 • Yeni Ödeme Yap ve Tahsilat Al ekranları: Cari sayfasından ya da Hareketler'deki + menüsünden hangi fatura/borçları kapatacağını seç, nakit, havale, kredi kartı, çek veya senetle öde. Kısmi ödeme de olur; faturanın kalanı açık kalır.
 • Çek ve senetle ödeme artık faturayı kapatıyor: 30.000 TL'lik faturaya 20.000 TL çek verdiğinde fatura 10.000 TL'ye düşer, çek vadesiyle ayrıca izlenir; borç artık iki kez görünmez. Çek vadesinde ödendiğinde para seçtiğin hesaptan çıkar. Taradığın bir çek/senet için de "hangi faturanın karşılığı?" diye sorulur.
+• Çek ciro: Müşteriden aldığın çeki tedarikçine vererek borcunu kapat; çek portföyden çıkar, hesabından para çıkmaz.
+• Ön ödeme ve avans cari bakiyesinde: Faturadan fazla ödediğinde ya da peşin ödediğinde fark kaybolmaz, cari bakiyesine yazılır; sonraki faturadan Mahsup ile düş.
+• Cari Hareketler sekmesi yenilendi: Faturalar, fişler, çek/senetler, ödeme ve tahsilatlar tek listede, yürüyen bakiyeyle.
+• Raporlar daha doğru: Kredi, nakit avans ve borç vermede anapara artık gelir/gider sayılmıyor; kredide yalnızca faiz gider olarak görünüyor. Borç Verme kaydı da artık sorunsuz oluşturuluyor.
 • Taksitli kayıtlarda ödemeler taksitlere işleniyor: Senet, kredi, maaş ve kira gibi kayıtlara yapılan ödeme en eski açık taksitten başlayarak düşülür; takvim ve hatırlatmalar doğru kalır.
 • Takvimdeki "Öde" artık hangi hesaptan ödediğini soruyor; kredi kartı borçları kart sayfasından ödenir.
 • Bir ödemeye bağlı hareket artık yanlışlıkla düzenlenip silinemiyor; değişiklik kaydın ödeme geçmişinden yapılır.

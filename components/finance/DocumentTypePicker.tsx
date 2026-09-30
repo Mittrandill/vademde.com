@@ -10,7 +10,8 @@ export interface DocumentTypePickerProps {
 export function DocumentTypePicker({ selectedId, onSelect }: DocumentTypePickerProps) {
   return (
     <SearchablePicker
-      items={DOCUMENT_TYPES}
+      // Sistem türleri (avans) elle seçilmez; düzenlenen kayıt zaten o türdeyse gösterilir.
+      items={DOCUMENT_TYPES.filter((t) => !t.systemOnly || t.id === selectedId)}
       selectedId={selectedId}
       onSelect={onSelect}
       // CategoryPicker ile aynı kimlik dili: kategoriler nasıl kendi renginde yuvarlak

@@ -48,7 +48,11 @@ export type TransactionWithRelations = Transaction & {
 };
 
 // Hareket detay ekranı için ek alan yok — transferToAccount artık temel tipte.
-export type TransactionDetail = TransactionWithRelations;
+export type TransactionDetail = TransactionWithRelations & {
+  // Hareket bir kaydın parçası olarak doğduysa (avans, nakit avans, borç verme, ekstre harcaması)
+  // o kayıt — bkz. transactions.source_obligation_id.
+  sourceObligation: { id: string; document_type: string } | null;
+};
 
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
 export const TRANSACTIONS_PAGE_SIZE = 30;
@@ -116,7 +120,7 @@ export async function getTransactionWithRelations(id: string): Promise<Transacti
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon, color), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four, currency_code), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code, type, card_last_four, currency_code), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
+      '*, sourceObligation:obligations!transactions_source_obligation_id_fkey(id, document_type), category:categories(name, icon, color), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four, currency_code), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code, type, card_last_four, currency_code), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
     )
     .eq('id', id)
     .single();

@@ -7,6 +7,10 @@ Vademde 1.0.4
 • New version notice: the app now tells you when a newer version is available.
 • New Make Payment and Receive Payment screens: from a contact's page or the + menu in Transactions, choose which invoices/debts to settle and pay by cash, bank transfer, credit card, cheque, or promissory note. Partial payments are supported; the rest of the invoice stays open.
 • Paying by cheque or promissory note now settles the invoice: give a 20,000 TL cheque against a 30,000 TL invoice and the invoice drops to 10,000 TL while the cheque is tracked with its own due date — the debt is no longer counted twice. When the cheque is paid on its due date, the money leaves the account you choose. Scanned cheques/notes also ask which invoice they cover.
+• Cheque endorsement: hand a cheque received from a customer to your supplier to settle your debt; the cheque leaves your portfolio and no money leaves your account.
+• Prepayments and advances in the contact balance: overpayments and payments made in advance are no longer lost — they're added to the contact's balance and can be offset against the next invoice.
+• Redesigned contact Transactions tab: invoices, receipts, cheques/notes, payments, and collections in one list with a running balance.
+• More accurate reports: loan, cash advance, and lending principal no longer count as income or expense; for loans only the interest shows as an expense. Lending records can now be created without errors.
 • Payments on installment records now go to the installments: payments on notes, loans, salaries, and rent are applied starting from the oldest open installment, so the calendar and reminders stay accurate.
 • "Pay" in the calendar now asks which account you paid from; credit card debts are paid from the card page.
 • Transactions linked to a payment can no longer be edited or deleted by mistake; changes are made from the record's payment history.

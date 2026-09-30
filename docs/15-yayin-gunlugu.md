@@ -72,12 +72,37 @@ edildi, TestFlight'a çift kayıt gitmedi.
   başlayarak dağıtılır — önceden yalnızca kaydın toplamı düşüyor, taksitler ödenmemiş kalıyordu.
 - **Takvim "Öde" (build 36):** artık doğrudan ödeme yazmaz, hesap seçtiren ödeme formunu açar;
   kart ekstresi/nakit avans kart sayfasına gider (önceden karta gider yazılıp kart borcu artıyordu).
+- **Çek ciro (sonraki build):** Ödeme Yap'ta "Çek Ciro" yöntemi ve alınan çek/senet detayında
+  "Ciro Et". Portföydeki alınmış çek/senet tam tutarıyla tedarikçiye verilir: çek alacağı ve
+  seçilen faturalar karşılıklı kapanır (hesapsız ödeme satırları, `settled_by_obligation_id` ile
+  çapraz bağlı); çek faturaları aşarsa fark tedarikçiden avans alacağı olur. Fatura ya da avans
+  silinirse çek (ilgili kısmıyla) portföye döner.
+- **Ön ödeme / avans cari bakiyesinde (sonraki build):** ödemeyi aşan tutar artık bağımsız hareket
+  değil, ters yönde `avans` kaydı olur (hesap hareketi `source_obligation_id` ile ona bağlı) ve
+  cari bakiyesine girer. Ödeme Yap/Tahsilat Al'da "Mahsup" yöntemi ve avans detayında "Faturadan
+  Mahsup Et" ile sonraki faturadan düşülür. Avansın vadesi yoktur; gecikmiş/bu ay ödenecek
+  hesaplarına ve hatırlatmalara girmez.
+- **Anapara gelir/gider değil (sonraki build):** `transactions.financing_minor`. Nakit avansın hesaba
+  yatan tutarı, ödünç verilen para ve kredi/nakit avans/borç verme geri ödemelerinin anapara payı
+  (taksitte anapara/faiz kırılımı varsa orantılı, yoksa tamamı) raporlarda ve dashboard'daki
+  gelir-gider analizinde sayılmaz; hesap bakiyeleri değişmez. Mevcut veri geriye dönük dolduruldu.
+- **Borç Verme kaydı çalışıyor (sonraki build):** `obligations_document_type_check` listesinde
+  `borc_verme` yoktu, kayıt veritabanında reddediliyordu (canlıda hiç borç verme kaydı yoktu).
+- **Cari Hareketler sekmesi = cari ekstresi (sonraki build):** faturalar/fişler, çek/senet/avans
+  kayıtları, bunlara yapılan ödeme/tahsilatlar (hesaptan, çek/senetle, mahsup, ciro) ve kayda bağlı
+  olmayan hareketler tek listede, yürüyen cari bakiyesiyle (`getCounterpartyStatement`).
+- **Takvim "Öde" nakit avansı kart sayfasına göndermiyor (sonraki build):** build 36'da nakit avans
+  kart ödeme akışına gidiyordu; nakit avans kart bakiyesine dahil olmadığı için kart borcunu
+  olduğundan az gösterirdi. Artık kayıt detayındaki ödeme formu açılır (kart hesapları listelenmez).
 - **Ödemeye bağlı hareketler kilitli (build 36):** hareket detayında düzenle/sil yerine "Bağlı
   Kayda Git"; değişiklik kaydın ödeme geçmişinden yapılır. Çek/senetle yapılmış ödeme satırı çek/
   senet kaydına yönlendirir; çek/senet silinirse kapattığı fatura yeniden açılır.
 
 ### Teknik değişiklikler (release notes'a girmez)
 
+- `obligations.parent_obligation_id` (sonraki build, FK değil — aynı PostgREST gerekçesi):
+  otomatik doğan kayıt (ör. çek fazlasından avans) üst kayıt silinince silinir;
+  `delete_settlement_payments_for_obligation` artık yalnızca aynı workspace'te siler.
 - `payments.settled_by_obligation_id` (build 36) + `obligations_delete_settlement_payments`
   trigger'ı; migration `20260930120000_add_payment_settlement_instrument.sql` canlıya uygulandı.
   Kolon **kasıtlı olarak FK değil**: payments → obligations ikinci bir FK, PostgREST'teki
@@ -112,8 +137,12 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - [ ] App Store Connect'te 1.0.4 için build 33 yerine **build 36**'yı seç.
 - [ ] TestFlight'ta doğrula: 30.000 fatura + 20.000 çek → fatura 10.000 kısmen ödendi, cari borç
       30.000; çek vadesinde "Öde" → hesap bakiyesi 20.000 düşer; çek silinince fatura 30.000'e döner.
-- [ ] Sonraki adım: fazla ödeme/avansın cari bakiyesine dahil edilmesi; kredi/nakit avans/borç
-      vermede anaparanın gelir/gider yerine transfer sayılması; alınan çekin ciro edilmesi.
+- [x] Fazla ödeme/avansın cari bakiyesine dahil edilmesi, anaparanın gelir/gider sayılmaması,
+      çek ciro, cari ekstresi — kodlandı; migration'lar `20260930150000_advances_financing_document_types.sql`
+      ve `20260930160000_obligation_parent_link.sql` canlıya uygulandı. Build alınacak.
+- [ ] TestFlight'ta doğrula: A'dan alınan 20.000 çek → B'nin 15.000 faturasına ciro → fatura kapanır,
+      B'den 5.000 avans alacağı; B'ye 10.000 peşin ödeme → cari bakiyesi +10.000, sonra 30.000 fatura
+      → Mahsup → cari borç 20.000; cari Hareketler sekmesinde tüm satırlar ve yürüyen bakiye.
 - [ ] App Store Connect'te 1.0.4 sürümünü oluştur, build 33'ü seç, "Yenilikler"
       (`assets/appstore/whats-new-1.0.4.tr.txt`) ve ekran görüntülerini
       (`assets/appstore/v2/vademde-01.png`…`vademde-10.png`) gir.
