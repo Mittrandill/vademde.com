@@ -595,6 +595,20 @@ export default function HareketlerScreen() {
         onClose={() => setAddSheetOpen(false)}
         options={[
           {
+            key: 'payment',
+            label: 'Ödeme Yap',
+            description: 'Borç/faturayı nakit, havale, kart, çek veya senetle kapat',
+            icon: 'arrow-up-circle-outline',
+            onPress: () => router.push({ pathname: '/payments/new', params: { direction: 'payable' } }),
+          },
+          {
+            key: 'collection',
+            label: 'Tahsilat Al',
+            description: 'Alacağı nakit, havale, kart, çek veya senetle kapat',
+            icon: 'arrow-down-circle-outline',
+            onPress: () => router.push({ pathname: '/payments/new', params: { direction: 'receivable' } }),
+          },
+          {
             key: 'transaction',
             label: 'İşlem',
             description: 'Gerçekleşmiş gelir, gider veya transfer',

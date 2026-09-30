@@ -716,6 +716,7 @@ export type Database = {
           obligation_id: string | null
           paid_at: string
           receipt_document_id: string | null
+          settled_by_obligation_id: string | null
           transaction_id: string | null
           workspace_id: string
         }
@@ -729,6 +730,7 @@ export type Database = {
           obligation_id?: string | null
           paid_at?: string
           receipt_document_id?: string | null
+          settled_by_obligation_id?: string | null
           transaction_id?: string | null
           workspace_id: string
         }
@@ -742,6 +744,7 @@ export type Database = {
           obligation_id?: string | null
           paid_at?: string
           receipt_document_id?: string | null
+          settled_by_obligation_id?: string | null
           transaction_id?: string | null
           workspace_id?: string
         }

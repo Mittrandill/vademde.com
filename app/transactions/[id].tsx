@@ -117,6 +117,8 @@ export default function TransactionDetailScreen() {
   const title =
     transaction.description?.trim() || transaction.category?.name || DIRECTION_LABEL[transaction.direction] || 'Hareket';
   const isObligationPayment = (transaction.payments?.length ?? 0) > 0;
+  const linkedPayment = transaction.payments?.[0];
+  const linkedObligationId = linkedPayment?.obligation_id ?? null;
 
   return (
     <>
@@ -267,16 +269,34 @@ export default function TransactionDetailScreen() {
         visible={menuOpen}
         title="Hareket"
         onClose={() => setMenuOpen(false)}
-        options={[
-          {
-            key: 'edit',
-            label: 'Düzenle',
-            icon: 'create-outline',
-            onPress: () => router.push({ pathname: '/transactions/new', params: { id: transaction.id } }),
-          },
-          { key: 'share', label: 'Paylaş', icon: 'share-outline', onPress: handleShare },
-          { key: 'delete', label: 'Sil', icon: 'trash-outline', danger: true, onPress: confirmDelete },
-        ]}
+        // Bir borç/alacak ödemesinden (fatura, çek, senet, kredi, kart ödemesi...) oluşan hareket
+        // burada düzenlenmez/silinmez: silinirse ödeme kaydı kalır ve borç "ödendi" görünürken para
+        // hesaba geri döner; tutarı değişirse borcun kalanı ile hesap bakiyesi birbirinden kopar.
+        // Değişiklik ödemenin kendisinden (kayıt detayı → Ödeme Geçmişi) yapılır; orası ödeme ile
+        // hareketi birlikte günceller/siler (bkz. features/payments/api.ts updatePayment/deletePayment).
+        options={
+          linkedObligationId
+            ? [
+                {
+                  key: 'obligation',
+                  label: 'Bağlı Kayda Git',
+                  description: 'Bu hareket bir ödemeye bağlı; düzenleme ve silme ödeme geçmişinden yapılır.',
+                  icon: 'document-text-outline',
+                  onPress: () => router.push(`/obligations/${linkedObligationId}`),
+                },
+                { key: 'share', label: 'Paylaş', icon: 'share-outline', onPress: handleShare },
+              ]
+            : [
+                {
+                  key: 'edit',
+                  label: 'Düzenle',
+                  icon: 'create-outline',
+                  onPress: () => router.push({ pathname: '/transactions/new', params: { id: transaction.id } }),
+                },
+                { key: 'share', label: 'Paylaş', icon: 'share-outline', onPress: handleShare },
+                { key: 'delete', label: 'Sil', icon: 'trash-outline', danger: true, onPress: confirmDelete },
+              ]
+        }
       />
     </>
   );

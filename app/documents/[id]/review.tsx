@@ -27,8 +27,18 @@ import {
 import { createAccount, listAccounts } from '@/features/accounts/api';
 import { listCategories, createCategory } from '@/features/categories/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
-import { createObligation, createInstallmentPlan, type Installment } from '@/features/obligations/api';
-import { recordPastInstallmentPayments } from '@/features/payments/api';
+import {
+  ACTIVE_OBLIGATION_STATUSES,
+  createObligation,
+  createInstallmentPlan,
+  listObligations,
+  type Installment,
+} from '@/features/obligations/api';
+import {
+  allocateAcrossObligations,
+  recordPastInstallmentPayments,
+  settleWithInstrument,
+} from '@/features/payments/api';
 import {
   createTransaction,
   createTransactions,
@@ -140,6 +150,9 @@ export default function DocumentReviewScreen() {
   const [dueDate, setDueDate] = useState('');
   const [documentNumber, setDocumentNumber] = useState('');
   const [counterpartyId, setCounterpartyId] = useState<string | null>(null);
+  // Taranan çek/senet bir fatura/borcun karşılığıysa kapatılacak kayıtlar (bkz. aşağıdaki
+  // settlementTargetsQuery). Seçilmezse çek/senet bağımsız yeni bir kayıt olarak açılır.
+  const [settleTargetIds, setSettleTargetIds] = useState<string[]>([]);
   const [accountId, setAccountId] = useState<string | null>(paramAccountId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [categoryAutoSet, setCategoryAutoSet] = useState(false);
@@ -588,6 +601,38 @@ export default function DocumentReviewScreen() {
     documentQuery.data,
   ]);
 
+  // Çek/senet ödeme aracıdır: müşteriden alınan ya da tedarikçiye verilen bir çek genellikle açık
+  // bir faturanın karşılığıdır. Karşılığı seçilmeden kaydedilirse fatura açık kalır ve aynı borç
+  // iki kez görünür (30.000 fatura + 20.000 çek = 50.000). Aynı kişi ve yöndeki açık kayıtlar
+  // (çek/senet hariç) önerilir; seçilenler çek/senet tutarı kadar kapanır.
+  const isInstrumentDocument = documentType === 'cek' || documentType === 'senet';
+  const settlementTargetsQuery = useQuery({
+    queryKey:
+      activeWorkspaceId && counterpartyId && isInstrumentDocument
+        ? [activeWorkspaceId, 'obligations', 'settlement-open', counterpartyId, direction]
+        : ['settlement-open', 'disabled'],
+    queryFn: () =>
+      listObligations({
+        workspaceId: activeWorkspaceId as string,
+        counterpartyId: counterpartyId as string,
+        direction: direction as 'payable' | 'receivable',
+        statuses: ACTIVE_OBLIGATION_STATUSES,
+        pageSize: 100,
+      }),
+    enabled:
+      !!activeWorkspaceId &&
+      !!counterpartyId &&
+      isInstrumentDocument &&
+      (direction === 'payable' || direction === 'receivable'),
+  });
+  const settlementTargets = (settlementTargetsQuery.data ?? []).filter(
+    (o) =>
+      o.document_type !== 'cek' &&
+      o.document_type !== 'senet' &&
+      o.currency_code === valueUnitCode &&
+      o.remaining_amount_minor > 0
+  );
+
   const confirmMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId) throw new Error('Çalışma alanı bulunamadı');
@@ -769,6 +814,25 @@ export default function DocumentReviewScreen() {
             // manuel ekleyebilir. Sessizce yutulmaz, aşağıda kullanıcıya bildirilir.
             cardTransactionsFailed = true;
           }
+        }
+
+        // Çek/senet karşılığı seçilen kayıtlar, çek/senet tutarı kadar (en eski vade önce) kapanır.
+        if (
+          (documentType === 'cek' || documentType === 'senet') &&
+          (direction === 'payable' || direction === 'receivable') &&
+          settleTargetIds.length > 0
+        ) {
+          const targets = settlementTargets.filter((o) => settleTargetIds.includes(o.id));
+          const { allocations } = allocateAcrossObligations(obligation.total_amount_minor, targets);
+          await settleWithInstrument({
+            workspaceId: activeWorkspaceId,
+            instrumentObligationId: obligation.id,
+            method: documentType,
+            direction,
+            documentNo: documentNumber.trim() || null,
+            paidAt: new Date().toISOString(),
+            allocations,
+          });
         }
 
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
@@ -1307,10 +1371,59 @@ export default function DocumentReviewScreen() {
                     workspaceId={activeWorkspaceId}
                     counterparties={counterpartiesQuery.data ?? []}
                     selectedId={counterpartyId}
-                    onSelect={setCounterpartyId}
+                    onSelect={(value) => {
+                      setCounterpartyId(value);
+                      setSettleTargetIds([]);
+                    }}
                   />
                 ) : null}
               </Stack>
+            ) : null}
+
+            {isInstrumentDocument && counterpartyId && settlementTargets.length > 0 ? (
+              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
+                <Stack gap="sm">
+                  <Stack gap="xxs">
+                    <Text variant="cardTitle">
+                      Bu {documentType === 'cek' ? 'çek' : 'senet'} hangi kaydın karşılığı?
+                    </Text>
+                    <Text variant="caption" color="textSecondary">
+                      Seçilen kayıtlar bu tutar kadar kapanır; para vadede{' '}
+                      {direction === 'receivable' ? 'tahsil edildiğinde hesaba girer' : 'ödendiğinde hesaptan çıkar'}.
+                      Seçmezseniz bağımsız yeni bir kayıt açılır ve aynı borç iki kez görünebilir.
+                    </Text>
+                  </Stack>
+                  {settlementTargets.map((target) => {
+                    const selected = settleTargetIds.includes(target.id);
+                    return (
+                      <Pressable
+                        key={target.id}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: selected }}
+                        onPress={() =>
+                          setSettleTargetIds((prev) =>
+                            prev.includes(target.id) ? prev.filter((x) => x !== target.id) : [...prev, target.id]
+                          )
+                        }
+                      >
+                        <Row gap="sm" align="center">
+                          <Ionicons
+                            name={selected ? 'checkbox' : 'square-outline'}
+                            size={22}
+                            color={selected ? theme.colors.brandPrimary : theme.colors.textSecondary}
+                          />
+                          <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
+                            {target.title}
+                          </Text>
+                          <Text variant="body" tabular>
+                            {formatMinorAmount(target.remaining_amount_minor, target.currency_code)}
+                          </Text>
+                        </Row>
+                      </Pressable>
+                    );
+                  })}
+                </Stack>
+              </Card>
             ) : null}
 
             <Stack gap="sm">

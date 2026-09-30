@@ -49,21 +49,10 @@ import { groupByDay } from '@/utils/groupByDay';
 import { showSuccessAlert } from '@/utils/alerts';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 
-// Tahsilat/Ödeme Ekle → yöntem alt-menüsü. Çek/Senet birer finansal kayıt türüdür
-// (obligations.document_type, docs/01-finansal-kayit-modeli.md §3) — borç kaydı şartı
-// olmadan doğrudan /obligations/new'e yönlendirilir. Diğerleri anlık/gerçekleşmiş
-// hareketlerdir — doğrudan /transactions/new'e yönlendirilir (bkz. app/transactions/new.tsx).
-type PaymentMenuDirection = 'tahsilat' | 'odeme';
-const QUICK_TRANSACTION_METHODS: Array<{
-  key: 'nakit' | 'havale' | 'kredi_karti' | 'online_odeme';
-  label: string;
-  icon: 'cash-outline' | 'swap-horizontal-outline' | 'card-outline' | 'globe-outline';
-}> = [
-  { key: 'nakit', label: 'Nakit', icon: 'cash-outline' },
-  { key: 'havale', label: 'Banka Havalesi/EFT', icon: 'swap-horizontal-outline' },
-  { key: 'kredi_karti', label: 'Kredi Kartı', icon: 'card-outline' },
-  { key: 'online_odeme', label: 'Online Ödeme', icon: 'globe-outline' },
-];
+// Tahsilat Al / Ödeme Yap → /payments/new (bkz. features/payments/api.ts settleObligations).
+// Önceden "Çek/Senet" seçimi Borç/Alacak formuna gidip bağımsız yeni bir kayıt açıyordu; faturaya
+// çek verilince borç ikiye katlanıyordu. Yöntem (nakit, havale, kart, çek, senet) artık formun
+// içinde seçilir ve her yöntem seçilen açık kayıtları kapatır.
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
@@ -82,7 +71,6 @@ export default function CounterpartyDetailScreen() {
   const enabled = !!activeWorkspaceId && !!id;
   const [tab, setTab] = useState<DetailTab>('genel');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [paymentMenu, setPaymentMenu] = useState<PaymentMenuDirection | null>(null);
   const [obligationsPage, setObligationsPage] = useState(0);
   const [transactionsPage, setTransactionsPage] = useState(0);
 
@@ -401,17 +389,19 @@ export default function CounterpartyDetailScreen() {
         },
         {
           key: 'collection',
-          label: 'Tahsilat Ekle',
+          label: 'Tahsilat Al',
           description: 'Nakit, havale, kart, çek veya senet ile tahsilat işleyin.',
           icon: 'arrow-down-circle-outline',
-          onPress: () => setPaymentMenu('tahsilat'),
+          onPress: () =>
+            router.push({ pathname: '/payments/new', params: { direction: 'receivable', counterpartyId: counterparty.id } }),
         },
         {
           key: 'payment',
-          label: 'Ödeme Ekle',
+          label: 'Ödeme Yap',
           description: 'Nakit, havale, kart, çek veya senet ile ödeme işleyin.',
           icon: 'arrow-up-circle-outline',
-          onPress: () => setPaymentMenu('odeme'),
+          onPress: () =>
+            router.push({ pathname: '/payments/new', params: { direction: 'payable', counterpartyId: counterparty.id } }),
         },
         {
           key: 'edit',
@@ -429,59 +419,6 @@ export default function CounterpartyDetailScreen() {
           onPress: () => {
             if (!deleteCounterpartyMutation.isPending) confirmDeleteCounterparty();
           },
-        },
-      ]}
-    />
-
-    <ActionSheet
-      visible={paymentMenu !== null}
-      title={paymentMenu === 'tahsilat' ? 'Tahsilat Yöntemi' : 'Ödeme Yöntemi'}
-      onClose={() => setPaymentMenu(null)}
-      options={[
-        ...QUICK_TRANSACTION_METHODS.map((method) => ({
-          key: method.key,
-          label: method.label,
-          icon: method.icon,
-          onPress: () =>
-            router.push({
-              pathname: '/transactions/new',
-              params: {
-                direction: paymentMenu === 'tahsilat' ? 'income' : 'expense',
-                counterpartyId: counterparty.id,
-                paymentMethod: method.key,
-                description: `${counterparty.name} — ${method.label}`,
-              },
-            }),
-        })),
-        {
-          key: 'cek',
-          label: 'Çek',
-          description: 'Yeni bir çek kaydı oluşturun.',
-          icon: 'document-text-outline',
-          onPress: () =>
-            router.push({
-              pathname: '/obligations/new',
-              params: {
-                type: 'cek',
-                direction: paymentMenu === 'tahsilat' ? 'receivable' : 'payable',
-                counterpartyId: counterparty.id,
-              },
-            }),
-        },
-        {
-          key: 'senet',
-          label: 'Senet',
-          description: 'Yeni bir senet kaydı oluşturun.',
-          icon: 'document-text-outline',
-          onPress: () =>
-            router.push({
-              pathname: '/obligations/new',
-              params: {
-                type: 'senet',
-                direction: paymentMenu === 'tahsilat' ? 'receivable' : 'payable',
-                counterpartyId: counterparty.id,
-              },
-            }),
         },
       ]}
     />

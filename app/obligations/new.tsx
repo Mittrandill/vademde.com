@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
+import { withAlpha } from '@/theme/colors';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
@@ -901,6 +902,41 @@ function ObligationForm({
                 }}
               />
             </Stack>
+
+            {/* Çek/senet çoğunlukla bir faturanın karşılığıdır. Burada açılan çek/senet bağımsız bir
+                kayıttır ve faturayı kapatmaz — fatura açık kalırsa aynı borç iki kez görünür
+                (30.000 fatura + 20.000 çek = 50.000). Karşılığı olan çek/senet Ödeme Yap /
+                Tahsilat Al'dan girilir (bkz. app/payments/new.tsx). */}
+            {!isEditing && (documentType === 'cek' || documentType === 'senet') ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  router.replace({
+                    pathname: '/payments/new',
+                    params: {
+                      direction,
+                      method: documentType,
+                      ...(counterpartyId ? { counterpartyId } : {}),
+                    },
+                  })
+                }
+              >
+                <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
+                  <Row gap="sm" align="center">
+                    <Stack gap="xxs" style={{ flex: 1 }}>
+                      <Text variant="cardTitle">
+                        Bu {documentType === 'cek' ? 'çek' : 'senet'} bir faturanın karşılığı mı?
+                      </Text>
+                      <Text variant="caption" color="textSecondary">
+                        {direction === 'receivable' ? 'Tahsilat Al' : 'Ödeme Yap'} ile kaydedin; fatura bu tutar
+                        kadar kapanır, borç iki kez görünmez.
+                      </Text>
+                    </Stack>
+                    <Ionicons name="chevron-forward" size={18} color={theme.colors.brandPrimary} />
+                  </Row>
+                </Card>
+              </Pressable>
+            ) : null}
 
             {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
               <Stack gap="sm">

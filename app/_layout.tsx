@@ -98,6 +98,7 @@ function AppNavigatorStack() {
         <Stack.Screen name="obligations/new" />
         <Stack.Screen name="obligations/index" />
         <Stack.Screen name="obligations/[id]" />
+        <Stack.Screen name="payments/new" />
         <Stack.Screen name="documents/[id]/review" />
         <Stack.Screen name="documents/[id]/receipt" />
         <Stack.Screen name="documents/archive" />

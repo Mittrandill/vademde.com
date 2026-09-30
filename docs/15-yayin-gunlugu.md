@@ -57,9 +57,35 @@ edildi, TestFlight'a çift kayıt gitmedi.
   ceyrek_altin) düzeltildi, doğru adıyla gösteriliyor.
 - **Tarama kısayolları (build 33):** Yeni Hareket ve Yeni Borç/Alacak ekranlarına kameradan
   taramaya yönlendiren bir kısayol eklendi.
+- **Ödeme Yap / Tahsilat Al (build 35):** yeni ekran (`app/payments/new.tsx`). Cari menüsü,
+  Hareketler + menüsü ve kayıt detayındaki "Çek / Senet ile Öde" buraya açılır. Kapatılacak
+  kayıtlar seçilir (varsayılan: tümü, en eski vade önce), kısmi kapatma desteklenir. Nakit/havale/
+  kart/online'da para seçilen hesaptan hemen hareket eder; artan tutar ön ödeme/avans olur.
+  Build 33'teki hareket formunun otomatik dağıtımı kaldırıldı; hareket formu artık açık kaydı
+  olan cari için bu ekrana yönlendirir.
+- **Çek/senetle ödeme borcu ikiye katlamıyor (build 35):** önceden "Ödeme Ekle → Çek" bağımsız
+  yeni bir borç açıyordu (30.000 fatura + 20.000 çek = 50.000). Artık fatura çek tutarı kadar
+  kapanır, vadeli çek/senet kaydı açılır; para çek/senet vadesinde ödendiğinde hesaptan çıkar.
+  Senette birden çok vade girilebilir. Taranan çek/senet onayında "hangi kaydın karşılığı?" sorulur.
+- **Taksite dağıtım (build 35):** taksit belirtilmeden yapılan ödeme en eski açık taksitten
+  başlayarak dağıtılır — önceden yalnızca kaydın toplamı düşüyor, taksitler ödenmemiş kalıyordu.
+- **Takvim "Öde" (build 35):** artık doğrudan ödeme yazmaz, hesap seçtiren ödeme formunu açar;
+  kart ekstresi/nakit avans kart sayfasına gider (önceden karta gider yazılıp kart borcu artıyordu).
+- **Ödemeye bağlı hareketler kilitli (build 35):** hareket detayında düzenle/sil yerine "Bağlı
+  Kayda Git"; değişiklik kaydın ödeme geçmişinden yapılır. Çek/senetle yapılmış ödeme satırı çek/
+  senet kaydına yönlendirir; çek/senet silinirse kapattığı fatura yeniden açılır.
 
 ### Teknik değişiklikler (release notes'a girmez)
 
+- `payments.settled_by_obligation_id` (build 35) + `obligations_delete_settlement_payments`
+  trigger'ı; migration `20260930120000_add_payment_settlement_instrument.sql` canlıya uygulandı.
+  Kolon **kasıtlı olarak FK değil**: payments → obligations ikinci bir FK, PostgREST'teki
+  `payments(...)` / `obligation:obligations(...)` gömülü seçimlerini belirsiz yapıp yayındaki
+  sürümleri bozuyordu (ilk uygulamada FK ~1 dakika canlıda kaldı, hemen kaldırıldı).
+- `features/payments/api.ts`: `recordPayment` taksitsiz ödemeyi `planInstallmentSlices` ile
+  taksitlere böler (her dilim kendi payment+transaction çifti, 1:1 korunur); `settleObligations`,
+  `settleWithInstrument`, `listObligationsSettledBy`; `deletePayment` aynı transaction'ı paylaşan
+  (kart ödemesi) tüm ödeme satırlarını birlikte siler.
 - `payments.receipt_document_id` + `enforce_payment_receipt_plan` trigger'ı
   (`RECEIPT_ARCHIVE_PLAN_REQUIRED`); migration `20260929120000_add_payment_receipts.sql` canlıya
   uygulandı. Yardımcı fonksiyonların RPC erişimi kapatıldı (ikinci migration
@@ -81,6 +107,11 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - [ ] Gerçek bir banka dekontuyla Gemini sınıflandırmasını ve dekont sonuç ekranını dene.
 - [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
 - [x] `eas build` ile build 33'ü al ve gönder (2026-09-30, tamamlandı).
+- [ ] Build 35'i al ve gönder (Ödeme Yap/Tahsilat Al, çek/senetle kapatma, taksite dağıtım).
+- [ ] TestFlight'ta doğrula: 30.000 fatura + 20.000 çek → fatura 10.000 kısmen ödendi, cari borç
+      30.000; çek vadesinde "Öde" → hesap bakiyesi 20.000 düşer; çek silinince fatura 30.000'e döner.
+- [ ] Sonraki adım: fazla ödeme/avansın cari bakiyesine dahil edilmesi; kredi/nakit avans/borç
+      vermede anaparanın gelir/gider yerine transfer sayılması; alınan çekin ciro edilmesi.
 - [ ] App Store Connect'te 1.0.4 sürümünü oluştur, build 33'ü seç, "Yenilikler"
       (`assets/appstore/whats-new-1.0.4.tr.txt`) ve ekran görüntülerini
       (`assets/appstore/v2/vademde-01.png`…`vademde-10.png`) gir.

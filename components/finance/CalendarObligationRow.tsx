@@ -1,65 +1,47 @@
-import { Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { StatusBadge } from './StatusBadge';
 import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
-import { getObligation, type ObligationDueItem } from '@/features/obligations/api';
-import { recordPayment } from '@/features/payments/api';
-import { formatValueUnitAmount } from '@/utils/money';
+import type { ObligationDueItem } from '@/features/obligations/api';
 import type { ValueUnitType } from '@/features/valueUnits/units';
-import { syncObligationReminder } from '@/services/notifications';
-import { invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 
 export interface CalendarObligationRowProps {
   workspaceId: string;
   obligation: ObligationDueItem;
 }
 
-export function CalendarObligationRow({ workspaceId, obligation }: CalendarObligationRowProps) {
+// "Ödendi / Tahsil Edildi" kısayolu artık ödemeyi doğrudan yazmaz. Önceden kaydın kendi hesabıyla
+// (obligations.account_id) soru sormadan ödeme oluşturuyordu:
+// - hesabı olmayan fatura/senet/maaşta borç kapanıyor ama hiçbir hesaptan para çıkmıyordu;
+// - kredi kartı ekstresi ve nakit avansta o hesap kartın kendisi olduğu için karta gider yazılıyor,
+//   kart borcu düşmek yerine artıyordu.
+// Bu yüzden kısayol, hesap seçtiren ödeme formunu açar (bkz. app/obligations/[id].tsx pay=1);
+// kart borçları kart sayfasındaki ödeme akışına gider (transferle ödenir, ekstreye dağıtılır).
+export function CalendarObligationRow({ obligation }: CalendarObligationRowProps) {
   const theme = useTheme();
-  const queryClient = useQueryClient();
   const isPayable = obligation.direction === 'payable';
   const isTerminal = obligation.status === 'odendi' || obligation.status === 'tahsil_edildi' || obligation.status === 'iptal_edildi';
   const isInstallment = !!obligation.installment_id;
-
-  const markPaidMutation = useMutation({
-    mutationFn: () =>
-      recordPayment({
-        workspace_id: workspaceId,
-        obligation_id: obligation.id,
-        installment_id: obligation.installment_id ?? null,
-        account_id: obligation.account_id,
-        amount_minor: obligation.remaining_amount_minor,
-        obligationDirection: obligation.direction as 'payable' | 'receivable',
-        obligationTitle: obligation.title,
-        obligationCategoryId: obligation.category_id,
-        obligationCounterpartyId: obligation.counterparty_id,
-        obligationCurrencyCode: obligation.currency_code,
-      }),
-    onSuccess: async () => {
-      invalidatePaymentRelatedQueries(queryClient, workspaceId);
-      const fresh = await getObligation(obligation.id);
-      await syncObligationReminder(workspaceId, fresh);
-    },
-    onError: (error) => {
-      Alert.alert('Hata', error instanceof Error ? error.message : 'İşlem kaydedilemedi');
-    },
-  });
+  const isCardDebt =
+    obligation.document_type === 'kredi_karti_ekstresi' || obligation.document_type === 'nakit_avans';
 
   function handleMarkPaid() {
-    Alert.alert(
-      isPayable ? 'Ödendi Olarak İşaretle' : 'Tahsil Edildi Olarak İşaretle',
-      `${obligation.title}${isInstallment ? ` — ${obligation.installment_number}. taksit` : ''} için ${formatValueUnitAmount(obligation.remaining_amount_minor, obligation.currency_code)} tutarında ${isPayable ? 'ödeme' : 'tahsilat'} kaydı oluşturulacak. Emin misiniz?`,
-      [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Onayla', onPress: () => markPaidMutation.mutate() },
-      ]
-    );
+    if (isCardDebt && obligation.account_id) {
+      router.push(`/accounts/${obligation.account_id}`);
+      return;
+    }
+    router.push({
+      pathname: '/obligations/[id]',
+      params: {
+        id: obligation.id,
+        pay: '1',
+        ...(obligation.installment_id ? { installmentId: obligation.installment_id } : {}),
+      },
+    });
   }
 
   return (
@@ -100,15 +82,11 @@ export function CalendarObligationRow({ workspaceId, obligation }: CalendarOblig
             variant="body"
           />
           {!isTerminal ? (
-            <Pressable onPress={handleMarkPaid} hitSlop={8} disabled={markPaidMutation.isPending}>
+            <Pressable onPress={handleMarkPaid} hitSlop={8}>
               <Row gap="xxs" align="center">
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={14}
-                  color={theme.colors.success}
-                />
+                <Ionicons name="checkmark-circle-outline" size={14} color={theme.colors.success} />
                 <Text variant="caption" style={{ color: theme.colors.success }}>
-                  {isPayable ? 'Ödendi' : 'Tahsil Edildi'}
+                  {isPayable ? 'Öde' : 'Tahsil Et'}
                 </Text>
               </Row>
             </Pressable>

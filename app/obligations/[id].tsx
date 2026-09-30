@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, InteractionManager, Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,7 +39,14 @@ import {
   type Obligation,
 } from '@/features/obligations/api';
 import { listAccounts, type Account } from '@/features/accounts/api';
-import { deletePayment, listPaymentsForObligation, recordPayment, updatePayment, type Payment } from '@/features/payments/api';
+import {
+  deletePayment,
+  listObligationsSettledBy,
+  listPaymentsForObligation,
+  recordPayment,
+  updatePayment,
+  type Payment,
+} from '@/features/payments/api';
 import { ReceiptAttachField } from '@/components/finance/ReceiptAttachField';
 import {
   attachReceiptFile,
@@ -71,11 +78,14 @@ const TAB_PAGE_SIZE = 10;
 type DetailTab = 'genel' | 'plan' | 'gecmis';
 
 export default function ObligationDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // pay/installmentId: takvimdeki "Ödendi" kısayolu buraya yönlendirir ve ödeme formunu hesap
+  // seçtirerek açar (bkz. components/finance/CalendarObligationRow.tsx).
+  const { id, pay, installmentId } = useLocalSearchParams<{ id: string; pay?: string; installmentId?: string }>();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [payingInstallment, setPayingInstallment] = useState<Installment | 'obligation' | null>(null);
+  const [payParamHandled, setPayParamHandled] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<DetailTab>('genel');
@@ -101,6 +111,22 @@ export default function ObligationDetailScreen() {
     queryFn: () => listAccounts(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
+
+  // Çek/senet kaydıysa hangi fatura/borçların karşılığı olarak verildiği/alındığı.
+  const isInstrumentRecord =
+    detailQuery.data?.obligation.document_type === 'cek' || detailQuery.data?.obligation.document_type === 'senet';
+  const settledQuery = useQuery({
+    queryKey: ['obligation', id, 'settled-by'],
+    queryFn: () => listObligationsSettledBy(id as string),
+    enabled: !!id && isInstrumentRecord,
+  });
+
+  useEffect(() => {
+    if (payParamHandled || pay !== '1' || !detailQuery.data) return;
+    setPayParamHandled(true);
+    const target = installmentId ? detailQuery.data.installments.find((i) => i.id === installmentId) : null;
+    setPayingInstallment(target ?? 'obligation');
+  }, [payParamHandled, pay, installmentId, detailQuery.data]);
 
   // docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydının TL karşılığı
   // kalıcı saklanmaz, her görüntülemede canlı fiyattan hesaplanır; yalnızca TRY dışı
@@ -171,9 +197,12 @@ export default function ObligationDetailScreen() {
   }
 
   function confirmDeleteObligation() {
+    const settledCount = settledQuery.data?.length ?? 0;
     Alert.alert(
       'Kaydı Sil',
-      'Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?',
+      settledCount > 0
+        ? `Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Bu ${DOCUMENT_TYPE_LABEL[detailQuery.data?.obligation.document_type ?? ''] ?? 'kayıt'} ile kapatılan ${settledCount} kayıt yeniden açılacak. Emin misiniz?`
+        : 'Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?',
       [
         { text: 'Vazgeç', style: 'cancel' },
         { text: 'Sil', style: 'destructive', onPress: () => deleteObligationMutation.mutate() },
@@ -327,6 +356,11 @@ export default function ObligationDetailScreen() {
               { label: 'Hesap', value: obligation.account?.name ?? '—' },
               { label: 'Kategori', value: obligation.category?.name ?? '—' },
               ...(obligation.counterparty?.name ? [{ label: 'Taraf', value: obligation.counterparty.name }] : []),
+              ...(obligation.notes ? [{ label: 'Not', value: obligation.notes }] : []),
+              ...(settledQuery.data ?? []).map((settled) => ({
+                label: 'Karşılığı',
+                value: `${settled.title} · ${formatValueUnitAmount(settled.amountMinor, obligation.currency_code)}`,
+              })),
               {
                 label: isInterestBearing ? 'Başlangıç Tutarı' : 'Toplam Tutar',
                 value: formatValueUnitAmount(obligation.total_amount_minor, obligation.currency_code),
@@ -379,6 +413,7 @@ export default function ObligationDetailScreen() {
                     currencyCode={obligation.currency_code}
                     onEdit={() => setEditingPayment(payment)}
                     onDelete={() => confirmDeletePayment(payment)}
+                    onOpenInstrument={() => router.push(`/obligations/${payment.settled_by_obligation_id}`)}
                   />
                 ))}
               </Stack>
@@ -414,11 +449,31 @@ export default function ObligationDetailScreen() {
               ? [
                   {
                     key: 'payment',
-                    label: 'Ödeme Ekle',
-                    description: 'Bu kayda yeni bir ödeme işle',
+                    label: isPayable ? 'Ödeme Ekle' : 'Tahsilat Ekle',
+                    description: isPayable
+                      ? 'Nakit, havale veya kartla ödeme işle'
+                      : 'Nakit, havale veya kartla tahsilat işle',
                     icon: 'cash-outline' as const,
                     onPress: () => setPayingInstallment('obligation'),
                   },
+                  // Çek/senet vadeli bir ödeme aracıdır: bu kayıt tutar kadar kapanır, vadeli bir
+                  // çek/senet kaydı açılır (bkz. app/payments/new.tsx). Çek/senedin kendisi başka
+                  // bir çek/senetle kapatılmaz; karşı tarafı olmayan kayıtlarda (kredi vb.) yoktur.
+                  ...(obligation.counterparty_id && !isInstrumentRecord
+                    ? [
+                        {
+                          key: 'instrument',
+                          label: isPayable ? 'Çek / Senet ile Öde' : 'Çek / Senet ile Tahsil Et',
+                          description: 'Kayıt tutar kadar kapanır, vadeli çek/senet açılır',
+                          icon: 'document-text-outline' as const,
+                          onPress: () =>
+                            router.push({
+                              pathname: '/payments/new',
+                              params: { obligationId: obligation.id, method: 'cek' },
+                            }),
+                        },
+                      ]
+                    : []),
                 ]
               : []),
           {
@@ -595,13 +650,51 @@ function PaymentRow({
   currencyCode,
   onEdit,
   onDelete,
+  onOpenInstrument,
 }: {
   payment: Payment;
   currencyCode: string;
   onEdit: () => void;
   onDelete: () => void;
+  onOpenInstrument: () => void;
 }) {
   const theme = useTheme();
+
+  // Çek/senetle yapılmış ödeme: tek başına düzenlenip silinemez — silinirse fatura yeniden açılır
+  // ama çek/senet borcu kalır ve borç ikiye katlanır. Değişiklik çek/senet kaydının kendisinden
+  // yapılır (silinirse bu satır da birlikte silinir).
+  if (payment.settled_by_obligation_id) {
+    return (
+      <Pressable accessibilityRole="button" onPress={onOpenInstrument}>
+        <Card>
+          <Row gap="sm" align="center">
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
+              }}
+            >
+              <Ionicons name="document-text-outline" size={16} color={theme.colors.brandPrimary} />
+            </View>
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="body" color="textSecondary">
+                {dateFormatter.format(new Date(payment.paid_at))}
+              </Text>
+              <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                {payment.notes ?? 'Çek/senet ile kapatıldı'}
+              </Text>
+            </Stack>
+            <Amount amountMinor={payment.amount_minor} currencyCode={currencyCode} variant="body" />
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+          </Row>
+        </Card>
+      </Pressable>
+    );
+  }
 
   return (
     <Card>
@@ -638,9 +731,13 @@ function PaymentRow({
             <Ionicons name="attach" size={20} color={theme.colors.brandPrimary} />
           </Pressable>
         ) : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi düzenle" onPress={onEdit} hitSlop={8}>
-          <Ionicons name="create-outline" size={18} color={theme.colors.textSecondary} />
-        </Pressable>
+        {/* Kart ödemesi transferinden dağıtılan satırlar (hesapsız ama transaction'lı) tek başına
+            düzenlenmez: transfer birden çok ekstreyi kapsar. Silme ise hepsini birlikte kaldırır. */}
+        {payment.transaction_id && !payment.account_id ? null : (
+          <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi düzenle" onPress={onEdit} hitSlop={8}>
+            <Ionicons name="create-outline" size={18} color={theme.colors.textSecondary} />
+          </Pressable>
+        )}
         <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi sil" onPress={onDelete} hitSlop={8}>
           <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />
         </Pressable>
@@ -684,12 +781,22 @@ function PaymentForm({
   // seçeneklerinden çıkarılır; alacak (receivable) tahsilatı POS'tan olabileceği için orada kalır.
   // Kredi kartı ekstresi ödemesinde ayrıca hiçbir kredi kartı hesabı kaynak olamaz — bir kartın
   // borcu başka (veya aynı) bir kartla "ödenemez", gerçek parasal hareket temsil etmez.
-  const isCardStatementPayment = obligation.document_type === 'kredi_karti_ekstresi';
+  // Nakit avans da kart borcudur: karttan "ödenirse" karta gider yazılır ve kart borcu düşmek
+  // yerine artar — ekstre ile aynı kural.
+  const isCardStatementPayment =
+    obligation.document_type === 'kredi_karti_ekstresi' || obligation.document_type === 'nakit_avans';
   const payableAccounts =
     obligation.direction === 'payable'
       ? accounts.filter((a) => a.type !== 'pos' && (!isCardStatementPayment || a.type !== 'credit_card'))
       : accounts;
-  const [accountId, setAccountId] = useState<string | null>(editingPayment?.account_id ?? null);
+  // Yeni ödemede kaydın kendi hesabı (ör. çek/senette "vadede ödenecek hesap") geçerliyse önerilir.
+  const [accountId, setAccountId] = useState<string | null>(
+    editingPayment
+      ? editingPayment.account_id
+      : payableAccounts.some((a) => a.id === obligation.account_id)
+        ? obligation.account_id
+        : null
+  );
   // Ödeme varsayılan olarak işlem yapıldığı anın tarihiyle (DB varsayılanı) kaydedilir,
   // ama geçmiş/ileri tarihli ödemeler için kullanıcı bunu elle değiştirebilir.
   const [dateStr, setDateStr] = useState(
