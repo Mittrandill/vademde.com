@@ -12,7 +12,8 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | build 33 | `eas build --auto-submit` ile gönderildi; Apple işliyor (TestFlight'ta "İşleniyor" olarak görünüyor) | 2026-09-30 |
+| iOS | build 36 | `eas build --no-wait --auto-submit` ile alındı (build ID `7d62261f-2951-4a8c-9e4d-7921922499d8`, commit `051774b`, `finished`); submission `ddc26ed8-46d2-4447-8b05-ef5b05e1cdc5` planlandı — TestFlight'ta doğrulanacak | 2026-09-30 |
+| iOS | build 33 | `eas build --auto-submit` ile gönderildi; build 36 ile değiştirildi (çek/senet ve Ödeme Yap/Tahsilat Al düzeltmelerini içermez) | 2026-09-30 |
 | iOS | build 32 | App Store Connect'e `eas submit` ile yüklendi; build 33 ile değiştirildi, artık kullanılmıyor | 2026-09-30 |
 | iOS | build 30 | Yüklendi ama dekontun manuel hareket formundaki hâlini içermiyor; test için build 33 kullanılır | 2026-09-29 |
 
@@ -57,27 +58,27 @@ edildi, TestFlight'a çift kayıt gitmedi.
   ceyrek_altin) düzeltildi, doğru adıyla gösteriliyor.
 - **Tarama kısayolları (build 33):** Yeni Hareket ve Yeni Borç/Alacak ekranlarına kameradan
   taramaya yönlendiren bir kısayol eklendi.
-- **Ödeme Yap / Tahsilat Al (build 35):** yeni ekran (`app/payments/new.tsx`). Cari menüsü,
+- **Ödeme Yap / Tahsilat Al (build 36):** yeni ekran (`app/payments/new.tsx`). Cari menüsü,
   Hareketler + menüsü ve kayıt detayındaki "Çek / Senet ile Öde" buraya açılır. Kapatılacak
   kayıtlar seçilir (varsayılan: tümü, en eski vade önce), kısmi kapatma desteklenir. Nakit/havale/
   kart/online'da para seçilen hesaptan hemen hareket eder; artan tutar ön ödeme/avans olur.
   Build 33'teki hareket formunun otomatik dağıtımı kaldırıldı; hareket formu artık açık kaydı
   olan cari için bu ekrana yönlendirir.
-- **Çek/senetle ödeme borcu ikiye katlamıyor (build 35):** önceden "Ödeme Ekle → Çek" bağımsız
+- **Çek/senetle ödeme borcu ikiye katlamıyor (build 36):** önceden "Ödeme Ekle → Çek" bağımsız
   yeni bir borç açıyordu (30.000 fatura + 20.000 çek = 50.000). Artık fatura çek tutarı kadar
   kapanır, vadeli çek/senet kaydı açılır; para çek/senet vadesinde ödendiğinde hesaptan çıkar.
   Senette birden çok vade girilebilir. Taranan çek/senet onayında "hangi kaydın karşılığı?" sorulur.
-- **Taksite dağıtım (build 35):** taksit belirtilmeden yapılan ödeme en eski açık taksitten
+- **Taksite dağıtım (build 36):** taksit belirtilmeden yapılan ödeme en eski açık taksitten
   başlayarak dağıtılır — önceden yalnızca kaydın toplamı düşüyor, taksitler ödenmemiş kalıyordu.
-- **Takvim "Öde" (build 35):** artık doğrudan ödeme yazmaz, hesap seçtiren ödeme formunu açar;
+- **Takvim "Öde" (build 36):** artık doğrudan ödeme yazmaz, hesap seçtiren ödeme formunu açar;
   kart ekstresi/nakit avans kart sayfasına gider (önceden karta gider yazılıp kart borcu artıyordu).
-- **Ödemeye bağlı hareketler kilitli (build 35):** hareket detayında düzenle/sil yerine "Bağlı
+- **Ödemeye bağlı hareketler kilitli (build 36):** hareket detayında düzenle/sil yerine "Bağlı
   Kayda Git"; değişiklik kaydın ödeme geçmişinden yapılır. Çek/senetle yapılmış ödeme satırı çek/
   senet kaydına yönlendirir; çek/senet silinirse kapattığı fatura yeniden açılır.
 
 ### Teknik değişiklikler (release notes'a girmez)
 
-- `payments.settled_by_obligation_id` (build 35) + `obligations_delete_settlement_payments`
+- `payments.settled_by_obligation_id` (build 36) + `obligations_delete_settlement_payments`
   trigger'ı; migration `20260930120000_add_payment_settlement_instrument.sql` canlıya uygulandı.
   Kolon **kasıtlı olarak FK değil**: payments → obligations ikinci bir FK, PostgREST'teki
   `payments(...)` / `obligation:obligations(...)` gömülü seçimlerini belirsiz yapıp yayındaki
@@ -107,7 +108,8 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - [ ] Gerçek bir banka dekontuyla Gemini sınıflandırmasını ve dekont sonuç ekranını dene.
 - [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
 - [x] `eas build` ile build 33'ü al ve gönder (2026-09-30, tamamlandı).
-- [ ] Build 35'i al ve gönder (Ödeme Yap/Tahsilat Al, çek/senetle kapatma, taksite dağıtım).
+- [x] Build 36'yı al ve gönder (2026-09-30; build 35 numarası EAS tarafında tüketilmiş, 36 kullanıldı).
+- [ ] App Store Connect'te 1.0.4 için build 33 yerine **build 36**'yı seç.
 - [ ] TestFlight'ta doğrula: 30.000 fatura + 20.000 çek → fatura 10.000 kısmen ödendi, cari borç
       30.000; çek vadesinde "Öde" → hesap bakiyesi 20.000 düşer; çek silinince fatura 30.000'e döner.
 - [ ] Sonraki adım: fazla ödeme/avansın cari bakiyesine dahil edilmesi; kredi/nakit avans/borç
