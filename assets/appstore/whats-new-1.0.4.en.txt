@@ -1,0 +1,15 @@
+Vademde 1.0.4
+
+• Refreshed welcome: a new animated onboarding flow that shows you how to scan a document and what you can do next.
+• Payment receipts (Plus): attach a receipt, photo, or PDF to any payment; open it in one tap from the payment row's paperclip icon. When you scan a bank transfer receipt, Vademde reads the sender, recipient, IBAN, and amount, and suggests the matching debt — the payment is only recorded once you confirm.
+• Document Archive (Plus): all your receipts in one place. Search, browse by month, or reach them straight from a contact's page.
+• New paywall: compare the Plus and Business plans. Eligible accounts get a 7-day free trial.
+• New version notice: the app now tells you when a newer version is available.
+• Contact payments are now applied correctly: an amount entered via "Add Collection/Payment" for a person or company is now automatically applied to their oldest open debt/receivable — as a full settlement, a partial payment, or (if there's no open debt) an advance payment. Your contact's balance and open records now reflect the real state.
+• Account selection is now required for payments: every payment is now recorded as a real account transaction, so your account balance and Transactions list show it correctly.
+• Redesigned receipt confirmation screen: brought in line with the other document confirmation screens; if the person on the receipt isn't a saved contact, you're offered to create one, and if the bank account isn't registered, you're offered to add it.
+• Upload a document instead of filling out the form: a shortcut pointing you to the camera scanner was added to the New Transaction and New Debt/Receivable screens.
+• Gold records fixed: quarter, half, and full gold units now display and save with the correct amounts; a raw internal code (e.g. ceyrek_altin) that sometimes appeared in the account detail's Currency field has also been fixed.
+• The balance card on the home screen now displays correctly at larger text sizes.
+• Contact and account balances now update instantly after a transaction is recorded, without needing to leave and reopen the page.
+• Minor improvements and bug fixes.

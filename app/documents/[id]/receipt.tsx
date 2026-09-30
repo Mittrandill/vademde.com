@@ -18,7 +18,7 @@ import {
   getSignedUrl,
   markDocumentConfirmed,
 } from '@/features/documents/api';
-import { listAccounts } from '@/features/accounts/api';
+import { createAccount, listAccounts } from '@/features/accounts/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
 import { recordPayment } from '@/features/payments/api';
 import { createTransaction } from '@/features/transactions/api';
@@ -28,9 +28,10 @@ import {
   useDocumentArchiveAccess,
   type ReceiptMatch,
 } from '@/features/receipts/api';
-import { resolveBankFromDocument } from '@/features/banks/banks';
+import { BANKS, resolveBankFromDocument } from '@/features/banks/banks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
+import { isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { showErrorAlert, showSaveSuccess } from '@/utils/alerts';
 
@@ -147,14 +148,40 @@ export default function ReceiptResultScreen() {
   // adı bizim hesabımızın bankasıdır. Kayıtlı hesaplarda o bankadan hiçbiri yoksa kullanıcı
   // her seferinde bir sonraki adımda hesap ekleme akışını manuel bulmak zorunda kalıyordu —
   // burada doğrudan önerilir.
+  const ownSideIban = summary ? (direction === 'expense' ? summary.senderIban : summary.recipientIban) : null;
   const ownSideBankCode = useMemo(() => {
     if (!summary) return null;
-    const iban = direction === 'expense' ? summary.senderIban : summary.recipientIban;
-    return resolveBankFromDocument({ bankName: summary.bankName ?? null, iban: iban ?? null });
-  }, [summary, direction]);
+    return resolveBankFromDocument({ bankName: summary.bankName ?? null, iban: ownSideIban ?? null });
+  }, [summary, ownSideIban]);
   const hasMatchingBankAccount = ownSideBankCode
     ? (accountsQuery.data ?? []).some((a) => a.bank_code === ownSideBankCode)
     : true;
+  const ownSideBankName = ownSideBankCode ? (BANKS.find((b) => b.code === ownSideBankCode)?.name ?? null) : null;
+
+  // Kullanıcı "banka hesabımı elle eklettirmesin" dedi — IBAN ve banka zaten OCR'dan
+  // okunduğundan, kayıtlı hesap yoksa formu doldurtmak yerine hesap doğrudan burada
+  // oluşturulur ve HESAP alanında otomatik seçilir (bkz. aşağıdaki banner, review.tsx'teki
+  // quickAddCardMutation ile aynı desen).
+  const quickAddBankAccountMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspaceId || !ownSideBankCode) throw new Error('Banka bulunamadı');
+      const normalizedIban = ownSideIban ? normalizeIban(ownSideIban) : '';
+      const account = await createAccount({
+        workspace_id: activeWorkspaceId,
+        name: ownSideBankName ?? 'Banka Hesabı',
+        type: 'bank',
+        bank_code: ownSideBankCode,
+        iban: isValidIbanFormat(normalizedIban) ? normalizedIban : null,
+        currency_code: 'TRY',
+      });
+      return account;
+    },
+    onSuccess: (account) => {
+      if (activeWorkspaceId) queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
+      setAccountId(account.id);
+    },
+    onError: (error) => showErrorAlert(error),
+  });
 
   // docs/04-ocr-belge-isleme.md §6.6 ile aynı desen (bkz. app/documents/[id]/review.tsx) —
   // dekonttaki isim mevcut bir cariyle TEK ve belirsiz olmayan bir eşleşme kuruyorsa önceden
@@ -525,18 +552,31 @@ export default function ReceiptResultScreen() {
           {ownSideBankCode && !hasMatchingBankAccount && !accountsQuery.isPending ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push({ pathname: '/accounts/new', params: { type: 'bank' } })}
+              disabled={quickAddBankAccountMutation.isPending}
+              onPress={() => quickAddBankAccountMutation.mutate()}
             >
               <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.4) }}>
                 <Row gap="sm" align="center">
                   <Ionicons name="business-outline" size={20} color={theme.colors.brandPrimary} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle">Bu banka hesabınız kayıtlı değil</Text>
+                    <Text variant="cardTitle">
+                      {quickAddBankAccountMutation.isPending
+                        ? 'Hesap ekleniyor…'
+                        : `${ownSideBankName ?? 'Bu banka'} hesabınız kayıtlı değil`}
+                    </Text>
                     <Text variant="caption" color="textSecondary">
-                      Dekonttaki hesabı eklemek için dokunun; ekledikten sonra aşağıdaki HESAP alanından seçebilirsiniz.
+                      {ownSideIban
+                        ? 'Dekonttaki IBAN ve banka ile otomatik eklensin, elle girmeyin.'
+                        : 'Dekonttaki bankayla otomatik eklensin, elle girmeyin.'}
                     </Text>
                   </Stack>
-                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                  {quickAddBankAccountMutation.isPending ? (
+                    <ActivityIndicator color={theme.colors.brandPrimary} />
+                  ) : (
+                    <Text variant="cardTitle" style={{ color: theme.colors.brandPrimary }}>
+                      Ekle
+                    </Text>
+                  )}
                 </Row>
               </Card>
             </Pressable>

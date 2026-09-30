@@ -18,6 +18,7 @@ export const DOCUMENT_TYPES: DocumentTypeOption[] = [
   { id: 'nakit_avans', name: 'Nakit Avans', icon: 'cash-outline', color: '#FF7A59' },
   { id: 'cek', name: 'Çek', icon: 'document-text', color: '#2FA9C9' },
   { id: 'senet', name: 'Senet', icon: 'reader', color: '#7C6FF0' },
+  { id: 'borc_verme', name: 'Borç Verme', icon: 'hand-left-outline', color: '#8C6F4E' },
   { id: 'fatura', name: 'Fatura', icon: 'receipt', color: '#F0B429' },
   { id: 'abonelik', name: 'Abonelik', icon: 'repeat', color: '#8B6BE0' },
   { id: 'kira', name: 'Kira', icon: 'home', color: '#C97B4A' },
@@ -54,6 +55,7 @@ export const DOCUMENT_TYPE_LABEL_PLURAL: Record<string, string> = {
   nakit_avans: 'Nakit Avanslarım',
   cek: 'Çeklerim',
   senet: 'Senetlerim',
+  borc_verme: 'Verdiğim Borçlar',
   fatura: 'Faturalarım',
   abonelik: 'Aboneliklerim',
   kira: 'Kira Ödemelerim',
@@ -99,9 +101,16 @@ export const TOTAL_AMOUNT_DOCUMENT_TYPES = new Set([
   'nakit_avans',
   'cek',
   'senet',
+  'borc_verme',
   'banka_dekontu',
   'makbuz_fis',
 ]);
+
+// Ödünç verilen nakit/altın/döviz bir hesaptan gerçekten çıkar — bu belge türü seçildiğinde
+// (bkz. app/obligations/new.tsx isLendingType) DEĞER BİRİMİ, kullanıcının seçtiği KAYNAK
+// HESAP'ın kendi birimiyle kilitlenir (o hesapta ne varsa onunla ödünç verilir) ve kayıt
+// oluşturulurken o hesaptan eş tutarda bir gider hareketi de yazılır.
+export const LENDING_DOCUMENT_TYPE = 'borc_verme';
 
 export type ObligationAmountMode = 'total' | 'per_installment';
 

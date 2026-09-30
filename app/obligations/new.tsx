@@ -18,6 +18,7 @@ import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
 import {
   BANK_DOCUMENT_TYPES,
   INTEREST_DOCUMENT_TYPES,
+  LENDING_DOCUMENT_TYPE,
   getDefaultAmountMode,
   getInstallmentUnitLabels,
   type ObligationAmountMode,
@@ -272,6 +273,11 @@ function ObligationForm({
   // aynı gerekçe — bkz. COUNTERPARTY_LESS_DOCUMENT_TYPES), HESAP zorunludur ve yalnızca kredi
   // kartı hesapları arasından seçilir; ayrıca çekilen nakit gerçekten bir hesaba yatırılabilir.
   const isCashAdvanceType = documentType === 'nakit_avans';
+  // Borç verme: ödünç verilen nakit/altın/döviz gerçekten bir hesaptan çıkar — KAYNAK HESAP
+  // zorunludur ve yalnızca gerçek bakiyesi olan hesaplar arasından (kasa/banka) seçilir;
+  // DEĞER BİRİMİ o hesabın biriminden türetilir (o hesapta ne varsa onunla ödünç verilir).
+  const isLendingType = documentType === LENDING_DOCUMENT_TYPE;
+  const lendingSourceAccounts = (accountsQuery.data ?? []).filter((a) => a.type === 'cash' || a.type === 'bank');
   // Kredi kartı ekstresi: borçlu taraf da kart hesabıdır (aynı gerekçe) — HESAP zorunlu ve
   // yalnızca kredi kartı hesapları listelenir. Hesapsız/sahipsiz bir ekstre oluşursa kart
   // detayındaki Ekstreler sekmesinde ve kart ödemesi akışında hiç görünmez (bkz.
@@ -629,6 +635,24 @@ function ObligationForm({
         });
       }
 
+      // Ödünç verilen nakit/altın/döviz gerçekten kaynak hesaptan çıkar — borç tarafı
+      // (yukarıdaki obligation, direction='receivable') kişinin size borcunu tutar; hesap
+      // tarafı ise ayrı bir gider hareketiyle KAYNAK HESAP'ın bakiyesini düşürür. Geri
+      // alındığında kullanıcı obligation detayından "Ödeme Ekle" ile normal şekilde tahsil
+      // eder (bkz. app/obligations/[id].tsx PaymentForm) — o akış zaten hesap seçtirip
+      // ilişkili bir gelir hareketi oluşturuyor, ekstra kod gerekmez.
+      if (isLendingType && accountId && enteredAmountMinor > 0) {
+        await createTransaction({
+          workspace_id: activeWorkspaceId,
+          account_id: accountId,
+          direction: 'expense',
+          amount_minor: enteredAmountMinor,
+          currency_code: valueUnitCode,
+          occurred_at: new Date().toISOString(),
+          description: `Ödünç verildi — ${title.trim()}`,
+        });
+      }
+
       await syncObligationReminder(activeWorkspaceId, obligation);
 
       return obligation;
@@ -694,7 +718,8 @@ function ObligationForm({
     !!documentType &&
     (!isLoanType || !!bankCode) &&
     (!isCashAdvanceType || !!accountId) &&
-    (!isCardStatementType || !!accountId);
+    (!isCardStatementType || !!accountId) &&
+    (!isLendingType || !!accountId);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -733,11 +758,15 @@ function ObligationForm({
               <Text variant="caption" color="textSecondary">
                 DEĞER BİRİMİ
               </Text>
-              {isEditing ? (
-                // docs/01-finansal-kayit-modeli.md §3.5 — birim kayıt oluşturulduktan
-                // sonra değiştirilemez; burada yalnızca bilgi amaçlı gösterilir.
+              {isEditing || isLendingType ? (
+                // docs/01-finansal-kayit-modeli.md §3.5 — birim kayıt oluşturulduktan sonra
+                // değiştirilemez (isEditing); ödünç vermede ise aşağıdaki KAYNAK HESAP'ın
+                // biriminden türetilir — o hesapta ne varsa onunla ödünç verilir, ayrıca
+                // seçilmez. İkisinde de burada yalnızca bilgi amaçlı gösterilir.
                 <Text variant="body" color="textSecondary">
-                  {VALUE_UNIT_LABEL[valueUnitCode] ?? valueUnitCode}
+                  {isLendingType && !accountId
+                    ? 'Aşağıdan kaynak hesap seçin'
+                    : (VALUE_UNIT_LABEL[valueUnitCode] ?? valueUnitCode)}
                 </Text>
               ) : (
                 <ValueUnitPicker selectedId={valueUnitCode} onSelect={setValueUnitCode} />
@@ -862,6 +891,13 @@ function ObligationForm({
                   ) {
                     setAccountId(null);
                   }
+                  // Ödünç verme her zaman bir alacaktır (kişi size borçlanır) — yön otomatik
+                  // kilitlenir. HESAP yalnızca gerçek bakiyesi olan (kasa/banka) hesaplardan
+                  // seçilebilir; geçersiz kalan bir seçim varsa temizlenir.
+                  if (value === LENDING_DOCUMENT_TYPE) {
+                    setDirection('receivable');
+                    if (!lendingSourceAccounts.some((a) => a.id === accountId)) setAccountId(null);
+                  }
                 }}
               />
             </Stack>
@@ -903,19 +939,41 @@ function ObligationForm({
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">
-                {isCashAdvanceType || isCardStatementType ? 'KREDİ KARTI' : 'HESAP (İSTEĞE BAĞLI)'}
+                {isLendingType
+                  ? 'KAYNAK HESAP'
+                  : isCashAdvanceType || isCardStatementType
+                    ? 'KREDİ KARTI'
+                    : 'HESAP (İSTEĞE BAĞLI)'}
               </Text>
-              {(isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts).length === 0 ? (
+              {isLendingType ? (
+                <Text variant="caption" color="textSecondary">
+                  Ödünç verilen tutar bu hesaptan düşülür.
+                </Text>
+              ) : null}
+              {(isLendingType
+                ? lendingSourceAccounts
+                : isCashAdvanceType || isCardStatementType
+                  ? creditCardAccounts
+                  : generalAccounts
+              ).length === 0 ? (
                 <Text variant="body" color="textSecondary">
-                  {isCashAdvanceType || isCardStatementType
-                    ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
-                    : "Önce Hesaplar'dan bir hesap ekleyin."}
+                  {isLendingType
+                    ? "Önce Hesaplar'dan bir kasa/banka hesabı ekleyin."
+                    : isCashAdvanceType || isCardStatementType
+                      ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
+                      : "Önce Hesaplar'dan bir hesap ekleyin."}
                 </Text>
               ) : (
                 <AccountPicker
-                  accounts={isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts}
+                  accounts={isLendingType ? lendingSourceAccounts : isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts}
                   selectedId={accountId}
-                  onSelect={setAccountId}
+                  onSelect={(value) => {
+                    setAccountId(value);
+                    if (isLendingType) {
+                      const selected = lendingSourceAccounts.find((a) => a.id === value);
+                      if (selected) setValueUnitCode(selected.currency_code);
+                    }
+                  }}
                 />
               )}
             </Stack>
