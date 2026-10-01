@@ -95,6 +95,17 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - **Takvim "Öde" nakit avansı kart sayfasına göndermiyor (build 37):** build 36'da nakit avans
   kart ödeme akışına gidiyordu; nakit avans kart bakiyesine dahil olmadığı için kart borcunu
   olduğundan az gösterirdi. Artık kayıt detayındaki ödeme formu açılır (kart hesapları listelenmez).
+- **Çek verilince cari bakiyesi düşüyor (sonraki build):** build 37'de faturayı kapatan çek/senet
+  cari bakiyesine ayrıca borç olarak ekleniyordu (Yılmaz Demir: 10.100 fatura kalanı + 20.000 çek =
+  30.100). Ön muhasebe mantığıyla cari çek verilince kapanır: bir kaydı kapatmış çek/senet
+  (`payments.settled_by_obligation_id` ile işaret edilen) cari detayı bakiyesine, cariler listesi
+  ve ana karta, cari "Ödenecekler" kırılımına ve Hareketler sekmesindeki yürüyen bakiyeye girmez
+  (`getSettlingInstrumentIds`). Cari detayında "vadede ödenecek çek/senet" olarak ayrıca gösterilir;
+  Çeklerim'de, takvimde ve ana sayfadaki ödenecekler kırılımında kalır. Fatura seçilmeden verilen
+  peşin çek de (fazlası/tamamı `parent_obligation_id` ile bağlı avans olur) ödeme aracı sayılır —
+  sayılmasaydı avansla birbirini götürüp cari 0 görünürdü. Yalnızca Borç/Alacak formundan karşılığı
+  seçilmeden tek başına girilmiş çek/senet (eski kayıtlarda borcun kendisi olarak girilmişti, canlıda
+  15 verilen + 2 alınan) carinin borcu/alacağı olarak sayılmaya devam eder.
 - **Ödemeye bağlı hareketler kilitli (build 36):** hareket detayında düzenle/sil yerine "Bağlı
   Kayda Git"; değişiklik kaydın ödeme geçmişinden yapılır. Çek/senetle yapılmış ödeme satırı çek/
   senet kaydına yönlendirir; çek/senet silinirse kapattığı fatura yeniden açılır.

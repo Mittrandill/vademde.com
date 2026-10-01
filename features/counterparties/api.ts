@@ -1,6 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
-import { ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import { ACTIVE_OBLIGATION_STATUSES, getSettlingInstrumentIds } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 
@@ -88,6 +88,13 @@ export interface CounterpartyLedger {
   overdueCount: number;
   openCount: number;
   nearestDueDate: string | null;
+  /**
+   * Bu cariye faturası karşılığında verilmiş, vadesi gelmemiş çek/senetlerin kalanı. Cari bakiyesine
+   * girmez (cari çek verilince kapanır); vadede hesaptan ödenecek tutar olarak ayrıca gösterilir.
+   */
+  instrumentPayableMinor: number;
+  /** Bu cariden alacağı karşılığında alınmış, henüz tahsil edilmemiş çek/senetlerin kalanı. */
+  instrumentReceivableMinor: number;
 }
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.7 — cari detayında toplam alacak, toplam borç ve
@@ -100,7 +107,7 @@ export async function getCounterpartyLedger(
   const [{ data, error }, rates] = await Promise.all([
     supabase
       .from('obligations')
-      .select('direction, remaining_amount_minor, currency_code, status, due_date')
+      .select('id, document_type, direction, remaining_amount_minor, currency_code, status, due_date')
       .eq('workspace_id', workspaceId)
       .eq('counterparty_id', counterpartyId)
       .in('status', ACTIVE_OBLIGATION_STATUSES),
@@ -108,7 +115,10 @@ export async function getCounterpartyLedger(
   ]);
   if (error) throw error;
 
-  const rows = data ?? [];
+  // Faturayı kapatmış çek/senet cari bakiyesinden ayrılır (bkz. getSettlingInstrumentIds).
+  const settlingInstrumentIds = await getSettlingInstrumentIds(workspaceId, data ?? []);
+  const instruments = (data ?? []).filter((r) => settlingInstrumentIds.has(r.id));
+  const rows = (data ?? []).filter((r) => !settlingInstrumentIds.has(r.id));
   const toRef = (r: { remaining_amount_minor: number; currency_code: string }) =>
     sumToReferenceMinor([{ amountMinor: r.remaining_amount_minor, unitCode: r.currency_code }], rates);
   // Kayıtlar farklı değer birimlerinde olabilir (TRY, USD, gram_altin, ...) — bkz.
@@ -130,6 +140,12 @@ export async function getCounterpartyLedger(
     overdueCount: overdue.length,
     openCount: rows.length,
     nearestDueDate: dueDates[0] ?? null,
+    instrumentPayableMinor: instruments
+      .filter((r) => r.direction === 'payable')
+      .reduce((sum, r) => sum + toRef(r), 0),
+    instrumentReceivableMinor: instruments
+      .filter((r) => r.direction === 'receivable')
+      .reduce((sum, r) => sum + toRef(r), 0),
   };
 }
 
@@ -140,7 +156,7 @@ export async function getCounterpartyBalances(workspaceId: string): Promise<Reco
   const [{ data, error }, rates] = await Promise.all([
     supabase
       .from('obligations')
-      .select('counterparty_id, direction, remaining_amount_minor, currency_code')
+      .select('id, document_type, counterparty_id, direction, remaining_amount_minor, currency_code')
       .eq('workspace_id', workspaceId)
       .not('counterparty_id', 'is', null)
       .in('status', ACTIVE_OBLIGATION_STATUSES),
@@ -148,9 +164,11 @@ export async function getCounterpartyBalances(workspaceId: string): Promise<Reco
   ]);
   if (error) throw error;
 
+  // Faturayı kapatmış çek/senet cari bakiyesine ikinci kez girmez (bkz. getSettlingInstrumentIds).
+  const settlingInstrumentIds = await getSettlingInstrumentIds(workspaceId, data ?? []);
   const balances: Record<string, number> = {};
   for (const row of data ?? []) {
-    if (!row.counterparty_id) continue;
+    if (!row.counterparty_id || settlingInstrumentIds.has(row.id)) continue;
     const sign = row.direction === 'receivable' ? 1 : -1;
     const refMinor = sumToReferenceMinor([{ amountMinor: row.remaining_amount_minor, unitCode: row.currency_code }], rates);
     balances[row.counterparty_id] = (balances[row.counterparty_id] ?? 0) + sign * refMinor;
@@ -262,6 +280,9 @@ export async function getCounterpartyStatement(
 
   const obligations = (obligationsResult.data ?? []) as StatementObligationRow[];
   const obligationById = new Map(obligations.map((o) => [o.id, o]));
+  // Faturayı kapatmış çek/senet: cariyi zaten kapattığı için kendi satırı ve vadesindeki ödemesi
+  // cari bakiyesini değiştirmez (bkz. getSettlingInstrumentIds) — bilgi satırı olarak görünür.
+  const settlingInstrumentIds = await getSettlingInstrumentIds(workspaceId, obligations);
 
   let payments: StatementPaymentRow[] = [];
   if (obligations.length > 0) {
@@ -283,15 +304,18 @@ export async function getCounterpartyStatement(
 
   for (const o of obligations) {
     const isReceivable = o.direction === 'receivable';
+    const isSettlingInstrument = settlingInstrumentIds.has(o.id);
     entries.push({
       key: `o:${o.id}`,
       kind: 'document',
       date: o.created_at,
       title: o.title,
-      subtitle: `${DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt'} · ${isReceivable ? 'Alacak' : 'Borç'}`,
+      subtitle: isSettlingInstrument
+        ? `${DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt'} · ${isReceivable ? 'alındı, vadede tahsil edilecek' : 'verildi, vadede ödenecek'}`
+        : `${DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt'} · ${isReceivable ? 'Alacak' : 'Borç'}`,
       amountMinor: o.total_amount_minor,
       currencyCode: o.currency_code,
-      balanceEffectMinor: isReceivable ? o.total_amount_minor : -o.total_amount_minor,
+      balanceEffectMinor: isSettlingInstrument ? 0 : isReceivable ? o.total_amount_minor : -o.total_amount_minor,
       runningBalanceMinor: null,
       obligationId: o.id,
       transactionId: null,
@@ -319,7 +343,7 @@ export async function getCounterpartyStatement(
       subtitle: [obligation.title, p.account?.name].filter(Boolean).join(' · ') || null,
       amountMinor: p.amount_minor,
       currencyCode: obligation.currency_code,
-      balanceEffectMinor: isReceivable ? -p.amount_minor : p.amount_minor,
+      balanceEffectMinor: settlingInstrumentIds.has(obligation.id) ? 0 : isReceivable ? -p.amount_minor : p.amount_minor,
       runningBalanceMinor: null,
       obligationId: obligation.id,
       transactionId: p.transaction_id,

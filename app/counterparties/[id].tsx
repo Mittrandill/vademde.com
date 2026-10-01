@@ -217,6 +217,20 @@ export default function CounterpartyDetailScreen() {
     { key: 'kayitlar', label: `Açık Kayıtlar (${allOpenObligations.length})` },
     { key: 'hareketler', label: 'Hareketler' },
   ];
+  // Faturayı kapatmış çek/senetler cari bakiyesine girmez; vadede hareket edecek tutar olarak not düşülür.
+  const instrumentParts = [
+    ledger?.instrumentPayableMinor
+      ? `bu cariye verilen ${formatMinorAmount(ledger.instrumentPayableMinor)} çek/senet vadesinde hesabından ödenecek`
+      : null,
+    ledger?.instrumentReceivableMinor
+      ? `bu cariden alınan ${formatMinorAmount(ledger.instrumentReceivableMinor)} çek/senet vadesinde tahsil edilecek`
+      : null,
+  ].filter((part): part is string => !!part);
+  const instrumentNoteBody = instrumentParts.join('; ');
+  const instrumentNote = instrumentNoteBody
+    ? `${instrumentNoteBody.charAt(0).toLocaleUpperCase('tr-TR')}${instrumentNoteBody.slice(1)} — cari bakiyesine dahil değil.`
+    : null;
+
   const infoRows = [
     { label: 'Tür', value: getCounterpartyTypeLabel(counterparty.type) },
     ...(counterparty.phone ? [{ label: 'Telefon', value: counterparty.phone }] : []),
@@ -225,6 +239,14 @@ export default function CounterpartyDetailScreen() {
     { label: 'Alacak', value: formatMinorAmount(ledger?.receivableMinor ?? 0) },
     { label: 'Borç', value: formatMinorAmount(ledger?.payableMinor ?? 0) },
     { label: 'Geciken', value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
+    // Faturayı kapatmış çek/senet cari bakiyesine girmez (cari çek verilince kapanır); vadede
+    // hesaptan ödenecek/tahsil edilecek tutar olarak burada ayrıca görünür.
+    ...(ledger?.instrumentPayableMinor
+      ? [{ label: 'Verilen çek/senet (vadede ödenecek)', value: formatMinorAmount(ledger.instrumentPayableMinor) }]
+      : []),
+    ...(ledger?.instrumentReceivableMinor
+      ? [{ label: 'Alınan çek/senet (vadede tahsil)', value: formatMinorAmount(ledger.instrumentReceivableMinor) }]
+      : []),
     ...(ledger?.nearestDueDate
       ? [{ label: 'En Yakın Vade', value: dateFormatter.format(new Date(ledger.nearestDueDate)) }]
       : []),
@@ -280,6 +302,12 @@ export default function CounterpartyDetailScreen() {
           </Text>
           <DueBreakdown data={breakdown.receivable} direction="receivable" />
         </Stack>
+      ) : null}
+
+      {instrumentNote ? (
+        <Text variant="caption" color="textSecondary">
+          {instrumentNote}
+        </Text>
       ) : null}
 
       <FinanceDetailTabs options={tabOptions} value={tab} onChange={setTab} />

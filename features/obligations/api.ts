@@ -136,6 +136,47 @@ const EMPTY_BREAKDOWN: DueBreakdown = {
   overdueCount: 0,
 };
 
+// Bir fatura/borcu kapatmak için verilmiş ya da alınmış çek/senet (Ödeme Yap/Tahsilat Al → Çek/Senet,
+// ya da OCR onayında "hangi kaydın karşılığı" seçilmiş çek) — bkz. features/payments/api.ts
+// settleWithInstrument. Cari hesap mantığında çek verildiğinde cari kapanır: kapattığı fatura zaten o
+// tutar kadar düşmüştür, çek/senet cari bakiyesine ikinci kez borç/alacak olarak eklenmez. Çek/senet
+// vadesinde hesaptan ödenecek/tahsil edilecek bir yükümlülük olarak Çeklerim/Senetlerim'de ve
+// takvimde kalır. Karşılığı seçilmeden Borç/Alacak formundan tek başına girilmiş çek/senet ise
+// (eski kayıtlarda çek borcun kendisi olarak girilmişti) carinin borcu/alacağı sayılmaya devam eder.
+//
+// Ödeme aracı sayılan çek/senet: bir kaydı kapatmış olan (payments.settled_by_obligation_id) ya da
+// fazlasından/tamamından avans doğmuş olan (obligations.parent_obligation_id) — fatura seçilmeden
+// verilen peşin çekte fatura yoktur ama avans vardır; çek sayılırsa avansla birbirini götürür ve cari
+// "bize borçlu" yerine 0 görünürdü.
+export async function getSettlingInstrumentIds(
+  workspaceId: string,
+  rows: { id: string; document_type: string }[]
+): Promise<Set<string>> {
+  const candidateIds = rows.filter((r) => r.document_type === 'cek' || r.document_type === 'senet').map((r) => r.id);
+  const result = new Set<string>();
+  // .in() listesi URL'ye yazıldığı için büyük portföylerde parçalara bölünür.
+  for (let i = 0; i < candidateIds.length; i += 150) {
+    const chunk = candidateIds.slice(i, i + 150);
+    const [settled, parents] = await Promise.all([
+      supabase
+        .from('payments')
+        .select('settled_by_obligation_id')
+        .eq('workspace_id', workspaceId)
+        .in('settled_by_obligation_id', chunk),
+      supabase
+        .from('obligations')
+        .select('parent_obligation_id')
+        .eq('workspace_id', workspaceId)
+        .in('parent_obligation_id', chunk),
+    ]);
+    if (settled.error) throw settled.error;
+    if (parents.error) throw parents.error;
+    for (const row of settled.data ?? []) if (row.settled_by_obligation_id) result.add(row.settled_by_obligation_id);
+    for (const row of parents.data ?? []) if (row.parent_obligation_id) result.add(row.parent_obligation_id);
+  }
+  return result;
+}
+
 export async function getDueBreakdown({
   workspaceId,
   counterpartyId,
@@ -148,7 +189,7 @@ export async function getDueBreakdown({
 }): Promise<DueBreakdownResult> {
   let obligationsQuery = supabase
     .from('obligations')
-    .select('id, direction, currency_code, remaining_amount_minor, due_date')
+    .select('id, direction, document_type, currency_code, remaining_amount_minor, due_date')
     .eq('workspace_id', workspaceId)
     .in('status', ACTIVE_OBLIGATION_STATUSES)
     // Avansın (ön ödeme/alınan avans) vadesi yoktur: gecikmiş/bu ay ödenecek sayılmaz, yalnızca
@@ -160,7 +201,12 @@ export async function getDueBreakdown({
   const [{ data: obligationRows, error }, rates] = await Promise.all([obligationsQuery, listValueUnitRates()]);
   if (error) throw error;
 
-  const obligations = obligationRows ?? [];
+  // Cari detayında faturayı kapatmış çek/senet carinin borcu/alacağı sayılmaz (bkz.
+  // getSettlingInstrumentIds); genel ekranlarda (ana sayfa, Çeklerim) vadesi olan bir ödeme olarak kalır.
+  const settlingInstrumentIds = counterpartyId
+    ? await getSettlingInstrumentIds(workspaceId, obligationRows ?? [])
+    : new Set<string>();
+  const obligations = (obligationRows ?? []).filter((o) => !settlingInstrumentIds.has(o.id));
   if (obligations.length === 0) {
     return { payable: { ...EMPTY_BREAKDOWN }, receivable: { ...EMPTY_BREAKDOWN } };
   }
