@@ -12,7 +12,8 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | build 37 | `eas build --no-wait --auto-submit` ile alındı (build ID `8bf8acb5-6019-495c-b67c-8c520ffa4e7f`, commit `be3783c`, `finished`); submission `1a374237-76e4-4711-9f9b-9000a2a35ca8` planlandı — çek ciro, avans/mahsup, anapara ayrımı, cari ekstresi. **1.0.4 için bu build seçilmeli** | 2026-10-01 |
+| iOS | build 38 | `eas build --no-wait --auto-submit` ile alındı (build ID `99a2c247-fb80-46ec-97fc-453c6db867c1`, commit `b9fe192`, `finished`); submission `615d1c7b-39d5-4a3d-8bda-bb927073b466` planlandı — çek verilince cari bakiyesinin düşmesi. **1.0.4 için bu build seçilmeli** | 2026-10-01 |
+| iOS | build 37 | `eas build --no-wait --auto-submit` ile alındı (build ID `8bf8acb5-6019-495c-b67c-8c520ffa4e7f`, commit `be3783c`, `finished`); submission `1a374237-76e4-4711-9f9b-9000a2a35ca8` planlandı — çek ciro, avans/mahsup, anapara ayrımı, cari ekstresi. build 38 ile değiştirildi (çekin cari bakiyesinden düşmemesi) | 2026-10-01 |
 | iOS | build 36 | `eas build --no-wait --auto-submit` ile alındı (build ID `7d62261f-2951-4a8c-9e4d-7921922499d8`, commit `051774b`, `finished`); submission `ddc26ed8-46d2-4447-8b05-ef5b05e1cdc5` planlandı — TestFlight'ta doğrulanacak | 2026-09-30 |
 | iOS | build 33 | `eas build --auto-submit` ile gönderildi; build 36 ile değiştirildi (çek/senet ve Ödeme Yap/Tahsilat Al düzeltmelerini içermez) | 2026-09-30 |
 | iOS | build 32 | App Store Connect'e `eas submit` ile yüklendi; build 33 ile değiştirildi, artık kullanılmıyor | 2026-09-30 |
@@ -95,7 +96,7 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - **Takvim "Öde" nakit avansı kart sayfasına göndermiyor (build 37):** build 36'da nakit avans
   kart ödeme akışına gidiyordu; nakit avans kart bakiyesine dahil olmadığı için kart borcunu
   olduğundan az gösterirdi. Artık kayıt detayındaki ödeme formu açılır (kart hesapları listelenmez).
-- **Çek verilince cari bakiyesi düşüyor (sonraki build):** build 37'de faturayı kapatan çek/senet
+- **Çek verilince cari bakiyesi düşüyor (build 38):** build 37'de faturayı kapatan çek/senet
   cari bakiyesine ayrıca borç olarak ekleniyordu (Yılmaz Demir: 10.100 fatura kalanı + 20.000 çek =
   30.100). Ön muhasebe mantığıyla cari çek verilince kapanır: bir kaydı kapatmış çek/senet
   (`payments.settled_by_obligation_id` ile işaret edilen) cari detayı bakiyesine, cariler listesi
@@ -146,7 +147,7 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
 - [x] `eas build` ile build 33'ü al ve gönder (2026-09-30, tamamlandı).
 - [x] Build 36'yı al ve gönder (2026-09-30; build 35 numarası EAS tarafında tüketilmiş, 36 kullanıldı).
-- [ ] App Store Connect'te 1.0.4 için **build 37**'yi seç (build 33 ve 36 bu düzeltmeleri içermez).
+- [ ] App Store Connect'te 1.0.4 için **build 38**'i seç (build 33, 36 ve 37 bu düzeltmeleri içermez).
 - [ ] TestFlight'ta doğrula: 30.000 fatura + 20.000 çek → fatura 10.000 kısmen ödendi, cari borç
       30.000; çek vadesinde "Öde" → hesap bakiyesi 20.000 düşer; çek silinince fatura 30.000'e döner.
 - [x] Fazla ödeme/avansın cari bakiyesine dahil edilmesi, anaparanın gelir/gider sayılmaması,
