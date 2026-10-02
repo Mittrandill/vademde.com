@@ -1,0 +1,6 @@
+Vademde 1.0.5
+
+• Kredi kartı ekstresi artık harcama harcama işleniyor: Ekstreyi tarattığında her harcama kendi tarihiyle karta ve Hareketler'e geçmiş hareket olarak eklenir; toplam borç da ayrıca takip edilir.
+• Otomatik kategori: Ekstredeki her harcama işyeri adına göre kategorilerine ayrılır (ör. kafe, market, yakıt, abonelik). Önerileri kaydetmeden önce görür, istediğini değiştirirsin.
+• Daha sade onay ekranı: Harcamalar tek tek kategorize edildiğinde ekstre için ayrıca genel bir kategori sorulmuyor.
+• Küçük iyileştirmeler ve hata düzeltmeleri.

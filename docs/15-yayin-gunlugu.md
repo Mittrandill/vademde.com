@@ -8,12 +8,49 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
-## 1.0.4 — Hazırlanıyor (2026-09-30)
+## 1.0.5 — Hazırlanıyor (2026-10-02)
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | build 39 | `eas build --no-wait --auto-submit` ile alındı (build ID `81ac7c0f-d8d9-41f1-9c00-fba0298918b8`, commit `554c093`); submission `c228c0c6-cfff-4beb-9a85-ff3233753100` planlandı — ekstre harcamalarının kategorilere ayrılması + `expo-updates` (OTA). **1.0.4 için bu build seçilmeli** | 2026-10-02 |
-| iOS | build 38 | `eas build --no-wait --auto-submit` ile alındı (build ID `99a2c247-fb80-46ec-97fc-453c6db867c1`, commit `b9fe192`, `finished`); submission `615d1c7b-39d5-4a3d-8bda-bb927073b466` planlandı — çek verilince cari bakiyesinin düşmesi. build 39 ile değiştirildi | 2026-10-01 |
+| iOS | (sıradaki) | `eas build --no-wait --auto-submit` ile alınacak | 2026-10-02 |
+
+Build 39 önce 1.0.4 numarasıyla alındı; 1.0.4 (build 38) zaten yayında olduğu için App Store
+gönderimi reddedilecekti, build `81ac7c0f-d8d9-41f1-9c00-fba0298918b8` tamamlanmadan
+`eas build:cancel` ile iptal edildi (submission `c228c0c6-…` hiç çalışmadı). Sürüm 1.0.5'e çekildi.
+
+### Kullanıcıya görünen değişiklikler
+
+- **Ekstre harcamaları kategorilere ayrılıyor:** kredi kartı ekstresi onayında varsayılan artık
+  "Kategorilere Ayır" — her harcama kendi tarihiyle karta ve Hareketler'e işlenir (önceden
+  varsayılan "Sadece Toplam Borç"tu, seçim gözden kaçınca yalnızca tek kart borcu oluşuyordu).
+  Satır kategorileri OCR önerisiyle önceden seçili gelir (ör. Starbucks → Restoran / Kafe); ücret/
+  faiz satırları banka/kart ücreti kategorisine düşer. Kategorilere ayırırken genel KATEGORİ alanı
+  sorulmaz, kart borcu kategorisiz kaydedilir.
+
+### Teknik değişiklikler (release notes'a girmez)
+
+- `process-document` Edge Function v22 (2026-10-02): prompt'a workspace gider kategorileri eklenir,
+  her ekstre satırı kategorize edilir → `document_line_items.suggested_category_id` (migration
+  `20261002120000_line_item_suggested_category.sql`, canlıya uygulandı). Sunucu tarafı olduğundan
+  mevcut build'lerde de çalışır; öneriyi gösteren onay ekranı 1.0.5 ile gelir.
+- `expo-updates`: `runtimeVersion.policy = appVersion`, kanallar development/preview/production.
+  1.0.5 build'leri JS değişikliklerini `eas update --channel production` ile incelemesiz alabilir
+  (runtime `1.0.5`); 1.0.4 ve öncesi OTA alamaz. Native değişiklik yeni build + sürüm artırımı ister.
+
+### Açık takip maddeleri
+
+- [ ] TestFlight'ta doğrula: ekstre tara → satırlar kategorili gelir → kaydet → harcamalar kartta ve
+      Hareketler'de kendi tarihleriyle görünür; genel KATEGORİ alanı görünmez.
+- [ ] App Store Connect'te 1.0.5 sürümünü oluştur, yeni build'i seç, "Yenilikler"
+      (`assets/appstore/whats-new-1.0.5.tr.txt` / `.en.txt`) gir ve incelemeye gönder.
+
+---
+
+## 1.0.4 — Yayında (build 38)
+
+| Platform | Build | Durum | Gönderim |
+|---|---|---|---|
+| iOS | build 38 | `eas build --no-wait --auto-submit` ile alındı (build ID `99a2c247-fb80-46ec-97fc-453c6db867c1`, commit `b9fe192`, `finished`); submission `615d1c7b-39d5-4a3d-8bda-bb927073b466` planlandı — çek verilince cari bakiyesinin düşmesi. **1.0.4 olarak yayınlandı** | 2026-10-01 |
 | iOS | build 37 | `eas build --no-wait --auto-submit` ile alındı (build ID `8bf8acb5-6019-495c-b67c-8c520ffa4e7f`, commit `be3783c`, `finished`); submission `1a374237-76e4-4711-9f9b-9000a2a35ca8` planlandı — çek ciro, avans/mahsup, anapara ayrımı, cari ekstresi. build 38 ile değiştirildi (çekin cari bakiyesinden düşmemesi) | 2026-10-01 |
 | iOS | build 36 | `eas build --no-wait --auto-submit` ile alındı (build ID `7d62261f-2951-4a8c-9e4d-7921922499d8`, commit `051774b`, `finished`); submission `ddc26ed8-46d2-4447-8b05-ef5b05e1cdc5` planlandı — TestFlight'ta doğrulanacak | 2026-09-30 |
 | iOS | build 33 | `eas build --auto-submit` ile gönderildi; build 36 ile değiştirildi (çek/senet ve Ödeme Yap/Tahsilat Al düzeltmelerini içermez) | 2026-09-30 |
@@ -108,26 +145,12 @@ edildi, TestFlight'a çift kayıt gitmedi.
   sayılmasaydı avansla birbirini götürüp cari 0 görünürdü. Yalnızca Borç/Alacak formundan karşılığı
   seçilmeden tek başına girilmiş çek/senet (eski kayıtlarda borcun kendisi olarak girilmişti, canlıda
   15 verilen + 2 alınan) carinin borcu/alacağı olarak sayılmaya devam eder.
-- **Ekstre harcamaları kategorilere ayrılıyor (build 39):** kredi kartı ekstresi onayında
-  varsayılan artık "Kategorilere Ayır" — her harcama kendi tarihiyle karta ve Hareketler'e işlenir
-  (önceden varsayılan "Sadece Toplam Borç"tu, seçim gözden kaçınca yalnızca tek kart borcu oluşuyordu).
-  Satır kategorileri OCR önerisiyle önceden seçili gelir (ör. Starbucks → Restoran / Kafe); ücret/
-  faiz satırları banka/kart ücreti kategorisine düşer. Kategorilere ayırırken genel KATEGORİ alanı
-  sorulmaz, kart borcu kategorisiz kaydedilir.
 - **Ödemeye bağlı hareketler kilitli (build 36):** hareket detayında düzenle/sil yerine "Bağlı
   Kayda Git"; değişiklik kaydın ödeme geçmişinden yapılır. Çek/senetle yapılmış ödeme satırı çek/
   senet kaydına yönlendirir; çek/senet silinirse kapattığı fatura yeniden açılır.
 
 ### Teknik değişiklikler (release notes'a girmez)
 
-- `process-document` Edge Function v22 (2026-10-02): prompt'a workspace gider kategorileri eklenir,
-  her ekstre satırı kategorize edilir → `document_line_items.suggested_category_id` (migration
-  `20261002120000_line_item_suggested_category.sql`, canlıya uygulandı). Sunucu tarafı olduğundan
-  mevcut build'lerde de çalışır; öneriyi gösteren onay ekranı build 39 ile gelir.
-- `expo-updates` (build 39): `runtimeVersion.policy = appVersion`, kanallar development/preview/
-  production. Build 39'dan itibaren aynı `version`'daki build'ler JS değişikliklerini
-  `eas update --channel production` ile incelemesiz alabilir; native değişiklik yeni build ve
-  sürüm artırımı gerektirir. Build 38 ve öncesi OTA alamaz.
 - `obligations.parent_obligation_id` (sonraki build, FK değil — aynı PostgREST gerekçesi):
   otomatik doğan kayıt (ör. çek fazlasından avans) üst kayıt silinince silinir;
   `delete_settlement_payments_for_obligation` artık yalnızca aynı workspace'te siler.
@@ -162,9 +185,7 @@ edildi, TestFlight'a çift kayıt gitmedi.
 - [ ] Sandbox'ta paywall'da "7 gün ücretsiz başlat"ın göründüğünü doğrula.
 - [x] `eas build` ile build 33'ü al ve gönder (2026-09-30, tamamlandı).
 - [x] Build 36'yı al ve gönder (2026-09-30; build 35 numarası EAS tarafında tüketilmiş, 36 kullanıldı).
-- [ ] App Store Connect'te 1.0.4 için **build 39**'u seç (build 38 ve öncesi ekstre/OTA değişikliklerini içermez).
-- [ ] TestFlight'ta doğrula: ekstre tara → satırlar kategorili gelir → kaydet → harcamalar kartta ve
-      Hareketler'de kendi tarihleriyle görünür; genel KATEGORİ alanı görünmez.
+- [x] App Store Connect'te 1.0.4 için build 38 seçildi; 1.0.4 yayında.
 - [ ] TestFlight'ta doğrula: 30.000 fatura + 20.000 çek → fatura 10.000 kısmen ödendi, cari borç
       30.000; çek vadesinde "Öde" → hesap bakiyesi 20.000 düşer; çek silinince fatura 30.000'e döner.
 - [x] Fazla ödeme/avansın cari bakiyesine dahil edilmesi, anaparanın gelir/gider sayılmaması,

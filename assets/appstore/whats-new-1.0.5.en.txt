@@ -1,0 +1,6 @@
+Vademde 1.0.5
+
+• Credit card statements are now recorded transaction by transaction: when you scan a statement, each purchase is added to the card and to Transactions with its own date, while the total balance is still tracked separately.
+• Automatic categories: each purchase on the statement is categorized based on the merchant name (e.g. café, groceries, fuel, subscriptions). You see the suggestions before saving and can change any of them.
+• A simpler confirmation screen: when purchases are categorized individually, you're no longer asked for a separate general category for the statement.
+• Minor improvements and bug fixes.
