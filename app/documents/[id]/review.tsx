@@ -183,9 +183,15 @@ export default function DocumentReviewScreen() {
   // kullanıcıya yalnızca bir kez sorulur.
   const [cardQuickAddOffered, setCardQuickAddOffered] = useState(false);
   // "Sadece toplam borç" ile "harcamaları kategorilere ayır" arasındaki seçim — ikincisinde
-  // her ekstre satırı için ayrı bir gider işlemi ve kategori seçimi gerekir.
-  const [categorizeCardSpending, setCategorizeCardSpending] = useState(false);
+  // her ekstre satırı karta ayrı bir (geçmiş tarihli) gider hareketi olarak işlenir. Ekstre
+  // taramanın asıl amacı harcamaları görmek olduğundan varsayılan "kategorilere ayır"dır;
+  // önceden varsayılan "toplam borç"tu ve seçim kolayca gözden kaçıp yalnızca tek bir kart
+  // borcu kaydı oluşuyordu.
+  const [categorizeCardSpending, setCategorizeCardSpending] = useState(true);
   const [cardTransactionCategoryById, setCardTransactionCategoryById] = useState<Record<string, string | null>>({});
+  // OCR'ın satır bazlı kategori önerileri (document_line_items.suggested_category_id) bir kez
+  // taslağa kopyalanır; sonrasında kullanıcının seçimi esastır.
+  const [cardCategoriesInitialized, setCardCategoriesInitialized] = useState(false);
   const [cardMatchOverrides, setCardMatchOverrides] = useState<Record<string, 'import' | 'skip'>>({});
   // Taksit tablosu satırları (vade + tutar + ödendi durumu) kullanıcı tarafından tek tek
   // düzenlenebilir; OCR'ın döndürdüğü document_line_items'tan bir kez taslak olarak kopyalanır.
@@ -228,6 +234,10 @@ export default function DocumentReviewScreen() {
     [cardTransactionItems]
   );
   const statementMatchRange = useMemo(() => statementMatchDateRange(cardExpenseItems), [cardExpenseItems]);
+  // Ekstre harcamaları karta ayrı hareketler olarak işlenecek mi? Harcama satırı hiç yoksa
+  // (yalnızca ödeme/iade okunduysa) seçim etkisizdir — toplam borç tek kayıt olarak kalır.
+  const splitsCardSpending =
+    documentType === 'kredi_karti_ekstresi' && categorizeCardSpending && cardExpenseItems.length > 0;
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -252,7 +262,7 @@ export default function DocumentReviewScreen() {
         amountsMinor: cardExpenseItems.map((item) => item.amount_minor),
       }),
     enabled:
-      documentType === 'kredi_karti_ekstresi' &&
+      splitsCardSpending &&
       !!activeWorkspaceId &&
       !!accountId &&
       !!statementMatchRange,
@@ -522,6 +532,43 @@ export default function DocumentReviewScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardQuickAddOffered, cardAccountMatchAttempted, accountId, cardLastFourFromOcr, documentType, extractedBankName]);
 
+  // Ekstre satırlarının kategorilerini OCR önerisiyle (bkz. process-document — Gemini her
+  // satırı işyeri adına göre workspace'in gider kategorilerinden birine atar) bir kez doldurur.
+  // Öneri gelmeyen ücret/faiz satırları banka/kart ücreti kategorisine düşer. Kullanıcı her
+  // satırı CategoryPicker'dan yine değiştirebilir — kesin kayıt onayla yazılır.
+  useEffect(() => {
+    if (
+      cardCategoriesInitialized ||
+      documentType !== 'kredi_karti_ekstresi' ||
+      !lineItemsQuery.isSuccess ||
+      !categoriesQuery.isSuccess
+    ) {
+      return;
+    }
+    setCardCategoriesInitialized(true);
+    const categoryIds = new Set(categoriesQuery.data.map((c) => c.id));
+    const feeCategory =
+      categoriesQuery.data.find((c) => c.name === 'Banka & Kart Ücretleri') ??
+      categoriesQuery.data.find((c) => c.name === 'Banka Masrafları') ??
+      null;
+    const initial: Record<string, string | null> = {};
+    for (const item of lineItemsQuery.data.filter(isCardExpenseLine)) {
+      if (item.suggested_category_id && categoryIds.has(item.suggested_category_id)) {
+        initial[item.id] = item.suggested_category_id;
+      } else if ((item.kind === 'card_fee' || item.kind === 'card_interest') && feeCategory) {
+        initial[item.id] = feeCategory.id;
+      }
+    }
+    setCardTransactionCategoryById((prev) => ({ ...initial, ...prev }));
+  }, [
+    cardCategoriesInitialized,
+    documentType,
+    lineItemsQuery.isSuccess,
+    lineItemsQuery.data,
+    categoriesQuery.isSuccess,
+    categoriesQuery.data,
+  ]);
+
   // Kredi taksit tablosunu (vade + tutar) düzenlenebilir taslağa bir kez kopyalar;
   // sonraki her düzenleme yalnızca yerel taslağı günceller, OCR verisini değil. Vadesi
   // bugünden önce olan taksitler gerçekte zaten ödenmiş olacağından "ödendi" ile başlar
@@ -661,18 +708,10 @@ export default function DocumentReviewScreen() {
 
       if (direction === 'payable' || direction === 'receivable') {
         if (!documentType) throw new Error('Belge türü seçin');
-        if (
-          documentType === 'kredi_karti_ekstresi' &&
-          categorizeCardSpending &&
-          statementCandidatesQuery.isFetching
-        ) {
+        if (splitsCardSpending && statementCandidatesQuery.isFetching) {
           throw new Error('Mükerrer hareket kontrolünün tamamlanmasını bekleyin');
         }
-        if (
-          documentType === 'kredi_karti_ekstresi' &&
-          categorizeCardSpending &&
-          statementCandidatesQuery.isError
-        ) {
+        if (splitsCardSpending && statementCandidatesQuery.isError) {
           throw new Error('Mevcut hareketler karşılaştırılamadı. Tekrar deneyin');
         }
 
@@ -731,7 +770,8 @@ export default function DocumentReviewScreen() {
           due_date: earliestInstallmentDueDate ?? dueDate ?? null,
           counterparty_id: resolvedCounterpartyId,
           account_id: accountId,
-          category_id: categoryId,
+          // Harcamalar satır satır kategorize edildiyse kart borcunun kendisi kategorisizdir.
+          category_id: splitsCardSpending ? null : categoryId,
           bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
           notes: documentNumber.trim() ? `Belge no: ${documentNumber.trim()}` : null,
         });
@@ -792,7 +832,7 @@ export default function DocumentReviewScreen() {
         // işlemi olarak kaydedilir (kategori kırılımı raporları bu şekilde beslenir).
         // İkisi bilinçli olarak birbirinden bağımsızdır — bkz. plan kararı #3.
         let cardTransactionsFailed = false;
-        if (documentType === 'kredi_karti_ekstresi' && categorizeCardSpending && accountId) {
+        if (splitsCardSpending && accountId) {
           try {
             await createTransactions(
               cardItemsToImport.map((item) => ({
@@ -970,11 +1010,9 @@ export default function DocumentReviewScreen() {
   const canSubmit =
     !!amount &&
     ((direction === 'payable' || direction === 'receivable') ? !!documentType : !!accountId) &&
-    (documentType !== 'kredi_karti_ekstresi' || !categorizeCardSpending || !!accountId);
+    (!splitsCardSpending || !!accountId);
   const statementMatchingReady =
-    documentType !== 'kredi_karti_ekstresi' ||
-    !categorizeCardSpending ||
-    (!statementCandidatesQuery.isFetching && !statementCandidatesQuery.isError);
+    !splitsCardSpending || (!statementCandidatesQuery.isFetching && !statementCandidatesQuery.isError);
 
   const isLoanDocument = documentType === 'kredi';
   // Kredi kartı hesapları her zaman TRY'dir (bkz. app/accounts/new.tsx isCash koşulu) —
@@ -1338,8 +1376,14 @@ export default function DocumentReviewScreen() {
                         </Stack>
                       ) : null}
                       <Text variant="caption" color="textSecondary">
-                        {cardItemsToImport.length} yeni hareket eklenecek · {cardExpenseItems.length - cardItemsToImport.length} mükerrer atlanacak
+                        {cardItemsToImport.length} harcama kendi tarihiyle karta ve Hareketler&apos;e işlenecek ·{' '}
+                        {cardExpenseItems.length - cardItemsToImport.length} mükerrer atlanacak
                       </Text>
+                      {splitsCardSpending && !accountId ? (
+                        <Text variant="caption" color="danger">
+                          Harcamaların işleneceği kredi kartını aşağıdan seçin.
+                        </Text>
+                      ) : null}
                     </Stack>
                   </Card>
                 ) : null}
@@ -1426,14 +1470,18 @@ export default function DocumentReviewScreen() {
               </Card>
             ) : null}
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                KATEGORİ (İSTEĞE BAĞLI)
-              </Text>
-              {(categoriesQuery.data ?? []).length > 0 ? (
-                <CategoryPicker categories={categoriesQuery.data ?? []} selectedId={categoryId} onSelect={setCategoryId} />
-              ) : null}
-            </Stack>
+            {/* Ekstre kategorilere ayrılıyorsa her harcama zaten kendi kategorisini taşır;
+                kart borcunun tamamına ayrıca genel bir kategori sormak anlamsız. */}
+            {!splitsCardSpending ? (
+              <Stack gap="sm">
+                <Text variant="caption" color="textSecondary">
+                  KATEGORİ (İSTEĞE BAĞLI)
+                </Text>
+                {(categoriesQuery.data ?? []).length > 0 ? (
+                  <CategoryPicker categories={categoriesQuery.data ?? []} selectedId={categoryId} onSelect={setCategoryId} />
+                ) : null}
+              </Stack>
+            ) : null}
 
             <Stack gap="sm">
               <Text variant="caption" color="textSecondary">

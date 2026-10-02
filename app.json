@@ -151,6 +151,12 @@
         "projectId": "df8f055e-b6e1-4104-b0f8-885b80d4775b"
       }
     },
-    "owner": "akintkaya"
+    "owner": "akintkaya",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/df8f055e-b6e1-4104-b0f8-885b80d4775b"
+    }
   }
 }

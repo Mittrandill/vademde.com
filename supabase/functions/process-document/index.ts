@@ -143,6 +143,9 @@ const RESPONSE_SCHEMA = {
                 type: 'STRING',
                 enum: ['purchase', 'payment', 'refund', 'fee', 'interest', 'cash_advance', 'unknown'],
               },
+              // Satırın gider kategorisi — PROMPT'a eklenen workspace kategori listesinden
+              // birebir bir ad (bkz. buildCategoryPrompt). Sunucu bunu id'ye eşler.
+              category: { type: 'STRING', nullable: true },
             },
             required: ['date', 'description', 'amount', 'transactionType'],
           },
@@ -230,7 +233,7 @@ Belge türüne özel kurallar:
 - documentType "cek" ise: ÇEKİ DÜZENLEYEN/İMZALAYAN/KAŞELEYEN taraf (hesap sahibi, "keşideci") ÖDEMEYİ YAPACAK taraftır — borçludur. "___ emrine ödeyiniz" ibaresinden SONRA EL YAZISIYLA yazılan isim ise ÖDEMEYİ ALACAK taraftır (lehtar/alacaklı) — bu iki ismi ASLA birbirine karıştırma. Belgeyi tarayan kullanıcı, fiziksel çek genellikle tahsil edecek kişide bulunduğu için varsayılan olarak LEHTAR (alacaklı) kabul edilir: direction'ı "receivable" yap ve counterpartyName alanına KEŞİDECİNİN adını (imza/kaşe/hesap sahibi bilgisi, "emrine"deki el yazısı isim DEĞİL) yaz. Belgede kullanıcının kendi imzası/kaşesi keşideci olarak görünüyorsa (yani kullanıcı çeki kendisi düzenlemişse) bunun yerine direction "payable", counterpartyName ise "emrine" kısmındaki lehtar adı olmalıdır — ama bu yalnızca kullanıcının kendi adı/işletmesi keşideci tarafında açıkça görünüyorsa geçerlidir, aksi halde varsayılan (receivable + keşideci adı) kullanılır. Kullanıcı yön ve tarafı onay ekranında düzeltebilir.
 - documentType "senet" ise aynı ayrım geçerlidir: senedi İMZALAYAN taraf borçludur (ödeyecek), senette adı geçen alacaklı ise tahsil edecek taraftır. Aynı varsayım: tarayan kullanıcı genellikle alacaklıdır (direction "receivable"), counterpartyName borçlunun adıdır — kullanıcının kendisi borçlu tarafında açıkça görünmedikçe.
 - documentType "kredi" ise installmentPlan alanını doldur: her taksit satırı için vade, anapara, faiz, vergi, taksit tutarı ve kalan anapara. installmentPlan.totalRepayment toplam geri ödemedir, totalAmount kredi anaparasıdır. Belgede krediyi veren bankanın adı geçiyorsa (logo, başlık, "... Bankası A.Ş." ibaresi vb.) bunu HEM installmentPlan.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz — kredide "kişi/firma" tarafı zaten bankanın kendisidir, bu iki alan farklı bankalar veya biri dolu diğeri boş olacak şekilde ASLA tutarsız olmamalı.
-- documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Her satıra transactionType ata: normal alışveriş "purchase"; "ÖDEME", "KART ÖDEMESİ", "TAHSİLAT", "ÖDEME - TEŞEKKÜRLER" benzeri geçmiş dönem borç kapatma satırları "payment"; işyeri/ürün iadesi "refund"; üyelik/yıllık kart/komisyon/BSMV gibi ücretler "fee"; akdi/gecikme faizi "interest"; nakit çekim/avans "cash_advance"; güvenle ayıramadığın satır "unknown". Ödeme ve iadeleri ASLA purchase olarak sınıflandırma. Satır amount değerlerini işaret kullanmadan pozitif sayı döndür; yön transactionType ile belirlenir. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz. Ekstreyi veren bankanın adını HEM cardStatement.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz (kredi kartı ekstresinde de "kişi/firma" tarafı bankadır).
+- documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Her satıra transactionType ata: normal alışveriş "purchase"; "ÖDEME", "KART ÖDEMESİ", "TAHSİLAT", "ÖDEME - TEŞEKKÜRLER" benzeri geçmiş dönem borç kapatma satırları "payment"; işyeri/ürün iadesi "refund"; üyelik/yıllık kart/komisyon/BSMV gibi ücretler "fee"; akdi/gecikme faizi "interest"; nakit çekim/avans "cash_advance"; güvenle ayıramadığın satır "unknown". Ödeme ve iadeleri ASLA purchase olarak sınıflandırma. Her purchase/fee/interest/cash_advance satırının category alanına, işyeri adına bakarak (ör. "STARBUCKS" -> kafe, "SHELL"/"OPET" -> yakıt, "MIGROS"/"A101" -> market, "NETFLIX"/"SPOTIFY" -> abonelik, "TURKCELL" -> telefon, "TRENDYOL"/"HEPSIBURADA" -> alışveriş, eczane -> sağlık, kart aidatı/BSMV/faiz -> banka/kart ücretleri) prompt sonunda verilen KATEGORİ LİSTESİNDEN en uygun adı BİREBİR yaz; listede uygun olan yoksa veya işyerini tanımıyorsan null bırak. payment ve refund satırlarında category null olsun. Satır amount değerlerini işaret kullanmadan pozitif sayı döndür; yön transactionType ile belirlenir. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz. Ekstreyi veren bankanın adını HEM cardStatement.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz (kredi kartı ekstresinde de "kişi/firma" tarafı bankadır).
 - documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur; counterpartyName alanına SATICI (invoiceDetails.sellerName ile birebir aynı) adını yaz — alıcı değil.
 - documentType "makbuz_fis" ise lineItems alanını doldur (varsa); counterpartyName alanına fişi/makbuzu düzenleyen İŞLETMENİN (market, mağaza, restoran vb. — fişin başlığında/kaşesinde geçen ad) adını yaz, alıcı/müşteri değil.
 - documentType "banka_dekontu" ise receiptDetails alanını doldur: bankName dekontu düzenleyen banka; senderName/senderIban parayı GÖNDEREN (hesabından çıkan) taraf; recipientName/recipientIban parayı ALAN taraf; transferType havale/eft/fast (belirtilmemişse "diger"); referenceNo dekontun referans/işlem/sıra numarası; description gönderim açıklaması; fee varsa işlem masrafı (ana para biriminde); transactionDateTime işlem tarihi ve saati (ISO 8601, saat yoksa yalnızca tarih). totalAmount gönderilen tutardır (masraf HARİÇ). direction: dekont gerçekleşmiş bir para hareketidir; belgeyi tarayan kullanıcının parayı GÖNDEREN taraf olduğu varsayılır ve direction "expense" olur; kullanıcının parayı ALDIĞI belli ise (alıcı olarak kendi adı/IBAN'ı görünüyorsa) "income". Hesaplar arası kendi hesapları arasındaki transferde "transfer". counterpartyName karşı tarafın adıdır (gönderen değil alıcı; kullanıcı alıcıysa gönderen). Dekont bir borç DEĞİLDİR: dueDate'i null bırak ve issueDate'e işlem tarihini yaz. Bu bir dekonttur, makbuz/fiş veya fatura ile karıştırma: "gönderen", "alıcı", "IBAN", "EFT/Havale/FAST", "referans no" ibareleri dekonta işaret eder.
@@ -295,7 +298,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // Tek bir Gemini generateContent çağrısını yürütür; timeout, HTTP hata, boş çıktı ve
 // bozuk JSON durumlarında fırlatır. runProcessing bunu önce primary sonra (gerekirse)
 // fallback modeliyle çağırır — bkz. GEMINI_FALLBACK_MODEL notu yukarıda.
-async function callGemini(model: string, mimeType: string, base64Data: string): Promise<any> {
+async function callGemini(model: string, mimeType: string, base64Data: string, promptSuffix = ''): Promise<any> {
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => abortController.abort(), GEMINI_TIMEOUT_MS);
   let geminiResponse: Response;
@@ -310,7 +313,7 @@ async function callGemini(model: string, mimeType: string, base64Data: string): 
           contents: [
             {
               parts: [
-                { text: PROMPT },
+                { text: PROMPT + promptSuffix },
                 { inline_data: { mime_type: mimeType, data: base64Data } },
               ],
             },
@@ -370,6 +373,34 @@ interface LineItemRow {
   tax_minor: number | null;
   amount_minor: number;
   remaining_minor: number | null;
+  suggested_category_id?: string | null;
+}
+
+type CategoryRef = { id: string; name: string };
+
+const normalizeCategoryName = (s: string) => s.trim().toLocaleLowerCase('tr-TR');
+
+// Modelin serbest metin kategori adını workspace'in MEVCUT kategorilerinden biriyle eşler:
+// önce birebir, sonra kısmi (biri diğerini içeriyorsa). Eşleşme yoksa null — yeni
+// kategori burada asla oluşturulmaz.
+function matchCategoryId(name: unknown, categories: CategoryRef[]): string | null {
+  if (typeof name !== 'string' || !name.trim() || categories.length === 0) return null;
+  const target = normalizeCategoryName(name);
+  const exact = categories.find((c) => normalizeCategoryName(c.name) === target);
+  if (exact) return exact.id;
+  const partial = categories.find((c) => {
+    const normalizedName = normalizeCategoryName(c.name);
+    return normalizedName.includes(target) || target.includes(normalizedName);
+  });
+  return partial?.id ?? null;
+}
+
+// Ekstre satırlarını kategorize edebilmesi için modele workspace'in gider kategorileri
+// verilir; model id değil, bu listeden birebir bir ad döndürür.
+function buildCategoryPrompt(categories: CategoryRef[]): string {
+  if (categories.length === 0) return '';
+  const list = categories.map((c) => `- ${c.name}`).join('\n');
+  return `\n\nKATEGORİ LİSTESİ (kredi kartı ekstresi satırlarının category alanı yalnızca bunlardan biri olabilir):\n${list}`;
 }
 
 const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' };
@@ -528,6 +559,17 @@ Deno.serve(async (req: Request) => {
     }
     const base64 = arrayBufferToBase64(arrayBuffer);
 
+    // Gider kategorileri hem ekstre satırı kategorizasyonu (PROMPT eki) hem de belge geneli
+    // suggestedCategory eşleştirmesi için bir kez okunur. Okunamazsa tarama bozulmaz —
+    // yalnızca kategori önerisi gelmez.
+    const { data: expenseCategoryRows } = await adminClient
+      .from('categories')
+      .select('id, name')
+      .eq('workspace_id', document.workspace_id)
+      .eq('kind', 'expense');
+    const expenseCategories: CategoryRef[] = expenseCategoryRows ?? [];
+    const categoryPrompt = buildCategoryPrompt(expenseCategories);
+
     // Önce ucuz primary model denenir; yalnızca katı bir hatayla (HTTP hatası, boş çıktı,
     // bozuk JSON) başarısız olursa tek seferlik pahalı fallback modeline geçilir. Düşük
     // confidence gibi "yumuşak" sinyaller bilinçli olarak tetikleyici değildir — bkz.
@@ -535,14 +577,14 @@ Deno.serve(async (req: Request) => {
     let parsed: any;
     let modelUsed = GEMINI_MODEL;
     try {
-      parsed = await callGemini(GEMINI_MODEL, document.mime_type, base64);
+      parsed = await callGemini(GEMINI_MODEL, document.mime_type, base64, categoryPrompt);
     } catch (primaryError) {
       console.warn(
         `Primary model (${GEMINI_MODEL}) başarısız, fallback deneniyor (${GEMINI_FALLBACK_MODEL}):`,
         primaryError instanceof Error ? primaryError.message : primaryError
       );
       modelUsed = GEMINI_FALLBACK_MODEL;
-      parsed = await callGemini(GEMINI_FALLBACK_MODEL, document.mime_type, base64);
+      parsed = await callGemini(GEMINI_FALLBACK_MODEL, document.mime_type, base64, categoryPrompt);
     }
 
     // Toplam tutar iki bağımsız yoldan elde edilir: modelin verdiği ondalık sayı ve
@@ -645,6 +687,7 @@ Deno.serve(async (req: Request) => {
         const amountMinor = toMinor(item.amount);
         if (amountMinor === null) return;
         const transactionType = typeof item.transactionType === 'string' ? item.transactionType : 'unknown';
+        const categorizable = transactionType !== 'payment' && transactionType !== 'refund';
         const kindByType: Record<string, LineItemRow['kind']> = {
           purchase: 'card_purchase',
           payment: 'card_payment',
@@ -666,6 +709,7 @@ Deno.serve(async (req: Request) => {
           tax_minor: null,
           amount_minor: Math.abs(amountMinor),
           remaining_minor: null,
+          suggested_category_id: categorizable ? matchCategoryId(item.category, expenseCategories) : null,
         });
       });
     }
@@ -751,24 +795,15 @@ Deno.serve(async (req: Request) => {
         : parsed.direction === 'receivable' || parsed.direction === 'income'
           ? 'income'
           : null;
-    if (parsed.suggestedCategory && categoryKind) {
-      const { data: categories } = await adminClient
+    if (parsed.suggestedCategory && categoryKind === 'expense') {
+      suggestedCategoryId = matchCategoryId(parsed.suggestedCategory, expenseCategories);
+    } else if (parsed.suggestedCategory && categoryKind === 'income') {
+      const { data: incomeCategories } = await adminClient
         .from('categories')
         .select('id, name')
         .eq('workspace_id', document.workspace_id)
-        .eq('kind', categoryKind);
-      if (categories?.length) {
-        const normalize = (s: string) => s.trim().toLocaleLowerCase('tr-TR');
-        const target = normalize(parsed.suggestedCategory);
-        const exact = categories.find((c) => normalize(c.name) === target);
-        const partial =
-          exact ??
-          categories.find((c) => {
-            const normalizedName = normalize(c.name);
-            return normalizedName.includes(target) || target.includes(normalizedName);
-          });
-        suggestedCategoryId = partial?.id ?? null;
-      }
+        .eq('kind', 'income');
+      suggestedCategoryId = matchCategoryId(parsed.suggestedCategory, incomeCategories ?? []);
     }
 
     // Ham belge saklanmayacaksa önce Storage'dan kaldırılır. Bu tamamlanmadan durumun

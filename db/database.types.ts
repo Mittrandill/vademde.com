@@ -314,6 +314,7 @@ export type Database = {
           quantity: number | null
           remaining_minor: number | null
           sort_order: number
+          suggested_category_id: string | null
           tax_minor: number | null
           unit_price_minor: number | null
           workspace_id: string
@@ -329,6 +330,7 @@ export type Database = {
           quantity?: number | null
           remaining_minor?: number | null
           sort_order?: number
+          suggested_category_id?: string | null
           tax_minor?: number | null
           unit_price_minor?: number | null
           workspace_id: string
@@ -344,6 +346,7 @@ export type Database = {
           quantity?: number | null
           remaining_minor?: number | null
           sort_order?: number
+          suggested_category_id?: string | null
           tax_minor?: number | null
           unit_price_minor?: number | null
           workspace_id?: string
