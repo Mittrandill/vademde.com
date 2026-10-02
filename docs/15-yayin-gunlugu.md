@@ -12,7 +12,7 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | (sıradaki) | `eas build --no-wait --auto-submit` ile alınacak | 2026-10-02 |
+| iOS | build 40 | `eas build --no-wait --auto-submit` ile alındı (build ID `c8bb89b4-29c3-4df4-8b65-4def9480f779`, commit `9f2eabe`); submission `b5ba6550-96fe-488f-a1ec-4efaa8921ac3` planlandı. **1.0.5 için bu build seçilmeli** | 2026-10-02 |
 
 Build 39 önce 1.0.4 numarasıyla alındı; 1.0.4 (build 38) zaten yayında olduğu için App Store
 gönderimi reddedilecekti, build `81ac7c0f-d8d9-41f1-9c00-fba0298918b8` tamamlanmadan
