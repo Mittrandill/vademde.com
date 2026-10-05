@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
-import { Card, Divider, Pressable, ProgressRing, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
-import { Amount, type AmountDirection } from '@/components/finance/Amount';
+import { Card, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Amount } from '@/components/finance/Amount';
 import { CalendarMonthGrid } from '@/components/finance/CalendarMonthGrid';
 import { CalendarWeekStrip } from '@/components/finance/CalendarWeekStrip';
 import { CalendarAgendaList } from '@/components/finance/CalendarAgendaList';
@@ -320,100 +319,44 @@ function DaySelectionDetail({
   );
 }
 
-const DAY_SUMMARY_RING_SIZE = 52;
-const DAY_SUMMARY_RING_STROKE = 6;
-
 interface DaySummaryCardProps {
   payableMinor: number;
   receivableMinor: number;
   netMinor: number;
 }
 
-// components/finance/IncomeExpenseAnalysis.tsx'teki halka+ikon+tutar üçlüsüyle aynı görsel
-// dil (docs/08-tasarim-sistemi.md — tek bir düz metin satırı yerine, uygulama genelinde
-// zaten kurulu olan bu desen tekrar kullanılır). Borç kırmızı değildir — kırmızı yalnızca
-// gecikme anlamı taşır (bkz. ObligationSummaryCard'daki aynı not); bu yüzden ÖDENECEK nötr,
-// TAHSİL EDİLECEK yeşil renktedir.
+// design Takvim.html: seçili gün özeti — halka yerine üç sütunlu mono özet. Ödenecek tutar
+// nötr (kırmızı yalnızca gecikme anlamı taşır), tahsil ve pozitif net receivable renginde.
 function DaySummaryCard({ payableMinor, receivableMinor, netMinor }: DaySummaryCardProps) {
   const theme = useTheme();
-  const volume = payableMinor + receivableMinor;
-  const share = (value: number) => (volume > 0 ? Math.abs(value) / volume : 0);
+  const columns: { label: string; sign: string; minor: number; color: string }[] = [
+    { label: 'Ödenecek', sign: '', minor: payableMinor, color: theme.colors.textPrimary },
+    { label: 'Tahsil', sign: '', minor: receivableMinor, color: theme.colors.receivable },
+    {
+      label: 'Net',
+      sign: netMinor >= 0 ? '+' : '−',
+      minor: Math.abs(netMinor),
+      color: netMinor >= 0 ? theme.colors.receivable : theme.colors.textPrimary,
+    },
+  ];
 
   return (
-    <Card>
-      <Row align="stretch">
-        <DayMetricColumn
-          label="ÖDENECEK"
-          amountMinor={payableMinor}
-          direction="payable"
-          progress={share(payableMinor)}
-          color={theme.colors.textSecondary}
-          icon="arrow-down-circle"
-        />
-        <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.xs }} />
-        <DayMetricColumn
-          label="TAHSİL EDİLECEK"
-          amountMinor={receivableMinor}
-          direction="receivable"
-          progress={share(receivableMinor)}
-          color={theme.colors.success}
-          icon="arrow-up-circle"
-        />
-        <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.xs }} />
-        <DayMetricColumn
-          label="NET"
-          amountMinor={Math.abs(netMinor)}
-          direction={netMinor >= 0 ? 'receivable' : 'payable'}
-          progress={share(netMinor)}
-          color={netMinor >= 0 ? theme.colors.success : theme.colors.textSecondary}
-          icon={netMinor >= 0 ? 'trending-up' : 'trending-down'}
-        />
-      </Row>
-    </Card>
-  );
-}
-
-interface DayMetricColumnProps {
-  label: string;
-  amountMinor: number;
-  direction: AmountDirection;
-  progress: number;
-  color: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}
-
-function DayMetricColumn({ label, amountMinor, direction, progress, color, icon }: DayMetricColumnProps) {
-  const theme = useTheme();
-  // "TAHSİL EDİLECEK" iki satıra sarıyor, "ÖDENECEK"/"NET" tek satır kalıyor — sabit
-  // yükseklikli (2 satırlık) bir kutuya ortalanmadan halkalar sütunlar arasında kayıyordu.
-  const labelHeight = (theme.typography.caption.lineHeight ?? 18) * 2;
-
-  return (
-    <Stack gap="xs" align="center" style={{ flex: 1 }}>
-      <View style={{ height: labelHeight, justifyContent: 'center' }}>
-        <Text variant="caption" color="textSecondary" numberOfLines={2} style={{ textAlign: 'center' }}>
-          {label}
-        </Text>
-      </View>
-      <ProgressRing
-        size={DAY_SUMMARY_RING_SIZE}
-        strokeWidth={DAY_SUMMARY_RING_STROKE}
-        progress={progress}
-        color={color}
-        trackColor={withAlpha(color, 0.18)}
-        cap
-      >
-        <Ionicons name={icon} size={18} color={color} />
-      </ProgressRing>
-      <Amount
-        amountMinor={amountMinor}
-        direction={direction}
-        variant="cardTitle"
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.6}
-        style={{ alignSelf: 'stretch', textAlign: 'center' }}
-      />
-    </Stack>
+    <Row style={{ justifyContent: 'space-between' }}>
+      {columns.map((c) => (
+        <Stack key={c.label} gap="xxs">
+          <Text variant="label" color="textSecondary">
+            {c.label}
+          </Text>
+          <Amount
+            amountMinor={c.minor}
+            variant="cardTitle"
+            numberOfLines={1}
+            style={{ color: c.color }}
+            direction={undefined}
+            prefix={c.sign}
+          />
+        </Stack>
+      ))}
+    </Row>
   );
 }

@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Pressable, Row, Stack, Text } from '@/components/primitives';
 import { getMonthGridWeeks, isSameDay, isSameMonth, toDateKey } from '@/utils/calendar';
 import type { ObligationDueItem } from '@/features/obligations/api';
 
@@ -32,36 +32,40 @@ export function CalendarMonthGrid({
   const today = new Date();
 
   return (
-    <Card>
+    <View>
       <Stack gap="md">
         <Row align="center">
           <Pressable
             onPress={onPrevMonth}
             hitSlop={12}
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: theme.radius.input,
+              width: theme.touchTarget.minimum,
+              height: theme.touchTarget.minimum,
+              borderRadius: 14,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: theme.colors.surfaceElevated,
+              backgroundColor: theme.colors.surfacePrimary,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
             }}
           >
             <Ionicons name="chevron-back" size={18} color={theme.colors.textPrimary} />
           </Pressable>
-          <Text variant="sectionTitle" style={{ flex: 1, textAlign: 'center' }}>
+          <Text variant="cardTitle" style={{ flex: 1, textAlign: 'center', fontSize: 17 }}>
             {monthLabelFormatter.format(monthDate)}
           </Text>
           <Pressable
             onPress={onNextMonth}
             hitSlop={12}
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: theme.radius.input,
+              width: theme.touchTarget.minimum,
+              height: theme.touchTarget.minimum,
+              borderRadius: 14,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: theme.colors.surfaceElevated,
+              backgroundColor: theme.colors.surfacePrimary,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
             }}
           >
             <Ionicons name="chevron-forward" size={18} color={theme.colors.textPrimary} />
@@ -70,18 +74,11 @@ export function CalendarMonthGrid({
 
         <Row>
           {WEEKDAY_LABELS.map((label) => (
-            <Text
-              key={label}
-              variant="caption"
-              color="textSecondary"
-              style={{ flex: 1, textAlign: 'center', fontWeight: '600' }}
-            >
+            <Text key={label} variant="label" color="textSecondary" style={{ flex: 1, textAlign: 'center' }}>
               {label}
             </Text>
           ))}
         </Row>
-
-        <Divider />
 
         <Stack gap="xs">
           {weeks.map((week, weekIndex) => (
@@ -104,19 +101,18 @@ export function CalendarMonthGrid({
                         borderRadius: theme.radius.input,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: isSelected ? theme.colors.brandPrimary : 'transparent',
-                        borderWidth: hasStrong ? 2 : 0,
-                        borderColor: theme.colors.accentViolet,
+                        backgroundColor: isSelected ? theme.colors.action : 'transparent',
+                        borderWidth: hasStrong || (isToday && !isSelected) ? 1.5 : 0,
+                        borderColor: hasStrong ? theme.colors.mutedControl : theme.colors.textPrimary,
                       }}
                     >
                       <Text
                         variant="body"
+                        tabular
                         style={{
                           color: isSelected
-                            ? theme.colors.brandPrimaryText
-                            : isToday
-                              ? theme.colors.brandPrimary
-                              : inCurrentMonth
+                            ? theme.colors.onAction
+                            : inCurrentMonth
                                 ? theme.colors.textPrimary
                                 : theme.colors.textSecondary,
                           fontWeight: isToday || isSelected ? '700' : '400',
@@ -133,7 +129,7 @@ export function CalendarMonthGrid({
                                 width: 5,
                                 height: 5,
                                 borderRadius: 3,
-                                backgroundColor: isSelected ? theme.colors.brandPrimaryText : theme.colors.danger,
+                                backgroundColor: isSelected ? theme.colors.onAction : theme.colors.payable,
                               }}
                             />
                           ) : null}
@@ -143,7 +139,7 @@ export function CalendarMonthGrid({
                                 width: 5,
                                 height: 5,
                                 borderRadius: 3,
-                                backgroundColor: isSelected ? theme.colors.brandPrimaryText : theme.colors.success,
+                                backgroundColor: isSelected ? theme.colors.onAction : theme.colors.receivable,
                               }}
                             />
                           ) : null}
@@ -161,20 +157,20 @@ export function CalendarMonthGrid({
 
         <Row gap="md" align="center">
           <Row gap="xxs" align="center">
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.danger }} />
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.payable }} />
             <Text variant="caption" color="textSecondary">
               Ödenecek
             </Text>
           </Row>
           <Row gap="xxs" align="center">
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.success }} />
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.receivable }} />
             <Text variant="caption" color="textSecondary">
               Tahsil Edilecek
             </Text>
           </Row>
           <Row gap="xxs" align="center">
             <View
-              style={{ width: 8, height: 8, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.accentViolet }}
+              style={{ width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: theme.colors.mutedControl }}
             />
             <Text variant="caption" color="textSecondary">
               Çek / Senet
@@ -182,6 +178,6 @@ export function CalendarMonthGrid({
           </Row>
         </Row>
       </Stack>
-    </Card>
+    </View>
   );
 }

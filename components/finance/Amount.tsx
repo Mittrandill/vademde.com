@@ -17,18 +17,20 @@ export interface AmountProps extends Omit<TextProps, 'children' | 'color'> {
    * Verilmezse (varsayılan) mevcut fiat davranışı korunur — geriye dönük uyumlu.
    */
   valueUnitType?: ValueUnitType;
+  /** Yönden türetilen işareti geçersiz kılar (ör. net için '+' / '−'). */
+  prefix?: string;
 }
 
 const PREFIX: Partial<Record<AmountDirection, string>> = {
   income: '+',
-  expense: '-',
+  expense: '−',
   transfer: '⇄',
 };
 
 const COLOR: Record<AmountDirection, keyof ThemeColors> = {
-  income: 'success',
+  income: 'receivable',
   expense: 'textPrimary',
-  receivable: 'success',
+  receivable: 'receivable',
   payable: 'textPrimary',
   transfer: 'textSecondary',
 };
@@ -39,12 +41,13 @@ export function Amount({
   direction,
   overdue,
   valueUnitType,
+  prefix: prefixOverride,
   variant = 'body',
   style,
   ...rest
 }: AmountProps) {
   const color = overdue ? 'danger' : direction ? COLOR[direction] : 'textPrimary';
-  const prefix = direction ? (PREFIX[direction] ?? '') : '';
+  const prefix = prefixOverride ?? (direction ? (PREFIX[direction] ?? '') : '');
   const formatted =
     valueUnitType === 'kiymetli_maden'
       ? formatValueUnitAmount(amountMinor, currencyCode)
