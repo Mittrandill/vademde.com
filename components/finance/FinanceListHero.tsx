@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/colors';
-import { Card, Stack, Text } from '@/components/primitives';
+import { Stack, Text } from '@/components/primitives';
 
 export interface FinanceListHeroMetric {
   label: string;
@@ -21,8 +20,17 @@ export interface FinanceListHeroProps {
   metrics: FinanceListHeroMetric[];
 }
 
-// Kişiler ekranında onaylanan liste hero'sunun tek kaynağı. Tüm finans liste ekranları
-// aynı ışımayı, başlık/tutar aralığını ve 2x2 metrik ızgarasını bu bileşenden alır.
+// HANDOFF §2 ölçek kuralı: tam kısım 7 karakteri aşarsa font küçülür (tek satır).
+const BASE_SIZE = 52;
+const FULL_PART_LIMIT = 7;
+
+function splitAmountText(text: string) {
+  const match = /^(.*?)(,\d{1,2})(\D*)$/.exec(text);
+  return match ? { whole: match[1], fraction: match[2] + match[3] } : { whole: text, fraction: '' };
+}
+
+// Liste ekranları hero'su (design Krediler/VadeliKayitlar): kartsız etiket + büyük tutar +
+// ince çizgiyle ayrılmış metrik satırı. Tüm finans liste ekranları bu bileşeni kullanır.
 export function FinanceListHero({
   label,
   description,
@@ -31,122 +39,82 @@ export function FinanceListHero({
   metrics,
 }: FinanceListHeroProps) {
   const theme = useTheme();
+  const { whole, fraction } = splitAmountText(amountText);
+  const size = Math.floor(BASE_SIZE * Math.min(1, FULL_PART_LIMIT / Math.max(whole.length, 1)));
+  const shown = metrics.slice(0, 4);
+  const columns = shown.length > 3 ? 2 : Math.max(shown.length, 1);
 
   return (
-    <Card variant="hero" style={{ paddingBottom: 0, overflow: 'hidden' }}>
-      <Svg
-        viewBox="0 0 1000 1000"
-        preserveAspectRatio="none"
-        pointerEvents="none"
-        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-      >
-        <Defs>
-          <RadialGradient
-            id="financeListHeroGlow"
-            gradientUnits="userSpaceOnUse"
-            cx={1000}
-            cy={0}
-            fx={1000}
-            fy={0}
-            rx={880}
-            ry={600}
-          >
-            <Stop
-              offset="0%"
-              stopColor={theme.colors.brandPrimary}
-              stopOpacity={theme.scheme === 'dark' ? 0.18 : 0.126}
-            />
-            <Stop
-              offset="34%"
-              stopColor={theme.colors.brandPrimary}
-              stopOpacity={theme.scheme === 'dark' ? 0.099 : 0.0675}
-            />
-            <Stop
-              offset="70%"
-              stopColor={theme.colors.brandPrimary}
-              stopOpacity={theme.scheme === 'dark' ? 0.0315 : 0.0225}
-            />
-            <Stop offset="100%" stopColor={theme.colors.brandPrimary} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#financeListHeroGlow)" />
-      </Svg>
+    <Stack gap="md">
+      <Stack gap="xxs">
+        <Text variant="label" color="textSecondary">
+          {label}
+        </Text>
+        <Text variant="caption" color="textSecondary">
+          {description}
+        </Text>
+      </Stack>
 
-      <Stack gap="xl" style={{ zIndex: 1 }}>
-        <Stack gap="xs">
-          <Text variant="cardTitle" color="textSecondary" style={{ letterSpacing: 1.8, fontSize: 14 }}>
-            {label}
-          </Text>
-          <Text variant="body" color="textSecondary">
-            {description}
-          </Text>
-        </Stack>
-
+      <View accessible accessibilityLabel={amountText} style={{ flexDirection: 'row', alignItems: 'baseline' }}>
         <Text
           variant="displayBalance"
           color={amountColor}
-          tabular
           numberOfLines={1}
           adjustsFontSizeToFit
-          minimumFontScale={0.62}
+          style={{ fontSize: size, lineHeight: Math.round(size * 1.05), flexShrink: 1 }}
         >
-          {amountText}
+          {whole}
         </Text>
+        {fraction ? (
+          <Text
+            variant="displayBalance"
+            color="textSecondary"
+            style={{ fontSize: Math.round(size / 2), lineHeight: Math.round(size * 0.55), fontWeight: '600' }}
+          >
+            {fraction}
+          </Text>
+        ) : null}
+      </View>
 
-        <View
-          style={{
-            marginHorizontal: -theme.spacing.lg,
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-          }}
-        >
-          {metrics.slice(0, 4).map((metric, index) => (
-            <FinanceListHeroMetricCell key={`${metric.label}-${index}`} metric={metric} index={index} />
-          ))}
-        </View>
-      </Stack>
-    </Card>
-  );
-}
-
-function FinanceListHeroMetricCell({ metric, index }: { metric: FinanceListHeroMetric; index: number }) {
-  const theme = useTheme();
-  const isLeft = index % 2 === 0;
-  const isTop = index < 2;
-
-  return (
-    <Stack
-      gap="xs"
-      style={{
-        width: '50%',
-        minHeight: 118,
-        justifyContent: 'center',
-        paddingHorizontal: theme.spacing.lg,
-        paddingVertical: theme.spacing.md,
-        borderRightWidth: isLeft ? 1 : 0,
-        borderRightColor: theme.colors.border,
-        borderBottomWidth: isTop ? 1 : 0,
-        borderBottomColor: theme.colors.border,
-      }}
-    >
-      <Text variant="caption" color="textSecondary" style={{ letterSpacing: 1.2, fontWeight: '600' }}>
-        {metric.label}
-      </Text>
-      <Text
-        variant="cardTitle"
-        color={metric.valueColor}
-        tabular
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.68}
+      <View
+        style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          borderTopWidth: 1,
+          borderBottomWidth: 1,
+          borderColor: theme.colors.border,
+          paddingVertical: theme.spacing.xs,
+        }}
       >
-        {metric.value}
-      </Text>
-      <Text variant="caption" color="textSecondary" numberOfLines={1}>
-        {metric.caption}
-      </Text>
+        {shown.map((metric, index) => (
+          <View
+            key={`${metric.label}-${index}`}
+            style={{
+              width: `${100 / columns}%`,
+              gap: 4,
+              paddingVertical: theme.spacing.xs,
+              paddingRight: theme.spacing.xs,
+            }}
+          >
+            <Text variant="label" color="textSecondary" numberOfLines={1}>
+              {metric.label}
+            </Text>
+            <Text
+              variant="cardTitle"
+              color={metric.valueColor}
+              tabular
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.68}
+            >
+              {metric.value}
+            </Text>
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {metric.caption}
+            </Text>
+          </View>
+        ))}
+      </View>
     </Stack>
   );
 }

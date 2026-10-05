@@ -273,11 +273,11 @@ export default function ObligationsByTypeScreen() {
             label={showsPayable ? 'TOPLAM BORÇ' : 'TOPLAM ALACAK'}
             description={`${title} için aktif kayıtların kalan toplamı`}
             amountText={formatMinorAmount(showsPayable ? heroPayableMinor : heroReceivableMinor)}
-            amountColor={showsPayable ? 'danger' : 'success'}
+            amountColor={showsPayable ? 'textPrimary' : 'receivable'}
             metrics={[
               { label: 'TOPLAM KAYIT', value: totalTypeCount, caption: `Tüm ${typeLabel.toLocaleLowerCase('tr-TR')} kayıtları` },
-              { label: 'ALACAĞINIZ', value: formatMinorAmount(heroReceivableMinor), caption: 'Tahsil edilecek', valueColor: 'success' },
-              { label: 'BORCUNUZ', value: formatMinorAmount(heroPayableMinor), caption: 'Ödenecek', valueColor: 'danger' },
+              { label: 'ALACAĞINIZ', value: formatMinorAmount(heroReceivableMinor), caption: 'Tahsil edilecek', valueColor: 'receivable' },
+              { label: 'BORCUNUZ', value: formatMinorAmount(heroPayableMinor), caption: 'Ödenecek' },
               { label: 'GECİKMİŞ', value: overdueCount, caption: 'Vadesi geçen', valueColor: overdueCount > 0 ? 'danger' : undefined },
             ]}
           />
@@ -389,10 +389,9 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
         onLongPress={() => setSheetOpen(true)}
         disabled={deleting}
         style={{
-          minHeight: 86,
+          minHeight: 72,
           opacity: deleting ? 0.5 : 1,
-          paddingHorizontal: theme.spacing.lg,
-          paddingVertical: theme.spacing.md,
+          paddingVertical: theme.spacing.sm,
           flexDirection: 'row',
           alignItems: 'center',
           gap: theme.spacing.md,
@@ -422,12 +421,13 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.68}
-          style={{ maxWidth: '34%', color: isPayable ? theme.colors.danger : theme.colors.success }}
+          overdue={item.status === 'gecikti'}
+          style={{ maxWidth: '34%' }}
         />
         {deleting ? (
           <ActivityIndicator color={theme.colors.textSecondary} />
         ) : (
-          <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.mutedControl} />
         )}
       </Pressable>
 
