@@ -46,7 +46,7 @@ export function AiInsightsCard() {
         <Text variant="cardTitle">{insights.length} öneri</Text>
         {savingMinor > 0 ? (
           <Text variant="caption" color="textSecondary">
-            Ayda {formatMinorAmount(savingMinor).replace(/,00$/, '')}'ye kadar tasarruf
+            Ayda {formatMinorAmount(savingMinor).replace(/,00$/, '')} tasarruf edebilirsin
           </Text>
         ) : null}
       </View>

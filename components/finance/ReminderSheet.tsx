@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -39,22 +39,21 @@ export function ReminderSheet({ visible, onClose, workspaceId, counterparty, net
   const [tone, setTone] = useState<ReminderTone>(overdue ? 'gecikti' : 'nazik');
   const [channel, setChannel] = useState<ReminderChannel>('whatsapp');
   const [attach, setAttach] = useState(false);
-  const [message, setMessage] = useState('');
-  const [edited, setEdited] = useState(false);
+  const [customMessage, setCustomMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Ton/ek değişince, kullanıcı metni elle düzenlemediyse şablon yeniden yazılır.
-  useEffect(() => {
-    if (!visible || edited) return;
-    setMessage(
+  // Şablon ton/ek değişince yeniden üretilir; kullanıcı elle düzenlediyse onun metni korunur.
+  const templateMessage = useMemo(
+    () =>
       buildReminderMessage(tone, {
         name: counterparty.name,
         amountMinor: Math.abs(netMinor),
         dueDate,
         attachStatement: attach,
-      })
-    );
-  }, [visible, tone, attach, edited, counterparty.name, netMinor, dueDate]);
+      }),
+    [tone, attach, counterparty.name, netMinor, dueDate]
+  );
+  const message = customMessage ?? templateMessage;
 
   async function send() {
     setBusy(true);
@@ -91,7 +90,7 @@ export function ReminderSheet({ visible, onClose, workspaceId, counterparty, net
             tabs={REMINDER_TONES}
             activeKey={tone}
             onChange={(k) => {
-              setEdited(false);
+              setCustomMessage(null);
               setTone(k as ReminderTone);
             }}
           />
@@ -99,10 +98,7 @@ export function ReminderSheet({ visible, onClose, workspaceId, counterparty, net
 
         <TextInput
           value={message}
-          onChangeText={(t) => {
-            setEdited(true);
-            setMessage(t);
-          }}
+          onChangeText={setCustomMessage}
           multiline
           maxFontSizeMultiplier={MAX_FONT_SCALE}
           accessibilityLabel="Mesaj metni"

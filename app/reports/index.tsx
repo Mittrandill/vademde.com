@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, Share, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -145,6 +145,25 @@ function rangeLabel(period: Period, custom: CustomRange | null): string {
   }
   if (period === 'year') return `${now.getFullYear()} yılı`;
   return 'Tüm zamanlar';
+}
+
+// Bölüm başlangıç konumunu ölçen sarmalayıcı (bölüm atlama çipleri için).
+function Anchor({
+  id,
+  onMeasure,
+  gap = 'sm',
+  children,
+}: {
+  id: SectionKey;
+  onMeasure: (key: SectionKey, y: number) => void;
+  gap?: 'sm' | 'md';
+  children: React.ReactNode;
+}) {
+  return (
+    <Stack gap={gap} onLayout={(e) => onMeasure(id, e.nativeEvent.layout.y)}>
+      {children}
+    </Stack>
+  );
 }
 
 // Daha Fazla > Analiz'den açılan modal bir ekran (bkz. app/(tabs)/daha-fazla.tsx).
@@ -365,16 +384,15 @@ export default function ReportsScreen() {
     else router.replace('/(tabs)/daha-fazla');
   }
 
+  const measure = useCallback((key: SectionKey, y: number) => {
+    offsets.current[key] = y;
+  }, []);
+
   function jumpTo(key: SectionKey) {
     setSection(key);
     scrollRef.current?.scrollTo({ y: Math.max(0, (offsets.current[key] ?? 0) - 8), animated: true });
   }
 
-  const mark = (key: SectionKey) => ({
-    onLayout: (e: { nativeEvent: { layout: { y: number } } }) => {
-      offsets.current[key] = e.nativeEvent.layout.y;
-    },
-  });
 
   if (!activeWorkspaceId) {
     return (
@@ -435,7 +453,7 @@ export default function ReportsScreen() {
         ref={scrollRef}
         contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.massive, gap: theme.spacing.xl }}
       >
-        <Stack gap="md" {...mark('ozet')}>
+        <Anchor id="ozet" onMeasure={measure} gap="md">
           {loading ? (
             <Skeleton height={180} borderRadius={theme.radius.widget} />
           ) : (
@@ -498,9 +516,9 @@ export default function ReportsScreen() {
               ) : null}
             </>
           )}
-        </Stack>
+        </Anchor>
 
-        <Stack gap="sm" {...mark('kategoriler')}>
+        <Anchor id="kategoriler" onMeasure={measure}>
           <SectionTitle
             right={
               <ScrollableTabs
@@ -521,14 +539,14 @@ export default function ReportsScreen() {
             emptyLabel="Bu dönemde kayıt yok."
             goodWhenDown={categoryDirection === 'expense'}
           />
-        </Stack>
+        </Anchor>
 
-        <Stack gap="sm" {...mark('kisiler')}>
+        <Anchor id="kisiler" onMeasure={measure}>
           <SectionTitle>Kişi ve firmalar</SectionTitle>
           <CounterpartyRows items={counterpartyQuery.data ?? []} />
-        </Stack>
+        </Anchor>
 
-        <Stack gap="sm" {...mark('borc')}>
+        <Anchor id="borc" onMeasure={measure}>
           <SectionTitle>Borç ve alacak</SectionTitle>
           <KpiRow
             items={[
@@ -554,22 +572,22 @@ export default function ReportsScreen() {
             ]}
           />
           <OverdueObligationsList obligations={overdueItems} />
-        </Stack>
+        </Anchor>
 
-        <Stack gap="sm" {...mark('nakit')}>
+        <Anchor id="nakit" onMeasure={measure}>
           <SectionTitle>Beklenen nakit akışı</SectionTitle>
           <CashFlowRows buckets={cashFlowQuery.data ?? []} />
-        </Stack>
+        </Anchor>
 
-        <Stack gap="sm" {...mark('hesaplar')}>
+        <Anchor id="hesaplar" onMeasure={measure}>
           <SectionTitle>Hesap bakiyeleri</SectionTitle>
           <AccountRows items={accountBalancesQuery.data ?? []} />
-        </Stack>
+        </Anchor>
 
-        <Stack gap="sm" {...mark('kurlar')}>
+        <Anchor id="kurlar" onMeasure={measure}>
           <SectionTitle>Güncel kurlar</SectionTitle>
           <RateRows rates={ratesWithData} ageText={newestRate ? `${formatCacheAge(newestRate)} güncellendi` : null} />
-        </Stack>
+        </Anchor>
       </ScrollView>
 
       <DateRangeSheet
