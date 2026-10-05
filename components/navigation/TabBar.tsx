@@ -5,6 +5,7 @@ import type { BottomTabBarProps } from 'expo-router/js-tabs';
 
 import { useTheme } from '@/theme';
 import { Text } from '@/components/primitives';
+import { useQuickAddStore } from '@/store/quickAddStore';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -34,6 +35,7 @@ const TARA_LIFT = 22;
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const showQuickAdd = useQuickAddStore((s) => s.show);
 
   // Çubuğun üst kenarı eski yüzen çubuğunkiyle aynı yükseklikte kalır (theme.layout.* ile
   // hesaplanan, tara.tsx'in kamera kontrollerini konumlandırdığı değer); altındaki alan
@@ -82,6 +84,9 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               accessibilityLabel="Belge tara"
               accessibilityState={{ selected: focused }}
               onPress={() => navigateTo(route, focused)}
+              // Uzun basış: Hızlı ekle sheet'i (design HizliEkle.html).
+              onLongPress={showQuickAdd}
+              accessibilityHint="Uzun basarak hızlı ekle menüsünü aç"
               style={{ flex: 1, alignItems: 'center', gap: 6, marginTop: -TARA_LIFT }}
             >
               <View

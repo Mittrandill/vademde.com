@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import {
-  ActionSheet,
   EmptyState,
   ListEnd,
   ListSkeleton,
@@ -33,6 +32,7 @@ import { listTransactions, type TransactionWithRelations } from '@/features/tran
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { queryKeys } from '@/services/queryKeys';
+import { useQuickAddStore } from '@/store/quickAddStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 
@@ -126,7 +126,7 @@ export default function HareketlerScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const showQuickAdd = useQuickAddStore((s) => s.show);
   // Krediler sayfasındaki Tarih düğmesiyle aynı: varsayılan en yeni önce (azalan).
   const [sortAscending, setSortAscending] = useState(false);
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE);
@@ -447,7 +447,7 @@ export default function HareketlerScreen() {
             <Ionicons name="search" size={21} color={theme.colors.textPrimary} />
           </Pressable>
           <Pressable
-            onPress={() => setAddSheetOpen(true)}
+            onPress={showQuickAdd}
             accessibilityRole="button"
             accessibilityLabel="Yeni hareket"
             style={{
@@ -598,42 +598,6 @@ export default function HareketlerScreen() {
         year={month.year}
         month={month.month}
         onChange={setMonth}
-      />
-
-      <ActionSheet
-        visible={addSheetOpen}
-        title="Yeni Kayıt"
-        onClose={() => setAddSheetOpen(false)}
-        options={[
-          {
-            key: 'payment',
-            label: 'Ödeme Yap',
-            description: 'Borç/faturayı nakit, havale, kart, çek veya senetle kapat',
-            icon: 'arrow-up-circle-outline',
-            onPress: () => router.push({ pathname: '/payments/new', params: { direction: 'payable' } }),
-          },
-          {
-            key: 'collection',
-            label: 'Tahsilat Al',
-            description: 'Alacağı nakit, havale, kart, çek veya senetle kapat',
-            icon: 'arrow-down-circle-outline',
-            onPress: () => router.push({ pathname: '/payments/new', params: { direction: 'receivable' } }),
-          },
-          {
-            key: 'transaction',
-            label: 'İşlem',
-            description: 'Gerçekleşmiş gelir, gider veya transfer',
-            icon: 'swap-horizontal-outline',
-            onPress: () => router.push('/transactions/new'),
-          },
-          {
-            key: 'obligation',
-            label: 'Borç / Alacak',
-            description: 'Vadeli kayıt: çek, senet, kredi, fatura',
-            icon: 'calendar-outline',
-            onPress: () => router.push('/obligations/new'),
-          },
-        ]}
       />
     </SafeAreaView>
   );
