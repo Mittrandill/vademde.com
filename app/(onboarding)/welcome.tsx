@@ -7,59 +7,51 @@ import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { Button, Pressable, Row, Stack, Text } from '@/components/primitives';
 import {
-  ReviewScene,
-  ScanHeroScene,
-  ScanningScene,
-  TeamScene,
-  TrialScene,
-  type SceneProps,
-} from '@/components/onboarding/scenes';
+  NotificationsIntroScene,
+  ScanIntroScene,
+  TimelineIntroScene,
+  WorkspacesIntroScene,
+  type IntroSceneProps,
+} from '@/components/onboarding/introScenes';
 import { useOnboardingStore } from '@/store/onboardingStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface OnboardingPage {
-  Scene: (props: SceneProps) => React.JSX.Element;
+  Scene: (props: IntroSceneProps) => React.JSX.Element;
   eyebrow: string;
   title: string;
   body: string;
 }
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.2 — kısa değer önerisi ekranları yalnızca ilk açılışta
-// gösterilir. OCR ürünün ana kayıt yöntemidir (docs/00), bu yüzden akış taramayla açılır:
-// tara → okunur → sen onaylarsın; ardından çalışma alanı/ekip ve 7 gün ücretsiz deneme.
-// Son sahne yalnızca teklifi anlatır: satın alma oturum gerektirdiği için fiyatlar ve satın
-// alma, kayıttan sonra açılan paywall'da (app/paywall/index.tsx) RevenueCat fiyatlarıyla sunulur.
+// gösterilir (yeniden tasarım: dört adım). OCR ürünün ana kayıt yöntemidir (docs/00); akış taramayla
+// açılır, vade hattı, bildirimler ve çalışma alanlarıyla sürer. Deneme/fiyat teklifi kayıttan sonra
+// açılan paywall'da (app/paywall/index.tsx) sunulur.
 const PAGES: OnboardingPage[] = [
   {
-    Scene: ScanHeroScene,
+    Scene: ScanIntroScene,
     eyebrow: 'Belge Tara',
     title: 'Fotoğrafını çek, yazmayı unut.',
-    body: 'Çek, senet veya fatura. Tek dokunuşla kamera açılır, gerisini Vademde okur.',
+    body: 'Çek, senet ya da fatura. Vademde tutarı, vadeyi ve karşı tarafı okur; sen yalnızca onaylarsın.',
   },
   {
-    Scene: ScanningScene,
-    eyebrow: 'Akıllı okuma',
-    title: 'Saniyeler içinde okunur.',
-    body: 'Tutar, vade ve karşı taraf kendiliğinden ayrıştırılır. Elle yazmak yok.',
+    Scene: TimelineIntroScene,
+    eyebrow: 'Vade hattı',
+    title: 'Bütün vadeler tek bir hatta.',
+    body: 'Ödeyeceklerin üstte, tahsil edeceklerin altta. Önümüzdeki haftayı tek bakışta gör.',
   },
   {
-    Scene: ReviewScene,
-    eyebrow: 'Senin onayınla',
-    title: 'Okunan her şey önüne gelir.',
-    body: 'Alanları sen görür, gerekirse düzeltir, onaylarsın. Okuma tutmazsa manuel giriş hep açık.',
+    Scene: NotificationsIntroScene,
+    eyebrow: 'Bildirimler',
+    title: 'Gecikmeden önce haber verir.',
+    body: 'Vade yaklaştığında, bakiye yetmeyeceğinde ve çek tahsil günü geldiğinde zamanında bildirim.',
   },
   {
-    Scene: TeamScene,
-    eyebrow: 'Çalışma alanları ve ekip',
-    title: 'Kişisel ve iş, ayrı ayrı.',
-    body: 'Her çalışma alanının verisi tamamen ayrıdır. Ekibini davet et, kimin düzenleyeceğini sen seç.',
-  },
-  {
-    Scene: TrialScene,
-    eyebrow: 'Vademde Plus',
-    title: 'İlk 7 gün bizden.',
-    body: 'Tüm Plus özellikleri açık. Deneme süresince ücret alınmaz.',
+    Scene: WorkspacesIntroScene,
+    eyebrow: 'Çalışma alanları',
+    title: 'Kişisel bütçe ya da bütün ekip.',
+    body: 'Ev bütçeni ve işini ayrı çalışma alanlarında yönet, ekibini rol vererek davet et.',
   },
 ];
 
@@ -126,8 +118,8 @@ export default function WelcomeScreen() {
           >
             <Scene active={page === index} />
             <Stack gap="xs">
-              <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '700', letterSpacing: 1.2 }}>
-                {eyebrow.toLocaleUpperCase('tr-TR')}
+              <Text variant="label" color="textSecondary" tabular accessibilityLabel={`${eyebrow}, ${index + 1}. adım, toplam ${PAGES.length}`}>
+                {String(index + 1).padStart(2, '0')} / {String(PAGES.length).padStart(2, '0')}
               </Text>
               <Text variant="pageTitle">{title}</Text>
               <Text variant="body" color="textSecondary">
@@ -154,17 +146,21 @@ export default function WelcomeScreen() {
                 width: index === page ? 22 : 6,
                 height: 6,
                 borderRadius: theme.radius.pill,
-                backgroundColor: index === page ? theme.colors.brandPrimary : theme.colors.border,
+                backgroundColor: index === page ? theme.colors.textPrimary : theme.colors.border,
               }}
             />
           ))}
         </Row>
-        <Button label={isLastPage ? 'Başla' : 'Devam'} onPress={goNext} />
-        {isLastPage ? (
-          <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-            Deneme teklifi hesabını oluşturduktan sonra sunulur.
+        <Button label={isLastPage ? 'Başla' : 'İleri'} onPress={goNext} />
+        <Pressable
+          accessibilityRole="button"
+          onPress={finish}
+          style={{ minHeight: theme.touchTarget.minimum, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text variant="cardTitle" style={{ fontSize: 14 }}>
+            {isLastPage ? 'Hesabım var' : 'Hesabım var, giriş yap'}
           </Text>
-        ) : null}
+        </Pressable>
       </Stack>
     </SafeAreaView>
   );
