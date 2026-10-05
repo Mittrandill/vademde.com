@@ -105,20 +105,20 @@ function buildReportHtml(input: ReportPdfInput): string {
 <head>
 <meta charset="utf-8" />
 <style>
-  body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1F2126; padding: 32px; }
+  body { font-family: 'Bricolage Grotesque', -apple-system, Helvetica, Arial, sans-serif; color: #111114; padding: 32px; }
   h1 { font-size: 24px; margin-bottom: 2px; }
-  .subtitle { color: #6E6F66; font-size: 12px; margin-bottom: 24px; }
-  h2 { font-size: 15px; margin-top: 28px; margin-bottom: 8px; border-bottom: 1px solid #E2E2DC; padding-bottom: 4px; }
+  .subtitle { color: #5E606A; font-size: 12px; margin-bottom: 24px; }
+  h2 { font-size: 15px; margin-top: 28px; margin-bottom: 8px; border-bottom: 1px solid #DCDEE3; padding-bottom: 4px; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  td { padding: 6px 4px; border-bottom: 1px solid #F0F0EC; }
+  td { padding: 6px 4px; border-bottom: 1px solid #E9EBEE; }
   td.amount { text-align: right; font-variant-numeric: tabular-nums; }
-  td.muted { color: #6E6F66; font-style: italic; }
+  td.muted { color: #5E606A; font-style: italic; }
   .summary-grid { display: flex; gap: 16px; margin-top: 8px; }
-  .summary-cell { flex: 1; border: 1px solid #E2E2DC; border-radius: 10px; padding: 10px 12px; }
-  .summary-label { font-size: 10px; color: #6E6F66; text-transform: uppercase; letter-spacing: 0.04em; }
+  .summary-cell { flex: 1; border: 1px solid #DCDEE3; border-radius: 10px; padding: 10px 12px; }
+  .summary-label { font-size: 10px; color: #5E606A; text-transform: uppercase; letter-spacing: 0.04em; }
   .summary-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
-  .positive { color: #1F8A5C; }
-  .negative { color: #C43D33; }
+  .positive { color: #0F7A52; }
+  .negative { color: #C8361C; }
 </style>
 </head>
 <body>
