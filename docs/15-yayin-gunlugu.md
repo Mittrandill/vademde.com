@@ -8,6 +8,38 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.6 — Hazırlanıyor (2026-10-05)
+
+| Platform | Build | Durum | Gönderim |
+|---|---|---|---|
+| iOS | (build numarası EAS tarafından atanır) | `eas build --platform ios --profile production --no-wait --auto-submit` ile alınır, TestFlight'a gönderilir | 2026-10-05 |
+
+Yeniden tasarım + yeni özellikler. Native değişiklik içerir (`expo-font` eklentisi, `LSApplicationQueriesSchemes`),
+bu yüzden OTA ile gelmez; yeni build ve yeni sürüm numarası gerekir (1.0.5 kapanmadan numara çakışmasın diye 1.0.6).
+
+### Kullanıcıya görünen değişiklikler
+
+`assets/appstore/whats-new-1.0.6.tr.txt` / `.en.txt` içinde.
+
+### Teknik değişiklikler (release notes'a girmez)
+
+- Tasarım: Bricolage Grotesque + IBM Plex Mono, yeni renk token'ları (`design/vademde-redesign/SAPMALAR.md`).
+- Migration'lar (production'a uygulandı, hepsi ekleyici): `ai_insights`, `instrument_status` (+ tetikleyiciler, `mark_instrument_bounced`),
+  `card_installment_purchases`, `cash_alert_log` (+ `send-cash-alerts` pg_cron işi, 06:00 UTC).
+- Edge Function'lar (yeni): `generate-insights`, `ai-ask`, `send-cash-alerts` (hepsi `verify_jwt` açık; Gemini anahtarı mevcut secret).
+  Sunucu tarafı olduğundan eski build'lere dokunmaz.
+- Yapılmayanlar: ana ekran widget'ları (§5.10; App Group + native hedef gerektirir), rapor ekranı/PDF yeniden düzeni (yalnızca PDF renkleri).
+
+### Açık takip maddeleri
+
+- [ ] TestFlight'ta doğrula: açık/koyu tema, büyük yazı boyutu (Dynamic Type 1.3x), giriş ekranı, ana sayfa, Hızlı ekle, Aboneliklerim, Döviz ve altın.
+- [ ] Çek/senet: alınan çek → ciro et → Karşılıksız (borç yeniden açılıyor mu); tahsile ver.
+- [ ] Plus hesapla: Akıllı öneriler ve Sor çalışıyor mu (Gemini anahtarı/kota).
+- [ ] Nakit uyarısı bildirimi ilk gün 09:00'da geldi mi (`send-cash-alerts` logları).
+- [ ] App Store Connect'te 1.0.6 sürümünü oluştur, "Yenilikler" gir.
+
+---
+
 ## 1.0.5 — Hazırlanıyor (2026-10-02)
 
 | Platform | Build | Durum | Gönderim |
