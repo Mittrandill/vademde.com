@@ -2,7 +2,7 @@ import { View } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Text } from '@/components/primitives';
-import { withAlpha } from '@/theme/colors';
+import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '@/theme/colors';
 
 // docs/01-finansal-kayit-modeli.md §3.4 — kayıt durumları.
@@ -29,17 +29,21 @@ export const OBLIGATION_STATUS_LABEL: Record<ObligationStatus, string> = {
   iptal_edildi: 'İptal Edildi',
 };
 
+// Yeni tasarım: durum, renkli dolgu yerine renkli metin (+ ödenmişlerde onay ikonu). Ödeme
+// bekleyen = payable, gerçekleşen = receivable, gecikme = danger, kontrol gerektiren = attention.
 const COLORS: Record<ObligationStatus, keyof ThemeColors> = {
   taslak: 'textSecondary',
-  inceleme_gerekli: 'accentAqua',
+  inceleme_gerekli: 'attentionMarker',
   bekliyor: 'textSecondary',
-  kismen_odendi: 'accentAqua',
-  odendi: 'success',
-  kismen_tahsil_edildi: 'accentAqua',
-  tahsil_edildi: 'success',
+  kismen_odendi: 'payable',
+  odendi: 'receivable',
+  kismen_tahsil_edildi: 'receivable',
+  tahsil_edildi: 'receivable',
   gecikti: 'danger',
   iptal_edildi: 'textSecondary',
 };
+
+const DONE: ObligationStatus[] = ['odendi', 'tahsil_edildi'];
 
 export function StatusBadge({ status }: { status: string }) {
   const theme = useTheme();
@@ -47,16 +51,9 @@ export function StatusBadge({ status }: { status: string }) {
   const color = theme.colors[COLORS[key]];
 
   return (
-    <View
-      style={{
-        alignSelf: 'flex-start',
-        paddingHorizontal: theme.spacing.xs,
-        paddingVertical: 3,
-        borderRadius: theme.radius.pill,
-        backgroundColor: withAlpha(color, 0.15),
-      }}
-    >
-      <Text variant="caption" style={{ color, fontWeight: '600' }}>
+    <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      {DONE.includes(key) ? <Ionicons name="checkmark" size={theme.iconSize.sm} color={color} /> : null}
+      <Text variant="caption" style={{ color, fontWeight: '600', fontSize: 12 }}>
         {OBLIGATION_STATUS_LABEL[key]}
       </Text>
     </View>

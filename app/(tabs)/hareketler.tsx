@@ -9,13 +9,16 @@ import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import {
   ActionSheet,
-  Divider,
   EmptyState,
-  Pagination,
+  ListEnd,
+  ListSkeleton,
+  LIST_PAGE_SIZE,
+  LoadMore,
+  MonthStepper,
+  MonthYearSheet,
   Pressable,
   Row,
-  SegmentedControl,
-  Skeleton,
+  ScrollableTabs,
   Stack,
   Text,
   TextField,
@@ -26,9 +29,10 @@ import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
-import { DateBlock } from '@/components/finance/DateBlock';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
+import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
+import { queryKeys } from '@/services/queryKeys';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 
@@ -90,18 +94,6 @@ interface HareketRow {
   paidAccountCurrencyCode?: string | null;
 }
 
-const DIRECTION_PREFIX: Record<string, string> = {
-  income: '+',
-  expense: '-',
-  transfer: '⇄',
-};
-
-const DIRECTION_COLOR: Record<string, 'success' | 'textPrimary' | 'textSecondary'> = {
-  income: 'success',
-  expense: 'textPrimary',
-  transfer: 'textSecondary',
-};
-
 const TRANSACTION_DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   income: 'arrow-down-circle-outline',
   expense: 'arrow-up-circle-outline',
@@ -126,7 +118,6 @@ function latestPaidAt(payments: { paid_at: string }[] | undefined): string | und
 // tek seferde çekilir, tarihe göre sıralanır ve ekranda 10'luk sayfalar halinde dilimlenir —
 // sonsuz kaydırma yerine sayfa numaralarıyla öngörülebilir gezinme.
 const FETCH_SIZE = 500;
-const LIST_PAGE_SIZE = 10;
 
 export default function HareketlerScreen() {
   const theme = useTheme();
@@ -138,7 +129,17 @@ export default function HareketlerScreen() {
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   // Krediler sayfasındaki Tarih düğmesiyle aynı: varsayılan en yeni önce (azalan).
   const [sortAscending, setSortAscending] = useState(false);
-  const [page, setPage] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [monthSheetOpen, setMonthSheetOpen] = useState(false);
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const valueUnitRatesQuery = useQuery({
+    queryKey: queryKeys.valueUnitRates(),
+    queryFn: listValueUnitRates,
+  });
 
   useEffect(() => {
     const timeout = setTimeout(() => setSearch(searchInput.trim()), 300);
@@ -152,11 +153,11 @@ export default function HareketlerScreen() {
 
   // Filtre, arama veya sıralama değiştiğinde geçerli sayfa anlamsızlaşır — render sırasında
   // (obligations/index.tsx'teki aynı desen) 1. sayfaya dönülür, ekstra render turu olmadan.
-  const resetKey = `${filter}|${search}|${sortAscending ? 'asc' : 'desc'}`;
+  const resetKey = `${filter}|${search}|${sortAscending ? 'asc' : 'desc'}|${month.year}-${month.month}`;
   const [lastResetKey, setLastResetKey] = useState(resetKey);
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey);
-    setPage(0);
+    setVisibleCount(LIST_PAGE_SIZE);
   }
 
   const transactionsQuery = useQuery({
@@ -358,79 +359,175 @@ export default function HareketlerScreen() {
     sortAscending,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / LIST_PAGE_SIZE));
-  const effectivePage = Math.min(page, totalPages - 1);
-  const visibleRows = rows.slice(effectivePage * LIST_PAGE_SIZE, effectivePage * LIST_PAGE_SIZE + LIST_PAGE_SIZE);
+  // Ay filtresi istemci tarafındadır: kaynaklar zaten tek seferde (FETCH_SIZE) çekiliyor;
+  // veri sorguları ve filtre mantığı değişmedi, yalnızca görünür dilim aya göre daraltılır.
+  const monthRows = useMemo(
+    () =>
+      rows.filter((r) => {
+        const d = new Date(r.date);
+        return d.getFullYear() === month.year && d.getMonth() === month.month;
+      }),
+    [rows, month]
+  );
+
+  const rateList = valueUnitRatesQuery.data ?? [];
+  const sumSigned = (items: HareketRow[]) =>
+    sumToReferenceMinor(
+      items.map((r) => ({ amountMinor: r.amountMinor, unitCode: r.currencyCode })),
+      rateList
+    );
+
+  const monthTotals = useMemo(() => {
+    const income = sumSigned(monthRows.filter((r) => rowSign(r) > 0));
+    const expense = sumSigned(monthRows.filter((r) => rowSign(r) < 0));
+    return { income, expense };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthRows, rateList]);
+
+  const visibleRows = monthRows.slice(0, visibleCount);
+
+  const listItems = useMemo<ListItem[]>(() => {
+    const items: ListItem[] = [];
+    let currentKey = '';
+    let group: HareketRow[] = [];
+    const flush = () => {
+      if (group.length === 0) return;
+      const net = sumSigned(group.filter((r) => rowSign(r) > 0)) - sumSigned(group.filter((r) => rowSign(r) < 0));
+      items.push({ type: 'day', key: `day-${currentKey}`, date: group[0].date, netMinor: net });
+      group.forEach((r) =>
+        items.push({ type: 'row', key: `${r.kind}-${r.id}${r.installmentId ? `-${r.installmentId}` : ''}`, row: r })
+      );
+      group = [];
+    };
+    for (const r of visibleRows) {
+      const d = new Date(r.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (key !== currentKey) {
+        flush();
+        currentKey = key;
+      }
+      group.push(r);
+    }
+    flush();
+    return items;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleRows, rateList]);
 
   const error = transactionsQuery.error || obligationsQuery.error || installmentsQuery.error;
   const isLoading = transactionsQuery.isLoading || obligationsQuery.isLoading || (wantsObligations && !search && installmentsQuery.isLoading);
 
-  // Tek dikey scroll sahibi: başlık, arama/sıralama ve segment filtresi FlatList'in
-  // ListHeaderComponent'ine taşınır ki liste kaydırıldığında hepsi tek parça halinde
-  // birlikte kaysın — üstte sabit kalıp listeyi küçük bir kutuya sıkıştırmasınlar.
+  // Tek dikey scroll sahibi: başlık, ay gezgini ve filtreler FlatList'in ListHeaderComponent'inde.
   const isInitialLoading = isLoading && rows.length === 0;
+  const isFetching = transactionsQuery.isFetching || obligationsQuery.isFetching || installmentsQuery.isFetching;
+  const showSearch = searchOpen || searchInput.length > 0;
+  const netTotal = monthTotals.income - monthTotals.expense;
 
   const listHeader = (
-    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
+    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.sm }}>
       <Row align="center">
         <Text variant="pageTitle" style={{ flex: 1 }}>
           Hareketler
         </Text>
-        <Pressable
-          onPress={() => setAddSheetOpen(true)}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Yeni hareket"
-          // Hesaplar/Kredilerim ekranlarındaki ScreenHeader'ın accent "+" düğmesiyle aynı
-          // görsel dil (bkz. components/navigation/ScreenHeader.tsx HeaderButton) — önceki
-          // çıplak add-circle ikonu uygulamanın geri kalanında hiç kullanılmayan, kopuk bir
-          // buton gibi duruyordu.
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.brandPrimary,
-          }}
-        >
-          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
-        </Pressable>
+        <Row gap="xs">
+          <Pressable
+            onPress={() => setSearchOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="Ara"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.colors.surfacePrimary,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+            }}
+          >
+            <Ionicons name="search" size={21} color={theme.colors.textPrimary} />
+          </Pressable>
+          <Pressable
+            onPress={() => setAddSheetOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Yeni hareket"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.colors.action,
+            }}
+          >
+            <Ionicons name="add" size={26} color={theme.colors.onAction} />
+          </Pressable>
+        </Row>
       </Row>
 
-      <Row gap="xs" align="center">
-        <TextField
-          placeholder="Açıklama veya başlıkta ara"
-          value={searchInput}
-          onChangeText={setSearchInput}
-          returnKeyType="search"
-          autoCorrect={false}
-          style={{ flex: 1 }}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Tarihe göre sırala"
-          onPress={() => setSortAscending((v) => !v)}
-          style={{
-            height: theme.buttonHeight.primary,
-            paddingHorizontal: theme.spacing.sm,
-            borderRadius: theme.radius.input,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.xxs,
-          }}
-        >
-          <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
-          <Text variant="body" color="textSecondary">
-            Tarih
-          </Text>
-        </Pressable>
+      {showSearch ? (
+        <Row gap="xs" align="center">
+          <TextField
+            placeholder="Açıklama veya başlıkta ara"
+            value={searchInput}
+            onChangeText={setSearchInput}
+            returnKeyType="search"
+            autoCorrect={false}
+            style={{ flex: 1 }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tarihe göre sırala"
+            onPress={() => setSortAscending((v) => !v)}
+            style={{
+              height: theme.buttonHeight.primary,
+              paddingHorizontal: theme.spacing.sm,
+              borderRadius: theme.radius.input,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.xxs,
+            }}
+          >
+            <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
+            <Text variant="body" color="textSecondary">
+              Tarih
+            </Text>
+          </Pressable>
+        </Row>
+      ) : null}
+
+      <MonthStepper
+        year={month.year}
+        month={month.month}
+        onChange={setMonth}
+        onPressLabel={() => setMonthSheetOpen(true)}
+      />
+
+      <Row style={{ justifyContent: 'space-between' }}>
+        {[
+          { label: 'Gelir', minor: monthTotals.income, sign: '+', color: theme.colors.receivable },
+          { label: 'Gider', minor: monthTotals.expense, sign: '−', color: theme.colors.textPrimary },
+          {
+            label: 'Net',
+            minor: Math.abs(netTotal),
+            sign: netTotal >= 0 ? '+' : '−',
+            color: netTotal >= 0 ? theme.colors.receivable : theme.colors.textPrimary,
+          },
+        ].map((item) => (
+          <Stack key={item.label} gap="xxs">
+            <Text variant="label" color="textSecondary">
+              {item.label}
+            </Text>
+            <Text variant="cardTitle" tabular style={{ color: item.color }}>
+              {item.sign}
+              {formatMinorAmount(item.minor)}
+            </Text>
+          </Stack>
+        ))}
       </Row>
 
-      {/* Uzun filtreler, ortak sekme stilini koruyarak yatay kaydırılır. */}
-      <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} size="compact" scrollable />
+      <ScrollableTabs tabs={FILTERS} activeKey={filter} onChange={(key) => setFilter(key as FilterKey)} />
 
       {error ? (
         <Text variant="body" color="danger">
@@ -443,150 +540,64 @@ export default function HareketlerScreen() {
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <FlatList
-        data={visibleRows}
-        keyExtractor={(item) => `${item.kind}-${item.id}${item.installmentId ? `-${item.installmentId}` : ''}`}
+        data={listItems}
+        keyExtractor={(item) => item.key}
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: theme.screenEdge.standard,
-          // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
-          // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
+          // Alt sekme çubuğunun altında kalmasın diye ek boşluk.
           paddingBottom: theme.layout.tabBarClearance,
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
-        // Satırlar artık ayrı ayrı kart değil, tek bir arka plan üzerinde ayraç
-        // çizgileriyle bölünmüş tek bir liste gövdesi oluşturur (yalnızca ilk/son
-        // satır köşeleri yuvarlanır) — Krediler/Borçlar'daki zengin kartlardan farklı
-        // olarak burası tek satırlık kompakt kayıtlar içindir.
-        ItemSeparatorComponent={() => <Divider style={{ marginHorizontal: theme.spacing.md }} />}
-        renderItem={({ item, index }) => {
-          const isFirst = index === 0;
-          const isLast = index === visibleRows.length - 1;
-          return (
-            <Pressable
-              onPress={() =>
-                item.kind === 'obligation'
-                  ? router.push(`/obligations/${item.id}`)
-                  : router.push(`/transactions/${item.id}`)
-              }
-            >
-              <Row
-                gap="sm"
-                align="center"
-                style={{
-                  backgroundColor: theme.colors.surfacePrimary,
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: theme.spacing.sm,
-                  borderTopLeftRadius: isFirst ? theme.radius.widget : 0,
-                  borderTopRightRadius: isFirst ? theme.radius.widget : 0,
-                  borderBottomLeftRadius: isLast ? theme.radius.widget : 0,
-                  borderBottomRightRadius: isLast ? theme.radius.widget : 0,
-                }}
-              >
-                <DateBlock date={item.date} />
-                {item.kind === 'obligation' ? (
-                  <ObligationIcon
-                    documentType={item.documentType ?? 'diger'}
-                    bankCode={item.bankCode}
-                    serviceCode={item.serviceCode}
-                    fallbackName={item.title}
-                    size={36}
-                  />
-                ) : item.categoryIcon ? (
-                  <CategoryIcon icon={item.categoryIcon} color={item.categoryColor} size={36} />
-                ) : item.direction === 'transfer' && (item.transferToBankCode || item.transferToAccountName) ? (
-                  // Transferde asıl ikon paranın gittiği hesabı temsil eder (ör. bir kredi
-                  // kartı ödemesinde asıl ikon kartın kendi logosudur) — kaynak hesap alt
-                  // satırda kalır.
-                  <AccountIcon
-                    bankCode={item.transferToBankCode}
-                    accountType={item.transferToAccountType}
-                    currencyCode={item.transferToCurrencyCode}
-                    fallbackName={item.transferToAccountName}
-                    size={36}
-                  />
-                ) : (
-                  <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={36} />
-                )}
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle">{item.title}</Text>
-                  {item.kind === 'transaction' && item.accountName ? (
-                    <AccountLabelRow
-                      bankCode={item.bankCode}
-                      accountName={item.accountName}
-                      accountType={item.accountType}
-                      cardLastFour={item.cardLastFour}
-                      currencyCode={item.accountCurrencyCode}
-                    />
-                  ) : item.kind === 'obligation' && (item.paidAccountName || item.paidAccountBankCode) ? (
-                    // Bu taksit/borç bir hesaptan ödendi — ayrı bir işlem satırı yerine
-                    // ödemenin yapıldığı hesap doğrudan burada gösterilir (bkz. rows useMemo).
-                    <AccountLabelRow
-                      bankCode={item.paidAccountBankCode}
-                      accountName={item.paidAccountName}
-                      accountType={item.paidAccountType}
-                      cardLastFour={item.paidAccountCardLastFour}
-                      currencyCode={item.paidAccountCurrencyCode}
-                    />
-                  ) : item.subtitle ? (
-                    <Text variant="caption" color="textSecondary">
-                      {item.subtitle}
-                    </Text>
-                  ) : null}
-                </Stack>
-                <Stack gap="xxs" align="flex-end">
-                  <Text
-                    variant="body"
-                    tabular
-                    color={item.kind === 'transaction' ? DIRECTION_COLOR[item.direction] : 'textPrimary'}
-                  >
-                    {item.kind === 'transaction' ? DIRECTION_PREFIX[item.direction] : ''}
-                    {item.valueUnitType === 'kiymetli_maden'
-                      ? formatValueUnitAmount(item.amountMinor, item.currencyCode)
-                      : formatMinorAmount(item.amountMinor, item.currencyCode)}
-                  </Text>
-                  {item.status ? <StatusBadge status={item.status} /> : null}
-                </Stack>
-              </Row>
-            </Pressable>
-          );
-        }}
+        renderItem={({ item }) =>
+          item.type === 'day' ? (
+            <DayHeader date={item.date} netMinor={item.netMinor} />
+          ) : (
+            <HareketRowView item={item.row} />
+          )
+        }
         ListEmptyComponent={
           isInitialLoading ? (
-            <Stack gap="sm">
-              <Skeleton height={64} borderRadius={theme.radius.widget} />
-              <Skeleton height={64} borderRadius={theme.radius.widget} />
-              <Skeleton height={64} borderRadius={theme.radius.widget} />
-            </Stack>
+            <ListSkeleton rows={5} />
           ) : (
-            // Liste boşken flex:1+justifyContent:'center' mesajı ekranın tam ortasına
-            // düşürüyordu, filtrelerden kopuk duruyordu — bunun yerine header'ın hemen
-            // altında, üstte küçük bir boşlukla oturur.
             <View style={{ paddingTop: theme.spacing.xl }}>
               <EmptyState
                 icon="receipt-outline"
-                title={search ? 'Sonuç bulunamadı' : 'Henüz hareket yok'}
-                message={search ? 'Farklı bir arama terimi deneyin.' : 'Sağ üstteki + ile ilk kaydınızı ekleyin.'}
+                title={search ? 'Sonuç bulunamadı' : 'Bu ayda hareket yok'}
+                message={
+                  search
+                    ? 'Farklı bir arama terimi deneyin.'
+                    : 'Başka bir ay seçin ya da sağ üstteki + ile kayıt ekleyin.'
+                }
               />
             </View>
           )
         }
         ListFooterComponent={
-          totalPages > 1 ? (
-            // Liste artık tek bir yuvarlak köşeli kart olarak bittiği için üstte ayrıca
-            // bir ayraç çizgisi gerekmiyor — eski kart-başına-kart tasarımından kalan
-            // borderTop, kartın hemen altında fazladan bir çizgi gibi görünüyordu.
+          monthRows.length === 0 ? null : visibleCount < monthRows.length ? (
+            <LoadMore
+              loaded={visibleRows.length}
+              total={monthRows.length}
+              noun="hareket"
+              loading={isFetching}
+              onPress={() => setVisibleCount((c) => c + LIST_PAGE_SIZE)}
+            />
+          ) : (
             <View style={{ paddingTop: theme.spacing.md }}>
-              <Pagination
-                page={effectivePage}
-                totalPages={totalPages}
-                loading={transactionsQuery.isFetching || obligationsQuery.isFetching || installmentsQuery.isFetching}
-                onChange={setPage}
-              />
+              <ListEnd label={`Hepsi bu kadar · ${monthRows.length} hareket`} />
             </View>
-          ) : null
+          )
         }
+      />
+
+      <MonthYearSheet
+        visible={monthSheetOpen}
+        onClose={() => setMonthSheetOpen(false)}
+        year={month.year}
+        month={month.month}
+        onChange={setMonth}
       />
 
       <ActionSheet
@@ -625,5 +636,139 @@ export default function HareketlerScreen() {
         ]}
       />
     </SafeAreaView>
+  );
+}
+
+type ListItem =
+  | { type: 'day'; key: string; date: string; netMinor: number }
+  | { type: 'row'; key: string; row: HareketRow };
+
+// Gelir (+1) / gider (-1) / etkisiz (0): işlemde yöne, borç/alacakta payable/receivable'a göre.
+function rowSign(r: HareketRow): number {
+  if (r.direction === 'income' || r.direction === 'receivable') return 1;
+  if (r.direction === 'expense' || r.direction === 'payable') return -1;
+  return 0;
+}
+
+const dayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+
+function DayHeader({ date, netMinor }: { date: string; netMinor: number }) {
+  const theme = useTheme();
+  const d = new Date(date);
+  const today = new Date();
+  const diff = Math.round(
+    (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) /
+      86_400_000
+  );
+  const prefix = diff === 0 ? 'Bugün · ' : diff === 1 ? 'Dün · ' : '';
+
+  return (
+    <Row style={{ justifyContent: 'space-between', paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xxs }}>
+      <Text variant="label" color="textSecondary" style={{ textTransform: 'none' }}>
+        {prefix}
+        {dayFormatter.format(d)}
+      </Text>
+      {netMinor !== 0 ? (
+        <Text
+          variant="label"
+          tabular
+          style={{ textTransform: 'none', color: netMinor > 0 ? theme.colors.receivable : theme.colors.textSecondary }}
+        >
+          {netMinor > 0 ? '+' : '−'}
+          {formatMinorAmount(Math.abs(netMinor))}
+        </Text>
+      ) : null}
+    </Row>
+  );
+}
+
+function HareketRowView({ item }: { item: HareketRow }) {
+  const theme = useTheme();
+  const sign = rowSign(item);
+  const prefix = sign > 0 ? '+' : sign < 0 ? '−' : '';
+  const amountColor = sign > 0 ? 'receivable' : 'textPrimary';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() =>
+        item.kind === 'obligation' ? router.push(`/obligations/${item.id}`) : router.push(`/transactions/${item.id}`)
+      }
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.sm,
+        paddingVertical: theme.spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      }}
+    >
+      {item.kind === 'obligation' ? (
+        <ObligationIcon
+          documentType={item.documentType ?? 'diger'}
+          bankCode={item.bankCode}
+          serviceCode={item.serviceCode}
+          fallbackName={item.title}
+          size={40}
+        />
+      ) : item.categoryIcon ? (
+        <CategoryIcon icon={item.categoryIcon} color={item.categoryColor} size={40} />
+      ) : item.direction === 'transfer' && (item.transferToBankCode || item.transferToAccountName) ? (
+        // Transferde asıl ikon paranın gittiği hesabı temsil eder (ör. kredi kartı ödemesinde
+        // kartın kendi logosu) — kaynak hesap alt satırda kalır.
+        <AccountIcon
+          bankCode={item.transferToBankCode}
+          accountType={item.transferToAccountType}
+          currencyCode={item.transferToCurrencyCode}
+          fallbackName={item.transferToAccountName}
+          size={40}
+        />
+      ) : (
+        <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={40} />
+      )}
+      <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+        <Text variant="cardTitle" numberOfLines={1}>
+          {item.title}
+        </Text>
+        {item.kind === 'transaction' && item.accountName ? (
+          <AccountLabelRow
+            bankCode={item.bankCode}
+            accountName={item.accountName}
+            accountType={item.accountType}
+            cardLastFour={item.cardLastFour}
+            currencyCode={item.accountCurrencyCode}
+          />
+        ) : item.kind === 'obligation' && (item.paidAccountName || item.paidAccountBankCode) ? (
+          // Bu taksit/borç bir hesaptan ödendi — ödemenin yapıldığı hesap burada gösterilir.
+          <AccountLabelRow
+            bankCode={item.paidAccountBankCode}
+            accountName={item.paidAccountName}
+            accountType={item.paidAccountType}
+            cardLastFour={item.paidAccountCardLastFour}
+            currencyCode={item.paidAccountCurrencyCode}
+          />
+        ) : item.subtitle ? (
+          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+            {item.subtitle}
+          </Text>
+        ) : null}
+      </Stack>
+      <Stack gap="xxs" align="flex-end">
+        <Text variant="cardTitle" tabular color={amountColor}>
+          {prefix}
+          {item.valueUnitType === 'kiymetli_maden'
+            ? formatValueUnitAmount(item.amountMinor, item.currencyCode)
+            : formatMinorAmount(item.amountMinor, item.currencyCode)}
+        </Text>
+        {item.status ? (
+          <StatusBadge status={item.status} />
+        ) : item.direction === 'transfer' ? (
+          <Text variant="caption" color="textSecondary">
+            Transfer
+          </Text>
+        ) : null}
+      </Stack>
+    </Pressable>
   );
 }
