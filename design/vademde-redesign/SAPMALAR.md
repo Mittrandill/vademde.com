@@ -28,3 +28,8 @@ Tasarımla kod çeliştiğinde kod esas alınır; her sapma burada kayıtlıdır
 - **Daha fazla:** Aboneliklerim, Döviz ve altın, Akıllı öneriler, Dışa aktar satırları ilgili ekranlar yapılana kadar eklenmedi. Çek ve senet portföyü (§5.4) gelene dek "Çekler" ve "Senetler" ayrı satırlar. Hesaplar/Krediler/Kartlar satırlarındaki tutar özetleri tasarımdaki gibi sayıya indirildi.
 - `Amount`: eksi işareti `-` yerine `−`; gelir/alacak rengi `receivable`. `StatusBadge`: dolgulu hap yerine renkli metin.
 - `TabBar`: yüzen çubuk yerine tam genişlikte düz çubuk; üst kenar eski konumda kaldığı için `tara.tsx` kamera kontrolleri etkilenmez.
+
+## Aşama 5 — Mevcut veriyle yeni ekranlar
+- **Hızlı ekle:** `QuickActions` (kullanıcının özelleştirdiği kısayol satırı) mevcut bir özellik olduğu için ana sayfada korundu (Aşama 3 notundaki "kalkacak" ifadesi geçersiz). Tasarımdaki tek "Ödeme veya tahsilat kaydet" satırı, yön rota parametresiyle seçildiği için "Ödeme kaydet" ve "Tahsilat kaydet" olarak ikiye bölündü. Başlıktaki bakiye gösterilmedi. Tetikleyiciler: Tara uzun basışı ve Hareketler "+" (ana sayfada "+" yok, tasarımdaki başlık düzeniyle uyumlu).
+- **Aboneliklerim:** Yeni şema yok. Aylık maliyet = sıradaki taksitin tutarı. "Deneme bitiyor" uyarısı ve "Yıllık" grubu için veri alanı yok (bkz. PLANLAR.md); onların yerine Bu hafta / Bu ay / Daha sonra grupları. Detayda "dolar bazlı aboneliğin aylara göre TL karşılığı" yapılmadı (geçmiş ödemelerin kuru saklanmıyor); ayrı karar gerektirir.
+- **Döviz ve altın:** Yeni şema yok; kasalar + birimli borç/alacaklar + güncel kurlar. Hesap detayında döviz/altın görünümü (`DovizHesapDetay`, `AltinHesapDetay`) Aşama 4'te.
