@@ -26,7 +26,25 @@ export interface ReportPdfInput {
   accountBalances: AccountBalanceReportItem[];
   overdueObligations: ObligationWithRelations[];
   cashFlow: CashFlowBucket[];
+  /** Dışa aktarma sheet'inde seçilen bölümler; verilmezse hepsi dahildir. */
+  sections?: ReportPdfSections;
 }
+
+export interface ReportPdfSections {
+  summary: boolean;
+  categories: boolean;
+  counterparties: boolean;
+  obligations: boolean;
+  accounts: boolean;
+}
+
+const ALL_SECTIONS: ReportPdfSections = {
+  summary: true,
+  categories: true,
+  counterparties: true,
+  obligations: true,
+  accounts: true,
+};
 
 function escapeHtml(value: string): string {
   return value
@@ -99,6 +117,78 @@ function buildReportHtml(input: ReportPdfInput): string {
   const generatedAt = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date());
   const netMinor = input.incomeMinor - input.expenseMinor;
 
+  const sec = input.sections ?? ALL_SECTIONS;
+  const summaryHtml = `
+  <h2>Gelir - Gider Özeti</h2>
+  <div class="summary-grid">
+    <div class="summary-cell">
+      <div class="summary-label">Gelir</div>
+      <div class="summary-value positive">${formatMinorAmount(input.incomeMinor)}</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-label">Gider</div>
+      <div class="summary-value">${formatMinorAmount(input.expenseMinor)}</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-label">Net</div>
+      <div class="summary-value ${netMinor >= 0 ? 'positive' : 'negative'}">${formatMinorAmount(Math.abs(netMinor))}</div>
+    </div>
+  </div>
+
+  <h2>Aylık Karşılaştırma</h2>
+  <table>
+    <tr><td><b>Ay</b></td><td class="amount"><b>Gelir</b></td><td class="amount"><b>Gider</b></td></tr>
+    ${renderMonthlyRows(input.monthlyComparison)}
+  </table>
+
+`;
+  const obligationsHtml = `
+  <h2>Borç / Alacak Özeti</h2>
+  <div class="summary-grid">
+    <div class="summary-cell">
+      <div class="summary-label">Borç (${input.payableCount} kayıt)</div>
+      <div class="summary-value">${formatMinorAmount(input.payableTotalMinor)}</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-label">Alacak (${input.receivableCount} kayıt)</div>
+      <div class="summary-value positive">${formatMinorAmount(input.receivableTotalMinor)}</div>
+    </div>
+  </div>
+
+  <h2>Gecikmiş Ödemeler</h2>
+  <table>
+    <tr><td><b>Başlık</b></td><td><b>Vade</b></td><td class="amount"><b>Tutar</b></td></tr>
+    ${renderOverdueRows(input.overdueObligations)}
+  </table>
+
+  <h2>Beklenen Nakit Akışı (30 Gün)</h2>
+  <table>
+    <tr><td><b>Dönem</b></td><td class="amount"><b>Alacak</b></td><td class="amount"><b>Borç</b></td></tr>
+    ${renderCashFlowRows(input.cashFlow)}
+  </table>
+`;
+  const categoriesHtml = `
+  <h2>Kategori Bazlı Gider</h2>
+  <table>${renderCategoryRows(input.expenseCategories)}</table>
+
+  <h2>Kategori Bazlı Gelir</h2>
+  <table>${renderCategoryRows(input.incomeCategories)}</table>
+
+`;
+  const counterpartiesHtml = `
+  <h2>Kişi / Firma Bazlı Hareketler</h2>
+  <table>
+    <tr><td><b>Ad</b></td><td><b>Hareket</b></td><td class="amount"><b>Tutar</b></td></tr>
+    ${renderCounterpartyRows(input.counterparties)}
+  </table>
+
+`;
+  const accountsHtml = `
+  <h2>Hesap Bakiyeleri</h2>
+  <table>${renderAccountRows(input.accountBalances)}</table>
+
+`;
+
   return `
 <!doctype html>
 <html lang="tr">
@@ -125,66 +215,11 @@ function buildReportHtml(input: ReportPdfInput): string {
   <h1>Vademde Rapor</h1>
   <div class="subtitle">${escapeHtml(input.periodLabel)} · Oluşturulma: ${escapeHtml(generatedAt)}</div>
 
-  <h2>Gelir - Gider Özeti</h2>
-  <div class="summary-grid">
-    <div class="summary-cell">
-      <div class="summary-label">Gelir</div>
-      <div class="summary-value positive">${formatMinorAmount(input.incomeMinor)}</div>
-    </div>
-    <div class="summary-cell">
-      <div class="summary-label">Gider</div>
-      <div class="summary-value">${formatMinorAmount(input.expenseMinor)}</div>
-    </div>
-    <div class="summary-cell">
-      <div class="summary-label">Net</div>
-      <div class="summary-value ${netMinor >= 0 ? 'positive' : 'negative'}">${formatMinorAmount(Math.abs(netMinor))}</div>
-    </div>
-  </div>
-
-  <h2>Borç / Alacak Özeti</h2>
-  <div class="summary-grid">
-    <div class="summary-cell">
-      <div class="summary-label">Borç (${input.payableCount} kayıt)</div>
-      <div class="summary-value">${formatMinorAmount(input.payableTotalMinor)}</div>
-    </div>
-    <div class="summary-cell">
-      <div class="summary-label">Alacak (${input.receivableCount} kayıt)</div>
-      <div class="summary-value positive">${formatMinorAmount(input.receivableTotalMinor)}</div>
-    </div>
-  </div>
-
-  <h2>Aylık Karşılaştırma</h2>
-  <table>
-    <tr><td><b>Ay</b></td><td class="amount"><b>Gelir</b></td><td class="amount"><b>Gider</b></td></tr>
-    ${renderMonthlyRows(input.monthlyComparison)}
-  </table>
-
-  <h2>Kategori Bazlı Gider</h2>
-  <table>${renderCategoryRows(input.expenseCategories)}</table>
-
-  <h2>Kategori Bazlı Gelir</h2>
-  <table>${renderCategoryRows(input.incomeCategories)}</table>
-
-  <h2>Kişi / Firma Bazlı Hareketler</h2>
-  <table>
-    <tr><td><b>Ad</b></td><td><b>Hareket</b></td><td class="amount"><b>Tutar</b></td></tr>
-    ${renderCounterpartyRows(input.counterparties)}
-  </table>
-
-  <h2>Hesap Bakiyeleri</h2>
-  <table>${renderAccountRows(input.accountBalances)}</table>
-
-  <h2>Gecikmiş Ödemeler</h2>
-  <table>
-    <tr><td><b>Başlık</b></td><td><b>Vade</b></td><td class="amount"><b>Tutar</b></td></tr>
-    ${renderOverdueRows(input.overdueObligations)}
-  </table>
-
-  <h2>Beklenen Nakit Akışı (30 Gün)</h2>
-  <table>
-    <tr><td><b>Dönem</b></td><td class="amount"><b>Alacak</b></td><td class="amount"><b>Borç</b></td></tr>
-    ${renderCashFlowRows(input.cashFlow)}
-  </table>
+  ${sec.summary ? summaryHtml : ''}
+  ${sec.obligations ? obligationsHtml : ''}
+  ${sec.categories ? categoriesHtml : ''}
+  ${sec.counterparties ? counterpartiesHtml : ''}
+  ${sec.accounts ? accountsHtml : ''}
 </body>
 </html>`;
 }
