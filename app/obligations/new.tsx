@@ -83,8 +83,12 @@ const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', mo
 export default function NewObligationScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, type, accountId, dueDate, counterpartyId, direction } = useLocalSearchParams<{
+  const { id, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam } =
+    useLocalSearchParams<{
     id?: string;
+    /** e-Fatura karekodundan gelen ön doldurma (bkz. app/(tabs)/tara.tsx) — kullanıcı onaylar. */
+    title?: string;
+    amountMinor?: string;
     type?: string;
     accountId?: string;
     dueDate?: string;
@@ -125,6 +129,8 @@ export default function NewObligationScreen() {
       initialDueDate={typeof dueDate === 'string' ? dueDate : undefined}
       initialCounterpartyId={typeof counterpartyId === 'string' ? counterpartyId : undefined}
       initialDirection={direction === 'payable' || direction === 'receivable' ? direction : undefined}
+      initialTitle={typeof titleParam === 'string' ? titleParam : undefined}
+      initialAmountMinor={typeof amountParam === 'string' && /^\d+$/.test(amountParam) ? Number(amountParam) : undefined}
     />
   );
 }
@@ -148,6 +154,9 @@ interface ObligationFormProps {
   initialCounterpartyId?: string;
   /** Aynı kısayollarda borç/alacak yönünü önceden doldurur. */
   initialDirection?: Direction;
+  initialTitle?: string;
+  /** TRY kuruşu; yalnızca yeni kayıtta ön doldurma. */
+  initialAmountMinor?: number;
 }
 
 function ObligationForm({
@@ -160,6 +169,8 @@ function ObligationForm({
   initialDueDate,
   initialCounterpartyId,
   initialDirection,
+  initialTitle,
+  initialAmountMinor,
 }: ObligationFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -174,7 +185,7 @@ function ObligationForm({
   );
   const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? null);
   const [serviceCode, setServiceCode] = useState<string | null>(initial?.service_code ?? null);
-  const [title, setTitle] = useState(initial?.title ?? '');
+  const [title, setTitle] = useState(initial?.title ?? initialTitle ?? '');
   // docs/01-finansal-kayit-modeli.md §3.5 — birim, kayıt oluşturulduktan sonra
   // değiştirilemez; edit modda initial.currency_code sabit kalır (aşağıda salt-okunur
   // gösterilir). Yeni kayıtta workspace'in varsayılan birimi hazır olana kadar 'TRY' ile
@@ -182,7 +193,9 @@ function ObligationForm({
   const [valueUnitCode, setValueUnitCode] = useState(initial?.currency_code ?? 'TRY');
   const [valueUnitDefaulted, setValueUnitDefaulted] = useState(!!initial);
   const [totalAmount, setTotalAmount] = useState(() => {
-    if (!initial) return '';
+    if (!initial) {
+      return initialAmountMinor ? formatAmountInput((initialAmountMinor / 100).toFixed(2).replace('.', ','), 2) : '';
+    }
     const precision = getValueUnit(initial.currency_code).precision;
     return formatAmountInput(
       (initial.total_amount_minor / 10 ** precision).toFixed(precision).replace('.', ','),

@@ -25,6 +25,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useMyWorkspaceRole } from '@/features/workspaces/useMyWorkspaceRole';
 import { queryKeys } from '@/services/queryKeys';
 import { hashArrayBuffer } from '@/utils/hash';
+import { parseGibInvoiceQr } from '@/utils/gibQr';
 import { RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — belge görüntüsü buluta gönderilmeden önce
@@ -83,6 +84,28 @@ const SCAN_INFO_TEXT =
   'Okuma başarısız olursa belge kaybolmaz, manuel girişe geçebilirsiniz.';
 
 export default function TaraScreen() {
+  const qrHandledRef = useRef(false);
+  function handleBarcode({ data }: { data: string }) {
+    if (qrHandledRef.current) return;
+    const invoice = parseGibInvoiceQr(data);
+    if (!invoice) return;
+    qrHandledRef.current = true;
+    router.push({
+      pathname: '/obligations/new',
+      params: {
+        type: 'fatura',
+        direction: 'payable',
+        title: invoice.invoiceNo ? `Fatura ${invoice.invoiceNo}` : 'e-Fatura',
+        amountMinor: String(invoice.amountMinor),
+        dueDate: invoice.date,
+      },
+    });
+    // Aynı karekod art arda tetiklenmesin; kullanıcı geri dönünce yeniden okunabilir.
+    setTimeout(() => {
+      qrHandledRef.current = false;
+    }, 4000);
+  }
+
   const theme = useTheme();
   const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
@@ -665,6 +688,10 @@ export default function TaraScreen() {
         facing={facing}
         enableTorch={torch}
         onCameraReady={() => setCameraReady(true)}
+        // e-Arşiv/e-Fatura karekodu: okunursa OCR çağrılmaz, kota düşmez; kayıt formu önceden dolar
+        // ve kullanıcı onayıyla oluşur (bkz. utils/gibQr.ts).
+        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+        onBarcodeScanned={handleBarcode}
       />
       <SafeAreaView style={{ flex: 1 }}>
         <Stack style={{ flex: 1, justifyContent: 'space-between' }}>
