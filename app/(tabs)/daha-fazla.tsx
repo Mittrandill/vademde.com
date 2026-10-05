@@ -1,3 +1,4 @@
+import { Children, Fragment, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,27 +7,15 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
-import { Card, Divider, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
+import { Pressable, Row, Stack, Text } from '@/components/primitives';
 import { listAccounts } from '@/features/accounts/api';
-import { getAccountBalances } from '@/features/reports/api';
 import { getObligationTotalsByType } from '@/features/obligations/api';
-import { DOCUMENT_TYPE_ICON, DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
+import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
 import { getMyProfile } from '@/features/profile/api';
-import { getMySubscription } from '@/features/subscriptions/api';
+import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
 import { useSession } from '@/features/auth/useSession';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
-
-// Hub'da gösterilecek belge/bağlantı türleri. Kişiler / Cariler, eski Kira kutusunun
-// yerini alır; Kira kayıtlarına Hareketler üzerinden erişilmeye devam edilir.
-const OTHER_RECORD_TILES = [
-  { kind: 'document', type: 'cek' },
-  { kind: 'document', type: 'senet' },
-  { kind: 'counterparties' },
-  { kind: 'document', type: 'abonelik' },
-] as const;
 
 // docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad (Ayarlar ile aynı eşleme).
 const PLAN_LABELS: Record<string, string> = {
@@ -75,21 +64,16 @@ export default function MoreScreen() {
     enabled: !!activeWorkspaceId,
   });
 
-  const balancesQuery = useQuery({
-    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'account-balances'] : ['account-balances', 'disabled'],
-    queryFn: () => getAccountBalances(activeWorkspaceId as string),
-    enabled: !!activeWorkspaceId,
+  const ocrUsageQuery = useQuery({
+    queryKey: queryKeys.ocrUsage(currentPeriodMonth()),
+    queryFn: getCurrentOcrUsage,
   });
+  const ocrUsage = ocrUsageQuery.data;
 
   const totalsByType = totalsQuery.data;
   const accounts = accountsQuery.data ?? [];
-  const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
   const creditCardAccounts = accounts.filter((a) => a.type === 'credit_card');
-  const totalCardDebtMinor = creditCardAccounts.reduce(
-    (sum, a) => sum + (balanceByAccountId.get(a.id) ?? a.opening_balance_minor),
-    0
-  );
-
+  
   const email = session?.user?.email ?? null;
   const fullName = profileQuery.data?.full_name ?? null;
   const planCode = subscriptionQuery.data?.plan ?? 'free';
@@ -106,264 +90,245 @@ export default function MoreScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <Text variant="pageTitle">Daha Fazla</Text>
+        <Text variant="pageTitle">Daha fazla</Text>
 
-        {/* Profil kartı — hesap ekranının en üstünde durur, dokununca kendi Profil
-            ekranına gider (More sekmesi = hesap girişi deseni; iOS Ayarlar'daki Apple ID
-            satırıyla aynı mantık — genel Ayarlar'a değil, doğrudan kimlik ekranına). */}
-        <Pressable onPress={() => router.push('/profile')}>
-          <Card>
-            <Row gap="sm">
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: theme.radius.pill,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-                }}
-              >
-                <Text variant="cardTitle" style={{ color: theme.colors.brandPrimary }}>
-                  {initialsFrom(fullName, email)}
-                </Text>
-              </View>
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Row gap="xs" align="center">
-                  <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
-                    {fullName || 'Profilini tamamla'}
-                  </Text>
-                  <PlanChip label={planLabel} isFree={planCode === 'free'} />
-                </Row>
-                <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                  {email ?? '—'}
-                </Text>
-              </Stack>
-              <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+        {/* Profil: dokununca kendi Profil ekranına gider (More sekmesi = hesap girişi deseni). */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/profile')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.sm,
+            padding: theme.spacing.md,
+            borderRadius: theme.radius.widget,
+            backgroundColor: theme.colors.surfacePrimary,
+          }}
+        >
+          <View
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: theme.radius.pill,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.colors.backgroundPrimary,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+            }}
+          >
+            <Text variant="cardTitle" mono>
+              {initialsFrom(fullName, email)}
+            </Text>
+          </View>
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Row gap="xs" align="center">
+              <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {fullName || 'Profilini tamamla'}
+              </Text>
+              <PlanChip label={planLabel} />
             </Row>
-          </Card>
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {email ?? '—'}
+            </Text>
+          </Stack>
+          <Ionicons name="chevron-forward" size={20} color={theme.colors.mutedControl} />
         </Pressable>
 
-        <Stack gap="sm">
-          <SectionHeader title="Kayıt Türleri" />
-          <Row gap="sm" style={{ flexWrap: 'wrap' }}>
-            <HubTile
-              icon={DOCUMENT_TYPE_ICON.kredi ?? 'cash-outline'}
-              label={DOCUMENT_TYPE_LABEL.kredi ?? 'Kredi'}
-              detail={
-                totalsByType?.kredi
-                  ? `${totalsByType.kredi.count} kayıt · ${formatMinorAmount(totalsByType.kredi.totalMinor)}`
-                  : 'Kayıt yok'
-              }
-              href={{ pathname: '/obligations', params: { type: 'kredi' } }}
-            />
-            {/* Kartlar artık obligation türü değil, hesap bazlı bir liste — kendi
-                ekranına (Kredi Kartlarım) gider, Kredi'nin hemen ardında yer alır. */}
-            <HubTile
-              icon="card-outline"
-              label="Kredi Kartlarım"
-              detail={
-                creditCardAccounts.length > 0
-                  ? `${creditCardAccounts.length} kart · ${formatMinorAmount(totalCardDebtMinor)}`
-                  : 'Kart yok'
-              }
-              href="/accounts/credit-cards"
-            />
-            {OTHER_RECORD_TILES.map((item) => {
-              if (item.kind === 'counterparties') {
-                return (
-                  <HubTile
-                    key="counterparties"
-                    icon="people-outline"
-                    label="Kişiler / Cariler"
-                    detail="Kişi ve firmalar"
-                    href="/counterparties"
-                  />
-                );
-              }
-
-              const totals = totalsByType?.[item.type];
-              return (
-                <HubTile
-                  key={item.type}
-                  icon={DOCUMENT_TYPE_ICON[item.type] ?? 'document-outline'}
-                  label={DOCUMENT_TYPE_LABEL[item.type] ?? item.type}
-                  detail={totals ? `${totals.count} kayıt · ${formatMinorAmount(totals.totalMinor)}` : 'Kayıt yok'}
-                  href={{ pathname: '/obligations', params: { type: item.type } }}
-                />
-              );
-            })}
+        {/* Plan ve kalan OCR hakkı. Ücretsiz planda yükseltme çağrısı gösterilir. */}
+        <View
+          style={{
+            gap: theme.spacing.sm,
+            padding: theme.spacing.md,
+            borderRadius: theme.radius.widget,
+            backgroundColor: theme.colors.surfacePrimary,
+          }}
+        >
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Stack gap="xxs">
+              <Text variant="label" color="textSecondary">
+                Plan
+              </Text>
+              <Text variant="cardTitle">{planLabel}</Text>
+            </Stack>
+            {planCode === 'free' ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/paywall')}
+                style={{
+                  minHeight: theme.touchTarget.minimum,
+                  paddingHorizontal: theme.spacing.md,
+                  borderRadius: 14,
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.action,
+                }}
+              >
+                <Text variant="cardTitle" style={{ color: theme.colors.onAction }}>
+                  Yükselt
+                </Text>
+              </Pressable>
+            ) : null}
           </Row>
-        </Stack>
+          {ocrUsage ? (
+            <Row style={{ justifyContent: 'space-between' }}>
+              <Text variant="caption" color="textSecondary">
+                Kalan OCR hakkı
+              </Text>
+              <Text variant="label" tabular style={{ textTransform: 'none' }}>
+                {ocrUsage.remaining} / {ocrUsage.quota}
+              </Text>
+            </Row>
+          ) : null}
+        </View>
 
-        <Stack gap="sm">
-          <SectionHeader title="Yönetim" />
-          <Card style={{ padding: 0 }}>
-            <ListRow
-              icon="wallet-outline"
-              label="Hesaplar"
-              detail={accounts.length > 0 ? `${accounts.length} hesap` : 'Hesap yok'}
-              href="/accounts"
-            />
-            <RowDivider />
-            <ListRow
-              icon="business-outline"
-              label="Bankalar"
-              detail="Hesap, kart ve kredileri bankaya göre gör"
-              href="/banks"
-            />
-            <RowDivider />
-            {/* Eskiden alt sekmede ayrı bir "Raporlar" sekmesiydi — kayan tab bar
-                yalnızca en sık kullanılan beş akışa ayrıldığından buraya taşındı. */}
-            <ListRow
-              icon="bar-chart-outline"
-              label="Raporlar"
-              detail="Gelir, gider ve borç/alacak özeti"
-              href="/reports"
-            />
-            <RowDivider />
-            <ListRow
-              icon="folder-open-outline"
-              label="Belge Arşivi"
-              detail="Ödemelere eklediğiniz dekontlar"
-              href="/documents/archive"
-            />
-            <RowDivider />
-            <ListRow
-              icon="sparkles-outline"
-              label="Abonelik Ayarları"
-              detail={planLabel}
-              href="/subscription"
-            />
-          </Card>
-        </Stack>
+        <MenuGroup title="Finans">
+          <MenuRow icon="wallet-outline" label="Hesaplar" detail={countText(accounts.length)} href="/accounts" />
+          <MenuRow
+            icon={DOCUMENT_TYPE_ICON.kredi ?? 'cash-outline'}
+            label="Krediler"
+            detail={countText(totalsByType?.kredi?.count)}
+            href={{ pathname: '/obligations', params: { type: 'kredi' } }}
+          />
+          <MenuRow
+            icon="card-outline"
+            label="Kredi kartları"
+            detail={countText(creditCardAccounts.length)}
+            href="/accounts/credit-cards"
+          />
+          {/* Çek/senet portföyü (yaşam döngüsü) Aşama 6'da birleşecek; o zamana dek ayrı listeler. */}
+          <MenuRow
+            icon={DOCUMENT_TYPE_ICON.cek ?? 'document-text-outline'}
+            label="Çekler"
+            detail={countText(totalsByType?.cek?.count)}
+            href={{ pathname: '/obligations', params: { type: 'cek' } }}
+          />
+          <MenuRow
+            icon={DOCUMENT_TYPE_ICON.senet ?? 'document-text-outline'}
+            label="Senetler"
+            detail={countText(totalsByType?.senet?.count)}
+            href={{ pathname: '/obligations', params: { type: 'senet' } }}
+          />
+          <MenuRow
+            icon={DOCUMENT_TYPE_ICON.abonelik ?? 'repeat-outline'}
+            label="Abonelikler"
+            detail={countText(totalsByType?.abonelik?.count)}
+            href={{ pathname: '/obligations', params: { type: 'abonelik' } }}
+          />
+          <MenuRow icon="people-outline" label="Kişiler ve firmalar" href="/counterparties" />
+          <MenuRow icon="business-outline" label="Bankalar" href="/banks" />
+          <MenuRow icon="pricetags-outline" label="Kategoriler" href="/categories" />
+        </MenuGroup>
 
-        <Stack gap="sm">
-          <SectionHeader title="Uygulama" />
-          <Card style={{ padding: 0 }}>
-            <ListRow
-              icon="settings-outline"
-              label="Ayarlar"
-              detail="Hesap, görünüm ve abonelik"
-              href="/settings"
+        <MenuGroup title="Analiz">
+          {/* Eskiden alt sekmede ayrı bir "Raporlar" sekmesiydi — buraya taşındı. */}
+          <MenuRow icon="bar-chart-outline" label="Raporlar" href="/reports" />
+          <MenuRow icon="folder-open-outline" label="Belge arşivi" href="/documents/archive" />
+        </MenuGroup>
+
+        <MenuGroup title="Uygulama">
+          {activeWorkspaceId ? (
+            <MenuRow
+              icon="people-circle-outline"
+              label="Çalışma alanı üyeleri"
+              href={{ pathname: '/workspace/[id]/members', params: { id: activeWorkspaceId } }}
             />
-          </Card>
-        </Stack>
+          ) : null}
+          <MenuRow icon="contrast-outline" label="Görünüm" href="/settings/appearance" />
+          <MenuRow icon="notifications-outline" label="Bildirimler" href="/notifications" />
+          <MenuRow icon="sparkles-outline" label="Abonelik ayarları" detail={planLabel} href="/subscription" />
+          <MenuRow icon="settings-outline" label="Ayarlar" href="/settings" />
+        </MenuGroup>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function PlanChip({ label, isFree }: { label: string; isFree: boolean }) {
+function countText(count: number | null | undefined): string | undefined {
+  return count === null || count === undefined ? undefined : String(count);
+}
+
+function PlanChip({ label }: { label: string }) {
   const theme = useTheme();
-  const tone = isFree ? theme.colors.textSecondary : theme.colors.brandPrimary;
   return (
     <View
       style={{
         paddingHorizontal: theme.spacing.xs,
         paddingVertical: 2,
-        borderRadius: theme.radius.pill,
-        backgroundColor: withAlpha(tone, 0.15),
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
       }}
     >
-      <Text variant="caption" style={{ color: tone, fontWeight: '600' }} numberOfLines={1}>
+      <Text variant="label" color="textSecondary" numberOfLines={1} style={{ fontSize: 10 }}>
         {label}
       </Text>
     </View>
   );
 }
 
-interface HubTileProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  detail: string;
-  /** Yalnızca gerçekten anlamlı olduğunda verilir (docs §12.4: ekran başına en fazla üç
-   * vurgu rengi) — çoğu kutu bu prop olmadan nötr (graphite) ikon kullanır. */
-  accent?: string;
-  href: Href;
-}
-
-function HubTile({ icon, label, detail, accent, href }: HubTileProps) {
-  return (
-    // Grid: minWidth satır başına kaç kutu sığacağını belirler (dar telefonda 2),
-    // flex:1 ile aynı satırdakiler kalan genişliği eşit paylaşır.
-    <Pressable onPress={() => router.push(href)} style={{ flex: 1, minWidth: 140 }}>
-      <Card>
-        <Stack gap="sm">
-          <IconChip icon={icon} accent={accent} />
-          <Stack gap="xxs">
-            <Text variant="cardTitle" numberOfLines={1}>
-              {label}
-            </Text>
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {detail}
-            </Text>
-          </Stack>
-        </Stack>
-      </Card>
-    </Pressable>
-  );
-}
-
-interface ListRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  detail: string;
-  /** Yalnızca gerçekten anlamlı olduğunda verilir (docs §12.4) — bkz. HubTileProps.accent. */
-  accent?: string;
-  href: Href;
-}
-
-// Yönetim/Uygulama satırları: tek bir kart içinde ayraçlı liste — navigasyon amaçlı
-// olduğu için (veri taşımayan) kutu yerine satır olarak gösterilir, kayıt türü
-// kutularından görsel olarak ayrışır.
-function ListRow({ icon, label, detail, accent, href }: ListRowProps) {
+// Gruplu menü: mono küçük başlık + tek yüzeyde ince çizgiyle ayrılmış satırlar.
+function MenuGroup({ title, children }: { title: string; children: ReactNode }) {
   const theme = useTheme();
+  const rows = Children.toArray(children).filter(Boolean);
 
   return (
-    <Pressable onPress={() => router.push(href)}>
-      <Row gap="sm" style={{ padding: theme.spacing.md }}>
-        <IconChip icon={icon} accent={accent} />
-        <Stack gap="xxs" style={{ flex: 1 }}>
-          <Text variant="cardTitle" numberOfLines={1}>
-            {label}
-          </Text>
-          <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            {detail}
-          </Text>
-        </Stack>
-        <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-      </Row>
-    </Pressable>
-  );
-}
-
-// Kutu/satır ikon kabı — varsayılan nötr (graphite) görünüm: tüm ikonlar aynı sakin
-// yüzeyde durur, kimlik renk yerine ikon şekli ve etiketten gelir (docs §12.9). `accent`
-// bilinçli olarak hiçbir satırda kullanılmıyor — bu ekranda tam tutarlılık tercih edildi.
-function IconChip({ icon, accent }: { icon: keyof typeof Ionicons.glyphMap; accent?: string }) {
-  const theme = useTheme();
-
-  return (
-    <View
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: theme.radius.input,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: accent ? withAlpha(accent, 0.14) : theme.colors.surfaceElevated,
-        borderWidth: accent ? 0 : 1,
-        borderColor: theme.colors.border,
-      }}
-    >
-      <Ionicons name={icon} size={20} color={accent ?? theme.colors.textSecondary} />
+    <View style={{ gap: theme.spacing.xs }}>
+      <Text variant="label" color="textSecondary">
+        {title}
+      </Text>
+      <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
+        {rows.map((row, index) => (
+          <Fragment key={index}>
+            {index > 0 ? (
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: theme.colors.border,
+                  marginLeft: theme.spacing.md + 24 + theme.spacing.sm,
+                }}
+              />
+            ) : null}
+            {row}
+          </Fragment>
+        ))}
+      </View>
     </View>
   );
 }
 
-// Liste satırlarını ayıran çizgi ikonun bittiği yerden başlasın diye sola girinti verir.
-function RowDivider() {
+interface MenuRowProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  detail?: string;
+  href: Href;
+}
+
+function MenuRow({ icon, label, detail, href }: MenuRowProps) {
   const theme = useTheme();
-  return <Divider style={{ marginLeft: theme.spacing.md + 40 + theme.spacing.sm }} />;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={detail ? `${label}, ${detail}` : label}
+      onPress={() => router.push(href)}
+      style={{
+        minHeight: 56,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.sm,
+        paddingHorizontal: theme.spacing.md,
+      }}
+    >
+      <Ionicons name={icon} size={24} color={theme.colors.textPrimary} />
+      <Text variant="cardTitle" numberOfLines={1} style={{ flex: 1 }}>
+        {label}
+      </Text>
+      {detail ? (
+        <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none', fontSize: 13 }}>
+          {detail}
+        </Text>
+      ) : null}
+      <Ionicons name="chevron-forward" size={18} color={theme.colors.mutedControl} />
+    </Pressable>
+  );
 }
