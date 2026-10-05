@@ -440,6 +440,13 @@ export default function AccountDetailScreen() {
               ]
             : []),
           {
+            key: 'installments',
+            label: 'Taksitli Alışverişler',
+            description: 'Gelecek ekstrelere yansıyan taksit yükü.',
+            icon: 'layers-outline' as const,
+            onPress: () => router.push(`/accounts/${account.id}/installments`),
+          },
+          {
             key: 'edit',
             label: 'Düzenle',
             description: 'Kart bilgilerini güncelleyin.',

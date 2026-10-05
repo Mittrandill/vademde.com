@@ -13,6 +13,7 @@ import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import { HomeHero } from '@/components/finance/HomeHero';
 import { VadeLineSection } from '@/components/finance/VadeLineSection';
 import { AiInsightsCard } from '@/components/finance/AiInsightsCard';
+import { CashAlertBanner } from '@/components/finance/CashAlertBanner';
 import { QuickActions } from '@/components/finance/QuickActions';
 import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
@@ -374,6 +375,8 @@ export default function HomeScreen() {
             hidden={balanceHidden}
             onToggleHidden={toggleBalanceHidden}
           />
+
+          <CashAlertBanner />
 
           <VadeLineSection obligations={activeObligations} rates={valueUnitRatesQuery.data ?? []} />
 

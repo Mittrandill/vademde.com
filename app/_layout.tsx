@@ -95,10 +95,12 @@ function AppNavigatorStack() {
         <Stack.Screen name="accounts/new" />
         <Stack.Screen name="accounts/[id]" />
         <Stack.Screen name="accounts/credit-cards" />
+        <Stack.Screen name="accounts/[id]/installments" />
         <Stack.Screen name="accounts/value-units" />
         <Stack.Screen name="transactions/new" />
         <Stack.Screen name="transactions/[id]" />
         <Stack.Screen name="aboneliklerim/index" />
+        <Stack.Screen name="cash-alert/[accountId]" />
         <Stack.Screen name="instruments/index" />
         <Stack.Screen name="insights/index" />
         <Stack.Screen name="insights/ask" />
