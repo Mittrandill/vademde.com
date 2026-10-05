@@ -39,18 +39,33 @@ interface PendingAsset {
   mimeType: string;
 }
 
+const CONSENT_POINTS: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string }[] = [
+  { icon: 'image-outline', title: 'Ne işlenir?', text: 'Yalnızca taradığın belgenin görüntüsü.' },
+  {
+    icon: 'checkmark-circle-outline',
+    title: 'Sonuç sende',
+    text: 'Tutar, vade ve karşı taraf okunur; hiçbir şey sen onaylamadan kaydedilmez.',
+  },
+  {
+    icon: 'create-outline',
+    title: 'Her zaman alternatif var',
+    text: 'İzin vermesen de tüm kayıtları elle girebilirsin.',
+  },
+];
+
+// BelgeIsleniyor.html: işlem adımları. Sunucu durumu (uploaded/processing/ready_for_review)
+// bu üç adıma eşlenir; aktif adımdan öncekiler tamamlanmış sayılır.
+const PROCESS_STEPS: { title: string; hint: string }[] = [
+  { title: 'Görüntü yüklendi', hint: 'Belge güvenle iletildi' },
+  { title: 'Alanlar okunuyor', hint: 'Tutar, vade, karşı taraf' },
+  { title: 'Kayıtlarla karşılaştırılıyor', hint: 'Mükerrer kayıt kontrolü' },
+];
+
 const STATUS_PROGRESS: Record<string, number> = {
   uploaded: 25,
   processing: 65,
   ready_for_review: 100,
   failed: 100,
-};
-
-const STEP_LABELS: Record<string, string> = {
-  uploaded: 'Taranıyor',
-  processing: 'Taranıyor',
-  ready_for_review: 'Tamamlandı',
-  failed: 'İşlem başarısız',
 };
 
 const FRAME_WIDTH = 280;
@@ -371,19 +386,36 @@ export default function TaraScreen() {
             />
           ) : null}
           <Stack gap="xs">
-            <Text variant="pageTitle">Akıllı Tarama İzni</Text>
+            <Text variant="pageTitle">Akıllı tarama izni</Text>
             <Text variant="body" color="textSecondary">
               {OCR_CONSENT_TEXT}
             </Text>
-            <Pressable onPress={() => router.push('/legal/privacy-policy')}>
-              <Text variant="caption" style={{ color: theme.colors.brandPrimary, textDecorationLine: 'underline' }}>
-                Gizlilik Politikası ve KVKK Aydınlatma Metnini oku
+          </Stack>
+          <Stack gap="md">
+            {CONSENT_POINTS.map((point) => (
+              <Row key={point.title} gap="sm" align="flex-start">
+                <Ionicons name={point.icon} size={theme.iconSize.xxl} color={theme.colors.textPrimary} />
+                <Stack gap="xxs" style={{ flex: 1 }}>
+                  <Text variant="cardTitle">{point.title}</Text>
+                  <Text variant="body" color="textSecondary">
+                    {point.text}
+                  </Text>
+                </Stack>
+              </Row>
+            ))}
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push('/legal/privacy-policy')}
+              style={{ minHeight: theme.touchTarget.minimum, justifyContent: 'center' }}
+            >
+              <Text variant="cardTitle" style={{ fontSize: 14, textDecorationLine: 'underline' }}>
+                KVKK aydınlatma metnini oku
               </Text>
             </Pressable>
           </Stack>
           <Stack gap="sm">
-            <Button label="Kabul Et ve Akıllı Tara" onPress={handleConsentAccept} />
-            <Button label="Vazgeç" variant="secondary" onPress={handleConsentDecline} />
+            <Button label="İzin ver ve tara" onPress={handleConsentAccept} />
+            <Button label="Şimdilik elle gireceğim" variant="secondary" onPress={handleConsentDecline} />
           </Stack>
         </ScrollView>
       </SafeAreaView>
@@ -418,55 +450,64 @@ export default function TaraScreen() {
           {/* Yüzen TabBar bu tam ekran katmanın üstünde durduğu için içerik onun
               üstünde kalacak kadar yukarı alınır. */}
           <Stack style={{ flex: 1, justifyContent: 'center', paddingBottom: tabBarOverlap }}>
-            <Stack align="center">
-              <View style={styles.scanFrame}>
-                {status !== 'failed' ? (
-                  <Animated.View
-                    style={[
-                      styles.scanLine,
-                      {
-                        backgroundColor: theme.colors.brandPrimary,
-                        transform: [
-                          {
-                            translateY: scanAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [0, FRAME_HEIGHT - 20],
-                            }),
-                          },
-                        ],
-                      },
-                    ]}
-                  />
-                ) : null}
-                {isPdf ? (
-                  <Ionicons name="document-text" size={64} color={theme.colors.textSecondary} />
-                ) : null}
-                <CornerBrackets color={status === 'failed' ? theme.colors.danger : theme.colors.brandPrimary} />
-              </View>
-
-              <Stack gap="sm" align="center" style={{ marginTop: theme.spacing.lg }}>
-                {status === 'failed' ? (
-                  <>
-                    <Ionicons name="alert-circle" size={28} color={theme.colors.danger} />
-                    <Text variant="body" style={{ color: '#fff' }}>
-                      Belge işlenemedi.
-                    </Text>
-                    <Button label="Tekrar Dene" variant="secondary" onPress={reset} />
-                  </>
-                ) : (
-                  <View style={[styles.progressPill, { backgroundColor: withAlpha('#000000', 0.55) }]}>
-                    <ActivityIndicator size="small" color={theme.colors.brandPrimary} />
-                    <Text variant="body" style={{ color: '#fff', marginLeft: theme.spacing.xs }}>
-                      {STEP_LABELS[status ?? 'uploaded']}... %{progress}
-                    </Text>
-                  </View>
-                )}
-                {error ? (
-                  <Text variant="caption" style={{ color: theme.colors.danger }}>
-                    {error}
+            <Stack gap="lg" style={{ paddingHorizontal: theme.screenEdge.standard }}>
+              {status === 'failed' ? (
+                <Stack gap="sm" align="center">
+                  <Ionicons name="alert-circle" size={28} color={theme.colors.danger} />
+                  <Text variant="body" style={{ color: '#fff' }}>
+                    Belge işlenemedi.
                   </Text>
-                ) : null}
-              </Stack>
+                  <Button label="Tekrar Dene" variant="secondary" onPress={reset} />
+                  {error ? (
+                    <Text variant="caption" style={{ color: theme.colors.danger }}>
+                      {error}
+                    </Text>
+                  ) : null}
+                </Stack>
+              ) : (
+                <View
+                  style={{
+                    backgroundColor: theme.colors.surfacePrimary,
+                    borderRadius: theme.radius.heroWidget,
+                    padding: theme.spacing.lg,
+                    gap: theme.spacing.md,
+                  }}
+                >
+                  <Row style={{ justifyContent: 'space-between' }}>
+                    <Text variant="sectionTitle">Okunuyor</Text>
+                    <Text variant="label" color="textSecondary" tabular>
+                      %{progress}
+                    </Text>
+                  </Row>
+                  {PROCESS_STEPS.map((step, index) => {
+                    const activeIndex = status === 'processing' ? 1 : 0;
+                    const done = status === 'ready_for_review' || index < activeIndex;
+                    const active = !done && index === activeIndex;
+                    return (
+                      <Row key={step.title} gap="sm" align="flex-start">
+                        {done ? (
+                          <Ionicons name="checkmark-circle" size={theme.iconSize.xxl} color={theme.colors.receivable} />
+                        ) : active ? (
+                          <ActivityIndicator size="small" color={theme.colors.action} style={{ width: theme.iconSize.xxl }} />
+                        ) : (
+                          <Ionicons name="ellipse-outline" size={theme.iconSize.xxl} color={theme.colors.mutedControl} />
+                        )}
+                        <Stack gap="xxs" style={{ flex: 1 }}>
+                          <Text variant="cardTitle" color={done || active ? 'textPrimary' : 'textSecondary'}>
+                            {step.title}
+                          </Text>
+                          <Text variant="caption" color="textSecondary">
+                            {step.hint}
+                          </Text>
+                        </Stack>
+                      </Row>
+                    );
+                  })}
+                  <Text variant="caption" color="textSecondary">
+                    Sonuç hazır olduğunda kontrol ekranına geçilir; hiçbir şey sen onaylamadan kaydedilmez.
+                  </Text>
+                </View>
+              )}
             </Stack>
           </Stack>
         </SafeAreaView>
@@ -492,7 +533,7 @@ export default function TaraScreen() {
         >
           <Stack gap="sm">
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text variant="pageTitle">Belge Tara</Text>
+              <Text variant="pageTitle">Belge tara</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Tarama hakkında bilgi"
@@ -535,54 +576,25 @@ export default function TaraScreen() {
             accessibilityRole="button"
             accessibilityLabel="Kameradan tara"
             onPress={() => setMode('camera')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.md,
+              padding: theme.spacing.lg,
+              borderRadius: theme.radius.heroWidget,
+              backgroundColor: theme.colors.action,
+            }}
           >
-            <Card elevated style={{ paddingVertical: theme.spacing.xl, alignItems: 'center' }}>
-              <Stack gap="md" align="center">
-                <View style={styles.heroGlowWrap}>
-                  <Animated.View
-                    style={[
-                      styles.heroGlowOuter,
-                      {
-                        backgroundColor: withAlpha(theme.colors.brandPrimary, 0.1),
-                        transform: [
-                          { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
-                        ],
-                      },
-                    ]}
-                  />
-                  <Animated.View
-                    style={[
-                      styles.heroGlowInner,
-                      {
-                        backgroundColor: withAlpha(theme.colors.brandPrimary, 0.18),
-                        transform: [
-                          { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) },
-                        ],
-                      },
-                    ]}
-                  />
-                  <View style={[styles.heroButton, { backgroundColor: theme.colors.brandPrimary }]}>
-                    <Ionicons name="camera-outline" size={52} color={theme.colors.brandPrimaryText} />
-                  </View>
-                </View>
-
-                <Stack gap="xxs" align="center">
-                  <Text variant="sectionTitle">Kameradan Tara</Text>
-                  <Text variant="caption" color="textSecondary">
-                    Belgeyi kamerayla çekerek tara
-                  </Text>
-                </Stack>
-
-                <View
-                  style={[
-                    styles.heroArrow,
-                    { backgroundColor: theme.colors.backgroundPrimary, borderColor: theme.colors.border },
-                  ]}
-                >
-                  <Ionicons name="arrow-forward" size={22} color={theme.colors.brandPrimary} />
-                </View>
-              </Stack>
-            </Card>
+            <Ionicons name="camera-outline" size={40} color={theme.colors.onAction} />
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="sectionTitle" style={{ color: theme.colors.onAction }}>
+                Kameradan tara
+              </Text>
+              <Text variant="caption" style={{ color: theme.colors.onAction }}>
+                Belgeyi kamerayla çekerek tara
+              </Text>
+            </Stack>
+            <Ionicons name="arrow-forward" size={theme.iconSize.xxl} color={theme.colors.onAction} />
           </Pressable>
 
           <Stack gap="sm">
