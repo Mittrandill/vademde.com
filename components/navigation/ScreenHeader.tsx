@@ -54,16 +54,18 @@ function HeaderButton({ action }: { action: ScreenHeaderAction }) {
       style={{
         width: 44,
         height: 44,
-        borderRadius: theme.radius.input,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: accent ? theme.colors.brandPrimary : theme.colors.surfaceElevated,
+        backgroundColor: accent ? theme.colors.action : theme.colors.surfacePrimary,
+        borderWidth: accent ? 0 : 1,
+        borderColor: theme.colors.border,
       }}
     >
       <Ionicons
         name={action.icon}
         size={accent ? 26 : 22}
-        color={accent ? theme.colors.brandPrimaryText : theme.colors.textPrimary}
+        color={accent ? theme.colors.onAction : theme.colors.textPrimary}
       />
     </Pressable>
   );

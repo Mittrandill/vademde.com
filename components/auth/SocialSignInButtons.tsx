@@ -32,8 +32,8 @@ export function SocialSignInButtons({
           onPress={onApplePress}
           disabled={disabled || appleLoading}
           style={{
-            height: theme.buttonHeight.primary,
-            borderRadius: theme.radius.input,
+            height: 52,
+            borderRadius: 16,
             backgroundColor: '#000000',
             alignItems: 'center',
             justifyContent: 'center',
@@ -57,9 +57,9 @@ export function SocialSignInButtons({
         onPress={onGooglePress}
         disabled={disabled || googleLoading}
         style={{
-          height: theme.buttonHeight.primary,
-          borderRadius: theme.radius.input,
-          backgroundColor: theme.colors.surfaceElevated,
+          height: 52,
+          borderRadius: 16,
+          backgroundColor: theme.colors.surfacePrimary,
           borderWidth: 1,
           borderColor: theme.colors.border,
           alignItems: 'center',

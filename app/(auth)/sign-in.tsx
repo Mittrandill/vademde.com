@@ -6,7 +6,7 @@ import { Link } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { Button, Divider, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
-import { AuthHeader } from '@/components/brand/AuthHeader';
+import { VademdeMark } from '@/components/brand/VademdeMark';
 import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
 import {
   resetPasswordForEmail,
@@ -101,7 +101,53 @@ export default function SignInScreen() {
           }}
         >
           <Stack gap="xl">
-            <AuthHeader markSize={48} />
+            <Stack gap="md" align="flex-start">
+              <VademdeMark size={44} />
+              <Stack gap="xs">
+                <Text variant="pageTitle">Tekrar hoş geldin</Text>
+                <Text variant="body" color="textSecondary">
+                  Hesabına giriş yap, kaldığın yerden devam et.
+                </Text>
+              </Stack>
+            </Stack>
+
+            <Stack gap="sm">
+              <TextField
+                label="E-POSTA"
+                placeholder="ornek@eposta.com"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextField
+                label="ŞİFRE"
+                placeholder="••••••••"
+                secureTextEntry={!passwordVisible}
+                value={password}
+                onChangeText={setPassword}
+                rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+                onRightIconPress={() => setPasswordVisible((v) => !v)}
+              />
+              <Pressable onPress={handleForgotPassword} style={{ alignSelf: 'flex-end' }}>
+                <Text variant="cardTitle" style={{ fontSize: 14 }}>
+                  Şifremi unuttum
+                </Text>
+              </Pressable>
+            </Stack>
+
+            {error ? (
+              <Text variant="caption" color="danger">
+                {error}
+              </Text>
+            ) : null}
+            {info ? (
+              <Text variant="caption" color="receivable">
+                {info}
+              </Text>
+            ) : null}
+
+            <Button label="Giriş yap" onPress={handleSubmit} loading={loading} />
 
             <SocialSignInButtons
               onApplePress={handleApple}
@@ -113,51 +159,15 @@ export default function SignInScreen() {
 
             <Row gap="sm" align="center">
               <Divider style={{ flex: 1 }} />
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 veya
               </Text>
               <Divider style={{ flex: 1 }} />
             </Row>
 
-            <Stack gap="sm">
-              <TextField
-                placeholder="E-posta adresiniz"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                value={email}
-                onChangeText={setEmail}
-              />
-              <TextField
-                placeholder="Şifreniz"
-                secureTextEntry={!passwordVisible}
-                value={password}
-                onChangeText={setPassword}
-                rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
-                onRightIconPress={() => setPasswordVisible((v) => !v)}
-              />
-              <Pressable onPress={handleForgotPassword} style={{ alignSelf: 'flex-end' }}>
-                <Text variant="caption" color="textSecondary">
-                  Şifremi unuttum?
-                </Text>
-              </Pressable>
-            </Stack>
-
-            {error ? (
-              <Text variant="caption" color="danger">
-                {error}
-              </Text>
-            ) : null}
-            {info ? (
-              <Text variant="caption" color="success">
-                {info}
-              </Text>
-            ) : null}
-
-            <Button label="Giriş Yap" onPress={handleSubmit} loading={loading} />
-
             <Link href="/(auth)/sign-up" style={{ alignSelf: 'center' }}>
               <Text variant="body" color="textSecondary">
-                Hesabınız yok mu? <Text variant="body" color="brandPrimary">Kayıt olun</Text>
+                Hesabın yok mu? <Text variant="body" style={{ fontWeight: '700' }}>Kayıt ol</Text>
               </Text>
             </Link>
           </Stack>

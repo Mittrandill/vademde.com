@@ -6,7 +6,7 @@ import { Link } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { Button, Divider, Row, Stack, Text, TextField } from '@/components/primitives';
-import { AuthHeader } from '@/components/brand/AuthHeader';
+import { VademdeMark } from '@/components/brand/VademdeMark';
 import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
 import { signInWithApple, signInWithGoogle, signUpWithPassword } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
@@ -79,41 +79,35 @@ export default function SignUpScreen() {
           }}
         >
           <Stack gap="xl">
-            <AuthHeader markSize={48} />
+            <Stack gap="md" align="flex-start">
+              <VademdeMark size={44} />
+              <Stack gap="xs">
+                <Text variant="pageTitle">Hesap oluştur</Text>
+                <Text variant="body" color="textSecondary">
+                  Bir dakikadan kısa sürer.
+                </Text>
+              </Stack>
+            </Stack>
 
             {confirmationSent ? (
-              <Text variant="body" color="success">
+              <Text variant="body" color="receivable">
                 Bu e-posta adresi sistemde kayıtlı değilse, doğrulama bağlantısı gönderildi.
                 Gelen kutunuzu kontrol edin.
               </Text>
             ) : (
               <>
-                <SocialSignInButtons
-                  onApplePress={handleApple}
-                  onGooglePress={handleGoogle}
-                  appleLoading={appleLoading}
-                  googleLoading={googleLoading}
-                  disabled={loading}
-                />
-
-                <Row gap="sm" align="center">
-                  <Divider style={{ flex: 1 }} />
-                  <Text variant="caption" color="textSecondary">
-                    veya
-                  </Text>
-                  <Divider style={{ flex: 1 }} />
-                </Row>
-
                 <Stack gap="sm">
                   <TextField
-                    placeholder="E-posta adresiniz"
+                    label="E-POSTA"
+                    placeholder="ornek@eposta.com"
                     autoCapitalize="none"
                     keyboardType="email-address"
                     value={email}
                     onChangeText={setEmail}
                   />
                   <TextField
-                    placeholder="Şifreniz"
+                    label="ŞİFRE"
+                    placeholder="••••••••"
                     secureTextEntry={!passwordVisible}
                     value={password}
                     onChangeText={setPassword}
@@ -128,13 +122,29 @@ export default function SignUpScreen() {
                   </Text>
                 ) : null}
 
-                <Button label="Kayıt Ol" onPress={handleSubmit} loading={loading} />
+                <Button label="Hesap oluştur" onPress={handleSubmit} loading={loading} />
+
+                <SocialSignInButtons
+                  onApplePress={handleApple}
+                  onGooglePress={handleGoogle}
+                  appleLoading={appleLoading}
+                  googleLoading={googleLoading}
+                  disabled={loading}
+                />
+
+                <Row gap="sm" align="center">
+                  <Divider style={{ flex: 1 }} />
+                  <Text variant="label" color="textSecondary">
+                    veya
+                  </Text>
+                  <Divider style={{ flex: 1 }} />
+                </Row>
               </>
             )}
 
             <Link href="/(auth)/sign-in" style={{ alignSelf: 'center' }}>
               <Text variant="body" color="textSecondary">
-                Zaten hesabınız var mı? <Text variant="body" color="brandPrimary">Giriş yapın</Text>
+                Zaten hesabın var mı? <Text variant="body" style={{ fontWeight: '700' }}>Giriş yap</Text>
               </Text>
             </Link>
           </Stack>
