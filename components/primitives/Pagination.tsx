@@ -61,10 +61,10 @@ export function Pagination({ page, totalPages, onChange, loading }: PaginationPr
               minWidth: theme.touchTarget.minimum,
               height: theme.touchTarget.minimum,
               paddingHorizontal: theme.spacing.xs,
-              borderRadius: theme.radius.pill,
+              borderRadius: 14,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: p === page ? theme.colors.brandPrimary : 'transparent',
+              backgroundColor: p === page ? theme.colors.action : 'transparent',
               borderWidth: p === page ? 0 : 1,
               borderColor: theme.colors.border,
             }}
@@ -73,7 +73,7 @@ export function Pagination({ page, totalPages, onChange, loading }: PaginationPr
               variant="caption"
               tabular
               style={{
-                color: p === page ? theme.colors.brandPrimaryText : theme.colors.textSecondary,
+                color: p === page ? theme.colors.onAction : theme.colors.textSecondary,
                 fontWeight: p === page ? '700' : '400',
               }}
             >
@@ -114,7 +114,7 @@ function StepButton({ icon, label, disabled, onPress }: StepButtonProps) {
       style={{
         width: theme.touchTarget.minimum,
         height: theme.touchTarget.minimum,
-        borderRadius: theme.radius.pill,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: theme.colors.border,
         alignItems: 'center',
