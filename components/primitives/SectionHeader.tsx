@@ -18,9 +18,8 @@ export function SectionHeader({ title, actionLabel, onActionPress }: SectionHead
 
   return (
     <Row align="center">
-      <Text variant="caption" color="textSecondary" style={{ flex: 1, letterSpacing: 0.6 }}>
-        {/* Türkçe'de i -> İ dönüşümü yalnızca yerelli büyütmede doğru çalışır. */}
-        {title.toLocaleUpperCase('tr-TR')}
+      <Text variant="label" color="textSecondary" style={{ flex: 1 }}>
+        {title}
       </Text>
       {actionLabel && onActionPress ? (
         <Pressable onPress={onActionPress} hitSlop={12}>

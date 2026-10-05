@@ -29,7 +29,7 @@ export const touchTarget = {
 } as const;
 
 export const buttonHeight = {
-  primary: 55,
+  primary: 56,
 } as const;
 
 // Filtre/segment satırları uygulama genelinde aynı yükseklikte olmalı; aksi halde her

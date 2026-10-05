@@ -27,9 +27,11 @@ function ButtonComponent({ label, onPress, variant = 'primary', loading, disable
       ? theme.colors.brandPrimary
       : variant === 'danger'
         ? theme.colors.danger
-        : theme.colors.surfaceElevated;
+        : theme.colors.surfacePrimary;
 
-  const textColor = variant === 'secondary' ? theme.colors.textPrimary : theme.colors.brandPrimaryText;
+  // Tasarım: ana buton 56 pt / 16 radius, etiket 17 pt kalın; ikincil buton yüzey + ince çerçeve.
+  const textColor =
+    variant === 'secondary' ? theme.colors.textPrimary : variant === 'danger' ? '#FFFFFF' : theme.colors.onAction;
 
   return (
     <Pressable
@@ -38,8 +40,10 @@ function ButtonComponent({ label, onPress, variant = 'primary', loading, disable
       style={{
         height: theme.buttonHeight.primary,
         paddingHorizontal: theme.spacing.lg,
-        borderRadius: theme.radius.input,
+        borderRadius: 16,
         backgroundColor: background,
+        borderWidth: variant === 'secondary' ? 1 : 0,
+        borderColor: theme.colors.border,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: disabled ? theme.opacity.disabled : 1,
@@ -50,12 +54,12 @@ function ButtonComponent({ label, onPress, variant = 'primary', loading, disable
       ) : icon ? (
         <Row gap="xs" align="center">
           <Ionicons name={icon} size={20} color={textColor} />
-          <Text variant="cardTitle" style={{ color: textColor }}>
+          <Text variant="cardTitle" style={{ color: textColor, fontSize: 17, fontWeight: '700' }}>
             {label}
           </Text>
         </Row>
       ) : (
-        <Text variant="cardTitle" style={{ color: textColor }}>
+        <Text variant="cardTitle" style={{ color: textColor, fontSize: 17, fontWeight: '700' }}>
           {label}
         </Text>
       )}

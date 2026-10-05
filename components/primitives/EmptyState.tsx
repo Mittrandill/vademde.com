@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
 import { Button } from './Button';
-import { Card } from './Card';
 import { Row, Stack } from './Stack';
 import { Text } from './Text';
 
@@ -22,7 +21,7 @@ export function EmptyState({ icon, title, message, actionLabel, onActionPress }:
   const theme = useTheme();
 
   return (
-    <Card>
+    <View style={{ paddingVertical: theme.spacing.md }}>
       <Row gap="sm" align="flex-start">
         <View
           style={{
@@ -49,6 +48,6 @@ export function EmptyState({ icon, title, message, actionLabel, onActionPress }:
           ) : null}
         </Stack>
       </Row>
-    </Card>
+    </View>
   );
 }
