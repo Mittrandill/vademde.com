@@ -223,6 +223,7 @@ export default function MoreScreen() {
         <MenuGroup title="Analiz">
           {/* Eskiden alt sekmede ayrı bir "Raporlar" sekmesiydi — buraya taşındı. */}
           <MenuRow icon="bar-chart-outline" label="Raporlar" href="/reports" />
+          <MenuRow icon="sparkles-outline" label="Akıllı öneriler" detail="Plus" href="/insights" />
           <MenuRow icon="folder-open-outline" label="Belge arşivi" href="/documents/archive" />
         </MenuGroup>
 

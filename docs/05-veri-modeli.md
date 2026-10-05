@@ -15,6 +15,7 @@
 | counterparties | Cariler: kişi, firma ve personel (`type` = `individual` \| `company` \| `personel`) |
 | transactions | Gerçekleşmiş para hareketleri |
 | obligations | Vadeli borç ve alacaklar |
+| ai_insights | Akıllı öneriler (Plus): kural çıktısı olgular + kısa metin, durum new/dismissed/applied; yazma yalnızca `generate-insights` (service role), kullanıcı yalnızca `status` günceller |
 | installments | Taksit satırları |
 | payments | Kısmi/tam ödeme ve tahsilatlar (`receipt_document_id` → `financial_documents`, ON DELETE SET NULL: ödemeye bağlı dekont; birden çok ödeme aynı dekonta bağlanabilir) |
 | recurrence_rules | Düzenli işlem kuralları |

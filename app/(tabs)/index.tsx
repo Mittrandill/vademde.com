@@ -12,6 +12,7 @@ import { useTheme } from '@/theme';
 import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import { HomeHero } from '@/components/finance/HomeHero';
 import { VadeLineSection } from '@/components/finance/VadeLineSection';
+import { AiInsightsCard } from '@/components/finance/AiInsightsCard';
 import { QuickActions } from '@/components/finance/QuickActions';
 import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
@@ -375,6 +376,8 @@ export default function HomeScreen() {
           />
 
           <VadeLineSection obligations={activeObligations} rates={valueUnitRatesQuery.data ?? []} />
+
+          <AiInsightsCard />
 
           <QuickActions />
 

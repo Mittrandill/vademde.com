@@ -39,3 +39,10 @@ Tasarımla kod çeliştiğinde kod esas alınır; her sapma burada kayıtlıdır
 - **Liste iskeleti:** `FinanceListHero`, `FinanceFilterCard` (artık `ScrollableTabs`), `FinanceListSurface` kartsız; Hesaplar, Kredi kartları, Bankalar, Cariler ve Vadeli kayıtlar listeleri bunları kullanıyor. Vadeli kayıtlar listesindeki borç/alacak sekmeleri ve gün grupları yok (iş mantığında yön filtresi bilerek kaldırılmıştı); numaralı sayfalama korundu. Satırlardaki borç tutarı artık kırmızı değil (kırmızı yalnızca gecikme).
 - **Giriş/Kayıt:** yeni başlık düzeni ve etiketli alanlar. Tasarımdaki "Ad soyad" alanı, parola kuralı çipleri, onay kutusu ve "7 gün ücretsiz Plus" rozeti eklenmedi (kayıt akışı ve plan mantığı değişmez).
 - **Henüz yapılmayanlar:** Vadeli kayıt detayı/formu, kredi ve kart detayları, hesap detayları, belge inceleme (OcrKontrol), raporlar, ayarlar, çalışma alanı, paywall, yasal ve onboarding ekranlarının yeniden düzeni.
+
+## Aşama 6 — Akıllı öneriler ve soru-cevap (§5.7)
+- **Şema:** yalnızca ekleyici `ai_insights` tablosu (`20261005120000_ai_insights.sql`, production'a uygulandı; geri alma: `drop table public.ai_insights`). RLS: üyeler okur, düzenleyiciler yalnızca `status` günceller; ekleme yalnızca service role.
+- **Edge function'lar** (`generate-insights`, `ai-ask`, `verify_jwt` açık, mevcut `GEMINI_API_KEY` secret'ı): sorgular kullanıcının JWT'siyle (RLS), üyelik ve Plus planı sunucuda doğrulanır. Rakamlar sorgudan; Gemini yalnızca metni akıcılaştırır ve metindeki sayılar olgularda yoksa şablon metne düşülür. `ai-ask` yazma yetkisiz, kaynak sayısı ve dönemi koddan hesaplanır.
+- **Kurallar (şimdilik 2):** aynı kategoride 2+ abonelik; son 3 ay üst üste artan harcama kategorisi. Nakit riski (§5.6 `planned_account_id` gelince) ve kur etkisi kuralları henüz yok.
+- **Onay:** "Akıllı Tarama İzni"nden ayrı, cihazda tutulan KVKK onayı; "yatırım/kredi tavsiyesi değildir" notu. Bu onay metni hukuki gözden geçirme ister.
+- **Bilinen sınır:** `ai-ask` yalnızca TL hareketleri son 120 günden özetler (en çok 3000 kayıt); istek başına hız sınırı yok (maliyet izlenmeli).
