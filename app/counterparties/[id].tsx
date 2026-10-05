@@ -18,6 +18,7 @@ import {
   Text,
 } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
+import { ReminderSheet } from '@/components/finance/ReminderSheet';
 import {
   FinanceDetailHero,
   FinanceDetailInfoCard,
@@ -153,6 +154,7 @@ export default function CounterpartyDetailScreen() {
   });
   const receipts = receiptsQuery.data ?? [];
 
+  const [reminderOpen, setReminderOpen] = useState(false);
   const counterparty = counterpartyQuery.data;
   const ledger = ledgerQuery.data;
 
@@ -255,6 +257,15 @@ export default function CounterpartyDetailScreen() {
 
   return (
     <>
+    <ReminderSheet
+      visible={reminderOpen}
+      onClose={() => setReminderOpen(false)}
+      workspaceId={activeWorkspaceId as string}
+      counterparty={counterparty}
+      netMinor={netMinor}
+      dueDate={ledger?.nearestDueDate ?? null}
+      overdue={(ledger?.overdueCount ?? 0) > 0}
+    />
     <DetailScaffold
       header={{
         title: counterparty.name,
@@ -398,6 +409,17 @@ export default function CounterpartyDetailScreen() {
       title="Cari işlemleri"
       onClose={() => setMenuOpen(false)}
       options={[
+        ...(owesUs
+          ? [
+              {
+                key: 'reminder',
+                label: 'Hatırlatma Gönder',
+                description: 'WhatsApp, SMS veya e-posta ile alacağı hatırlat.',
+                icon: 'notifications-outline' as const,
+                onPress: () => setReminderOpen(true),
+              },
+            ]
+          : []),
         {
           key: 'sales-invoice',
           label: 'Satış Faturası Oluştur',

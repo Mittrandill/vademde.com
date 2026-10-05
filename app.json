@@ -13,6 +13,7 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["whatsapp"],
         "CFBundleDevelopmentRegion": "tr",
         "CFBundleLocalizations": [
           "tr"
