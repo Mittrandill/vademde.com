@@ -52,7 +52,7 @@ function FormSection({
     <Card>
       <Stack gap="md">
         <Row gap="sm" align="center">
-          <Ionicons name={icon} size={18} color={theme.colors.brandPrimary} />
+          <Ionicons name={icon} size={18} color={theme.colors.textPrimary} />
           <Text variant="cardTitle">{title}</Text>
         </Row>
         <Divider />

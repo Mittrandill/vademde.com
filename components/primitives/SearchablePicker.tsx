@@ -157,8 +157,8 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                       opacity: creating ? 0.6 : 1,
                     }}
                   >
-                    <Ionicons name="add-circle-outline" size={20} color={theme.colors.brandPrimary} />
-                    <Text variant="body" style={{ color: theme.colors.brandPrimary }}>
+                    <Ionicons name="add-circle-outline" size={20} color={theme.colors.textPrimary} />
+                    <Text variant="body" style={{ color: theme.colors.textPrimary }}>
                       {creating ? 'Ekleniyor...' : `"${trimmedSearch}" ekle`}
                     </Text>
                   </Pressable>

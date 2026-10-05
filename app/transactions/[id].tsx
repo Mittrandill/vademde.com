@@ -258,7 +258,7 @@ export default function TransactionDetailScreen() {
                 <Divider />
                 <Pressable accessibilityRole="button" accessibilityLabel="Dekontu aç" onPress={handleOpenReceipt}>
                   <Row gap="sm" align="center">
-                    <Ionicons name="attach" size={24} color={theme.colors.brandPrimary} style={{ width: 36, textAlign: 'center' }} />
+                    <Ionicons name="attach" size={24} color={theme.colors.textPrimary} style={{ width: 36, textAlign: 'center' }} />
                     <Stack gap="xxs" style={{ flex: 1 }}>
                       <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
                         DEKONT

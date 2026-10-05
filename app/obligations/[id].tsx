@@ -216,7 +216,7 @@ export default function ObligationDetailScreen() {
       <DetailScaffold
         header={{ title: '' }}
         isLoading
-        loadingIndicator={<ActivityIndicator color={theme.colors.brandPrimary} />}
+        loadingIndicator={<ActivityIndicator color={theme.colors.textPrimary} />}
         error={detailQuery.error}
         errorFallbackMessage="Kayıt yüklenemedi"
       >
@@ -665,7 +665,7 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
                     backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
                   }}
                 >
-                  <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+                  <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
                     Öde
                   </Text>
                 </Pressable>
@@ -711,7 +711,7 @@ function PaymentRow({
                 backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
               }}
             >
-              <Ionicons name="document-text-outline" size={16} color={theme.colors.brandPrimary} />
+              <Ionicons name="document-text-outline" size={16} color={theme.colors.textPrimary} />
             </View>
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="body" color="textSecondary">
@@ -761,7 +761,7 @@ function PaymentRow({
             }}
             hitSlop={8}
           >
-            <Ionicons name="attach" size={20} color={theme.colors.brandPrimary} />
+            <Ionicons name="attach" size={20} color={theme.colors.textPrimary} />
           </Pressable>
         ) : null}
         {/* Kart ödemesi transferinden dağıtılan satırlar (hesapsız ama transaction'lı) tek başına

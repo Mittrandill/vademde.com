@@ -239,8 +239,8 @@ export default function CounterpartiesScreen() {
                     onPress={openNewCounterparty}
                     style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}
                   >
-                    <Ionicons name="add" size={20} color={theme.colors.brandPrimary} />
-                    <Text variant="body" color="brandPrimary" style={{ fontWeight: '600' }}>
+                    <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
+                    <Text variant="body" color="textPrimary" style={{ fontWeight: '600' }}>
                       Yeni cari
                     </Text>
                   </Pressable>
@@ -275,7 +275,7 @@ function CounterpartyHero({
   netMinor,
 }: CounterpartyHeroProps) {
   const theme = useTheme();
-  const netColor = netMinor > 0 ? theme.colors.success : netMinor < 0 ? theme.colors.danger : theme.colors.textPrimary;
+  const netColor = netMinor > 0 ? theme.colors.receivable : theme.colors.textPrimary;
   const netPrefix = netMinor > 0 ? '+' : netMinor < 0 ? '-' : '';
 
   return (
@@ -438,7 +438,7 @@ function CounterpartyRow({ counterparty, netMinor }: { counterparty: Counterpart
   const theme = useTheme();
   const detail = counterparty.phone || counterparty.email || 'Bilgi eklenmedi';
   const amountPrefix = netMinor > 0 ? '+' : netMinor < 0 ? '-' : '';
-  const amountColor = netMinor > 0 ? theme.colors.success : netMinor < 0 ? theme.colors.danger : theme.colors.textSecondary;
+  const amountColor = netMinor > 0 ? theme.colors.receivable : netMinor < 0 ? theme.colors.textPrimary : theme.colors.textSecondary;
 
   return (
     <Pressable
@@ -495,7 +495,7 @@ function EmptyCounterparties({ hasAny, onAdd }: { hasAny: boolean; onAdd: () => 
           backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
         }}
       >
-        <Ionicons name="people-outline" size={24} color={theme.colors.brandPrimary} />
+        <Ionicons name="people-outline" size={24} color={theme.colors.textPrimary} />
       </View>
       <Text variant="cardTitle">{hasAny ? 'Sonuç bulunamadı' : 'Henüz cari yok'}</Text>
       <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
@@ -508,8 +508,8 @@ function EmptyCounterparties({ hasAny, onAdd }: { hasAny: boolean; onAdd: () => 
           onPress={onAdd}
           style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}
         >
-          <Ionicons name="add" size={20} color={theme.colors.brandPrimary} />
-          <Text variant="body" color="brandPrimary" style={{ fontWeight: '600' }}>
+          <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
+          <Text variant="body" color="textPrimary" style={{ fontWeight: '600' }}>
             Yeni cari ekle
           </Text>
         </Pressable>

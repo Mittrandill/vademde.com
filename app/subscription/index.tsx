@@ -148,7 +148,7 @@ export default function SubscriptionScreen() {
                   backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
                 }}
               >
-                <Ionicons name="sparkles-outline" size={24} color={theme.colors.brandPrimary} />
+                <Ionicons name="sparkles-outline" size={24} color={theme.colors.textPrimary} />
               </View>
             </Row>
 

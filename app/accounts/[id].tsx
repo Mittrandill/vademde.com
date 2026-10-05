@@ -232,7 +232,7 @@ export default function AccountDetailScreen() {
     const availableMinor = hasLimit ? Math.max(0, (account.credit_limit_minor as number) - balanceMinor) : 0;
     const stateAccent =
       balanceMinor <= 0 ? theme.colors.success : clampedUtilization >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary;
-    const heroAmountColor = balanceMinor > 0 ? theme.colors.danger : theme.colors.textPrimary;
+    const heroAmountColor = theme.colors.textPrimary;
     const loadedStatementCount = statementMonths.filter((m) => m.obligation).length;
     const sourceAccounts = (accountsQuery.data ?? []).filter(
       (a) => a.type !== 'credit_card' && a.type !== 'pos'
@@ -681,7 +681,7 @@ function OverdraftCard({ accountId, balanceMinor, limitMinor, currencyCode }: Ov
     <Card>
       <Stack gap="md">
         <Row gap="sm" align="center">
-          <Ionicons name="trending-down-outline" size={18} color={theme.colors.brandPrimary} />
+          <Ionicons name="trending-down-outline" size={18} color={theme.colors.textPrimary} />
           <Text variant="cardTitle">Ek Hesap (KMH)</Text>
         </Row>
         <Divider />
@@ -706,8 +706,8 @@ function OverdraftCard({ accountId, balanceMinor, limitMinor, currencyCode }: Ov
             gap: theme.spacing.xxs,
           }}
         >
-          <Ionicons name="add-circle-outline" size={16} color={theme.colors.brandPrimary} />
-          <Text variant="body" color="brandPrimary">
+          <Ionicons name="add-circle-outline" size={16} color={theme.colors.textPrimary} />
+          <Text variant="body" color="textPrimary">
             Ek Hesap Faizi Ekle
           </Text>
         </Pressable>
@@ -727,7 +727,7 @@ function PosCommissionCard({ account }: { account: Account }) {
     <Card>
       <Stack gap="md">
         <Row gap="sm" align="center">
-          <Ionicons name="cut-outline" size={18} color={theme.colors.brandPrimary} />
+          <Ionicons name="cut-outline" size={18} color={theme.colors.textPrimary} />
           <Text variant="cardTitle">POS Komisyonu</Text>
         </Row>
         <Divider />

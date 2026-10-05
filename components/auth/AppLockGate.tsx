@@ -109,7 +109,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
             backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
           }}
         >
-          <Ionicons name="lock-closed" size={40} color={theme.colors.brandPrimary} />
+          <Ionicons name="lock-closed" size={40} color={theme.colors.textPrimary} />
         </View>
         <Stack gap="xs" align="center">
           <Text variant="pageTitle" style={{ textAlign: 'center' }}>

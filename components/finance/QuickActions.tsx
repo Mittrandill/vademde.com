@@ -203,7 +203,7 @@ function QuickActionsEditSheet({ visible, onClose }: QuickActionsEditSheetProps)
                           backgroundColor: theme.colors.surfacePrimary,
                         }}
                       >
-                        <Ionicons name={action.icon} size={20} color={theme.colors.brandPrimary} />
+                        <Ionicons name={action.icon} size={20} color={theme.colors.textPrimary} />
                         <Text variant="body" style={{ flex: 1 }} numberOfLines={1}>
                           {action.label}
                         </Text>

@@ -50,8 +50,9 @@ export function ScrollableTabs({ tabs, activeKey, onChange }: ScrollableTabsProp
               accessibilityState={{ selected: active }}
               onPress={() => onChange(tab.key)}
               style={{
-                height: theme.touchTarget.minimum,
+                minHeight: theme.touchTarget.minimum,
                 paddingHorizontal: theme.spacing.md,
+                paddingVertical: theme.spacing.xxs,
                 borderRadius: theme.radius.input,
                 alignItems: 'center',
                 justifyContent: 'center',

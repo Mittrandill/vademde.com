@@ -237,7 +237,7 @@ export default function PaywallScreen() {
 
       {planLimitsQuery.isPending ? (
         <Stack align="center" style={{ flex: 1, justifyContent: 'center' }}>
-          <ActivityIndicator color={theme.colors.brandPrimary} />
+          <ActivityIndicator color={theme.colors.textPrimary} />
         </Stack>
       ) : planLimitsQuery.isError ? (
         <Stack
@@ -263,7 +263,7 @@ export default function PaywallScreen() {
             }}
           >
             <Stack gap="xs">
-              <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '700', letterSpacing: 1.2 }}>
+              <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '700', letterSpacing: 1.2 }}>
                 VADEMDE PREMIUM
               </Text>
               <Text variant="pageTitle">Tarayan hiç yazmaz.</Text>
@@ -287,7 +287,7 @@ export default function PaywallScreen() {
                   borderColor: withAlpha(theme.colors.brandPrimary, 0.4),
                 }}
               >
-                <Ionicons name="gift-outline" size={22} color={theme.colors.brandPrimary} />
+                <Ionicons name="gift-outline" size={22} color={theme.colors.textPrimary} />
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="cardTitle">{trialDays} gün ücretsiz dene</Text>
                   <Text variant="caption" color="textSecondary">

@@ -156,12 +156,12 @@ export function ReceiptAttachField({
             backgroundColor: theme.colors.surfacePrimary,
           }}
         >
-          <Ionicons name="attach" size={22} color={theme.colors.brandPrimary} />
+          <Ionicons name="attach" size={22} color={theme.colors.textPrimary} />
           <Text variant="body" style={{ flex: 1 }}>
             Dekont ekli
           </Text>
           <Pressable accessibilityRole="button" onPress={openExisting} hitSlop={8}>
-            <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+            <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
               Aç
             </Text>
           </Pressable>
@@ -211,7 +211,7 @@ export function ReceiptAttachField({
                   backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
                 }}
               >
-                <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '700' }}>
+                <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>
                   Plus
                 </Text>
               </View>

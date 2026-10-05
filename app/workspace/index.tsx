@@ -201,7 +201,7 @@ export default function WorkspacesScreen() {
                           hitSlop={8}
                           onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
                         >
-                          <Ionicons name="people-outline" size={18} color={theme.colors.brandPrimary} />
+                          <Ionicons name="people-outline" size={18} color={theme.colors.textPrimary} />
                         </Pressable>
                         {isOwner ? (
                           <>

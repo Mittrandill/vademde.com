@@ -61,12 +61,12 @@ function MonthGrid({ year, month, onPickDay, isSelected, isInRange, dueDates }: 
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: theme.spacing.xxs }}>
         {cells.map((day, index) => {
-          if (day === null) return <View key={`e${index}`} style={{ width: `${100 / 7}%`, height: 46 }} />;
+          if (day === null) return <View key={`e${index}`} style={{ width: `${100 / 7}%`, minHeight: 46 }} />;
           const iso = toIso(year, month, day);
           const selected = isSelected(iso);
           const inRange = !selected && !!isInRange?.(iso);
           return (
-            <View key={iso} style={{ width: `${100 / 7}%`, height: 46, alignItems: 'center' }}>
+            <View key={iso} style={{ width: `${100 / 7}%`, minHeight: 46, alignItems: 'center' }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${day} ${MONTH_NAMES[month]} ${year}${due.has(iso) ? ', vade var' : ''}`}
@@ -74,7 +74,7 @@ function MonthGrid({ year, month, onPickDay, isSelected, isInRange, dueDates }: 
                 onPress={() => onPickDay(iso)}
                 style={{
                   width: theme.touchTarget.minimum,
-                  height: 42,
+                  minHeight: 42,
                   borderRadius: 12,
                   alignItems: 'center',
                   justifyContent: 'center',

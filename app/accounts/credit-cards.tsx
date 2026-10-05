@@ -321,7 +321,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, hasCurrentStatem
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.68}
-        style={{ maxWidth: '34%', color: theme.colors.danger }}
+        style={{ maxWidth: '34%' }}
       />
       <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
     </Pressable>

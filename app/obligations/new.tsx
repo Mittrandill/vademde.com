@@ -938,7 +938,7 @@ function ObligationForm({
                         kadar kapanır, borç iki kez görünmez.
                       </Text>
                     </Stack>
-                    <Ionicons name="chevron-forward" size={18} color={theme.colors.brandPrimary} />
+                    <Ionicons name="chevron-forward" size={18} color={theme.colors.textPrimary} />
                   </Row>
                 </Card>
               </Pressable>
@@ -1328,8 +1328,8 @@ function InstallmentPlanEditor({
         style={{ alignSelf: 'flex-start', paddingVertical: theme.spacing.xs }}
       >
         <Row gap="xs" align="center">
-          <Ionicons name="add-circle-outline" size={18} color={theme.colors.brandPrimary} />
-          <Text variant="body" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+          <Ionicons name="add-circle-outline" size={18} color={theme.colors.textPrimary} />
+          <Text variant="body" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
             {unitLabel} Ekle
           </Text>
         </Row>

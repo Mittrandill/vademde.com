@@ -350,7 +350,7 @@ export default function WorkspaceDetailScreen() {
                           backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
                         }}
                       >
-                        <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+                        <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
                           {initials(member.full_name, member.email)}
                         </Text>
                       </View>
@@ -455,7 +455,7 @@ export default function WorkspaceDetailScreen() {
                         />
                       </Pressable>
                       <Pressable onPress={() => shareInvite(invite.code)} hitSlop={8}>
-                        <Ionicons name="share-outline" size={20} color={theme.colors.brandPrimary} />
+                        <Ionicons name="share-outline" size={20} color={theme.colors.textPrimary} />
                       </Pressable>
                       <Pressable onPress={() => revokeMutation.mutate(invite.id)} hitSlop={8}>
                         <Ionicons name="trash-outline" size={20} color={theme.colors.danger} />

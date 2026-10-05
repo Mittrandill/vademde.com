@@ -336,7 +336,7 @@ export default function ReceiptResultScreen() {
     return (
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack align="center" style={{ flex: 1, justifyContent: 'center' }}>
-          <ActivityIndicator color={theme.colors.brandPrimary} />
+          <ActivityIndicator color={theme.colors.textPrimary} />
         </Stack>
       </SafeAreaView>
     );
@@ -407,7 +407,7 @@ export default function ReceiptResultScreen() {
             <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')}>
               <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.4) }}>
                 <Row gap="sm" align="center">
-                  <Ionicons name="lock-closed-outline" size={20} color={theme.colors.brandPrimary} />
+                  <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textPrimary} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">Dekontu arşivle</Text>
                     <Text variant="caption" color="textSecondary">
@@ -501,7 +501,7 @@ export default function ReceiptResultScreen() {
               BU ÖDEME HANGİ KAYITLA İLGİLİ?
             </Text>
             {matchesQuery.isPending ? (
-              <ActivityIndicator color={theme.colors.brandPrimary} />
+              <ActivityIndicator color={theme.colors.textPrimary} />
             ) : (
               <>
                 {matches.map((match) => (
@@ -557,7 +557,7 @@ export default function ReceiptResultScreen() {
             >
               <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.4) }}>
                 <Row gap="sm" align="center">
-                  <Ionicons name="business-outline" size={20} color={theme.colors.brandPrimary} />
+                  <Ionicons name="business-outline" size={20} color={theme.colors.textPrimary} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">
                       {quickAddBankAccountMutation.isPending
@@ -571,9 +571,9 @@ export default function ReceiptResultScreen() {
                     </Text>
                   </Stack>
                   {quickAddBankAccountMutation.isPending ? (
-                    <ActivityIndicator color={theme.colors.brandPrimary} />
+                    <ActivityIndicator color={theme.colors.textPrimary} />
                   ) : (
-                    <Text variant="cardTitle" style={{ color: theme.colors.brandPrimary }}>
+                    <Text variant="cardTitle" style={{ color: theme.colors.textPrimary }}>
                       Ekle
                     </Text>
                   )}

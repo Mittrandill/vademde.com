@@ -328,7 +328,7 @@ function RowIcon({ name }: { name: keyof typeof Ionicons.glyphMap }) {
         backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
       }}
     >
-      <Ionicons name={name} size={16} color={theme.colors.brandPrimary} />
+      <Ionicons name={name} size={16} color={theme.colors.textPrimary} />
     </View>
   );
 }
@@ -346,7 +346,7 @@ function RowAvatar({ initials }: { initials: string }) {
         backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
       }}
     >
-      <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+      <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
         {initials}
       </Text>
     </View>

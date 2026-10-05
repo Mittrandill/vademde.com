@@ -25,7 +25,7 @@ export function ScanPromptBanner({ description }: { description: string }) {
               justifyContent: 'center',
             }}
           >
-            <Ionicons name="camera-outline" size={20} color={theme.colors.brandPrimary} />
+            <Ionicons name="camera-outline" size={20} color={theme.colors.textPrimary} />
           </Row>
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="cardTitle">Belgeni yükle, formu doldurmakla uğraşma</Text>

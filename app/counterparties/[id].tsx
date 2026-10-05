@@ -340,10 +340,10 @@ export default function CounterpartyDetailScreen() {
                 onPress={() => router.push({ pathname: '/documents/archive', params: { counterpartyId: id as string } })}
               >
                 <Row gap="xs" align="center" style={{ justifyContent: 'center', paddingVertical: theme.spacing.xs }}>
-                  <Text variant="caption" style={{ color: theme.colors.brandPrimary, fontWeight: '600' }}>
+                  <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
                     Tümünü gör ({receipts.length})
                   </Text>
-                  <Ionicons name="chevron-forward" size={14} color={theme.colors.brandPrimary} />
+                  <Ionicons name="chevron-forward" size={14} color={theme.colors.textPrimary} />
                 </Row>
               </Pressable>
             </Stack>

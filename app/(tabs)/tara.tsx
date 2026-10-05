@@ -690,7 +690,7 @@ export default function TaraScreen() {
 
           <Stack align="center">
             <View style={styles.scanFrame}>
-              <CornerBrackets color={theme.colors.brandPrimary} />
+              <CornerBrackets color={theme.colors.textPrimary} />
             </View>
             <Text variant="caption" style={{ color: 'rgba(255,255,255,0.8)', marginTop: theme.spacing.sm }}>
               Belgeyi çerçeve içine hizalayın

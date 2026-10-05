@@ -513,7 +513,7 @@ function TransactionForm({
                             kaydedilen hareket açık kayıtları düşürmez.
                           </Text>
                         </Stack>
-                        <Ionicons name="chevron-forward" size={18} color={theme.colors.brandPrimary} />
+                        <Ionicons name="chevron-forward" size={18} color={theme.colors.textPrimary} />
                       </Row>
                     </Card>
                   </Pressable>

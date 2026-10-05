@@ -236,7 +236,7 @@ function BankRow({ bank }: { bank: BankSummary }) {
         minimumFontScale={0.68}
         style={{
           maxWidth: '30%',
-          color: bank.loanDebtMinor > 0 ? theme.colors.danger : theme.colors.textSecondary,
+          color: bank.loanDebtMinor > 0 ? theme.colors.textPrimary : theme.colors.textSecondary,
         }}
       />
       <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />

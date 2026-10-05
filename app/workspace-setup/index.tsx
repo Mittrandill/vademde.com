@@ -261,7 +261,7 @@ function ChoiceOption({
               backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
             }}
           >
-            <Ionicons name={icon} size={20} color={theme.colors.brandPrimary} />
+            <Ionicons name={icon} size={20} color={theme.colors.textPrimary} />
           </View>
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="cardTitle">{title}</Text>

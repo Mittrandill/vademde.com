@@ -203,7 +203,7 @@ export default function ProfileScreen() {
               {profileQuery.data?.avatar_url ? (
                 <Image source={{ uri: profileQuery.data.avatar_url }} style={{ width: 88, height: 88 }} />
               ) : (
-                <Text variant="pageTitle" style={{ color: theme.colors.brandPrimary }}>
+                <Text variant="pageTitle" style={{ color: theme.colors.textPrimary }}>
                   {initialsFrom(displayName, email)}
                 </Text>
               )}
@@ -413,7 +413,7 @@ export default function ProfileScreen() {
         <Card style={{ padding: 0 }}>
           <Pressable onPress={() => router.push('/subscription')}>
             <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
-              <Ionicons name="sparkles-outline" size={18} color={theme.colors.brandPrimary} />
+              <Ionicons name="sparkles-outline" size={18} color={theme.colors.textPrimary} />
               <Text variant="body" style={{ flex: 1 }}>
                 Abonelik
               </Text>
@@ -423,7 +423,7 @@ export default function ProfileScreen() {
           <Divider style={{ marginLeft: theme.spacing.md + 18 + theme.spacing.sm }} />
           <Pressable onPress={() => router.push('/settings')}>
             <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
-              <Ionicons name="settings-outline" size={18} color={theme.colors.brandPrimary} />
+              <Ionicons name="settings-outline" size={18} color={theme.colors.textPrimary} />
               <Text variant="body" style={{ flex: 1 }}>
                 Ayarlar
               </Text>

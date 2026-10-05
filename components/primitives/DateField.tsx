@@ -218,7 +218,7 @@ export function DateField({ label, value, onChangeText, placeholder = 'YYYY-AA-G
                 borderColor: theme.colors.border,
               }}
             >
-              <Text variant="body" style={{ color: theme.colors.brandPrimary }}>
+              <Text variant="body" style={{ color: theme.colors.textPrimary }}>
                 Bugün
               </Text>
             </Pressable>

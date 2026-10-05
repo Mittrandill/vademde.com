@@ -61,7 +61,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         left: 0,
         right: 0,
         bottom: 0,
-        height: theme.layout.tabBarHeight + bottomInset,
+        minHeight: theme.layout.tabBarHeight + bottomInset,
         paddingBottom: bottomInset,
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -105,7 +105,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               >
                 <Ionicons name={icons.active} size={26} color={theme.colors.onAction} />
               </View>
-              <Text variant="caption" style={{ fontSize: 11, fontWeight: '600' }} color="textSecondary">
+              <Text variant="caption" maxFontSizeMultiplier={1.15} style={{ fontSize: 11, fontWeight: '600' }} color="textSecondary">
                 {label}
               </Text>
             </Pressable>
@@ -135,6 +135,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             <Text
               variant="caption"
               numberOfLines={1}
+              maxFontSizeMultiplier={1.15}
               color={focused ? 'textPrimary' : 'textSecondary'}
               style={{ fontSize: 11, fontWeight: focused ? '700' : '500' }}
             >
