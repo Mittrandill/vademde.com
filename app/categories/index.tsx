@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { SectionList } from 'react-native';
+import { SectionList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,27 +7,28 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Card, EmptyState, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { EmptyState, Pressable, ScrollableTabs, Stack, Text, TextField } from '@/components/primitives';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import { listCategories, type Category } from '@/features/categories/api';
+import { getCategoryBreakdown } from '@/features/reports/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
+import { formatMinorAmount } from '@/utils/money';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 
-type KindFilterKey = 'all' | 'expense' | 'income';
+type Kind = 'expense' | 'income';
 
-const KIND_FILTERS: { key: KindFilterKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'expense', label: 'Gider' },
-  { key: 'income', label: 'Gelir' },
-];
+const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long' });
 
+// design Kategoriler.html: Gider/Gelir sekmeleri; bu ay en çok kullanılanlar üstte, kalanlar "Diğer"de.
+// Kullanım tutarı raporlardaki mevcut kategori dökümünden (bu ay) gelir; yeni sorgu mantığı yoktur.
 export default function CategoriesScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<KindFilterKey>('all');
+  const [kind, setKind] = useState<Kind>('expense');
 
   const categoriesQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.categories(activeWorkspaceId) : ['categories', 'disabled'],
@@ -35,134 +36,140 @@ export default function CategoriesScreen() {
     enabled: !!activeWorkspaceId,
   });
 
+  // Ay değişimi ekran yeniden açılınca yakalanır.
+  const [monthRange] = useState(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+      to: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString(),
+    };
+  });
+  const usageQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'category-usage', kind, monthRange.from] : ['category-usage', 'disabled'],
+    queryFn: () => getCategoryBreakdown(activeWorkspaceId as string, kind, monthRange),
+    enabled: !!activeWorkspaceId,
+  });
+
   const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+  const usageById = useMemo(
+    () => new Map((usageQuery.data ?? []).filter((u) => u.categoryId).map((u) => [u.categoryId as string, u.amountMinor])),
+    [usageQuery.data]
+  );
+  const counts = useMemo(
+    () => ({
+      expense: categories.filter((c) => c.kind === 'expense').length,
+      income: categories.filter((c) => c.kind === 'income').length,
+    }),
+    [categories]
+  );
 
   const sections = useMemo(() => {
     const query = normalizeForSearch(search);
-    const visible = categories.filter(
-      (c) => (kindFilter === 'all' || c.kind === kindFilter) && matchesSearch(c.name, query)
-    );
+    const visible = categories
+      .filter((c) => c.kind === kind && matchesSearch(c.name, query))
+      .sort((a, b) => (usageById.get(b.id) ?? 0) - (usageById.get(a.id) ?? 0) || a.name.localeCompare(b.name, 'tr'));
+    const used = visible.filter((c) => (usageById.get(c.id) ?? 0) > 0);
+    const top = used.slice(0, 4);
+    const rest = visible.filter((c) => !top.includes(c));
     return [
-      { title: 'GİDER KATEGORİLERİ', data: visible.filter((c) => c.kind === 'expense') },
-      { title: 'GELİR KATEGORİLERİ', data: visible.filter((c) => c.kind === 'income') },
-    ].filter((section) => section.data.length > 0);
-  }, [categories, search, kindFilter]);
+      { title: `Bu ay en çok · ${monthFormatter.format(new Date())}`, data: top },
+      { title: top.length > 0 ? 'Diğer' : 'Kategoriler', data: rest },
+    ].filter((s) => s.data.length > 0);
+  }, [categories, kind, search, usageById]);
 
-  const isFiltered = search.trim().length > 0 || kindFilter !== 'all';
-
-  // Tek dikey scroll sahibi: başlık, arama ve filtre SectionList'in ListHeaderComponent'ine
-  // taşınır ki liste kaydırıldığında hepsi tek parça halinde birlikte kaysın — üstte sabit
-  // kalıp listeyi küçük bir kutuya sıkıştırmasınlar. (Önceki halinde SectionList'e `flex: 1`
-  // verilmemişti; bu da liste yerine doğal içerik yüksekliğine sıkışmasına yol açıyordu.)
   const listHeader = (
-    <Stack gap="lg" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.md }}>
-      <Row align="center">
-        <Pressable
-          accessibilityLabel="Kapat"
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.surfaceElevated,
-          }}
-        >
-          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-          Kategoriler
-        </Text>
-        <Pressable
-          accessibilityLabel="Yeni kategori"
-          onPress={() => router.push('/categories/new')}
-          hitSlop={8}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.input,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.brandPrimary,
-          }}
-        >
-          <Ionicons name="add" size={26} color={theme.colors.brandPrimaryText} />
-        </Pressable>
-      </Row>
-
-      <Stack gap="sm">
-        <TextField
-          placeholder="Kategori adında ara"
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-          autoCorrect={false}
-        />
-        <SegmentedControl options={KIND_FILTERS} value={kindFilter} onChange={setKindFilter} size="compact" stretch />
-      </Stack>
+    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.sm }}>
+      <ScreenHeader
+        title="Kategoriler"
+        left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+        right={{ icon: 'add', accessibilityLabel: 'Yeni kategori', variant: 'accent', onPress: () => router.push('/categories/new') }}
+      />
+      <ScrollableTabs
+        tabs={[
+          { key: 'expense', label: `Gider · ${counts.expense}` },
+          { key: 'income', label: `Gelir · ${counts.income}` },
+        ]}
+        activeKey={kind}
+        onChange={(k) => setKind(k as Kind)}
+      />
+      <TextField
+        placeholder="Kategori adında ara"
+        value={search}
+        onChangeText={setSearch}
+        returnKeyType="search"
+        autoCorrect={false}
+      />
     </Stack>
   );
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        <SectionList
-          sections={sections}
-          keyExtractor={(item: Category) => item.id}
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            paddingHorizontal: theme.screenEdge.standard,
-            paddingBottom: theme.spacing.xxl,
-            flexGrow: 1,
-          }}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={listHeader}
-          renderSectionHeader={({ section }) => (
-            <Text
-              variant="caption"
-              color="textSecondary"
-              style={{ backgroundColor: theme.colors.backgroundPrimary, paddingVertical: theme.spacing.sm }}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item: Category) => item.id}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: theme.screenEdge.standard,
+          paddingBottom: theme.spacing.xxl,
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={listHeader}
+        renderSectionHeader={({ section }) => (
+          <Text variant="label" color="textSecondary" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xxs }}>
+            {section.title}
+          </Text>
+        )}
+        renderItem={({ item }) => {
+          const used = usageById.get(item.id) ?? 0;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/categories/new', params: { id: item.id } })}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: theme.spacing.sm,
+                minHeight: 60,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.border,
+              }}
             >
-              {section.title}
-            </Text>
-          )}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => router.push({ pathname: '/categories/new', params: { id: item.id } })}>
-              <Card style={{ marginBottom: theme.spacing.sm }}>
-                <Row gap="sm">
-                  <CategoryIcon icon={item.icon} color={item.color} size={36} />
-                  <Text variant="body" style={{ flex: 1 }}>
-                    {item.name}
+              <CategoryIcon icon={item.icon} color={item.color} size={40} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text variant="cardTitle" numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {used === 0 ? (
+                  <Text variant="caption" color="textSecondary">
+                    Bu ay yok
                   </Text>
-                  {item.is_default ? (
-                    <Text variant="caption" color="textSecondary">
-                      Varsayılan
-                    </Text>
-                  ) : null}
-                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-                </Row>
-              </Card>
+                ) : null}
+              </View>
+              <Text variant="cardTitle" tabular color={used > 0 ? 'textPrimary' : 'textSecondary'}>
+                {used > 0 ? formatMinorAmount(used).replace(/,00$/, '') : '—'}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedControl} />
             </Pressable>
-          )}
-          ListEmptyComponent={
-            categoriesQuery.isSuccess ? (
-              <Stack style={{ paddingTop: theme.spacing.lg }}>
-                <EmptyState
-                  icon="pricetag-outline"
-                  title={categories.length === 0 ? 'Henüz kategori yok' : 'Sonuç bulunamadı'}
-                  message={
-                    categories.length === 0
-                      ? 'Sağ üstteki + ile ilk kategorinizi ekleyin.'
-                      : isFiltered
-                        ? 'Arama terimini veya filtreyi değiştirin.'
-                        : ' '
-                  }
-                />
-              </Stack>
-            ) : null
-          }
-        />
+          );
+        }}
+        ListEmptyComponent={
+          categoriesQuery.isSuccess ? (
+            <Stack style={{ paddingTop: theme.spacing.lg }}>
+              <EmptyState
+                icon="pricetag-outline"
+                title={categories.length === 0 ? 'Henüz kategori yok' : 'Sonuç bulunamadı'}
+                message={
+                  categories.length === 0
+                    ? 'Sağ üstteki + ile ilk kategorinizi ekleyin.'
+                    : 'Arama terimini veya sekmeyi değiştirin.'
+                }
+              />
+            </Stack>
+          ) : null
+        }
+      />
     </SafeAreaView>
   );
 }

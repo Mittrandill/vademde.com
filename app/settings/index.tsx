@@ -7,8 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
-import { Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
 import { getMySubscription, getPlanLimits } from '@/features/subscriptions/api';
@@ -233,10 +232,12 @@ function SettingsSection({ title, children }: { title: string; children: ReactNo
   const theme = useTheme();
   return (
     <Stack gap="xs">
-      <Text variant="caption" color="textSecondary" style={{ paddingLeft: theme.spacing.xs }}>
+      <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
         {title}
       </Text>
-      <Card style={{ padding: 0 }}>{children}</Card>
+      <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
+        {children}
+      </View>
     </Stack>
   );
 }
@@ -254,22 +255,22 @@ function SettingsRow({
 }) {
   const theme = useTheme();
   return (
-    <Pressable onPress={onPress}>
+    <Pressable accessibilityRole="button" onPress={onPress}>
       <Row
         gap="sm"
         align="center"
-        style={{ paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.md }}
+        style={{ minHeight: 56, paddingVertical: theme.spacing.xs, paddingHorizontal: theme.spacing.md }}
       >
         {leading}
-        <Text variant="body" style={{ flex: 1 }} numberOfLines={1}>
+        <Text variant="cardTitle" style={{ flex: 1 }} numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
-          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ flexShrink: 1, maxWidth: '45%' }}>
             {subtitle}
           </Text>
         ) : null}
-        <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+        <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedControl} />
       </Row>
     </Pressable>
   );
@@ -297,11 +298,11 @@ function SettingsToggleRow({
     <Row
       gap="sm"
       align="center"
-      style={{ paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.md }}
+      style={{ minHeight: 56, paddingVertical: theme.spacing.xs, paddingHorizontal: theme.spacing.md }}
     >
       {leading}
       <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-        <Text variant="body" numberOfLines={1}>
+        <Text variant="cardTitle" numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
@@ -310,7 +311,12 @@ function SettingsToggleRow({
           </Text>
         ) : null}
       </Stack>
-      <Switch value={value} disabled={disabled} onValueChange={onValueChange} />
+      <Switch
+        value={value}
+        disabled={disabled}
+        onValueChange={onValueChange}
+        trackColor={{ false: theme.colors.border, true: theme.colors.action }}
+      />
     </Row>
   );
 }
@@ -322,13 +328,11 @@ function RowIcon({ name }: { name: keyof typeof Ionicons.glyphMap }) {
       style={{
         width: ROW_ICON_SIZE,
         height: ROW_ICON_SIZE,
-        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
       }}
     >
-      <Ionicons name={name} size={16} color={theme.colors.textPrimary} />
+      <Ionicons name={name} size={22} color={theme.colors.textPrimary} />
     </View>
   );
 }
@@ -343,10 +347,12 @@ function RowAvatar({ initials }: { initials: string }) {
         borderRadius: theme.radius.pill,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
+        backgroundColor: theme.colors.backgroundPrimary,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
       }}
     >
-      <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
+      <Text variant="label" mono style={{ color: theme.colors.textPrimary, textTransform: 'none' }}>
         {initials}
       </Text>
     </View>

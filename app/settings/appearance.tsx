@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { AppIconPicker } from '@/components/brand/AppIconPicker';
-import { Card, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { SegmentedControl, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 
@@ -35,23 +35,22 @@ export default function AppearanceScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <Card>
-          <Stack gap="sm">
-            <Text variant="label" color="textSecondary">
-              TEMA
-            </Text>
-            <SegmentedControl options={THEME_OPTIONS} value={themePreference} onChange={setThemePreference} />
-          </Stack>
-        </Card>
+        <Stack gap="sm">
+          <Text variant="label" color="textSecondary">
+            Tema
+          </Text>
+          <SegmentedControl options={THEME_OPTIONS} value={themePreference} onChange={setThemePreference} stretch />
+          <Text variant="caption" color="textSecondary">
+            Sistem seçiliyken telefonun ayarını izler.
+          </Text>
+        </Stack>
 
-        <Card>
-          <Stack gap="sm">
-            <Text variant="label" color="textSecondary">
-              UYGULAMA İKONU
-            </Text>
-            <AppIconPicker />
-          </Stack>
-        </Card>
+        <Stack gap="sm">
+          <Text variant="label" color="textSecondary">
+            Uygulama ikonu
+          </Text>
+          <AppIconPicker />
+        </Stack>
       </ScrollView>
     </SafeAreaView>
   );

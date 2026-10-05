@@ -7,7 +7,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { ActionSheet, Card, EmptyState, Pagination, Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
+import { ActionSheet, EmptyState, Pagination, Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import type { ActionSheetOption } from '@/components/primitives/ActionSheet';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
@@ -312,10 +312,17 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
           content.onPress();
         }}
       >
-        <Card style={{ marginBottom: theme.spacing.sm, opacity: isUnread ? 1 : 0.65 }}>
+        <View
+          style={{
+            paddingVertical: theme.spacing.sm,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+            opacity: isUnread ? 1 : 0.7,
+          }}
+        >
           <Row gap="sm" align="flex-start">
             {item.kind === 'statement_upload' ? (
-              <BankLogo bankCode={item.account?.bank_code} fallbackName={item.account?.name} size={36} />
+              <BankLogo bankCode={item.account?.bank_code} fallbackName={item.account?.name} size={40} />
             ) : (
               <ObligationIcon
                 documentType={item.obligation?.document_type ?? 'diger'}
@@ -328,7 +335,7 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Row gap="xs" align="center">
                 {isUnread ? (
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.brandPrimary }} />
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.attentionMarker }} />
                 ) : null}
                 <Text variant="cardTitle" style={{ flex: 1 }}>
                   {content.title}
@@ -347,7 +354,7 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
               </Pressable>
             </Stack>
           </Row>
-        </Card>
+        </View>
       </Pressable>
 
       <ActionSheet visible={sheetOpen} title={content.title} onClose={() => setSheetOpen(false)} options={options} />
