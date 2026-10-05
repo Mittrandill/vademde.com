@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
 import { useTheme } from '@/theme';
-import { Card, Row, Stack, Text } from '@/components/primitives';
+import { Row, Stack, Text } from '@/components/primitives';
 import { formatMinorAmount } from '@/utils/money';
 import type { DueBreakdown as DueBreakdownData } from '@/features/obligations/api';
 
@@ -25,7 +25,14 @@ export function DueBreakdown({
   const hasOverdue = data.overdueMinor > 0;
 
   return (
-    <Card>
+    <View
+      style={{
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: theme.colors.border,
+        paddingVertical: theme.spacing.sm,
+      }}
+    >
       <Row align="stretch">
         <Metric
           label="GECİKMİŞ"
@@ -54,7 +61,7 @@ export function DueBreakdown({
           valueColor={theme.colors.textSecondary}
         />
       </Row>
-    </Card>
+    </View>
   );
 }
 
@@ -76,7 +83,7 @@ function Metric({
 }) {
   return (
     <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-      <Text variant="caption" color="textSecondary" numberOfLines={1}>
+      <Text variant="label" color="textSecondary" numberOfLines={1}>
         {label}
       </Text>
       <Text

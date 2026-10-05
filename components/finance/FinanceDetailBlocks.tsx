@@ -1,10 +1,8 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
-import { Card, Divider, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { ScrollableTabs, Stack, Text } from '@/components/primitives';
 
 export interface FinanceDetailHeroStat {
   label: string;
@@ -25,10 +23,19 @@ export interface FinanceDetailHeroProps {
   stats: [FinanceDetailHeroStat, FinanceDetailHeroStat, FinanceDetailHeroStat];
 }
 
+// HANDOFF §2 ölçek kuralı: tam kısım 7 karakteri aşarsa font küçülür (tek satır).
+const BASE_SIZE = 52;
+const FULL_PART_LIMIT = 7;
+
+function splitAmountText(text: string) {
+  const match = /^(.*?)(,\d{1,2})(\D*)$/.exec(text);
+  return match ? { whole: match[1], fraction: match[2] + match[3] } : { whole: text, fraction: '' };
+}
+
 /**
- * Finansal detay ekranlarının tek hero kaynağı. Kredi detayında onaylanan nötr
- * yüzey, sağ üst safran ışıma, ilerleme çubuğu ve tek sıradaki üçlü istatistik
- * düzenini bütün kayıt türlerinde aynı ölçülerle korur.
+ * Finansal detay ekranlarının tek hero kaynağı (kredi, kart, hesap, banka, cari, kayıt). Yeni
+ * tasarımda kartsız: ikon + başlık + durum, mono etiket, büyük tutar, ince ilerleme çubuğu ve
+ * çizgiyle ayrılmış üçlü istatistik satırı.
  */
 export function FinanceDetailHero({
   icon,
@@ -46,125 +53,99 @@ export function FinanceDetailHero({
   const theme = useTheme();
   const normalizedProgress = progress === undefined ? undefined : Math.max(0, Math.min(1, progress));
   const progressPercent = Math.round((normalizedProgress ?? 0) * 100);
+  const { whole, fraction } = splitAmountText(amount);
+  const size = Math.floor(BASE_SIZE * Math.min(1, FULL_PART_LIMIT / Math.max(whole.length, 1)));
 
   return (
-    <Card variant="hero" style={{ borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' }}>
-      <Svg
-        viewBox="0 0 1000 1000"
-        preserveAspectRatio="none"
-        pointerEvents="none"
-        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-      >
-        <Defs>
-          <RadialGradient
-            id="financeDetailHeroGlow"
-            gradientUnits="userSpaceOnUse"
-            cx={1000}
-            cy={0}
-            fx={1000}
-            fy={0}
-            rx={880}
-            ry={600}
+    <Stack gap="lg">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+        {icon}
+        <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+          <Text variant="label" color="textSecondary" numberOfLines={1}>
+            {eyebrow}
+          </Text>
+          <Text variant="cardTitle" numberOfLines={1} style={{ fontSize: 17 }}>
+            {title}
+          </Text>
+        </Stack>
+        {status}
+      </View>
+
+      <Stack gap="xs">
+        <Text variant="label" color="textSecondary">
+          {amountLabel}
+        </Text>
+        <View accessible accessibilityLabel={amount} style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+          <Text
+            variant="displayBalance"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={{ fontSize: size, lineHeight: Math.round(size * 1.05), color: amountColor, flexShrink: 1 }}
           >
-            <Stop offset="0%" stopColor={theme.colors.brandPrimary} stopOpacity={theme.scheme === 'dark' ? 0.18 : 0.126} />
-            <Stop offset="34%" stopColor={theme.colors.brandPrimary} stopOpacity={theme.scheme === 'dark' ? 0.099 : 0.0675} />
-            <Stop offset="70%" stopColor={theme.colors.brandPrimary} stopOpacity={theme.scheme === 'dark' ? 0.0315 : 0.0225} />
-            <Stop offset="100%" stopColor={theme.colors.brandPrimary} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#financeDetailHeroGlow)" />
-      </Svg>
-
-      <Stack gap="xl" style={{ zIndex: 1 }}>
-        <Row gap="sm" align="center">
-          {icon}
-          <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              variant="caption"
-              color="textSecondary"
-              numberOfLines={1}
-              style={{ letterSpacing: 1.8, fontWeight: '600' }}
-            >
-              {eyebrow}
-            </Text>
-            <Text variant="cardTitle" numberOfLines={1}>
-              {title}
-            </Text>
-          </Stack>
-          {status}
-        </Row>
-
-        <Stack gap="md">
-          <Stack gap="xs">
-            <Text variant="caption" color="textSecondary" style={{ letterSpacing: 1.6, fontWeight: '600' }}>
-              {amountLabel}
-            </Text>
+            {whole}
+          </Text>
+          {fraction ? (
             <Text
               variant="displayBalance"
-              tabular
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.55}
-              style={{ color: amountColor }}
+              color="textSecondary"
+              style={{ fontSize: Math.round(size / 2), lineHeight: Math.round(size * 0.55), fontWeight: '600' }}
             >
-              {amount}
+              {fraction}
             </Text>
-          </Stack>
-
-          {normalizedProgress !== undefined ? (
-            <Stack gap="xs">
-              <Row gap="sm" style={{ justifyContent: 'space-between' }}>
-                <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>
-                  {progressLabel}
-                </Text>
-                <Text variant="caption" color="textSecondary" tabular style={{ fontWeight: '600' }}>
-                  %{progressPercent}
-                </Text>
-              </Row>
-              <View
-                style={{
-                  height: 7,
-                  overflow: 'hidden',
-                  borderRadius: theme.radius.pill,
-                  backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
-                }}
-              >
-                <View
-                  style={{
-                    width: `${progressPercent}%`,
-                    height: '100%',
-                    borderRadius: theme.radius.pill,
-                    backgroundColor: progressColor ?? theme.colors.brandPrimary,
-                  }}
-                />
-              </View>
-            </Stack>
           ) : null}
-        </Stack>
-
-        <Divider />
-
-        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-          {stats.map((stat) => (
-            <Stack key={stat.label} gap="xs" style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                variant="caption"
-                color="textSecondary"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.55}
-                style={{ fontWeight: '600' }}
-              >
-                {stat.label}
-              </Text>
-              <Text variant="cardTitle" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
-                {stat.value}
-              </Text>
-            </Stack>
-          ))}
         </View>
       </Stack>
-    </Card>
+
+      {normalizedProgress !== undefined ? (
+        <Stack gap="xs">
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text variant="caption" color="textSecondary">
+              {progressLabel}
+            </Text>
+            <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none' }}>
+              %{progressPercent}
+            </Text>
+          </View>
+          <View
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityValue={{ min: 0, max: 100, now: progressPercent }}
+            style={{ height: 8, overflow: 'hidden', borderRadius: 4, backgroundColor: theme.colors.border }}
+          >
+            <View
+              style={{
+                width: `${progressPercent}%`,
+                height: '100%',
+                borderRadius: 4,
+                backgroundColor: progressColor ?? theme.colors.textPrimary,
+              }}
+            />
+          </View>
+        </Stack>
+      ) : null}
+
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: theme.spacing.sm,
+          paddingVertical: theme.spacing.md,
+          borderTopWidth: 1,
+          borderBottomWidth: 1,
+          borderColor: theme.colors.border,
+        }}
+      >
+        {stats.map((stat) => (
+          <Stack key={stat.label} gap="xs" style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="label" color="textSecondary" numberOfLines={2}>
+              {stat.label}
+            </Text>
+            <Text variant="cardTitle" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {stat.value}
+            </Text>
+          </Stack>
+        ))}
+      </View>
+    </Stack>
   );
 }
 
@@ -182,7 +163,7 @@ export function FinanceDetailTabs<T extends string>({
   value: T;
   onChange: (value: T) => void;
 }) {
-  return <SegmentedControl options={options} value={value} onChange={onChange} stretch />;
+  return <ScrollableTabs tabs={options} activeKey={value} onChange={(key) => onChange(key as T)} />;
 }
 
 export interface FinanceDetailInfoRow {
@@ -202,34 +183,36 @@ export function FinanceDetailInfoCard({
   const theme = useTheme();
 
   return (
-    <Card variant="hero" style={{ padding: 0, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border }}>
-      <Stack gap="xs" style={{ padding: theme.spacing.lg }}>
-        <Text variant="cardTitle">{title}</Text>
-        <Text variant="body" color="textSecondary">
+    <Stack gap="xs">
+      <Stack gap="xxs">
+        <Text variant="sectionTitle">{title}</Text>
+        <Text variant="caption" color="textSecondary">
           {description}
         </Text>
       </Stack>
-      <Divider />
-      {rows.map((row, index) => (
-        <View key={`${row.label}-${index}`}>
-          {index > 0 ? <Divider /> : null}
-          <Row gap="md" style={{ minHeight: 64, paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm }}>
-            <Text variant="body" color="textSecondary" style={{ flex: 1 }}>
+      <View>
+        {rows.map((row, index) => (
+          <View
+            key={`${row.label}-${index}`}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.md,
+              minHeight: 52,
+              paddingVertical: theme.spacing.xs,
+              borderBottomWidth: index === rows.length - 1 ? 0 : 1,
+              borderBottomColor: theme.colors.border,
+            }}
+          >
+            <Text variant="label" color="textSecondary" style={{ flex: 1 }}>
               {row.label}
             </Text>
-            <Text
-              variant="body"
-              tabular
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.72}
-              style={{ maxWidth: '58%', textAlign: 'right', fontWeight: '600' }}
-            >
+            <Text variant="cardTitle" tabular style={{ maxWidth: '60%', textAlign: 'right' }}>
               {row.value}
             </Text>
-          </Row>
-        </View>
-      ))}
-    </Card>
+          </View>
+        ))}
+      </View>
+    </Stack>
   );
 }
