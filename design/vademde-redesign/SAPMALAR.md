@@ -46,3 +46,9 @@ Tasarımla kod çeliştiğinde kod esas alınır; her sapma burada kayıtlıdır
 - **Kurallar (şimdilik 2):** aynı kategoride 2+ abonelik; son 3 ay üst üste artan harcama kategorisi. Nakit riski (§5.6 `planned_account_id` gelince) ve kur etkisi kuralları henüz yok.
 - **Onay:** "Akıllı Tarama İzni"nden ayrı, cihazda tutulan KVKK onayı; "yatırım/kredi tavsiyesi değildir" notu. Bu onay metni hukuki gözden geçirme ister.
 - **Bilinen sınır:** `ai-ask` yalnızca TL hareketleri son 120 günden özetler (en çok 3000 kayıt); istek başına hız sınırı yok (maliyet izlenmeli).
+
+## Aşama 4/11 — Raporlar ve alt ekranlar (ikinci tur)
+- **Raporlar:** yeni düzen (dönem sekmeleri + özel aralık, önceki döneme göre değişim, bölüm atlama çipleri, dışa aktarma sheet'i, PDF bölüm seçimi). "Akıllı özet" yapay zekâ değil, ekrandaki rakamlardan türeyen deterministik metindir. Borç/alacak için "geçen aya göre" değişimi yok (geçmiş borç anlık görüntüsü saklanmıyor). Tasarruf oranı yalnızca gelir kaydı olan dönemlerde.
+- **Alt ekranlar:** `SearchablePicker` (tüm hesap/kategori/kişi/banka/tür/birim seçicileri), form başlıkları (`ScreenHeader`) ve alan etiketleri, Ayarlar, Görünüm, Kategoriler (bu ay kullanım), Bildirimler, Abonelik yeni görünümde. Profil, Çalışma alanları, Üyeler, Paywall, Yasal, Uygulama kilidi, vadeli kayıt/ödeme/hareket **formlarının iç yerleşimi** yeni renk ve yazı tipini alıyor ama tasarımdaki satır satır düzene yeniden çizilmedi; cihazda inceleyip sapmaları bildirmek gerekir.
+- Bildirimler tasarımındaki "Ödendi işaretle / Kontrol et" satır içi eylemleri ve "Bu hafta" grubu yok (liste yalnızca bugün/geçmiş ayrımı yapıyor).
+- Abonelik ekranında yalnızca belge tarama kullanımı gösteriliyor (çalışma alanı/ekip kullanımı için ek sorgu gerekir).

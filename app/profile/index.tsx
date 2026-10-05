@@ -432,14 +432,14 @@ export default function ProfileScreen() {
           </Pressable>
         </Card>
 
-        <Button label="Çıkış Yap" variant="secondary" onPress={handleSignOut} />
+        <Button label="Çıkış yap" variant="secondary" onPress={handleSignOut} />
 
         <Stack gap="sm" style={{ marginTop: theme.spacing.lg }}>
           <Text variant="label" color="textSecondary">
             TEHLİKELİ BÖLGE
           </Text>
           <Button
-            label="Hesabımı ve Verilerimi Sil"
+            label="Hesabımı ve verilerimi sil"
             variant="danger"
             onPress={confirmDeleteAccount}
             loading={isDeleting}
