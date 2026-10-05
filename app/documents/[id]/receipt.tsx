@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -369,21 +369,19 @@ export default function ReceiptResultScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}
         >
-          <Row align="center">
-            <Pressable onPress={() => router.back()} hitSlop={12}>
-              <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-              Dekontu Onayla
-            </Text>
-          </Row>
+          <ScreenHeader title="Dekontu kontrol et" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
 
           {imageUrl ? (
-            <Image
-              source={{ uri: imageUrl }}
-              style={{ width: '100%', height: 200, borderRadius: theme.radius.widget }}
-              resizeMode="cover"
-            />
+            <View
+              style={{
+                height: 220,
+                borderRadius: theme.radius.widget,
+                backgroundColor: '#26272C',
+                overflow: 'hidden',
+              }}
+            >
+              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+            </View>
           ) : isPdf && canLinkFile ? (
             <Row
               gap="sm"
@@ -398,14 +396,14 @@ export default function ReceiptResultScreen() {
           ) : null}
 
           {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
-            <Text variant="caption" color="textSecondary">
-              Genel güven: %{Math.round((document.overall_confidence ?? 0) * 100)}
+            <Text variant="label" mono color="textSecondary">
+              GENEL GÜVEN · %{Math.round((document.overall_confidence ?? 0) * 100)}
             </Text>
           ) : null}
 
           {!archive.allowed && !archive.isLoading ? (
             <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')}>
-              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.4) }}>
+              <Card>
                 <Row gap="sm" align="center">
                   <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textPrimary} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
@@ -421,7 +419,7 @@ export default function ReceiptResultScreen() {
           ) : null}
 
           {warnings.length > 0 ? (
-            <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.danger, 0.4) }}>
+            <Card>
               <Stack gap="xs">
                 <Row gap="xs" align="center">
                   <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
@@ -497,7 +495,7 @@ export default function ReceiptResultScreen() {
           </Stack>
 
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               BU ÖDEME HANGİ KAYITLA İLGİLİ?
             </Text>
             {matchesQuery.isPending ? (
@@ -555,7 +553,7 @@ export default function ReceiptResultScreen() {
               disabled={quickAddBankAccountMutation.isPending}
               onPress={() => quickAddBankAccountMutation.mutate()}
             >
-              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.4) }}>
+              <Card>
                 <Row gap="sm" align="center">
                   <Ionicons name="business-outline" size={20} color={theme.colors.textPrimary} />
                   <Stack gap="xxs" style={{ flex: 1 }}>

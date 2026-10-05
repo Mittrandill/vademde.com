@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Card, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
 import { deleteWorkspace, listMyWorkspaces, updateWorkspaceName, type Workspace } from '@/features/workspaces/api';
@@ -17,6 +17,12 @@ import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
 import { queryKeys } from '@/services/queryKeys';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showErrorAlert } from '@/utils/alerts';
+
+function workspaceInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toLocaleUpperCase('tr-TR');
+  return name.trim().slice(0, 2).toLocaleUpperCase('tr-TR');
+}
 
 // Ayarlar'daki "Çalışma Alanları" satırından açılır: tüm çalışma alanlarını listeler, aralarında
 // geçiş (aktif çalışma alanını değiştirme), davet koduyla yeni birine katılma ve yeni çalışma
@@ -129,10 +135,10 @@ export default function WorkspacesScreen() {
           </Text>
         ) : (
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
-              ÇALIŞMA ALANLARIN — DOKUNARAK GEÇİŞ YAP
+            <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.xxs }}>
+              Her çalışma alanının verisi tamamen ayrıdır. Aktif olanı seç; ana sayfa ona göre değişir.
             </Text>
-            <Card style={{ padding: 0 }}>
+            <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
               <Stack gap="xxs">
                 {workspaces.map((w) => {
                   const isOwner = w.owner_id === session?.user?.id;
@@ -168,33 +174,53 @@ export default function WorkspacesScreen() {
                         choosingPrimary && isOwner ? primaryMutation.mutate(w.id) : setActiveWorkspaceId(w.id)
                       }
                     >
-                      <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
+                      <Row gap="sm" align="center" style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
                         <View
                           style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: theme.radius.pill,
+                            width: 44,
+                            height: 44,
+                            borderRadius: 14,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderWidth: isActive ? 0 : 1.5,
-                            borderColor: theme.colors.border,
-                            backgroundColor: isActive ? theme.colors.brandPrimary : 'transparent',
+                            backgroundColor: isActive ? theme.colors.textPrimary : theme.colors.backgroundPrimary,
                           }}
                         >
-                          {isActive ? (
-                            <Ionicons name="checkmark" size={14} color={theme.colors.brandPrimaryText} />
-                          ) : null}
+                          <Text
+                            variant="label"
+                            mono
+                            style={{
+                              color: isActive ? theme.colors.backgroundPrimary : theme.colors.textPrimary,
+                              textTransform: 'none',
+                            }}
+                          >
+                            {workspaceInitials(w.name)}
+                          </Text>
                         </View>
-                        <Stack gap="xxs" style={{ flex: 1 }}>
-                          <Text variant="body" numberOfLines={1}>
+                        <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+                          <Text variant="cardTitle" numberOfLines={1}>
                             {w.name}
                           </Text>
-                          <Text variant="caption" color={readOnly ? 'danger' : 'textSecondary'}>
+                          <Text variant="caption" color={readOnly ? 'danger' : 'textSecondary'} numberOfLines={1}>
                             {w.type === 'business' ? 'İşletme' : 'Kişisel'}
                             {readOnly ? ' · Salt-okunur' : ''}
                             {planState?.overLimit && isPrimary ? ' · Birincil alan' : ''}
                           </Text>
                         </Stack>
+                        {isOwner ? (
+                          <View
+                            style={{
+                              borderWidth: 1,
+                              borderColor: theme.colors.border,
+                              borderRadius: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                            }}
+                          >
+                            <Text variant="caption" mono color="textSecondary">
+                              Sahip
+                            </Text>
+                          </View>
+                        ) : null}
                         <Pressable
                           accessibilityLabel="Ekip"
                           hitSlop={8}
@@ -212,12 +238,15 @@ export default function WorkspacesScreen() {
                             </Pressable>
                           </>
                         ) : null}
+                        <View style={{ width: 18, alignItems: 'center' }}>
+                          {isActive ? <Ionicons name="checkmark" size={18} color={theme.colors.textPrimary} /> : null}
+                        </View>
                       </Row>
                     </Pressable>
                   );
                 })}
               </Stack>
-            </Card>
+            </View>
           </Stack>
         )}
 

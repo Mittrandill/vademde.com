@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch } from 'react-native';
+import { Alert, Image, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
@@ -1045,14 +1045,7 @@ export default function DocumentReviewScreen() {
           }}
         >
           <Stack gap="lg">
-            <Row align="center">
-              <Pressable onPress={() => router.back()} hitSlop={12}>
-                <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
-              </Pressable>
-              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-                Belgeyi Onayla
-              </Text>
-            </Row>
+            <ScreenHeader title="Kontrol et" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
 
             {document.mime_type === 'application/pdf' ? (
               <Row
@@ -1071,23 +1064,28 @@ export default function DocumentReviewScreen() {
                 </Text>
               </Row>
             ) : imageUrl ? (
-              <Image
-                source={{ uri: imageUrl }}
-                style={{ width: '100%', height: 200, borderRadius: theme.radius.widget }}
-                resizeMode="cover"
-              />
+              <View
+              style={{
+                height: 220,
+                borderRadius: theme.radius.widget,
+                backgroundColor: '#26272C',
+                overflow: 'hidden',
+              }}
+            >
+              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+            </View>
             ) : null}
 
             {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
-              <Text variant="caption" color="textSecondary">
-                Genel güven: %{Math.round((document.overall_confidence ?? 0) * 100)}
+              <Text variant="label" mono color="textSecondary">
+                GENEL GÜVEN · %{Math.round((document.overall_confidence ?? 0) * 100)}
               </Text>
             ) : null}
 
             {/* docs/04-ocr-belge-isleme.md — okuması şüpheli alanlar kullanıcı onaylamadan
                 önce açıkça gösterilir (ör. tutar mutabakatı tutmadığında belgede ne yazdığı). */}
             {(warningsQuery.data ?? []).length > 0 ? (
-              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.danger, 0.4) }}>
+              <Card>
                 <Stack gap="xs">
                   <Row gap="xs" align="center">
                     <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
@@ -1154,7 +1152,7 @@ export default function DocumentReviewScreen() {
 
             {isLoanDocument ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   FAİZ ORANI % (İSTEĞE BAĞLI)
                 </Text>
                 <TextField
@@ -1425,7 +1423,7 @@ export default function DocumentReviewScreen() {
             ) : null}
 
             {isInstrumentDocument && counterpartyId && settlementTargets.length > 0 ? (
-              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
+              <Card>
                 <Stack gap="sm">
                   <Stack gap="xxs">
                     <Text variant="cardTitle">

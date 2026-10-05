@@ -8,7 +8,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
@@ -867,7 +866,7 @@ function ObligationForm({
 
             {isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   {isSalaryType ? 'PERSONEL' : 'KİŞİ / FİRMA'}
                 </Text>
                 {activeWorkspaceId ? (
@@ -937,7 +936,7 @@ function ObligationForm({
                   })
                 }
               >
-                <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
+                <Card>
                   <Row gap="sm" align="center">
                     <Stack gap="xxs" style={{ flex: 1 }}>
                       <Text variant="cardTitle">
@@ -956,7 +955,7 @@ function ObligationForm({
 
             {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   {isLoanType ? 'BANKA' : 'BANKA (İSTEĞE BAĞLI)'}
                 </Text>
                 <BankPicker selectedId={bankCode} onSelect={setBankCode} />
@@ -990,7 +989,7 @@ function ObligationForm({
             </Stack>
 
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 {isLendingType
                   ? 'KAYNAK HESAP'
                   : isCashAdvanceType || isCardStatementType
@@ -1032,7 +1031,7 @@ function ObligationForm({
 
             {isCashAdvanceType && !isEditing ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   NAKİT NEREYE YATIRILDI? (İSTEĞE BAĞLI)
                 </Text>
                 {depositTargetAccounts.length === 0 ? (
@@ -1070,7 +1069,7 @@ function ObligationForm({
 
             {showInterestField ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   AYLIK FAİZ ORANI % (İSTEĞE BAĞLI)
                 </Text>
                 <TextField

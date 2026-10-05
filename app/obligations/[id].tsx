@@ -6,7 +6,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import {
   AmountField,
   ActionSheet,
@@ -237,6 +236,12 @@ export default function ObligationDetailScreen() {
       : 0;
   const clampedProgress = Math.max(0, Math.min(1, progress));
   const hasInstallments = installments.length > 0;
+  // Kart ekstresi kart sayfasından ödenir (bkz. eylem menüsü); kapalı/iptal kayıtta ödeme yok.
+  const canRecordPayment =
+    obligation.document_type !== 'kredi_karti_ekstresi' &&
+    !isClosed &&
+    obligation.status !== 'iptal_edildi' &&
+    obligation.remaining_amount_minor > 0;
   // Kredi listelerindeki filtre diliyle aynı: seçili sekme safran, üç seçenek tek satırda
   // ve sabit yükseklikte kalır. Kredi kaydında plan henüz oluşmamış olsa da sekme görünür.
   const showsPlanTab = hasInstallments || obligation.document_type === 'kredi';
@@ -332,6 +337,14 @@ export default function ObligationDetailScreen() {
             { label: 'ÖDENEN', value: formatValueUnitAmount(paidAmountMinor, obligation.currency_code) },
           ]}
         />
+
+        {canRecordPayment ? (
+          <Button
+            label={isPayable ? 'Ödendi işaretle' : 'Tahsil edildi işaretle'}
+            icon="checkmark-circle-outline"
+            onPress={() => setPayingInstallment('obligation')}
+          />
+        ) : null}
 
         {isInstrumentRecord ? <InstrumentLifecycle obligation={obligation} /> : null}
 
@@ -595,9 +608,10 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
   const theme = useTheme();
   const paid = installment.remaining_amount_minor <= 0;
 
-  const markerBg = paid ? theme.colors.success : isNext ? theme.colors.brandPrimary : 'transparent';
-  const markerBorder = paid ? theme.colors.success : isNext ? theme.colors.brandPrimary : theme.colors.border;
-  const markerTextColor = paid || isNext ? theme.colors.brandPrimaryText : theme.colors.textSecondary;
+  const overdue = !paid && installment.status === 'gecikti';
+  const markerBg = paid ? theme.colors.textPrimary : isNext ? theme.colors.payable : 'transparent';
+  const markerBorder = overdue ? theme.colors.danger : paid ? theme.colors.textPrimary : isNext ? theme.colors.payable : theme.colors.mutedControl;
+  const markerTextColor = paid || isNext ? theme.colors.backgroundPrimary : overdue ? theme.colors.danger : theme.colors.textSecondary;
 
   return (
     <Row gap="sm" align="stretch" style={{ marginBottom: isLast ? 0 : theme.spacing.sm }}>
@@ -607,7 +621,7 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
             width: 32,
             height: 32,
             borderRadius: 16,
-            borderWidth: paid || isNext ? 0 : 1.5,
+            borderWidth: (paid || isNext) && !overdue ? 0 : 1.5,
             borderColor: markerBorder,
             backgroundColor: markerBg,
             alignItems: 'center',
@@ -615,9 +629,9 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
           }}
         >
           {paid ? (
-            <Ionicons name="checkmark" size={16} color={theme.colors.brandPrimaryText} />
+            <Ionicons name="checkmark" size={16} color={theme.colors.backgroundPrimary} />
           ) : (
-            <Text variant="caption" style={{ color: markerTextColor, fontWeight: '700' }}>
+            <Text variant="caption" mono style={{ color: markerTextColor, fontWeight: '600' }}>
               {installment.installment_number}
             </Text>
           )}
@@ -628,7 +642,7 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
               flex: 1,
               width: 2,
               borderRadius: 1,
-              backgroundColor: paid ? theme.colors.success : theme.colors.border,
+              backgroundColor: paid ? theme.colors.textPrimary : theme.colors.border,
             }}
           />
         ) : null}
@@ -651,7 +665,7 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
 
             <Stack gap="xxs" align="flex-end">
               {paid ? (
-                <Text variant="caption" style={{ color: theme.colors.success, fontWeight: '600' }}>
+                <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>
                   Ödendi
                 </Text>
               ) : (
@@ -661,14 +675,9 @@ function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, uni
                 <Pressable
                   accessibilityRole="button"
                   onPress={onPay}
-                  style={{
-                    paddingHorizontal: theme.spacing.sm,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-                  }}
+                  hitSlop={8}
                 >
-                  <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
+                  <Text variant="cardTitle" style={{ color: theme.colors.payable }}>
                     Öde
                   </Text>
                 </Pressable>
@@ -711,7 +720,7 @@ function PaymentRow({
                 borderRadius: 16,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
+                backgroundColor: theme.colors.backgroundPrimary,
               }}
             >
               <Ionicons name="document-text-outline" size={16} color={theme.colors.textPrimary} />
@@ -742,10 +751,10 @@ function PaymentRow({
             borderRadius: 16,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: withAlpha(theme.colors.success, 0.16),
+            backgroundColor: theme.colors.backgroundPrimary,
           }}
         >
-          <Ionicons name="checkmark" size={16} color={theme.colors.success} />
+          <Ionicons name="checkmark" size={16} color={theme.colors.textPrimary} />
         </View>
         <Text variant="body" color="textSecondary" style={{ flex: 1 }}>
           {dateFormatter.format(new Date(payment.paid_at))}
@@ -930,7 +939,7 @@ function PaymentForm({
         ) : null}
 
         <Stack gap="sm">
-          <Text variant="caption" color="textSecondary">
+          <Text variant="label" color="textSecondary">
             TUTAR ({valueUnit.quantityLabel})
           </Text>
           <AmountField

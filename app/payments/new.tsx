@@ -8,7 +8,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
 import {
   AmountField,
   Button,
@@ -488,7 +487,7 @@ function SettlementForm({
 
             {counterpartyId ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   {isPayable ? 'KAPATILACAK BORÇLAR' : 'KAPATILACAK ALACAKLAR'}
                 </Text>
                 {openRecords.length === 0 ? (
@@ -518,7 +517,7 @@ function SettlementForm({
             ) : null}
 
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 {isPayable ? 'ÖDEME YÖNTEMİ' : 'TAHSİLAT YÖNTEMİ'}
               </Text>
               <SegmentedControl<SettlementMethod>
@@ -600,7 +599,7 @@ function SettlementForm({
             ) : null}
 
             {method === 'mahsup' || method === 'ciro' ? null : instrument ? (
-              <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
+              <Card>
                 <Stack gap="md">
                   <Stack gap="xxs">
                     <Text variant="cardTitle">{instrumentLabel} bilgileri</Text>
@@ -666,7 +665,7 @@ function SettlementForm({
 
                   {instrumentAccounts.length > 0 ? (
                     <Stack gap="sm">
-                      <Text variant="caption" color="textSecondary">
+                      <Text variant="label" color="textSecondary">
                         {isPayable ? 'VADEDE ÖDENECEK HESAP (İSTEĞE BAĞLI)' : 'VADEDE TAHSİL EDİLECEK HESAP (İSTEĞE BAĞLI)'}
                       </Text>
                       <AccountPicker
@@ -681,7 +680,7 @@ function SettlementForm({
               </Card>
             ) : (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   {isPayable ? 'ÖDEMENİN ÇIKTIĞI HESAP' : 'TAHSİLATIN GİRDİĞİ HESAP'}
                 </Text>
                 {methodAccounts.length === 0 ? (
@@ -752,13 +751,13 @@ function RecordOption({
     <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} onPress={onToggle}>
       <Card
         elevated={selected}
-        style={{ borderWidth: 1.5, borderColor: selected ? theme.colors.brandPrimary : theme.colors.border }}
+        style={{ borderWidth: 1.5, borderColor: selected ? theme.colors.textPrimary : theme.colors.border }}
       >
         <Row gap="sm" align="center">
           <Ionicons
             name={selected ? 'checkbox' : 'square-outline'}
             size={22}
-            color={selected ? theme.colors.brandPrimary : theme.colors.textSecondary}
+            color={selected ? theme.colors.textPrimary : theme.colors.mutedControl}
           />
           <ObligationIcon
             documentType={record.document_type}

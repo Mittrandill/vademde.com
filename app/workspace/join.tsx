@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Card, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { redeemWorkspaceInvite } from '@/features/workspaces/members';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -51,18 +51,14 @@ export default function JoinWorkspaceScreen() {
             tüm verilerini rolünüze göre görür (veya düzenlersiniz).
           </Text>
 
-          <Card>
-            <Stack gap="sm">
-              <TextField
+          <TextField
                 label="DAVET KODU"
                 placeholder="ÖRN: 7QK4P2ZC"
                 autoCapitalize="characters"
                 autoCorrect={false}
                 value={code}
                 onChangeText={(text) => setCode(text.toUpperCase())}
-              />
-            </Stack>
-          </Card>
+          />
 
           <Button
             label="Katıl"

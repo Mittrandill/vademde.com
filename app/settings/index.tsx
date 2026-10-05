@@ -1,13 +1,12 @@
-import { useState, type ReactNode } from 'react';
-import { Alert, ScrollView, Switch, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { GroupedRow, GroupedRowAvatar, GroupedRowIcon, GroupedSection, GroupedToggleRow } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
 import { getMySubscription, getPlanLimits } from '@/features/subscriptions/api';
@@ -34,9 +33,6 @@ const THEME_LABELS = {
   dark: 'Koyu',
 } as const;
 
-const ROW_ICON_SIZE = 32;
-// İkon kutusundan sonraki hairline divider, ikon+gap+sol padding'in tam hizasından başlar.
-const ROW_DIVIDER_INSET = ROW_ICON_SIZE + 12 + 16;
 
 function initialsFrom(name: string | null | undefined, email: string | null | undefined): string {
   const source = name?.trim() || email?.trim() || '';
@@ -142,61 +138,57 @@ export default function SettingsScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <SettingsSection title="HESAP">
-          <SettingsRow
+        <GroupedSection title="HESAP">
+          <GroupedRow
             leading={
-              <RowAvatar initials={initialsFrom(fullName, email)} />
+              <GroupedRowAvatar initials={initialsFrom(fullName, email)} />
             }
             title={fullName || 'Profilini tamamla'}
             subtitle={email ?? undefined}
             onPress={() => router.push('/profile')}
           />
-          <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
-          <SettingsRow
-            leading={<RowIcon name="sparkles-outline" />}
+          <GroupedRow
+            leading={<GroupedRowIcon name="sparkles-outline" />}
             title="Abonelik"
             subtitle={planLabel}
             onPress={() => router.push('/subscription')}
           />
-        </SettingsSection>
+        </GroupedSection>
 
-        <SettingsSection title="UYGULAMA">
-          <SettingsRow
-            leading={<RowIcon name="color-palette-outline" />}
+        <GroupedSection title="UYGULAMA">
+          <GroupedRow
+            leading={<GroupedRowIcon name="color-palette-outline" />}
             title="Görünüm"
             subtitle={THEME_LABELS[themePreference]}
             onPress={() => router.push('/settings/appearance')}
           />
-          <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
-          <SettingsRow
-            leading={<RowIcon name="pricetags-outline" />}
+          <GroupedRow
+            leading={<GroupedRowIcon name="pricetags-outline" />}
             title="Kategoriler"
             onPress={() => router.push('/categories')}
           />
-          <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
-          <SettingsRow
-            leading={<RowIcon name="notifications-outline" />}
+          <GroupedRow
+            leading={<GroupedRowIcon name="notifications-outline" />}
             title="Bildirimler"
             onPress={() => router.push('/notifications')}
           />
-          <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
-          <SettingsRow
-            leading={<RowIcon name="people-outline" />}
+          <GroupedRow
+            leading={<GroupedRowIcon name="people-outline" />}
             title="Çalışma Alanları"
             subtitle={activeWorkspaceName ?? (workspaceCount === 0 ? 'Oluştur veya katıl' : undefined)}
             onPress={() => router.push('/workspace')}
           />
-        </SettingsSection>
+        </GroupedSection>
 
-        <SettingsSection title="GİZLİLİK">
+        <GroupedSection title="GİZLİLİK">
           {/* docs/10-abonelik-gelir-modeli.md — Face ID kilidi Plus ve İşletme planlarının
               özelliği. Cihaz desteklemiyorsa (donanım yok veya kullanıcı hiç yüz/parmak izi
               kaydetmemiş) satır hiç gösterilmez: açılamayacak bir ayarı göstermek kafa
               karıştırır. */}
           {biometricSupport?.available ? (
             <>
-              <SettingsToggleRow
-                leading={<RowIcon name="finger-print-outline" />}
+              <GroupedToggleRow
+                leading={<GroupedRowIcon name="finger-print-outline" />}
                 title={`${biometricLabel} Kilidi`}
                 subtitle={
                   planAllowsLock
@@ -207,154 +199,21 @@ export default function SettingsScreen() {
                 disabled={!planAllowsLock}
                 onValueChange={handleToggleAppLock}
               />
-              <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
             </>
           ) : null}
-          <SettingsRow
-            leading={<RowIcon name="download-outline" />}
+          <GroupedRow
+            leading={<GroupedRowIcon name="download-outline" />}
             title="Verilerimi Dışa Aktar"
             subtitle={isExportingData ? 'Hazırlanıyor…' : 'JSON yedeği'}
             onPress={handleExportData}
           />
-          <Divider style={{ marginLeft: ROW_DIVIDER_INSET }} />
-          <SettingsRow
-            leading={<RowIcon name="shield-checkmark-outline" />}
+          <GroupedRow
+            leading={<GroupedRowIcon name="shield-checkmark-outline" />}
             title="Gizlilik Politikası ve KVKK"
             onPress={() => router.push('/legal/privacy-policy')}
           />
-        </SettingsSection>
+        </GroupedSection>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function SettingsSection({ title, children }: { title: string; children: ReactNode }) {
-  const theme = useTheme();
-  return (
-    <Stack gap="xs">
-      <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-        {title}
-      </Text>
-      <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
-        {children}
-      </View>
-    </Stack>
-  );
-}
-
-function SettingsRow({
-  leading,
-  title,
-  subtitle,
-  onPress,
-}: {
-  leading: ReactNode;
-  title: string;
-  subtitle?: string;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress}>
-      <Row
-        gap="sm"
-        align="center"
-        style={{ minHeight: 56, paddingVertical: theme.spacing.xs, paddingHorizontal: theme.spacing.md }}
-      >
-        {leading}
-        <Text variant="cardTitle" style={{ flex: 1 }} numberOfLines={1}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ flexShrink: 1, maxWidth: '45%' }}>
-            {subtitle}
-          </Text>
-        ) : null}
-        <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedControl} />
-      </Row>
-    </Pressable>
-  );
-}
-
-// Ayarlar listesinde ekrana götürmeyen, yerinde açılıp kapanan satır (uygulama kilidi).
-// SettingsRow ile aynı yükseklik/hizalama dilini paylaşır ki liste tek bir ritimde kalsın.
-function SettingsToggleRow({
-  leading,
-  title,
-  subtitle,
-  value,
-  disabled,
-  onValueChange,
-}: {
-  leading: ReactNode;
-  title: string;
-  subtitle?: string;
-  value: boolean;
-  disabled?: boolean;
-  onValueChange: (value: boolean) => void;
-}) {
-  const theme = useTheme();
-  return (
-    <Row
-      gap="sm"
-      align="center"
-      style={{ minHeight: 56, paddingVertical: theme.spacing.xs, paddingHorizontal: theme.spacing.md }}
-    >
-      {leading}
-      <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-        <Text variant="cardTitle" numberOfLines={1}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </Stack>
-      <Switch
-        value={value}
-        disabled={disabled}
-        onValueChange={onValueChange}
-        trackColor={{ false: theme.colors.border, true: theme.colors.action }}
-      />
-    </Row>
-  );
-}
-
-function RowIcon({ name }: { name: keyof typeof Ionicons.glyphMap }) {
-  const theme = useTheme();
-  return (
-    <View
-      style={{
-        width: ROW_ICON_SIZE,
-        height: ROW_ICON_SIZE,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Ionicons name={name} size={22} color={theme.colors.textPrimary} />
-    </View>
-  );
-}
-
-function RowAvatar({ initials }: { initials: string }) {
-  const theme = useTheme();
-  return (
-    <View
-      style={{
-        width: ROW_ICON_SIZE,
-        height: ROW_ICON_SIZE,
-        borderRadius: theme.radius.pill,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.colors.backgroundPrimary,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-      }}
-    >
-      <Text variant="label" mono style={{ color: theme.colors.textPrimary, textTransform: 'none' }}>
-        {initials}
-      </Text>
-    </View>
   );
 }

@@ -52,3 +52,12 @@ Tasarımla kod çeliştiğinde kod esas alınır; her sapma burada kayıtlıdır
 - **Alt ekranlar:** `SearchablePicker` (tüm hesap/kategori/kişi/banka/tür/birim seçicileri), form başlıkları (`ScreenHeader`) ve alan etiketleri, Ayarlar, Görünüm, Kategoriler (bu ay kullanım), Bildirimler, Abonelik yeni görünümde. Profil, Çalışma alanları, Üyeler, Paywall, Yasal, Uygulama kilidi, vadeli kayıt/ödeme/hareket **formlarının iç yerleşimi** yeni renk ve yazı tipini alıyor ama tasarımdaki satır satır düzene yeniden çizilmedi; cihazda inceleyip sapmaları bildirmek gerekir.
 - Bildirimler tasarımındaki "Ödendi işaretle / Kontrol et" satır içi eylemleri ve "Bu hafta" grubu yok (liste yalnızca bugün/geçmiş ayrımı yapıyor).
 - Abonelik ekranında yalnızca belge tarama kullanımı gösteriliyor (çalışma alanı/ekip kullanımı için ek sorgu gerekir).
+
+## Aşama 4 — Alt ekranlar (üçüncü tur)
+- **Ortak:** `GroupedList` (`GroupedSection/Row/ToggleRow/RowIcon/RowAvatar`) Ayarlar'dan çıkarıldı; Profil ve diğer ekranlar da kullanıyor.
+- **Profil:** ad alanı her zaman düzenlenebilir, değişince Kaydet çıkar; "Telefon" alanı yok (profilde saklanmıyor). Şifre değiştirme satırdan açılan satır içi form.
+- **Çalışma alanları:** rol çipi yalnızca "Sahip" için (listede üye rolü sorgulanmıyor). Ad düzenleme/silme ikonları korundu. Kurulum ekranı illüstrasyonsuz, sola hizalı.
+- **Üyeler, Paywall, Yasal, Uygulama kilidi:** yeni renk/tipografi ve satır düzeni. Yasal ekranda bölüm atlama çipleri ve paylaş düğmesi yok; "Şifreyle giriş yap" bağlantısı kilit ekranında yok. Paywall'da plan kartları mağaza fiyatından, özellik maddeleri yerine tek satır slogan.
+- **Vadeli kayıt detayı:** hero altında "Ödendi işaretle" birincil eylemi; taksit işaretleri tasarım eşlemesinde. Belge görüntüsü satırı ve "Geçmiş" zaman çizelgesi yok.
+- **Vadeli kayıt formu, ödeme formu, Belge inceleme, Dekont:** alan etiketleri mono, başlık `ScreenHeader`, belge önizlemesi koyu çerçevede. Satır satır `FieldGroup` düzenine ve alan bazlı "belgeden okundu / kontrol et" rozetlerine geçilmedi.
+- Bildirimlerdeki satır içi eylemler hâlâ yok.

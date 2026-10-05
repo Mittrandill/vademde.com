@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,12 +12,24 @@ import { RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, Divider, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import {
+  Button,
+  GroupedRow,
+  GroupedRowIcon,
+  GroupedSection,
+  GroupedToggleRow,
+  Pressable,
+  Row,
+  Stack,
+  Text,
+  TextField,
+} from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { deleteAccount, signOut, updatePassword } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
 import { useSession } from '@/features/auth/useSession';
 import { listMyWorkspaces } from '@/features/workspaces/api';
+import { getMySubscription } from '@/features/subscriptions/api';
 import { getMyProfile, updateMyProfile, uploadAvatar } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert } from '@/utils/alerts';
@@ -43,7 +55,6 @@ export default function ProfileScreen() {
   const { session } = useSession();
   const [isDeleting, setIsDeleting] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [isEditingName, setIsEditingName] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -64,11 +75,17 @@ export default function ProfileScreen() {
     queryFn: listMyWorkspaces,
   });
 
+  const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
+  const planCode = subscriptionQuery.data?.plan ?? 'free';
+  const planLabel =
+    ({ free: 'ÜCRETSİZ PLAN', plus: 'PLUS PLAN', isletme: 'İŞLETME PLANI' } as Record<string, string>)[planCode] ??
+    planCode.toUpperCase();
+
   useEffect(() => {
-    if (profileQuery.data && !isEditingName) {
+    if (profileQuery.data) {
       setFullName(profileQuery.data.full_name ?? '');
     }
-  }, [profileQuery.data, isEditingName]);
+  }, [profileQuery.data]);
 
   useEffect(() => {
     AsyncStorage.getItem(RETAIN_ORIGINAL_DEFAULT_KEY).then((value) => {
@@ -88,7 +105,7 @@ export default function ProfileScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
-      showSuccessAlert('Ad Soyad başarıyla güncellendi.', () => setIsEditingName(false));
+      showSuccessAlert('Ad Soyad başarıyla güncellendi.', () => {});
     },
   });
 
@@ -174,6 +191,8 @@ export default function ProfileScreen() {
     router.replace('/(auth)/sign-in');
   }
 
+  const nameChanged = fullName.trim() !== (profileQuery.data?.full_name ?? '').trim();
+
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
@@ -181,29 +200,30 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           padding: theme.screenEdge.standard,
           paddingBottom: theme.spacing.huge,
           gap: theme.spacing.lg,
         }}
       >
-        <Stack align="center" gap="sm" style={{ paddingVertical: theme.spacing.sm }}>
-          <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending}>
+        <Stack align="center" gap="xs">
+          <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending} accessibilityLabel="Fotoğraf değiştir">
             <View
               style={{
-                width: 88,
-                height: 88,
+                width: 84,
+                height: 84,
                 borderRadius: theme.radius.pill,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
+                backgroundColor: theme.colors.textPrimary,
                 overflow: 'hidden',
               }}
             >
               {profileQuery.data?.avatar_url ? (
-                <Image source={{ uri: profileQuery.data.avatar_url }} style={{ width: 88, height: 88 }} />
+                <Image source={{ uri: profileQuery.data.avatar_url }} style={{ width: 84, height: 84 }} />
               ) : (
-                <Text variant="pageTitle" style={{ color: theme.colors.textPrimary }}>
+                <Text variant="pageTitle" style={{ color: theme.colors.backgroundPrimary }}>
                   {initialsFrom(displayName, email)}
                 </Text>
               )}
@@ -211,8 +231,8 @@ export default function ProfileScreen() {
                 <View
                   style={{
                     position: 'absolute',
-                    width: 88,
-                    height: 88,
+                    width: 84,
+                    height: 84,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: withAlpha('#000000', 0.4),
@@ -225,225 +245,154 @@ export default function ProfileScreen() {
             <View
               style={{
                 position: 'absolute',
-                right: -2,
-                bottom: -2,
-                width: 30,
-                height: 30,
-                borderRadius: 15,
+                right: -4,
+                bottom: -4,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: theme.colors.brandPrimary,
-                borderWidth: 2,
+                backgroundColor: theme.colors.surfacePrimary,
+                borderWidth: 3,
                 borderColor: theme.colors.backgroundPrimary,
               }}
             >
-              <Ionicons name="camera" size={14} color={theme.colors.brandPrimaryText} />
+              <Ionicons name="pencil" size={15} color={theme.colors.textPrimary} />
             </View>
           </Pressable>
-          <Stack align="center" gap="xxs">
-            <Text variant="sectionTitle" numberOfLines={1}>
-              {displayName || 'Profilini tamamla'}
-            </Text>
-            <Text variant="body" color="textSecondary" numberOfLines={1}>
-              {email ?? '—'}
-            </Text>
-          </Stack>
+          <Text variant="sectionTitle" numberOfLines={1}>
+            {displayName || 'Profilini tamamla'}
+          </Text>
+          <Text variant="label" mono color="textSecondary">
+            {planLabel}
+          </Text>
         </Stack>
 
-        <Card>
-          <Stack gap="sm">
-            <Text variant="label" color="textSecondary">
-              AD SOYAD
+        <Stack gap="sm">
+          <TextField label="AD SOYAD" placeholder="Adın ve soyadın" value={fullName} onChangeText={setFullName} />
+          <TextField label="E-POSTA" value={email ?? ''} editable={false} />
+          {updateNameMutation.error ? (
+            <Text variant="caption" color="danger">
+              {updateNameMutation.error instanceof Error ? updateNameMutation.error.message : 'Kaydedilemedi'}
             </Text>
-            {isEditingName ? (
-              <Stack gap="sm">
-                <TextField placeholder="Ad Soyad" value={fullName} onChangeText={setFullName} autoFocus />
-                {updateNameMutation.error ? (
-                  <Text variant="caption" color="danger">
-                    {updateNameMutation.error instanceof Error
-                      ? updateNameMutation.error.message
-                      : 'Kaydedilemedi'}
-                  </Text>
-                ) : null}
-                <Row gap="sm">
-                  <View style={{ flex: 1 }}>
-                    <Button
-                      label="Kaydet"
-                      onPress={() => updateNameMutation.mutate()}
-                      loading={updateNameMutation.isPending}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Button
-                      label="Vazgeç"
-                      variant="secondary"
-                      onPress={() => {
-                        setFullName(profileQuery.data?.full_name ?? '');
-                        setIsEditingName(false);
-                      }}
-                    />
-                  </View>
-                </Row>
-              </Stack>
-            ) : (
-              <Pressable onPress={() => setIsEditingName(true)}>
-                <Row style={{ justifyContent: 'space-between' }}>
-                  <Text variant="body">{displayName || 'Ad Soyad ekle'}</Text>
-                  <Ionicons name="pencil" size={16} color={theme.colors.textSecondary} />
-                </Row>
-              </Pressable>
-            )}
-          </Stack>
-        </Card>
-
-        <Card>
-          <Stack gap="sm">
-            <Text variant="label" color="textSecondary">
-              ŞİFRE
-            </Text>
-            {isChangingPassword ? (
-              <Stack gap="sm">
-                <TextField
-                  placeholder="Yeni şifre"
-                  secureTextEntry={!passwordVisible}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
-                  onRightIconPress={() => setPasswordVisible((v) => !v)}
-                  autoFocus
+          ) : null}
+          {nameChanged ? (
+            <Row gap="sm">
+              <View style={{ flex: 1 }}>
+                <Button label="Kaydet" onPress={() => updateNameMutation.mutate()} loading={updateNameMutation.isPending} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="Vazgeç"
+                  variant="secondary"
+                  onPress={() => setFullName(profileQuery.data?.full_name ?? '')}
                 />
-                <TextField
-                  placeholder="Yeni şifre (tekrar)"
-                  secureTextEntry={!passwordVisible}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  error={passwordMismatch ? 'Şifreler eşleşmiyor.' : undefined}
-                />
-                {changePasswordMutation.error ? (
-                  <Text variant="caption" color="danger">
-                    {translateAuthError(changePasswordMutation.error, 'Şifre güncellenemedi')}
-                  </Text>
-                ) : null}
-                <Row gap="sm">
-                  <View style={{ flex: 1 }}>
-                    <Button
-                      label="Kaydet"
-                      onPress={() => changePasswordMutation.mutate()}
-                      loading={changePasswordMutation.isPending}
-                      disabled={!canSubmitPassword}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Button label="Vazgeç" variant="secondary" onPress={resetPasswordForm} />
-                  </View>
-                </Row>
-              </Stack>
-            ) : (
-              <Pressable onPress={() => setIsChangingPassword(true)}>
-                <Row style={{ justifyContent: 'space-between' }}>
-                  <Text variant="body">••••••••</Text>
-                  <Ionicons name="pencil" size={16} color={theme.colors.textSecondary} />
-                </Row>
-              </Pressable>
-            )}
-          </Stack>
-        </Card>
-
-        <Card>
-          <Stack gap="sm">
-            <Text variant="label" color="textSecondary">
-              ÇALIŞMA ALANLARI
-            </Text>
-            {(workspacesQuery.data ?? []).map((w) => (
-              <Pressable
-                key={w.id}
-                onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
-              >
-                <Row align="center" style={{ justifyContent: 'space-between' }}>
-                  <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                    {w.name}
-                  </Text>
-                  <Row gap="sm" align="center">
-                    <Text variant="caption" color="textSecondary">
-                      {w.type === 'business' ? 'İşletme' : 'Kişisel'}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
-                  </Row>
-                </Row>
-              </Pressable>
-            ))}
-            <Button
-              label="Davet koduyla katıl"
-              variant="secondary"
-              icon="enter-outline"
-              onPress={() => router.push('/workspace/join')}
-            />
-          </Stack>
-        </Card>
-
-        <Card>
-          <Stack gap="sm">
-            <Text variant="label" color="textSecondary">
-              GİZLİLİK
-            </Text>
-            <Row align="center" style={{ justifyContent: 'space-between' }}>
-              <Stack gap="xxs" style={{ flex: 1, marginRight: theme.spacing.sm }}>
-                <Text variant="body">Taranan belgeleri sakla</Text>
-                <Text variant="caption" color="textSecondary">
-                  Kapalıyken (varsayılan), taranan belgenin ham görüntüsü OCR analizi biter
-                  bitmez depolamadan silinir; oluşan kayıt etkilenmez. Açarsan belge, onay
-                  ekranında karşılaştırma için depoda kalmaya devam eder.
-                </Text>
-              </Stack>
-              <Switch
-                value={retainOriginalDefault}
-                onValueChange={handleToggleRetainOriginal}
-                trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
-              />
+              </View>
             </Row>
-            <Pressable onPress={() => router.push('/legal/privacy-policy')}>
-              <Row align="center" style={{ justifyContent: 'space-between', paddingTop: theme.spacing.xs }}>
-                <Text variant="body">Gizlilik Politikası ve KVKK Aydınlatma Metni</Text>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-              </Row>
-            </Pressable>
-          </Stack>
-        </Card>
+          ) : null}
+        </Stack>
 
-        <Card style={{ padding: 0 }}>
-          <Pressable onPress={() => router.push('/subscription')}>
-            <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
-              <Ionicons name="sparkles-outline" size={18} color={theme.colors.textPrimary} />
-              <Text variant="body" style={{ flex: 1 }}>
-                Abonelik
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
-            </Row>
-          </Pressable>
-          <Divider style={{ marginLeft: theme.spacing.md + 18 + theme.spacing.sm }} />
-          <Pressable onPress={() => router.push('/settings')}>
-            <Row gap="sm" align="center" style={{ padding: theme.spacing.md }}>
-              <Ionicons name="settings-outline" size={18} color={theme.colors.textPrimary} />
-              <Text variant="body" style={{ flex: 1 }}>
-                Ayarlar
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
-            </Row>
-          </Pressable>
-        </Card>
-
-        <Button label="Çıkış yap" variant="secondary" onPress={handleSignOut} />
-
-        <Stack gap="sm" style={{ marginTop: theme.spacing.lg }}>
-          <Text variant="label" color="textSecondary">
-            TEHLİKELİ BÖLGE
-          </Text>
-          <Button
-            label="Hesabımı ve verilerimi sil"
-            variant="danger"
-            onPress={confirmDeleteAccount}
-            loading={isDeleting}
+        <GroupedSection title="GÜVENLİK">
+          <GroupedRow
+            leading={<GroupedRowIcon name="key-outline" />}
+            title="Şifre değiştir"
+            onPress={() => setIsChangingPassword((v) => !v)}
           />
+        </GroupedSection>
+        {isChangingPassword ? (
+          <Stack gap="sm">
+            <TextField
+              label="YENİ ŞİFRE"
+              secureTextEntry={!passwordVisible}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+              onRightIconPress={() => setPasswordVisible((v) => !v)}
+              autoFocus
+            />
+            <TextField
+              label="YENİ ŞİFRE (TEKRAR)"
+              secureTextEntry={!passwordVisible}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              error={passwordMismatch ? 'Şifreler eşleşmiyor.' : undefined}
+            />
+            {changePasswordMutation.error ? (
+              <Text variant="caption" color="danger">
+                {translateAuthError(changePasswordMutation.error, 'Şifre güncellenemedi')}
+              </Text>
+            ) : null}
+            <Row gap="sm">
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="Kaydet"
+                  onPress={() => changePasswordMutation.mutate()}
+                  loading={changePasswordMutation.isPending}
+                  disabled={!canSubmitPassword}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button label="Vazgeç" variant="secondary" onPress={resetPasswordForm} />
+              </View>
+            </Row>
+          </Stack>
+        ) : null}
+
+        <GroupedSection title="ÇALIŞMA ALANLARI">
+          {(workspacesQuery.data ?? []).map((w) => (
+            <GroupedRow
+              key={w.id}
+              leading={<GroupedRowIcon name={w.type === 'business' ? 'briefcase-outline' : 'person-outline'} />}
+              title={w.name}
+              value={w.type === 'business' ? 'İşletme' : 'Kişisel'}
+              onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
+            />
+          ))}
+          <GroupedRow
+            leading={<GroupedRowIcon name="enter-outline" />}
+            title="Davet koduyla katıl"
+            onPress={() => router.push('/workspace/join')}
+          />
+        </GroupedSection>
+
+        <GroupedSection title="GİZLİLİK">
+          <GroupedToggleRow
+            title="Taranan belgeleri sakla"
+            subtitle="Kapalıyken taranan belgenin ham görüntüsü OCR analizi biter bitmez depolamadan silinir; oluşan kayıt etkilenmez. Açarsan belge onay ekranında karşılaştırma için depoda kalır."
+            value={retainOriginalDefault}
+            onValueChange={handleToggleRetainOriginal}
+          />
+          <GroupedRow
+            leading={<GroupedRowIcon name="shield-checkmark-outline" />}
+            title="Gizlilik Politikası ve KVKK"
+            onPress={() => router.push('/legal/privacy-policy')}
+          />
+        </GroupedSection>
+
+        <GroupedSection>
+          <GroupedRow
+            leading={<GroupedRowIcon name="sparkles-outline" />}
+            title="Abonelik"
+            onPress={() => router.push('/subscription')}
+          />
+          <GroupedRow
+            leading={<GroupedRowIcon name="settings-outline" />}
+            title="Ayarlar"
+            onPress={() => router.push('/settings')}
+          />
+        </GroupedSection>
+
+        <Stack gap="xs">
+          <Button label="Çıkış yap" variant="secondary" icon="log-out-outline" onPress={handleSignOut} />
+          <Pressable
+            onPress={confirmDeleteAccount}
+            disabled={isDeleting}
+            style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text variant="cardTitle" color="danger">
+              {isDeleting ? 'Siliniyor…' : 'Hesabımı ve verilerimi sil'}
+            </Text>
+          </Pressable>
         </Stack>
       </ScrollView>
     </SafeAreaView>

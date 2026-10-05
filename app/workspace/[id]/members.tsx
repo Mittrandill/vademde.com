@@ -8,7 +8,6 @@ import * as Clipboard from 'expo-clipboard';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
 import {
   Button,
   Card,
@@ -268,18 +267,9 @@ export default function WorkspaceDetailScreen() {
                 <Text variant="caption" color="textSecondary">
                   {workspace.type === 'business' ? 'İŞLETME' : 'KİŞİSEL'}
                 </Text>
-                <View
-                  style={{
-                    paddingHorizontal: theme.spacing.sm,
-                    paddingVertical: 3,
-                    borderRadius: theme.radius.pill,
-                    backgroundColor: withAlpha(isActive ? theme.colors.success : theme.colors.textSecondary, 0.15),
-                  }}
-                >
-                  <Text variant="caption" style={{ color: isActive ? theme.colors.success : theme.colors.textSecondary, fontWeight: '600' }}>
-                    {isActive ? 'Aktif' : 'Pasif'}
-                  </Text>
-                </View>
+                <Text variant="caption" mono color={isActive ? 'textPrimary' : 'textSecondary'}>
+                  {isActive ? 'AKTİF' : 'PASİF'}
+                </Text>
               </Row>
 
               {isEditingName ? (
@@ -333,7 +323,7 @@ export default function WorkspaceDetailScreen() {
           <Text variant="label" color="textSecondary">
             ÜYELER
           </Text>
-          <Card style={{ padding: 0 }}>
+          <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
             <Stack gap="xxs">
               {members.map((member) => {
                 const tappable = isOwner && member.role !== 'owner' && member.user_id !== myUserId;
@@ -342,20 +332,28 @@ export default function WorkspaceDetailScreen() {
                     <Row gap="sm" style={{ padding: theme.spacing.md }} align="center">
                       <View
                         style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: theme.radius.pill,
+                          width: 44,
+                          height: 44,
+                          borderRadius: 14,
                           alignItems: 'center',
                           justifyContent: 'center',
-                          backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
+                          backgroundColor:
+                            member.role === 'owner' ? theme.colors.textPrimary : theme.colors.backgroundPrimary,
                         }}
                       >
-                        <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
+                        <Text
+                          variant="label"
+                          mono
+                          style={{
+                            color: member.role === 'owner' ? theme.colors.backgroundPrimary : theme.colors.textPrimary,
+                            textTransform: 'none',
+                          }}
+                        >
                           {initials(member.full_name, member.email)}
                         </Text>
                       </View>
                       <Stack gap="xxs" style={{ flex: 1 }}>
-                        <Text variant="body" numberOfLines={1}>
+                        <Text variant="cardTitle" numberOfLines={1}>
                           {member.full_name || member.email || 'Üye'}
                           {member.user_id === myUserId ? ' (siz)' : ''}
                         </Text>
@@ -365,16 +363,14 @@ export default function WorkspaceDetailScreen() {
                       </Stack>
                       <View
                         style={{
-                          paddingHorizontal: theme.spacing.sm,
-                          paddingVertical: 4,
-                          borderRadius: theme.radius.pill,
-                          backgroundColor:
-                            member.role === 'owner'
-                              ? withAlpha(theme.colors.brandPrimary, 0.16)
-                              : theme.colors.surfaceElevated,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          borderRadius: 6,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
                         }}
                       >
-                        <Text variant="caption" color={member.role === 'owner' ? 'brandPrimary' : 'textSecondary'}>
+                        <Text variant="caption" mono color="textSecondary">
                           {ROLE_LABEL[member.role]}
                         </Text>
                       </View>
@@ -391,7 +387,7 @@ export default function WorkspaceDetailScreen() {
                 </Text>
               ) : null}
             </Stack>
-          </Card>
+          </View>
         </Stack>
 
         {/* DAVETLER — yalnızca sahip */}
@@ -436,7 +432,7 @@ export default function WorkspaceDetailScreen() {
             </Card>
 
             {invites.length > 0 ? (
-              <Card style={{ padding: 0 }}>
+              <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
                 <Stack gap="xxs">
                   {invites.map((invite) => (
                     <Row key={invite.id} gap="sm" style={{ padding: theme.spacing.md }} align="center">
@@ -463,7 +459,7 @@ export default function WorkspaceDetailScreen() {
                     </Row>
                   ))}
                 </Stack>
-              </Card>
+              </View>
             ) : null}
           </Stack>
         ) : null}

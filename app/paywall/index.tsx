@@ -8,8 +8,7 @@ import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
-import { Button, Card, Divider, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
 import {
   currentPeriodMonth,
   getAllPlanLimits,
@@ -28,12 +27,6 @@ import {
 import { queryKeys } from '@/services/queryKeys';
 
 type BillingPeriod = 'monthly' | 'yearly';
-
-const PLAN_LABELS: Record<PlanCode, string> = {
-  free: 'Ücretsiz',
-  plus: 'Vademde Plus',
-  isletme: 'Vademde İşletme',
-};
 
 const PLAN_SHORT_LABELS: Record<PlanCode, string> = {
   free: 'Ücretsiz',
@@ -54,8 +47,14 @@ const PLAN_CTA_LABELS: Record<PlanCode, string> = {
   isletme: "İşletme'ye geç",
 };
 
-const TABLE_LABEL_WIDTH_FLEX = 1;
-const TABLE_COLUMN_WIDTH = 64;
+const PLAN_TAGLINES: Record<PlanCode, string> = {
+  free: '',
+  plus: 'Kişisel ve küçük işler için',
+  isletme: 'Ekipler ve işletmeler için',
+};
+
+const TABLE_LABEL_WIDTH_FLEX = 1.5;
+const TABLE_COLUMN_FLEX = 1;
 
 // Karşılaştırma tablosu plan_limits alanlarından türetilir (docs/10-abonelik-gelir-modeli.md);
 // etiketler kullanıcının tanıdığı adlarla yazılır (ör. "audit log" değil).
@@ -197,17 +196,12 @@ export default function PaywallScreen() {
     }
   }
 
-  const priceSubline = !product
-    ? null
-    : billingPeriod === 'yearly'
-      ? `/ yıl · ayda ${formatPrice(product.price / 12, product.currencyCode)}`
-      : '/ ay';
-
   const storeName = Platform.OS === 'android' ? 'Google Play' : 'App Store';
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <Row
+        align="center"
         style={{
           justifyContent: 'space-between',
           paddingHorizontal: theme.screenEdge.standard,
@@ -215,23 +209,25 @@ export default function PaywallScreen() {
           paddingBottom: theme.spacing.xs,
         }}
       >
-        <Pressable accessibilityRole="button" accessibilityLabel="Kapat" onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-        </Pressable>
+        <Text variant="label" mono style={{ color: theme.colors.payable }}>
+          VADEMDE PREMIUM
+        </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Satın alımları geri yükle"
-          onPress={handleRestore}
-          disabled={isRestoring}
-          hitSlop={12}
+          accessibilityLabel="Kapat"
+          onPress={() => router.back()}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.surfacePrimary,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
-          {isRestoring ? (
-            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-          ) : (
-            <Text variant="body" color="textSecondary">
-              Geri yükle
-            </Text>
-          )}
+          <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
         </Pressable>
       </Row>
 
@@ -263,9 +259,6 @@ export default function PaywallScreen() {
             }}
           >
             <Stack gap="xs">
-              <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '700', letterSpacing: 1.2 }}>
-                VADEMDE PREMIUM
-              </Text>
               <Text variant="pageTitle">Tarayan hiç yazmaz.</Text>
               <Text variant="body" color="textSecondary">
                 {PLAN_STATUS_LABELS[currentPlan] ?? PLAN_STATUS_LABELS.free}
@@ -275,72 +268,108 @@ export default function PaywallScreen() {
               </Text>
             </Stack>
 
-            {trialDays ? (
-              <Row
-                gap="sm"
-                align="center"
+            <SegmentedControl
+              stretch
+              options={[
+                { key: 'monthly', label: 'Aylık' },
+                { key: 'yearly', label: savingPercent ? `Yıllık · -%${savingPercent}` : 'Yıllık' },
+              ]}
+              value={billingPeriod}
+              onChange={setBillingPeriod}
+            />
+
+            {paidPlans.map((limits) => {
+              const plan = limits.plan as PlanCode;
+              const pkg = resolvePackage(plan);
+              const selected = plan === selectedPlan;
+              const planTrialDays =
+                pkg && trialEligibilityQuery.data?.[pkg.product.identifier] ? freeTrialDays(pkg.product) : null;
+              return (
+                <Pressable
+                  key={plan}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => setChosenPlan(plan)}
+                >
+                  <View
+                    style={{
+                      padding: 18,
+                      borderRadius: 22,
+                      backgroundColor: theme.colors.surfacePrimary,
+                      borderWidth: 2,
+                      borderColor: selected ? theme.colors.textPrimary : 'transparent',
+                      gap: theme.spacing.xxs,
+                    }}
+                  >
+                    <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <Stack gap="xxs" style={{ flex: 1 }}>
+                        <Row gap="xs" align="center">
+                          <Text variant="sectionTitle">{PLAN_SHORT_LABELS[plan] ?? plan}</Text>
+                          {planTrialDays ? (
+                            <View
+                              style={{
+                                backgroundColor: theme.colors.action,
+                                borderRadius: 5,
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                              }}
+                            >
+                              <Text variant="caption" mono style={{ color: theme.colors.brandPrimaryText }}>
+                                {planTrialDays} GÜN ÜCRETSİZ
+                              </Text>
+                            </View>
+                          ) : null}
+                        </Row>
+                        <Text variant="caption" color="textSecondary">
+                          {PLAN_TAGLINES[plan] ?? ''}
+                        </Text>
+                      </Stack>
+                      <Row gap="sm" align="center">
+                        <Text variant="cardTitle" mono tabular>
+                          {pkg ? `${pkg.product.priceString}${billingPeriod === 'yearly' ? '/yıl' : '/ay'}` : '—'}
+                        </Text>
+                        <View
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            borderWidth: selected ? 7 : 1.5,
+                            borderColor: selected ? theme.colors.textPrimary : theme.colors.mutedControl,
+                          }}
+                        />
+                      </Row>
+                    </Row>
+                    {selected && billingPeriod === 'yearly' && pkg ? (
+                      <Text variant="caption" color="textSecondary" tabular>
+                        {`ayda ${formatPrice(pkg.product.price / 12, pkg.product.currencyCode)}`}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+
+            <Stack gap="xs">
+              <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
+                KARŞILAŞTIR
+              </Text>
+              <View
                 style={{
-                  padding: theme.spacing.sm,
                   borderRadius: theme.radius.widget,
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.12),
-                  borderWidth: 1,
-                  borderColor: withAlpha(theme.colors.brandPrimary, 0.4),
+                  backgroundColor: theme.colors.surfacePrimary,
+                  padding: theme.spacing.md,
                 }}
               >
-                <Ionicons name="gift-outline" size={22} color={theme.colors.textPrimary} />
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle">{trialDays} gün ücretsiz dene</Text>
-                  <Text variant="caption" color="textSecondary">
-                    Deneme bitmeden iptal edersen ücret ödemezsin.
-                  </Text>
-                </Stack>
-              </Row>
-            ) : null}
-
-            <Stack gap="sm">
-              <SegmentedControl
-                stretch
-                options={[
-                  { key: 'monthly', label: 'Aylık' },
-                  { key: 'yearly', label: savingPercent ? `Yıllık · -%${savingPercent}` : 'Yıllık' },
-                ]}
-                value={billingPeriod}
-                onChange={setBillingPeriod}
-              />
-              <SegmentedControl
-                stretch
-                options={paidPlans.map((limits) => ({
-                  key: limits.plan,
-                  label: PLAN_SHORT_LABELS[limits.plan as PlanCode] ?? limits.plan,
-                }))}
-                value={selectedPlan ?? ''}
-                onChange={(plan) => setChosenPlan(plan as PlanCode)}
-              />
+                <ComparisonTable planLimits={planLimits} selectedPlan={selectedPlan} />
+              </View>
             </Stack>
-
-            <Stack gap="xxs" align="center">
-              <Text variant="caption" color="textSecondary">
-                {selectedPlan ? PLAN_LABELS[selectedPlan] : ''}
-              </Text>
-              <Text variant="displayBalance" tabular>
-                {product?.priceString ?? '—'}
-              </Text>
-              {priceSubline ? (
-                <Text variant="caption" color="textSecondary" tabular>
-                  {priceSubline}
-                </Text>
-              ) : null}
-            </Stack>
-
-            <Card style={{ padding: 0, overflow: 'hidden' }}>
-              <ComparisonTable planLimits={planLimits} selectedPlan={selectedPlan} />
-            </Card>
           </ScrollView>
 
-          <Divider />
           <Stack
             gap="xs"
             style={{
+              borderTopWidth: 1,
+              borderTopColor: theme.colors.border,
               paddingHorizontal: theme.screenEdge.standard,
               paddingTop: theme.spacing.sm,
               paddingBottom: theme.spacing.xs,
@@ -370,6 +399,21 @@ export default function PaywallScreen() {
             {/* App Store Review Guideline 3.1.2 — otomatik yenilenen abonelik satan ekranda
                 Gizlilik Politikası ve Kullanım Koşulları'na işlevsel bağlantı zorunludur. */}
             <Row gap="md" style={{ justifyContent: 'center' }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Satın alımları geri yükle"
+                onPress={handleRestore}
+                disabled={isRestoring}
+                hitSlop={8}
+              >
+                {isRestoring ? (
+                  <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                ) : (
+                  <Text variant="caption" color="textPrimary" style={{ fontWeight: '600' }}>
+                    Geri yükle
+                  </Text>
+                )}
+              </Pressable>
               <Pressable onPress={() => router.push('/legal/terms-of-service')} hitSlop={8}>
                 <Text variant="caption" style={{ textDecorationLine: 'underline' }} color="textSecondary">
                   Kullanım Koşulları
@@ -395,67 +439,59 @@ function ComparisonTable({ planLimits, selectedPlan }: { planLimits: PlanLimits[
 
   return (
     <View>
-      <Row align="center" style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs }}>
+      <Row
+        align="center"
+        gap="xs"
+        style={{ paddingBottom: theme.spacing.xs, borderBottomWidth: 1.5, borderBottomColor: theme.colors.textPrimary }}
+      >
         <View style={{ flex: TABLE_LABEL_WIDTH_FLEX }} />
         {columns.map((plan) => (
-          <View
-            key={plan}
-            style={{ width: TABLE_COLUMN_WIDTH, alignItems: 'center', paddingVertical: 2 }}
-          >
+          <View key={plan} style={{ flex: TABLE_COLUMN_FLEX, alignItems: 'center' }}>
             <Text
-              variant="caption"
+              variant="label"
+              mono
               numberOfLines={1}
-              style={{
-                fontWeight: plan === selectedPlan ? '700' : '500',
-                color: plan === selectedPlan ? theme.colors.brandPrimary : theme.colors.textSecondary,
-              }}
+              style={{ color: plan === selectedPlan ? theme.colors.textPrimary : theme.colors.textSecondary }}
             >
               {PLAN_SHORT_LABELS[plan]}
             </Text>
           </View>
         ))}
       </Row>
-      {COMPARISON_ROWS.map((row) => (
-        <View key={row.label}>
-          <Divider />
-          <Row align="center" style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs }}>
-            <Text variant="caption" style={{ flex: TABLE_LABEL_WIDTH_FLEX }}>
-              {row.label}
-            </Text>
-            {planLimits.map((limits) => {
-              const selected = limits.plan === selectedPlan;
-              const value = row.value(limits);
-              return (
-                <View
-                  key={limits.plan}
+      {COMPARISON_ROWS.map((row, index) => (
+        <Row
+          key={row.label}
+          align="center"
+          gap="xs"
+          style={{
+            paddingVertical: 11,
+            borderBottomWidth: index < COMPARISON_ROWS.length - 1 ? 1 : 0,
+            borderBottomColor: theme.colors.border,
+          }}
+        >
+          <Text variant="caption" style={{ flex: TABLE_LABEL_WIDTH_FLEX }}>
+            {row.label}
+          </Text>
+          {planLimits.map((limits) => {
+            const selected = limits.plan === selectedPlan;
+            const value = row.value(limits);
+            return (
+              <View key={limits.plan} style={{ flex: TABLE_COLUMN_FLEX, alignItems: 'center' }}>
+                <Text
+                  variant="caption"
+                  mono
+                  tabular
                   style={{
-                    width: TABLE_COLUMN_WIDTH,
-                    alignItems: 'center',
-                    paddingVertical: 4,
-                    borderRadius: 8,
-                    backgroundColor: selected ? withAlpha(theme.colors.brandPrimary, 0.1) : 'transparent',
+                    fontWeight: selected ? '600' : '500',
+                    color: value === '—' || !selected ? theme.colors.textSecondary : theme.colors.textPrimary,
                   }}
                 >
-                  <Text
-                    variant="caption"
-                    tabular
-                    style={{
-                      fontWeight: selected ? '700' : '400',
-                      color:
-                        value === '—'
-                          ? theme.colors.textSecondary
-                          : selected
-                            ? theme.colors.brandPrimary
-                            : theme.colors.textPrimary,
-                    }}
-                  >
-                    {value}
-                  </Text>
-                </View>
-              );
-            })}
-          </Row>
-        </View>
+                  {value}
+                </Text>
+              </View>
+            );
+          })}
+        </Row>
       ))}
     </View>
   );

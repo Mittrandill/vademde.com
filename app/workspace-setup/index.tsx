@@ -7,10 +7,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
-import { AmountField, Button, Card, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { OnboardingWorkspaceIllustration } from '@/components/brand/OnboardingWorkspaceIllustration';
 import { setupInitialWorkspaces } from '@/features/workspaces/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -129,18 +127,18 @@ export default function WorkspaceSetupScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: theme.screenEdge.standard, flexGrow: 1, justifyContent: 'center' }}
+          contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge, flexGrow: 1 }}
         >
-          <Stack gap="xl" align="center">
-            <OnboardingWorkspaceIllustration size={140} />
+          <Stack gap="xl">
+            <Text variant="label" mono color="textSecondary">
+              {step === 'choice' ? 'BAŞLANGIÇ' : 'SON ADIM'}
+            </Text>
 
             {step === 'choice' ? (
               <>
-                <Stack gap="xs" align="center">
-                  <Text variant="pageTitle" style={{ textAlign: 'center' }}>
-                    Vademde&apos;ye Hoş Geldin
-                  </Text>
-                  <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
+                <Stack gap="xs">
+                  <Text variant="pageTitle">Nerede takip edeceksin?</Text>
+                  <Text variant="body" color="textSecondary">
                     Kendi çalışma alanını oluştur veya seni davet eden bir ekibe davet koduyla katıl.
                   </Text>
                 </Stack>
@@ -148,13 +146,13 @@ export default function WorkspaceSetupScreen() {
                 <Stack gap="sm" style={{ alignSelf: 'stretch' }}>
                   <ChoiceOption
                     icon="add-circle-outline"
-                    title="Kendi Çalışma Alanımı Oluştur"
+                    title="Kendi çalışma alanımı oluştur"
                     description="Kişisel veya işletme bütçeni sıfırdan kur."
                     onPress={() => setStep('create')}
                   />
                   <ChoiceOption
                     icon="enter-outline"
-                    title="Davet Koduyla Katıl"
+                    title="Davet koduyla katıl"
                     description="Bir ekip arkadaşının paylaştığı kodla mevcut çalışma alanına katıl."
                     onPress={() => router.push('/workspace/join')}
                   />
@@ -162,17 +160,15 @@ export default function WorkspaceSetupScreen() {
               </>
             ) : (
               <>
-                <Stack gap="xs" align="center">
-                  <Text variant="pageTitle" style={{ textAlign: 'center' }}>
-                    Çalışma Alanını Kur
-                  </Text>
-                  <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
+                <Stack gap="xs">
+                  <Text variant="pageTitle">Çalışma alanını kur</Text>
+                  <Text variant="body" color="textSecondary">
                     Kişisel veya işletme bütçenizi takip etmek için bir çalışma alanı oluşturun.
                   </Text>
                 </Stack>
 
                 <Stack gap="sm" style={{ alignSelf: 'stretch' }}>
-                  <Text variant="caption" color="textSecondary">
+                  <Text variant="label" color="textSecondary">
                     NASIL KULLANACAKSINIZ?
                   </Text>
                   <SegmentedControl
@@ -249,29 +245,31 @@ function ChoiceOption({
   const theme = useTheme();
   return (
     <Pressable onPress={onPress}>
-      <Card>
-        <Row gap="sm" align="center">
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: theme.radius.input,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
-            }}
-          >
-            <Ionicons name={icon} size={20} color={theme.colors.textPrimary} />
-          </View>
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle">{title}</Text>
-            <Text variant="caption" color="textSecondary">
-              {description}
-            </Text>
-          </Stack>
-          <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-        </Row>
-      </Card>
+      <Row
+        gap="sm"
+        align="center"
+        style={{ padding: theme.spacing.md, borderRadius: 22, backgroundColor: theme.colors.surfacePrimary }}
+      >
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.colors.backgroundPrimary,
+          }}
+        >
+          <Ionicons name={icon} size={20} color={theme.colors.textPrimary} />
+        </View>
+        <Stack gap="xxs" style={{ flex: 1 }}>
+          <Text variant="cardTitle">{title}</Text>
+          <Text variant="caption" color="textSecondary">
+            {description}
+          </Text>
+        </Stack>
+        <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedControl} />
+      </Row>
     </Pressable>
   );
 }

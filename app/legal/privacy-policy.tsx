@@ -1,10 +1,11 @@
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Stack, Text } from '@/components/primitives';
+import { Row, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 
 interface Section {
@@ -149,7 +150,7 @@ export default function PrivacyPolicyScreen() {
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
         <ScreenHeader
-          title="Gizlilik Politikası"
+          title="Gizlilik ve KVKK"
           left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
         />
       </View>
@@ -160,21 +161,32 @@ export default function PrivacyPolicyScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <Stack gap="xxs">
-          <Text variant="pageTitle">Gizlilik Politikası ve KVKK Aydınlatma Metni</Text>
-          <Text variant="caption" color="textSecondary">
-            Son güncelleme: 11 Ağustos 2026
-          </Text>
-        </Stack>
+        <Text variant="label" mono color="textSecondary">
+          SON GÜNCELLEME · 11 AĞUSTOS 2026
+        </Text>
 
         {SECTIONS.map((section) => (
           <Stack key={section.title} gap="xs">
             <Text variant="sectionTitle">{section.title}</Text>
-            <Text variant="body" color="textSecondary">
+            <Text variant="body" style={{ lineHeight: 24 }}>
               {section.body}
             </Text>
           </Stack>
         ))}
+
+        <Row
+          gap="sm"
+          align="center"
+          style={{ padding: theme.spacing.md, borderRadius: 18, backgroundColor: theme.colors.surfacePrimary }}
+        >
+          <Ionicons name="mail-outline" size={22} color={theme.colors.textPrimary} />
+          <Text variant="body" style={{ flex: 1 }}>
+            Başvurular ve sorular için:{' '}
+            <Text variant="body" mono>
+              info@vademde.com
+            </Text>
+          </Text>
+        </Row>
       </ScrollView>
     </SafeAreaView>
   );

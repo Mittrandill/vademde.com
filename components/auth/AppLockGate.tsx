@@ -5,8 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
-import { Button, Stack, Text } from '@/components/primitives';
+import { Button, Pressable, Stack, Text } from '@/components/primitives';
+import { VademdeMark } from '@/components/brand/VademdeMark';
 import { useAppLockStore } from '@/store/appLockStore';
 import { authenticate, getBiometricSupport } from '@/services/appLock';
 import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
@@ -98,29 +98,39 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="lg" align="center" style={{ flex: 1, justifyContent: 'center', padding: theme.screenEdge.standard }}>
-        <View
-          style={{
-            width: 88,
-            height: 88,
-            borderRadius: 44,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
-          }}
-        >
-          <Ionicons name="lock-closed" size={40} color={theme.colors.textPrimary} />
-        </View>
-        <Stack gap="xs" align="center">
-          <Text variant="pageTitle" style={{ textAlign: 'center' }}>
-            Vademde kilitli
-          </Text>
-          <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-            Finansal verilerinize erişmek için {label} ile kimliğinizi doğrulayın.
-          </Text>
+      <View style={{ flex: 1, padding: theme.screenEdge.standard, alignItems: 'center' }}>
+        <Stack gap="lg" align="center" style={{ flex: 1, justifyContent: 'center' }}>
+          <VademdeMark size={72} />
+          <Stack gap="xxs" align="center">
+            <Text variant="pageTitle" style={{ textAlign: 'center' }}>
+              Uygulama kilitli
+            </Text>
+            <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
+              Devam etmek için {label} ile kimliğini doğrula
+            </Text>
+          </Stack>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${label} ile aç`}
+            onPress={unlock}
+            disabled={checking}
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: 30,
+              marginTop: theme.spacing.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.colors.surfacePrimary,
+            }}
+          >
+            <Ionicons name="finger-print" size={44} color={theme.colors.textPrimary} />
+          </Pressable>
         </Stack>
-        <Button label={`${label} ile aç`} icon="finger-print" onPress={unlock} loading={checking} />
-      </Stack>
+        <View style={{ alignSelf: 'stretch' }}>
+          <Button label={`${label} ile aç`} onPress={unlock} loading={checking} />
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
