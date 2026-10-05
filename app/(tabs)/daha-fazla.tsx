@@ -210,10 +210,11 @@ export default function MoreScreen() {
           />
           <MenuRow
             icon={DOCUMENT_TYPE_ICON.abonelik ?? 'repeat-outline'}
-            label="Abonelikler"
+            label="Aboneliklerim"
             detail={countText(totalsByType?.abonelik?.count)}
-            href={{ pathname: '/obligations', params: { type: 'abonelik' } }}
+            href="/aboneliklerim"
           />
+          <MenuRow icon="logo-usd" label="Döviz ve altın" href="/accounts/value-units" />
           <MenuRow icon="people-outline" label="Kişiler ve firmalar" href="/counterparties" />
           <MenuRow icon="business-outline" label="Bankalar" href="/banks" />
           <MenuRow icon="pricetags-outline" label="Kategoriler" href="/categories" />
