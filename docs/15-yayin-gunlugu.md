@@ -12,7 +12,7 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | (build numarası EAS tarafından atanır) | `eas build --platform ios --profile production --no-wait --auto-submit` ile alınır, TestFlight'a gönderilir | 2026-10-05 |
+| iOS | build 41 | `eas build --no-wait --auto-submit` ile alındı (build ID `c5f5739d-df3e-4edf-92bd-4615524ebe92`, commit `04d41c5`); submission `c5d57b02-ab76-459c-b6bb-822cbf17b8b6` planlandı — TestFlight'ta doğrulanacak | 2026-10-05 |
 
 Yeniden tasarım + yeni özellikler. Native değişiklik içerir (`expo-font` eklentisi, `LSApplicationQueriesSchemes`),
 bu yüzden OTA ile gelmez; yeni build ve yeni sürüm numarası gerekir (1.0.5 kapanmadan numara çakışmasın diye 1.0.6).
