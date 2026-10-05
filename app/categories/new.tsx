@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
@@ -133,14 +134,10 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
         <Stack gap="lg">
-          <Row align="center">
-            <Pressable onPress={() => router.back()} hitSlop={12}>
-              <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-              {isEditing ? 'Kategoriyi Düzenle' : 'Yeni Kategori'}
-            </Text>
-          </Row>
+          <ScreenHeader
+            title={isEditing ? 'Kategoriyi Düzenle' : 'Yeni Kategori'}
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+          />
 
           <SegmentedControl
             options={KINDS.map((k) => ({ key: k.value, label: k.label }))}
@@ -204,7 +201,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
           </Stack>
 
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               RENK
             </Text>
             <Row gap="sm" style={{ flexWrap: 'wrap' }}>

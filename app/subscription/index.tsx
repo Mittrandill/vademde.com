@@ -182,7 +182,7 @@ export default function SubscriptionScreen() {
 
             <Stack gap="xs">
               <Row align="center" style={{ justifyContent: 'space-between' }}>
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   BU AY OCR KULLANIMI
                 </Text>
                 <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>

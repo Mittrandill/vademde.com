@@ -299,7 +299,7 @@ export default function CounterpartyDetailScreen() {
 
       {breakdown && breakdown.payable.remainingTotalMinor > 0 ? (
         <Stack gap="sm">
-          <Text variant="caption" color="textSecondary">
+          <Text variant="label" color="textSecondary">
             ÖDENECEKLER
           </Text>
           <DueBreakdown data={breakdown.payable} direction="payable" />
@@ -308,7 +308,7 @@ export default function CounterpartyDetailScreen() {
 
       {breakdown && breakdown.receivable.remainingTotalMinor > 0 ? (
         <Stack gap="sm">
-          <Text variant="caption" color="textSecondary">
+          <Text variant="label" color="textSecondary">
             TAHSİL EDİLECEKLER
           </Text>
           <DueBreakdown data={breakdown.receivable} direction="receivable" />

@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
@@ -383,14 +384,10 @@ function TransactionForm({
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
           <Stack gap="lg">
-            <Row align="center">
-              <Pressable onPress={() => router.back()} hitSlop={12}>
-                <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-              </Pressable>
-              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-                {isEditing ? 'Hareketi Düzenle' : 'Yeni Hareket'}
-              </Text>
-            </Row>
+            <ScreenHeader
+            title={isEditing ? 'Hareketi Düzenle' : 'Yeni Hareket'}
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+          />
 
             {!isEditing ? (
               <ScanPromptBanner description="Dekont, fiş veya fatura fotoğrafını tara; tutar, tarih ve hesap otomatik dolsun." />
@@ -454,7 +451,7 @@ function TransactionForm({
 
             {direction === 'transfer' ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   HEDEF HESAP
                 </Text>
                 <AccountPicker
@@ -467,7 +464,7 @@ function TransactionForm({
               </Stack>
             ) : (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   KATEGORİ
                 </Text>
                 {categories.length === 0 ? (
@@ -483,7 +480,7 @@ function TransactionForm({
             {direction === 'transfer' ? null : (
               <>
                 <Stack gap="sm">
-                  <Text variant="caption" color="textSecondary">
+                  <Text variant="label" color="textSecondary">
                     KİŞİ / FİRMA (İSTEĞE BAĞLI)
                   </Text>
                   {activeWorkspaceId ? (
@@ -520,7 +517,7 @@ function TransactionForm({
                 ) : null}
 
                 <Stack gap="sm">
-                  <Text variant="caption" color="textSecondary">
+                  <Text variant="label" color="textSecondary">
                     ÖDEME YÖNTEMİ (İSTEĞE BAĞLI)
                   </Text>
                   <SegmentedControl<PaymentMethod | ''>

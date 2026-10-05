@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
@@ -746,14 +747,10 @@ function ObligationForm({
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
           <Stack gap="lg">
-            <Row align="center">
-              <Pressable onPress={() => router.back()} hitSlop={12}>
-                <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-              </Pressable>
-              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-                {isEditing ? 'Borç / Alacağı Düzenle' : 'Yeni Borç / Alacak'}
-              </Text>
-            </Row>
+            <ScreenHeader
+            title={isEditing ? 'Borç / Alacağı Düzenle' : 'Yeni Borç / Alacak'}
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+          />
 
             {!isEditing ? (
               <ScanPromptBanner description="Çek, senet, fatura veya kredi belgesini tara; tür, tutar ve vade otomatik dolsun." />
@@ -775,7 +772,7 @@ function ObligationForm({
             <TextField label="BAŞLIK" placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
 
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 DEĞER BİRİMİ
               </Text>
               {isEditing || isLendingType ? (
@@ -892,7 +889,7 @@ function ObligationForm({
             )}
 
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 BELGE TÜRÜ
               </Text>
               <DocumentTypePicker
@@ -968,7 +965,7 @@ function ObligationForm({
 
             {isSubscriptionType ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   SERVİS (İSTEĞE BAĞLI)
                 </Text>
                 <ServicePicker selectedId={serviceCode} onSelect={setServiceCode} />
@@ -976,7 +973,7 @@ function ObligationForm({
             ) : null}
 
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 KATEGORİ (İSTEĞE BAĞLI)
               </Text>
               {(categoriesQuery.data ?? []).length === 0 ? (
@@ -1196,12 +1193,12 @@ function InstallmentPlanEditor({
 
   return (
     <Stack gap="sm">
-      <Text variant="caption" color="textSecondary">
+      <Text variant="label" color="textSecondary">
         TAKSİT PLANI
       </Text>
 
       <Stack gap="sm">
-        <Text variant="caption" color="textSecondary">
+        <Text variant="label" color="textSecondary">
           BAŞLANGIÇ TARİHİ
         </Text>
         {!firstRow || firstRow.locked ? (
@@ -1352,7 +1349,7 @@ function InstallmentPlanEditor({
           N vade eklemek için. Tutar boş bırakılırsa son vadenin tutarı sürer. */}
       <Card>
         <Stack gap="sm">
-          <Text variant="caption" color="textSecondary">
+          <Text variant="label" color="textSecondary">
             PLANI UZAT
           </Text>
           <Row gap="sm" align="center">

@@ -347,7 +347,7 @@ export default function NewAccountScreen() {
             <>
               {isCash ? (
                 <Stack gap="sm">
-                  <Text variant="caption" color="textSecondary">
+                  <Text variant="label" color="textSecondary">
                     DEĞER BİRİMİ
                   </Text>
                   <ValueUnitPicker selectedId={valueUnitCode} onSelect={setValueUnitCode} />
@@ -361,7 +361,7 @@ export default function NewAccountScreen() {
               {isPos ? (
                 <FormSection icon="card-outline" title="POS Bilgileri">
                   <Stack gap="sm">
-                    <Text variant="caption" color="textSecondary">
+                    <Text variant="label" color="textSecondary">
                       BANKA (İSTEĞE BAĞLI)
                     </Text>
                     <BankPicker selectedId={bankCode} onSelect={setBankCode} />
@@ -386,7 +386,7 @@ export default function NewAccountScreen() {
 
               {type === 'bank' ? (
                 <Stack gap="sm">
-                  <Text variant="caption" color="textSecondary">
+                  <Text variant="label" color="textSecondary">
                     BANKA (İSTEĞE BAĞLI)
                   </Text>
                   <BankPicker selectedId={bankCode} onSelect={setBankCode} />
@@ -424,7 +424,7 @@ export default function NewAccountScreen() {
 
               {isBank ? (
                 <Stack gap="sm">
-                  <Text variant="caption" color="textSecondary">
+                  <Text variant="label" color="textSecondary">
                     AÇILIŞ BAKİYESİ (İSTEĞE BAĞLI)
                   </Text>
                   <Row gap="sm" align="center">

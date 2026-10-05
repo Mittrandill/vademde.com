@@ -454,7 +454,7 @@ export default function ReceiptResultScreen() {
           ) : null}
 
           <Stack gap="xs">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               YÖN
             </Text>
             <SegmentedControl
@@ -471,7 +471,7 @@ export default function ReceiptResultScreen() {
           </Stack>
 
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               TUTAR
             </Text>
             <AmountField value={amount} onChangeText={(value) => { setAmount(value); setSelectedMatch(null); }} />
@@ -480,7 +480,7 @@ export default function ReceiptResultScreen() {
           <DateField label="İŞLEM TARİHİ" value={dateStr} onChangeText={setDateStr} />
 
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               KİŞİ / FİRMA
             </Text>
             {activeWorkspaceId ? (
@@ -588,7 +588,7 @@ export default function ReceiptResultScreen() {
             // recordPayment hesapsız çağrılır (bkz. features/payments/api.ts), borç kapanır
             // ama hiçbir hesabın bakiyesi değişmez ve Hareketler'de hiç görünmez.
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 HESAP
               </Text>
               <AccountPicker accounts={selectableAccounts} selectedId={accountId} onSelect={setAccountId} />

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { FlatList, Modal, View } from 'react-native';
+import { FlatList, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -79,8 +79,8 @@ export function SearchablePicker<T extends { id: string; name: string }>({
           alignItems: 'center',
           gap: theme.spacing.xs,
           paddingHorizontal: theme.spacing.md,
-          height: theme.buttonHeight.primary,
-          borderRadius: theme.radius.input,
+          minHeight: theme.buttonHeight.primary,
+          borderRadius: 16,
           backgroundColor: theme.colors.surfacePrimary,
           borderWidth: 1,
           borderColor: theme.colors.border,
@@ -92,16 +92,17 @@ export function SearchablePicker<T extends { id: string; name: string }>({
           <Ionicons
             name={selected ? iconFor(selected) : FALLBACK_ICON}
             size={20}
-            color={selected ? theme.colors.accentViolet : theme.colors.textSecondary}
+            color={selected ? theme.colors.textPrimary : theme.colors.textSecondary}
           />
         )}
         <Text
-          variant="body"
+          variant="cardTitle"
+          numberOfLines={1}
           style={{ flex: 1, color: selected ? theme.colors.textPrimary : theme.colors.textSecondary }}
         >
           {selected ? selected.name : placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={18} color={theme.colors.textSecondary} />
+        <Ionicons name="chevron-down" size={18} color={theme.colors.mutedControl} />
       </Pressable>
 
       {/* Modal yalnızca açıkken mount edilir — bkz. DateField'daki aynı not. Bu seçici
@@ -114,11 +115,25 @@ export function SearchablePicker<T extends { id: string; name: string }>({
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
           <Stack gap="md" style={{ flex: 1, paddingTop: theme.spacing.md }}>
             <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-              <Text variant="pageTitle" style={{ flex: 1 }}>
+              <Text variant="sectionTitle" style={{ flex: 1 }}>
                 {title}
               </Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={12}>
-                <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
+                onPress={() => setOpen(false)}
+                style={{
+                  width: theme.touchTarget.minimum,
+                  height: theme.touchTarget.minimum,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.surfacePrimary,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                }}
+              >
+                <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
               </Pressable>
             </Row>
 
@@ -137,7 +152,6 @@ export function SearchablePicker<T extends { id: string; name: string }>({
               keyExtractor={(item) => item.id}
               contentContainerStyle={{
                 paddingHorizontal: theme.screenEdge.standard,
-                gap: theme.spacing.xs,
                 paddingBottom: theme.spacing.xxl,
               }}
               keyboardShouldPersistTaps="handled"
@@ -150,9 +164,10 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: theme.spacing.sm,
-                      padding: theme.spacing.md,
+                      minHeight: 56,
+                      paddingHorizontal: theme.spacing.md,
                       borderRadius: theme.radius.widget,
-                      backgroundColor: theme.colors.surfaceElevated,
+                      backgroundColor: theme.colors.surfacePrimary,
                       marginBottom: theme.spacing.xs,
                       opacity: creating ? 0.6 : 1,
                     }}
@@ -169,59 +184,42 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                   {emptyLabel}
                 </Text>
               }
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => {
-                    onSelect(item.id);
-                    setSearch('');
-                    setOpen(false);
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: theme.spacing.sm,
-                    padding: theme.spacing.md,
-                    borderRadius: theme.radius.widget,
-                    backgroundColor:
-                      item.id === selectedId ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
-                  }}
-                >
-                  {renderLeading ? (
-                    // Özel rozetin (bkz. BankLogo/CategoryIcon/ValueUnitPicker) kendi rengi
-                    // seçili satırın dolu brandPrimary zeminiyle yakın/aynı olduğunda ikon
-                    // görünmez oluyordu (bkz. kullanıcı geri bildirimi — Değer Birimi Seç'te
-                    // TRY rozeti kayboluyordu). Seçiliyken rozeti nötr bir zemine oturtmak,
-                    // rozetin kendi rengi ne olursa olsun kontrastı garanti eder.
-                    item.id === selectedId ? (
-                      <View
-                        style={{
-                          backgroundColor: theme.colors.surfaceElevated,
-                          borderRadius: theme.radius.input,
-                          padding: 3,
-                        }}
-                      >
-                        {renderLeading(item)}
-                      </View>
-                    ) : (
-                      renderLeading(item)
-                    )
-                  ) : (
-                    <Ionicons
-                      name={iconFor(item)}
-                      size={20}
-                      color={item.id === selectedId ? theme.colors.brandPrimaryText : theme.colors.accentViolet}
-                    />
-                  )}
-                  <Text
-                    variant="body"
+              renderItem={({ item }) => {
+                const active = item.id === selectedId;
+                return (
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => {
+                      onSelect(item.id);
+                      setSearch('');
+                      setOpen(false);
+                    }}
                     style={{
-                      color: item.id === selectedId ? theme.colors.brandPrimaryText : theme.colors.textPrimary,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: theme.spacing.sm,
+                      minHeight: 60,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.border,
                     }}
                   >
-                    {item.name}
-                  </Text>
-                </Pressable>
-              )}
+                    {renderLeading ? (
+                      renderLeading(item)
+                    ) : (
+                      <Ionicons name={iconFor(item)} size={22} color={theme.colors.textPrimary} />
+                    )}
+                    <Text variant="cardTitle" numberOfLines={1} style={{ flex: 1 }}>
+                      {item.name}
+                    </Text>
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={22}
+                      color={active ? theme.colors.action : theme.colors.mutedControl}
+                    />
+                  </Pressable>
+                );
+              }}
             />
           </Stack>
         </SafeAreaView>

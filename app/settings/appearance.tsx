@@ -37,7 +37,7 @@ export default function AppearanceScreen() {
       >
         <Card>
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               TEMA
             </Text>
             <SegmentedControl options={THEME_OPTIONS} value={themePreference} onChange={setThemePreference} />
@@ -46,7 +46,7 @@ export default function AppearanceScreen() {
 
         <Card>
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               UYGULAMA İKONU
             </Text>
             <AppIconPicker />

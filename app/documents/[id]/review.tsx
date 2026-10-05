@@ -1105,7 +1105,7 @@ export default function DocumentReviewScreen() {
             ) : null}
 
             <Stack gap="xs">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 YÖN
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
@@ -1124,7 +1124,7 @@ export default function DocumentReviewScreen() {
             </Stack>
 
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 BAŞLIK
               </Text>
               <TextField value={title} onChangeText={setTitle} />
@@ -1168,7 +1168,7 @@ export default function DocumentReviewScreen() {
 
             {isLoanDocument && totalInterestMinor !== null ? (
               <Row style={{ justifyContent: 'space-between' }}>
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   FAİZ (TOPLAM)
                 </Text>
                 <Text variant="body" tabular>
@@ -1179,7 +1179,7 @@ export default function DocumentReviewScreen() {
 
             {isLoanDocument && totalRepaymentMinor !== null ? (
               <Row style={{ justifyContent: 'space-between' }}>
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   TOPLAM GERİ ÖDEME
                 </Text>
                 <Text variant="body" tabular>
@@ -1208,7 +1208,7 @@ export default function DocumentReviewScreen() {
 
             {(direction === 'payable' || direction === 'receivable') && (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   BELGE TÜRÜ
                 </Text>
                 <DocumentTypePicker selectedId={documentType} onSelect={setDocumentType} />
@@ -1271,7 +1271,7 @@ export default function DocumentReviewScreen() {
 
             {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   BANKA (İSTEĞE BAĞLI)
                 </Text>
                 <Row gap="sm" align="center">
@@ -1362,7 +1362,7 @@ export default function DocumentReviewScreen() {
                       })}
                       {cardOtherItems.length > 0 ? (
                         <Stack gap="xs">
-                          <Text variant="caption" color="textSecondary">HARCAMA OLARAK EKLENMEYECEK</Text>
+                          <Text variant="label" color="textSecondary">HARCAMA OLARAK EKLENMEYECEK</Text>
                           {cardOtherItems.map((item) => (
                             <Row key={item.id} align="center">
                               <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
@@ -1474,7 +1474,7 @@ export default function DocumentReviewScreen() {
                 kart borcunun tamamına ayrıca genel bir kategori sormak anlamsız. */}
             {!splitsCardSpending ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   KATEGORİ (İSTEĞE BAĞLI)
                 </Text>
                 {(categoriesQuery.data ?? []).length > 0 ? (

@@ -952,7 +952,7 @@ function PaymentForm({
           // "ödendi" işaretlenmesi ayrı bir yoldan gider, bkz. recordPastInstallmentPayments) —
           // burada hesap artık zorunlu.
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               HESAP
             </Text>
             <AccountPicker accounts={payableAccounts} selectedId={accountId} onSelect={setAccountId} />

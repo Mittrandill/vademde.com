@@ -252,7 +252,7 @@ export default function ProfileScreen() {
 
         <Card>
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               AD SOYAD
             </Text>
             {isEditingName ? (
@@ -298,7 +298,7 @@ export default function ProfileScreen() {
 
         <Card>
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               ŞİFRE
             </Text>
             {isChangingPassword ? (
@@ -351,7 +351,7 @@ export default function ProfileScreen() {
 
         <Card>
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               ÇALIŞMA ALANLARI
             </Text>
             {(workspacesQuery.data ?? []).map((w) => (
@@ -383,7 +383,7 @@ export default function ProfileScreen() {
 
         <Card>
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               GİZLİLİK
             </Text>
             <Row align="center" style={{ justifyContent: 'space-between' }}>
@@ -435,7 +435,7 @@ export default function ProfileScreen() {
         <Button label="Çıkış Yap" variant="secondary" onPress={handleSignOut} />
 
         <Stack gap="sm" style={{ marginTop: theme.spacing.lg }}>
-          <Text variant="caption" color="textSecondary">
+          <Text variant="label" color="textSecondary">
             TEHLİKELİ BÖLGE
           </Text>
           <Button

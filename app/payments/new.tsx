@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import {
@@ -456,17 +457,13 @@ function SettlementForm({
           contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xxl }}
         >
           <Stack gap="lg">
-            <Row align="center">
-              <Pressable onPress={() => router.back()} hitSlop={12}>
-                <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-              </Pressable>
-              <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-                {isPayable ? 'Ödeme Yap' : 'Tahsilat Al'}
-              </Text>
-            </Row>
+            <ScreenHeader
+            title={isPayable ? 'Ödeme Yap' : 'Tahsilat Al'}
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+          />
 
             <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
+              <Text variant="label" color="textSecondary">
                 KİŞİ / FİRMA
               </Text>
               {activeWorkspaceId ? (
@@ -569,7 +566,7 @@ function SettlementForm({
 
             {method === 'ciro' ? (
               <Stack gap="xxs">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   TUTAR
                 </Text>
                 <Text variant="cardTitle" tabular>
@@ -623,14 +620,14 @@ function SettlementForm({
 
                   {method === 'cek' ? (
                     <Stack gap="sm">
-                      <Text variant="caption" color="textSecondary">
+                      <Text variant="label" color="textSecondary">
                         BANKA (İSTEĞE BAĞLI)
                       </Text>
                       <BankPicker selectedId={bankCode} onSelect={setBankCode} />
                     </Stack>
                   ) : (
                     <Stack gap="sm">
-                      <Text variant="caption" color="textSecondary">
+                      <Text variant="label" color="textSecondary">
                         VADE SAYISI
                       </Text>
                       <Row gap="sm" align="center">

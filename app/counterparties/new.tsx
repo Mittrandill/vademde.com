@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Button, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import {
   COUNTERPARTY_TYPES,
   COUNTERPARTY_TYPE_LABEL,
@@ -124,14 +124,10 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
         <Stack gap="lg">
-          <Row align="center">
-            <Pressable onPress={() => router.back()} hitSlop={12}>
-              <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-            </Pressable>
-            <Text variant="pageTitle" style={{ flex: 1, marginLeft: theme.spacing.sm }}>
-              {isEditing ? `${typeLabel} Kaydını Düzenle` : 'Yeni Cari'}
-            </Text>
-          </Row>
+          <ScreenHeader
+            title={isEditing ? `${typeLabel} Kaydını Düzenle` : 'Yeni Cari'}
+            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+          />
 
           <SegmentedControl
             options={TYPES.map((t) => ({ key: t.value, label: t.label }))}

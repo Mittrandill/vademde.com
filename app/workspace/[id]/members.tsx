@@ -330,7 +330,7 @@ export default function WorkspaceDetailScreen() {
 
         {/* ÜYELER */}
         <Stack gap="sm">
-          <Text variant="caption" color="textSecondary">
+          <Text variant="label" color="textSecondary">
             ÜYELER
           </Text>
           <Card style={{ padding: 0 }}>
@@ -397,7 +397,7 @@ export default function WorkspaceDetailScreen() {
         {/* DAVETLER — yalnızca sahip */}
         {isOwner ? (
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               YENİ ÜYE DAVET ET
             </Text>
             <Card>
@@ -476,7 +476,7 @@ export default function WorkspaceDetailScreen() {
         {/* Tehlikeli bölge — yalnızca sahip */}
         {isOwner ? (
           <Stack gap="sm" style={{ marginTop: theme.spacing.lg }}>
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               TEHLİKELİ BÖLGE
             </Text>
             <Button
