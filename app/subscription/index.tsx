@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,8 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
-import { Button, Card, Divider, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
+import { Button, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import {
   currentPeriodMonth,
@@ -127,124 +126,105 @@ export default function SubscriptionScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <Card variant="hero">
-          <Stack gap="lg">
-            <Row gap="md" align="center">
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.4 }}>
-                  MEVCUT PLAN
-                </Text>
-                <Text variant="displayAmount" numberOfLines={1} adjustsFontSizeToFit>
-                  {planLabel}
-                </Text>
-              </Stack>
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: theme.radius.input,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-                }}
-              >
-                <Ionicons name="sparkles-outline" size={24} color={theme.colors.textPrimary} />
-              </View>
+        <Stack gap="xs">
+          <Text variant="label" color="textSecondary">
+            Mevcut plan
+          </Text>
+          <Text variant="displayAmount" numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: undefined, fontSize: 36 }}>
+            {planLabel}
+          </Text>
+          <Text variant="caption" color="textSecondary">
+            {renewalLine ?? (isFree ? "Kota her ayın 1'inde yenilenir" : 'Aktif üyelik')}
+          </Text>
+        </Stack>
+
+        <Stack gap="xs">
+          <Text variant="label" color="textSecondary">
+            Bu ay kullanım
+          </Text>
+          <View style={{ gap: theme.spacing.xs, paddingVertical: theme.spacing.xs }}>
+            <Row align="center" style={{ justifyContent: 'space-between' }}>
+              <Text variant="cardTitle">Belge tarama</Text>
+              <Text variant="cardTitle" tabular>
+                {usage ? `${usage.usedCount} / ${usage.quota}` : '—'}
+              </Text>
             </Row>
-
-            <Row align="center" gap="xs">
+            <View
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityValue={{ min: 0, max: 100, now: Math.round(usageRatio * 100) }}
+              style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.border, overflow: 'hidden' }}
+            >
               <View
                 style={{
-                  paddingHorizontal: theme.spacing.xs,
-                  paddingVertical: 3,
-                  borderRadius: 999,
-                  backgroundColor: withAlpha(isFree ? theme.colors.textSecondary : theme.colors.success, 0.15),
-                }}
-              >
-                <Text
-                  variant="caption"
-                  style={{
-                    color: isFree ? theme.colors.textSecondary : theme.colors.success,
-                    fontWeight: '600',
-                  }}
-                >
-                  {isFree ? 'Aktif' : 'Aktif Üyelik'}
-                </Text>
-              </View>
-              {renewalLine ? (
-                <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
-                  {renewalLine}
-                </Text>
-              ) : null}
-            </Row>
-
-            <Divider />
-
-            <Stack gap="xs">
-              <Row align="center" style={{ justifyContent: 'space-between' }}>
-                <Text variant="label" color="textSecondary">
-                  BU AY OCR KULLANIMI
-                </Text>
-                <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>
-                  {usage ? `${usage.usedCount}/${usage.quota}` : '—'}
-                </Text>
-              </Row>
-              <View
-                style={{
-                  height: 8,
+                  width: `${Math.round(usageRatio * 100)}%`,
+                  height: '100%',
                   borderRadius: 4,
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-                  overflow: 'hidden',
+                  backgroundColor: usageRatio >= 1 ? theme.colors.danger : theme.colors.textPrimary,
                 }}
-              >
-                <View
-                  style={{
-                    width: `${Math.round(usageRatio * 100)}%`,
-                    height: '100%',
-                    borderRadius: 4,
-                    backgroundColor: theme.colors.brandPrimary,
-                  }}
-                />
-              </View>
-            </Stack>
+              />
+            </View>
+          </View>
+        </Stack>
 
-            <Button
-              icon={isFree ? 'arrow-up-circle-outline' : 'swap-horizontal-outline'}
-              label={isFree ? 'Plan Yükselt' : 'Planı Değiştir'}
-              onPress={() => router.push('/paywall')}
-            />
-          </Stack>
-        </Card>
+        <Button
+          icon={isFree ? 'arrow-up-circle-outline' : 'swap-horizontal-outline'}
+          label={isFree ? "Plus'a geç" : 'Planı değiştir'}
+          onPress={() => router.push('/paywall')}
+        />
 
         {features.length > 0 ? (
-          <Stack gap="sm">
-            <SectionHeader title={`${planLabel} planında`} />
-            <Card>
-              <Stack gap="sm">
-                {features.map((feature) => (
-                  <Row key={feature} gap="sm">
-                    <Ionicons name="checkmark" size={18} color={theme.colors.success} />
-                    <Text variant="body" style={{ flex: 1 }}>
-                      {feature}
-                    </Text>
-                  </Row>
-                ))}
-              </Stack>
-            </Card>
+          <Stack gap="xs">
+            <Text variant="label" color="textSecondary">
+              {planLabel} planında
+            </Text>
+            {features.map((feature) => (
+              <Row key={feature} gap="sm" style={{ minHeight: 40 }}>
+                <Ionicons name="checkmark" size={18} color={theme.colors.receivable} />
+                <Text variant="body" style={{ flex: 1 }}>
+                  {feature}
+                </Text>
+              </Row>
+            ))}
           </Stack>
         ) : null}
 
-        <Pressable onPress={handleRestore} disabled={isRestoring}>
-          <Row align="center" style={{ justifyContent: 'center', paddingVertical: theme.spacing.sm }} gap="xs">
+        <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleRestore}
+            disabled={isRestoring}
+            style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingHorizontal: theme.spacing.md }}
+          >
+            <Ionicons name="refresh-outline" size={22} color={theme.colors.textPrimary} />
+            <Text variant="cardTitle" style={{ flex: 1 }}>
+              Satın alımları geri yükle
+            </Text>
             {isRestoring ? (
               <ActivityIndicator size="small" color={theme.colors.textSecondary} />
             ) : (
-              <Text variant="body" color="textSecondary">
-                Satın alımları geri yükle
-              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedControl} />
             )}
-          </Row>
-        </Pressable>
+          </Pressable>
+          <View style={{ height: 1, backgroundColor: theme.colors.border, marginLeft: theme.spacing.md + 22 + theme.spacing.sm }} />
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {})}
+            style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingHorizontal: theme.spacing.md }}
+          >
+            <Ionicons name="storefront-outline" size={22} color={theme.colors.textPrimary} />
+            <Text variant="cardTitle" style={{ flex: 1 }}>
+              Aboneliği mağazada yönet
+            </Text>
+            <Text variant="caption" color="textSecondary">
+              App Store
+            </Text>
+          </Pressable>
+        </View>
+
+        <Text variant="caption" color="textSecondary">
+          Ödemeler App Store veya Google Play üzerinden alınır; iptal de oradan yapılır.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
