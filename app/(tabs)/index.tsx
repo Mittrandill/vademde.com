@@ -10,7 +10,8 @@ import { PAYWALL_LAST_SHOWN_KEY } from '@/utils/storageKeys';
 
 import { useTheme } from '@/theme';
 import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
-import { BalanceHero } from '@/components/finance/BalanceHero';
+import { HomeHero } from '@/components/finance/HomeHero';
+import { VadeLineSection } from '@/components/finance/VadeLineSection';
 import { QuickActions } from '@/components/finance/QuickActions';
 import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
@@ -18,7 +19,6 @@ import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
 import { RecentTransactionsList } from '@/components/finance/RecentTransactionsList';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { listAccounts } from '@/features/accounts/api';
-import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 import {
   listObligations,
   listInstallmentsDue,
@@ -32,7 +32,6 @@ import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features
 import { getMySubscription } from '@/features/subscriptions/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
-import { DueBreakdown } from '@/components/finance/DueBreakdown';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -48,7 +47,6 @@ export default function HomeScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { activeWorkspaceId, setActiveWorkspaceId, balanceHidden, toggleBalanceHidden } = useWorkspaceStore();
-  const setThemePreference = useThemePreferenceStore((s) => s.setThemePreference);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   // Sistem yazı boyutu ekran açıkken değişirse (bkz. services/reflow.ts), bu ekranın
   // yeniden mount olması için — büyük fontta bozulan (BalanceHero'nun bir kerelik ölçülen
@@ -120,6 +118,7 @@ export default function HomeScreen() {
   }, [workspacesQuery.isFetchedAfterMount, workspacesQuery.isFetching, workspaces.length]);
 
   const now = new Date();
+  const todayLabel = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now);
   const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
 
   const accountsQuery = useQuery({
@@ -286,88 +285,55 @@ export default function HomeScreen() {
         >
           <Stack gap="xs">
             <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Stack gap="xxs">
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text variant="label" color="textSecondary">
+                  {todayLabel}
+                </Text>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Çalışma alanını değiştir"
                   onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
                   disabled={workspaces.length <= 1}
+                  style={{ minHeight: 30 }}
                 >
                   <Row gap="xs" align="center">
-                    <Text variant="caption" color="textSecondary">
-                      ÇALIŞMA ALANI
+                    <Text variant="cardTitle" numberOfLines={1} style={{ fontSize: 19, fontWeight: '700', flexShrink: 1 }}>
+                      {activeWorkspace?.name ?? '—'}
                     </Text>
                     {workspaces.length > 1 ? (
                       <Ionicons
                         name={switcherOpen ? 'chevron-up' : 'chevron-down'}
-                        size={14}
-                        color={theme.colors.textSecondary}
+                        size={18}
+                        color={theme.colors.textPrimary}
                       />
                     ) : null}
                   </Row>
                 </Pressable>
-                <Pressable
-                  onPress={() =>
-                    activeWorkspace &&
-                    router.push({ pathname: '/workspace/[id]/members', params: { id: activeWorkspace.id } })
-                  }
-                  disabled={!activeWorkspace}
-                >
-                  <Text variant="pageTitle">{activeWorkspace?.name ?? '—'}</Text>
-                </Pressable>
               </Stack>
               <Row gap="xs">
-                <Pressable
-                  onPress={() => router.push('/notifications')}
-                  hitSlop={12}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: theme.radius.input,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                  }}
-                >
-                  <Ionicons name="notifications-outline" size={22} color={theme.colors.textSecondary} />
-                </Pressable>
-                <Pressable
-                  onPress={() => router.push('/settings')}
-                  hitSlop={12}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: theme.radius.input,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                  }}
-                >
-                  <Ionicons name="settings-outline" size={22} color={theme.colors.textSecondary} />
-                </Pressable>
-                <Pressable
-                  accessibilityLabel={theme.scheme === 'dark' ? 'Açık moda geç' : 'Koyu moda geç'}
-                  onPress={() => setThemePreference(theme.scheme === 'dark' ? 'light' : 'dark')}
-                  hitSlop={12}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: theme.radius.input,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                  }}
-                >
-                  <Ionicons
-                    name={theme.scheme === 'dark' ? 'moon-outline' : 'sunny-outline'}
-                    size={22}
-                    color={theme.colors.textSecondary}
-                  />
-                </Pressable>
+                {[
+                  { icon: 'notifications-outline' as const, label: 'Bildirimler', route: '/notifications' as const },
+                  { icon: 'settings-outline' as const, label: 'Ayarlar', route: '/settings' as const },
+                ].map((item) => (
+                  <Pressable
+                    key={item.route}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.label}
+                    onPress={() => router.push(item.route)}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: theme.colors.surfacePrimary,
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                    }}
+                  >
+                    <Ionicons name={item.icon} size={21} color={theme.colors.textPrimary} />
+                  </Pressable>
+                ))}
               </Row>
             </Row>
             {switcherOpen ? (
@@ -382,9 +348,9 @@ export default function HomeScreen() {
                       setActiveWorkspaceId(w.id);
                       setSwitcherOpen(false);
                     }}
-                    style={{ padding: theme.spacing.sm }}
+                    style={{ padding: theme.spacing.sm, minHeight: 44, justifyContent: 'center' }}
                   >
-                    <Text variant="body" color={w.id === activeWorkspaceId ? 'brandPrimary' : 'textPrimary'}>
+                    <Text variant="body" style={{ color: w.id === activeWorkspaceId ? theme.colors.action : theme.colors.textPrimary }}>
                       {w.name}
                     </Text>
                   </Pressable>
@@ -397,38 +363,18 @@ export default function HomeScreen() {
               hero'nun kendi iki sayfası (sağa kaydırarak geçilir) bu ikisini gösteriyor. */}
           <PlanLimitBanner state={planEnforcementQuery.data} />
 
-          <BalanceHero
+          <HomeHero
             totalBalanceMinor={totalBalanceMinor}
             monthNetMinor={monthNetMinor}
-            monthIncomeMinor={monthTotalsQuery.data?.incomeMinor ?? 0}
-            monthExpenseMinor={monthTotalsQuery.data?.expenseMinor ?? 0}
             receivableMinor={receivableTotalMinor}
             payableMinor={payableTotalMinor}
+            overdueMinor={dueBreakdownQuery.data?.payable.overdueMinor ?? 0}
+            overdueCount={dueBreakdownQuery.data?.payable.overdueCount ?? 0}
             hidden={balanceHidden}
             onToggleHidden={toggleBalanceHidden}
           />
 
-          {/* docs/01-finansal-kayit-modeli.md §3.2.1 — hero'daki tek "borç" rakamının altında
-              hangi kısmının gecikmiş, hangisinin bu ay ödenecek olduğunu gösteren kırılım.
-              Alacak tarafı yalnızca gerçekten alacak varken gösterilir; olmayan bir tabloyu
-              her kullanıcıya göstermek dashboard'u gereksiz kalabalıklaştırır. */}
-          {dueBreakdownQuery.data && dueBreakdownQuery.data.payable.remainingTotalMinor > 0 ? (
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                ÖDENECEKLER
-              </Text>
-              <DueBreakdown data={dueBreakdownQuery.data.payable} direction="payable" />
-            </Stack>
-          ) : null}
-
-          {dueBreakdownQuery.data && dueBreakdownQuery.data.receivable.remainingTotalMinor > 0 ? (
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                TAHSİL EDİLECEKLER
-              </Text>
-              <DueBreakdown data={dueBreakdownQuery.data.receivable} direction="receivable" />
-            </Stack>
-          ) : null}
+          <VadeLineSection obligations={activeObligations} rates={valueUnitRatesQuery.data ?? []} />
 
           <QuickActions />
 
