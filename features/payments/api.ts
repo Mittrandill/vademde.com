@@ -1,3 +1,4 @@
+import { markEndorsed } from '@/features/instruments/api';
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
 import { createTransaction, createTransfer } from '@/features/transactions/api';
@@ -793,6 +794,9 @@ async function settleByEndorsement(input: SettleObligationsInput): Promise<Settl
       if (error) throw error;
     }
   }
+
+  // Çek/senetler portföyden çıktı: yaşam döngüsü durumu ciro edildi (tetikleyici kapanış durumunu ezmez).
+  await markEndorsed(sources.map((s) => s.id));
 
   return { allocations, leftoverMinor, instrumentObligation: null, advanceObligation, transactionIds: [] };
 }

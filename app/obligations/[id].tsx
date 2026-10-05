@@ -69,6 +69,7 @@ import { getValueUnit } from '@/features/valueUnits/units';
 import { listValueUnitRates } from '@/features/valueUnits/api';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
+import { InstrumentLifecycle } from '@/components/finance/InstrumentLifecycle';
 import { showSuccessAlert, showErrorAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -331,6 +332,8 @@ export default function ObligationDetailScreen() {
             { label: 'ÖDENEN', value: formatValueUnitAmount(paidAmountMinor, obligation.currency_code) },
           ]}
         />
+
+        {isInstrumentRecord ? <InstrumentLifecycle obligation={obligation} /> : null}
 
         {!isTry ? (
           <ReferenceValueRow

@@ -195,18 +195,11 @@ export default function MoreScreen() {
             detail={countText(creditCardAccounts.length)}
             href="/accounts/credit-cards"
           />
-          {/* Çek/senet portföyü (yaşam döngüsü) Aşama 6'da birleşecek; o zamana dek ayrı listeler. */}
           <MenuRow
             icon={DOCUMENT_TYPE_ICON.cek ?? 'document-text-outline'}
-            label="Çekler"
-            detail={countText(totalsByType?.cek?.count)}
-            href={{ pathname: '/obligations', params: { type: 'cek' } }}
-          />
-          <MenuRow
-            icon={DOCUMENT_TYPE_ICON.senet ?? 'document-text-outline'}
-            label="Senetler"
-            detail={countText(totalsByType?.senet?.count)}
-            href={{ pathname: '/obligations', params: { type: 'senet' } }}
+            label="Çek ve senetler"
+            detail={countText((totalsByType?.cek?.count ?? 0) + (totalsByType?.senet?.count ?? 0))}
+            href="/instruments"
           />
           <MenuRow
             icon={DOCUMENT_TYPE_ICON.abonelik ?? 'repeat-outline'}

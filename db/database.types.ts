@@ -605,6 +605,8 @@ export type Database = {
           due_date: string | null
           id: string
           notes: string | null
+          instrument_status: string | null
+          instrument_status_changed_at: string | null
           parent_obligation_id: string | null
           remaining_amount_minor: number
           service_code: string | null
@@ -627,6 +629,8 @@ export type Database = {
           due_date?: string | null
           id?: string
           notes?: string | null
+          instrument_status?: string | null
+          instrument_status_changed_at?: string | null
           parent_obligation_id?: string | null
           remaining_amount_minor?: number
           service_code?: string | null
@@ -649,6 +653,8 @@ export type Database = {
           due_date?: string | null
           id?: string
           notes?: string | null
+          instrument_status?: string | null
+          instrument_status_changed_at?: string | null
           parent_obligation_id?: string | null
           remaining_amount_minor?: number
           service_code?: string | null
@@ -1386,6 +1392,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      mark_instrument_bounced: {
+        Args: { p_obligation_id: string }
+        Returns: undefined
+      }
       can_edit_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
