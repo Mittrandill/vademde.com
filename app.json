@@ -18,8 +18,12 @@
           "tr"
         ],
         "SKAdNetworkItems": [
-          { "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork" },
-          { "SKAdNetworkIdentifier": "n38lu8286q.skadnetwork" }
+          {
+            "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "n38lu8286q.skadnetwork"
+          }
         ]
       },
       "privacyManifests": {
@@ -143,7 +147,8 @@
         {
           "userTrackingPermission": "Size daha uygun reklamlar gösterebilmemiz ve reklam performansını ölçebilmemiz için bu izne ihtiyacımız var."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {},

@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 
 import { ThemeProvider, useTheme } from '@/theme';
+import { fontAssets } from '@/theme/typography';
 import { useSession } from '@/features/auth/useSession';
 import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
@@ -130,6 +132,8 @@ function AppNavigatorStack() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
+
   useEffect(() => {
     initDatabase().catch((error) => {
       console.error('SQLite migration hatası', error);
@@ -144,6 +148,9 @@ export default function RootLayout() {
       detachAuthDeepLinks();
     };
   }, []);
+
+  // Font hatasında sistem fontuyla devam edilir; yüklenirken yerel splash örter.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <ThemeProvider>

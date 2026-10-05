@@ -8,6 +8,21 @@ export interface ThemeColors {
   textSecondary: string;
   brandPrimary: string;
   brandPrimaryText: string;
+  /** Yalnızca aksiyon (ana buton, +, Tara, seçili segment/çip, açık anahtar). brandPrimary ile aynı. */
+  action: string;
+  /** action üzerindeki yazı/ikon. brandPrimaryText ile aynı. */
+  onAction: string;
+  /** Ödeme bekleyen her şey: ödenecek çubuklar, sıradaki taksit, "Yarın/3 gün" etiketleri. */
+  payable: string;
+  /** payable dolgulu etiketler (üzerinde beyaz yazı). */
+  payableFill: string;
+  /** Para girişi / doğrulandı: tahsil, gelir, "Belgeden okundu". success ile aynı. */
+  receivable: string;
+  /** "Kontrol et" kesik çizgisi, okunmamış noktası, eski kur uyarısı. */
+  attentionMarker: string;
+  /** Boş radyo/kutucuk, pasif ok, boş taksit kutusu. */
+  mutedControl: string;
+  /** Marka kilitli mor (logo çubukları, illüstrasyon). Ödeme anlamı için payable kullanılır. */
   accentViolet: string;
   accentAqua: string;
   success: string;
@@ -16,18 +31,18 @@ export interface ThemeColors {
   overlay: string;
 }
 
-// docs/08-tasarim-sistemi.md §12.5 — Graphite Finance renk sistemi.
-// Marka tonları (brandPrimary/accentViolet/graphite/soft/white) Vademde_Tam_Logo_Paketi_v2.0
-// /07_Gelistirici/design-tokens.json ile birebir eşleşir. success/danger marka kimliği değil,
-// finansal durum anlamı taşıdığı için (gelir=yeşil, gecikme=kırmızı) pakette tanımlı
-// income/expense eşlemesinden ayrı tutulur ve değiştirilmez.
+// docs/08-tasarim-sistemi.md §12.5 — Graphite Finance renk sistemi
+// (yeniden tasarım: design/vademde-redesign/HANDOFF.md §1).
+// Marka tonları (brandPrimary/accentViolet) Vademde_Tam_Logo_Paketi_v2.0 ile birebir eşleşir ve
+// temadan bağımsızdır (logo kilitli). success = receivable (para girişi/doğrulandı); danger
+// yalnızca gecikme ve yıkıcı aksiyon içindir.
 const shared = {
   brandPrimary: '#FFB000',
   brandPrimaryText: '#1F2126',
+  action: '#FFB000',
+  onAction: '#1F2126',
   accentViolet: '#6B4DFF',
   accentAqua: '#86DDEB',
-  success: '#52CE96',
-  danger: '#FF625C',
   // ActionSheet ve diğer modal/sheet backdrop'ları için ortak scrim (docs §12.8 — ağır efekt değil, kontrollü karartma).
   overlay: 'rgba(0, 0, 0, 0.45)',
 };
@@ -40,16 +55,30 @@ export const darkColors: ThemeColors = {
   textPrimary: '#F6F5F1',
   textSecondary: '#B1B2AA',
   border: '#3D3F45',
+  payable: '#8B73FF',
+  payableFill: '#6B4DFF',
+  receivable: '#52CE96',
+  success: '#52CE96',
+  danger: '#FF625C',
+  attentionMarker: '#FFB000',
+  mutedControl: '#6E7076',
 };
 
 export const lightColors: ThemeColors = {
   ...shared,
-  backgroundPrimary: '#F6F5F1',
-  surfacePrimary: '#FAFAF7',
+  backgroundPrimary: '#F1F2F4',
+  surfacePrimary: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  textPrimary: '#1F2126',
-  textSecondary: '#6E6F66',
-  border: '#E2E2DC',
+  textPrimary: '#111114',
+  textSecondary: '#5E606A',
+  border: '#DCDEE3',
+  payable: '#5638F0',
+  payableFill: '#5638F1',
+  receivable: '#0F7A52',
+  success: '#0F7A52',
+  danger: '#C8361C',
+  attentionMarker: '#B07800',
+  mutedControl: '#83868F',
 };
 
 export const colorsByScheme: Record<ColorScheme, ThemeColors> = {

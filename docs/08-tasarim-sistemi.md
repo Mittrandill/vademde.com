@@ -50,34 +50,54 @@ Vademde ilk açıldığında finansal olarak güvenilir, tasarım stüdyosu tara
 
 ## 12.5 Tema ve renk sistemi
 
-| Token | Koyu tema | Kullanım |
-|---|---|---|
-| background-primary | #101110 | Ana zemin |
-| surface-primary | #1B1C1B | Standart widget |
-| surface-elevated | #292A29 | Etkileşimli kart / modal |
-| text-primary | #F5F5F0 | Ana metin |
-| text-secondary | #B1B2AA | İkincil metin |
-| brand-primary | #F3C64E | Belge Tara ve ana aksiyon |
-| accent-violet | #8068F4 | Analiz ve bütçe |
-| accent-aqua | #86DDEB | Tahsilat ve ikincil veri |
-| success | #52CE96 | Ödendi/tahsil edildi |
-| danger | #FF625C | Gecikme ve kritik hata |
+> Yeniden tasarım (2026-10): kaynak `design/vademde-redesign/HANDOFF.md` §1. Token'lar `theme/colors.ts` içindedir; ekranlarda sabit renk yazılmaz.
 
-Açık temada ana zemin `#F1F1EE`, yüzey `#FAFAF7`, yükseltilmiş yüzey `#FFFFFF`, ana metin `#181917` olarak kullanılır. Uygulama cihaz temasını varsayılan alır; marka tanıtımlarında koyu tema kullanılır.
+| Token | Açık | Koyu | Kullanım |
+|---|---|---|---|
+| backgroundPrimary | #F1F2F4 | #1F2126 | Ekran zemini |
+| surfacePrimary | #FFFFFF | #2B2D31 | Kartlar, liste grupları, alanlar |
+| surfaceElevated | #FFFFFF | #393B3F | Modal / yükseltilmiş yüzey |
+| textPrimary | #111114 | #F6F5F1 | Ana metin, ikonlar |
+| textSecondary | #5E606A | #B1B2AA | İkincil metin, etiketler |
+| border | #DCDEE3 | #3D3F45 | Ayırıcı çizgiler |
+| action (= brandPrimary) | #FFB000 | #FFB000 | Ana buton, +, Tara, seçili segment/çip, açık anahtar, aktif sekme noktası |
+| onAction (= brandPrimaryText) | #1F2126 | #1F2126 | Sarı üzerindeki yazı/ikon |
+| payable | #5638F0 | #8B73FF | Ödeme bekleyen: ödenecek çubukları, sıradaki taksit, "Yarın/3 gün" etiketleri |
+| payableFill | #5638F1 | #6B4DFF | Mor dolgulu etiketler (üzerinde beyaz yazı) |
+| receivable (= success) | #0F7A52 | #52CE96 | Tahsil, gelir, "Belgeden okundu" |
+| danger | #C8361C | #FF625C | Yalnızca gecikme ve silme |
+| attentionMarker | #B07800 | #FFB000 | "Kontrol et" kesik çizgisi, okunmamış noktası, eski kur uyarısı |
+| mutedControl | #83868F | #6E7076 | Boş radyo/kutucuk, pasif ok, boş taksit kutusu |
+| accentViolet | #6B4DFF | #6B4DFF | Yalnızca marka (logo çubukları, illüstrasyon); ödeme anlamı taşımaz |
+
+Kurallar:
+
+- Sarı yalnızca aksiyon içindir; ödeme bekleyen her şey mor (payable), para girişi yeşildir (receivable).
+- Tutarlar renkle birlikte işaretle de ayrılır: `−₺` ödenecek/gider (textPrimary), `+₺` tahsil/gelir (receivable).
+- Kırmızı yalnızca gecikme ve yıkıcı aksiyon içindir.
+- Logodaki sarı/mor çubuklar markaya kilitlidir (`components/brand/VademdeMark.tsx`), tema değişse de sabit kalır.
+- Kontrast: metinler ≥ 4.5:1, anlam taşıyan grafik/çizgiler ≥ 3:1.
+- Uygulama cihaz temasını varsayılan alır; Ayarlar'dan açık/koyu seçilebilir.
 
 ## 12.6 Tipografi
 
-| Stil | Boyut | Kullanım |
-|---|---|---|
-| Display Balance | 42-48 pt | Ana bakiye, toplam borç/alacak |
-| Display Amount | 32-36 pt | Detay ekranı tutarı |
-| Page Title | 28-32 pt | Sayfa başlığı |
-| Section Title | 20-22 pt | Bölüm başlığı |
-| Card Title | 16-18 pt | Widget başlığı |
-| Body | 16-17 pt | Ana okunabilir metin |
-| Caption | 12-13 pt | İkincil bilgi ve grafik etiketi |
+Yazı tipleri: **Bricolage Grotesque** (başlık + gövde) ve **IBM Plex Mono** (tutarlar, tarihler, küçük büyük-harf etiketler); ikisi de OFL lisanslıdır ve `@expo-google-fonts/*` ile yüklenir (`app/_layout.tsx`). React Native'de özel fontlarda `fontWeight` aileyi seçmediği için `components/primitives/Text.tsx` ağırlığı ilgili aileye çevirir (`theme/typography.ts` → `resolveFontFamily`). Plex Mono 400/500/600 yüklüdür; 700 istenirse 600'e düşer.
 
-iOS sistem fontu ve tabular numbers kullanılmalıdır. Para biçimi Türkçe yerelleştirilir: `185.000,00 TL`. Kullanıcı kuruşları gizleyebilir. IBAN ve belge numarası gibi alanlarda monospaced görünüm kullanılabilir.
+| Token | Yazı tipi / boyut / ağırlık | Kullanım |
+|---|---|---|
+| displayBalance | Plex Mono 56 / 700, −4% | Ana bakiye, toplam borç/alacak (hero) |
+| displayAmount | Plex Mono 34 / 700, −4% | Detay ekranı tutarı |
+| pageTitle | Bricolage 34 / 700 | Ekran başlığı |
+| sectionTitle | Bricolage 24 / 700 | Bölüm başlığı |
+| cardTitle | Bricolage 16 / 600 | Liste ve widget başlığı |
+| body | Bricolage 16 / 400 | Ana okunabilir metin |
+| caption | Bricolage 13 / 400 | İkincil bilgi ve grafik etiketi |
+| label | Plex Mono 11 / 500, büyük harf, 0.08em | Küçük etiketler (textSecondary) |
+
+- Tutarlar ve tarihler her zaman Plex Mono + `tabular-nums` (`<Text tabular>`).
+- Hero tutarda kuruş kısmı yarı boyutta ve textSecondary'dir. **Ölçek kuralı:** tam kısım 7 karakteri aşarsa font `base × 7 / uzunluk` oranında küçülür (tek satır).
+- Para biçimi Türkçe yerelleştirilir: `185.000,00 TL` / `₺185.000,00`. Kullanıcı kuruşları gizleyebilir. IBAN ve belge numarası gibi alanlarda Plex Mono (`<Text mono>`) kullanılır.
+- Dynamic Type üst sınırı `MAX_FONT_SCALE` = 1.3.
 
 ## 12.7 Spacing, grid ve radius
 
@@ -93,7 +113,7 @@ iOS sistem fontu ve tabular numbers kullanılmalıdır. Para biçimi Türkçe ye
 
 ## 12.8 Yüzey ve arka plan
 
-Koyu temada kartlar yoğun gölgeyle değil, yüzey tonuyla ayrılır. İnce daire yayları, zaman çizgileri ve düşük opaklıklı geometrik öğeler yalnızca onboarding, boş durum ve hero kartlarında kullanılır; finans verisinin okunabilirliğini bozamaz.
+Koyu temada kartlar yoğun gölgeyle değil, yüzey tonuyla; açık temada beyaz yüzey ve ince `border` çizgisiyle ayrılır. İnce daire yayları, zaman çizgileri ve düşük opaklıklı geometrik öğeler yalnızca onboarding, boş durum ve hero kartlarında kullanılır; finans verisinin okunabilirliğini bozamaz.
 
 ## 12.9 İkonografi ve illüstrasyon
 
