@@ -33,19 +33,19 @@ export function SocialSignInButtons({
           disabled={disabled || appleLoading}
           style={{
             height: 52,
-            borderRadius: 16,
-            backgroundColor: '#000000',
+            borderRadius: theme.radius.button,
+            backgroundColor: theme.colors.textPrimary,
             alignItems: 'center',
             justifyContent: 'center',
             opacity: disabled ? theme.opacity.disabled : 1,
           }}
         >
           {appleLoading ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={theme.colors.backgroundPrimary} />
           ) : (
             <Row gap="xs" align="center">
-              <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
-              <Text variant="cardTitle" style={{ color: '#FFFFFF' }}>
+              <Ionicons name="logo-apple" size={20} color={theme.colors.backgroundPrimary} />
+              <Text variant="cardTitle" style={{ color: theme.colors.backgroundPrimary }}>
                 Apple ile devam et
               </Text>
             </Row>
@@ -58,10 +58,8 @@ export function SocialSignInButtons({
         disabled={disabled || googleLoading}
         style={{
           height: 52,
-          borderRadius: 16,
-          backgroundColor: theme.colors.surfacePrimary,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
+          borderRadius: theme.radius.button,
+          backgroundColor: theme.colors.fill,
           alignItems: 'center',
           justifyContent: 'center',
           opacity: disabled ? theme.opacity.disabled : 1,

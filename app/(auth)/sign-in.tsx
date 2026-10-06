@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Divider, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Divider, FieldGroup, Pressable, Row, Text, TextField } from '@/components/primitives';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { VademdeMark } from '@/components/brand/VademdeMark';
 import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
 import {
@@ -87,68 +88,24 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: 'center',
-            paddingHorizontal: theme.screenEdge.standard,
-            paddingVertical: theme.spacing.xxl,
-          }}
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: theme.screenEdge.standard, paddingBottom: theme.spacing.lg }}
         >
-          <Stack gap="xl">
-            <Stack gap="md" align="flex-start">
-              <VademdeMark size={44} />
-              <Stack gap="xs">
-                <Text variant="pageTitle">Tekrar hoş geldin</Text>
-                <Text variant="body" color="textSecondary">
-                  Hesabına giriş yap, kaldığın yerden devam et.
-                </Text>
-              </Stack>
-            </Stack>
+          <ScreenHeader title="" inline />
 
-            <Stack gap="sm">
-              <TextField
-                label="E-POSTA"
-                placeholder="ornek@eposta.com"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                value={email}
-                onChangeText={setEmail}
-              />
-              <TextField
-                label="ŞİFRE"
-                placeholder="••••••••"
-                secureTextEntry={!passwordVisible}
-                value={password}
-                onChangeText={setPassword}
-                rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
-                onRightIconPress={() => setPasswordVisible((v) => !v)}
-              />
-              <Pressable onPress={handleForgotPassword} style={{ alignSelf: 'flex-end' }}>
-                <Text variant="cardTitle" style={{ fontSize: 14 }}>
-                  Şifremi unuttum
-                </Text>
-              </Pressable>
-            </Stack>
+          <View style={{ marginTop: theme.spacing.sm, alignItems: 'flex-start', gap: theme.spacing.xs }}>
+            <VademdeMark size={40} />
+            <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, marginTop: theme.spacing.sm }}>
+              Tekrar hoş geldiniz
+            </Text>
+            <Text color="textSecondary" style={{ fontSize: 15, lineHeight: 20 }}>
+              Kayıtlarınız tüm cihazlarınızda eşitlenir.
+            </Text>
+          </View>
 
-            {error ? (
-              <Text variant="caption" color="danger">
-                {error}
-              </Text>
-            ) : null}
-            {info ? (
-              <Text variant="caption" color="receivable">
-                {info}
-              </Text>
-            ) : null}
-
-            <Button label="Giriş yap" onPress={handleSubmit} loading={loading} />
-
+          <View style={{ marginTop: 28 }}>
             <SocialSignInButtons
               onApplePress={handleApple}
               onGooglePress={handleGoogle}
@@ -156,21 +113,62 @@ export default function SignInScreen() {
               googleLoading={googleLoading}
               disabled={loading}
             />
+          </View>
 
-            <Row gap="sm" align="center">
-              <Divider style={{ flex: 1 }} />
-              <Text variant="label" color="textSecondary">
-                veya
-              </Text>
-              <Divider style={{ flex: 1 }} />
-            </Row>
+          <Row gap="sm" align="center" style={{ marginTop: theme.spacing.xl }}>
+            <Divider style={{ flex: 1 }} />
+            <Text variant="caption" color="textSecondary">
+              veya e-posta ile
+            </Text>
+            <Divider style={{ flex: 1 }} />
+          </Row>
 
-            <Link href="/(auth)/sign-up" style={{ alignSelf: 'center' }}>
-              <Text variant="body" color="textSecondary">
-                Hesabın yok mu? <Text variant="body" style={{ fontWeight: '700' }}>Kayıt ol</Text>
+          <View style={{ marginTop: theme.spacing.md }}>
+            <FieldGroup>
+              <TextField
+                label="E-posta"
+                placeholder="ornek@eposta.com"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextField
+                label="Şifre"
+                placeholder="••••••••"
+                secureTextEntry={!passwordVisible}
+                value={password}
+                onChangeText={setPassword}
+                rightIcon={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+                onRightIconPress={() => setPasswordVisible((v) => !v)}
+              />
+            </FieldGroup>
+            <Pressable onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ fontSize: 15, fontWeight: '500' }}>Şifremi unuttum</Text>
+            </Pressable>
+          </View>
+
+          {error ? (
+            <Text variant="caption" color="danger">
+              {error}
+            </Text>
+          ) : null}
+          {info ? (
+            <Text variant="caption" color="receivable">
+              {info}
+            </Text>
+          ) : null}
+
+          <View style={{ flex: 1, minHeight: theme.spacing.lg }} />
+
+          <View style={{ gap: theme.spacing.xs }}>
+            <Button label="Giriş yap" onPress={handleSubmit} loading={loading} />
+            <Link href="/(auth)/sign-up" style={{ alignSelf: 'center', paddingVertical: 12 }}>
+              <Text color="textSecondary">
+                Hesabın yok mu? <Text style={{ fontWeight: '600' }}>Kayıt ol</Text>
               </Text>
             </Link>
-          </Stack>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
