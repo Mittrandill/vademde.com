@@ -1,13 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { FlatList, Modal } from 'react-native';
+import { FlatList, Modal, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
 import { Pressable } from './Pressable';
-import { Row, Stack } from './Stack';
+import { FieldShell } from './FormRow';
 import { Text } from './Text';
-import { TextField } from './TextField';
 
 // docs/08-tasarim-sistemi.md §12.16 — büyüyebilecek liste alanları (hesap, kategori,
 // kişi/firma vb.) yazarak arama + ikonlu seçici ile sunulur.
@@ -72,37 +71,33 @@ export function SearchablePicker<T extends { id: string; name: string }>({
 
   return (
     <>
-      <Pressable
-        onPress={() => setOpen(true)}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: theme.spacing.xs,
-          paddingHorizontal: theme.spacing.md,
-          minHeight: theme.buttonHeight.primary,
-          borderRadius: 16,
-          backgroundColor: theme.colors.surfacePrimary,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-        }}
-      >
-        {selected && renderLeading ? (
-          renderLeading(selected)
-        ) : (
-          <Ionicons
-            name={selected ? iconFor(selected) : FALLBACK_ICON}
-            size={20}
-            color={selected ? theme.colors.textPrimary : theme.colors.textSecondary}
-          />
-        )}
-        <Text
-          variant="cardTitle"
-          numberOfLines={1}
-          style={{ flex: 1, color: selected ? theme.colors.textPrimary : theme.colors.textSecondary }}
-        >
-          {selected ? selected.name : placeholder}
-        </Text>
-        <Ionicons name="chevron-down" size={18} color={theme.colors.mutedControl} />
+      <Pressable accessibilityRole="button" onPress={() => setOpen(true)}>
+        <FieldShell>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: 10,
+              minHeight: 56,
+            }}
+          >
+            {selected && renderLeading ? (
+              renderLeading(selected)
+            ) : (
+              <Ionicons
+                name={selected ? iconFor(selected) : FALLBACK_ICON}
+                size={20}
+                color={selected ? theme.colors.textPrimary : theme.colors.textSecondary}
+              />
+            )}
+            <Text numberOfLines={1} style={{ flex: 1, color: selected ? theme.colors.textPrimary : theme.colors.mutedControl }}>
+              {selected ? selected.name : placeholder}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
+          </View>
+        </FieldShell>
       </Pressable>
 
       {/* Modal yalnızca açıkken mount edilir — bkz. DateField'daki aynı not. Bu seçici
@@ -113,45 +108,51 @@ export function SearchablePicker<T extends { id: string; name: string }>({
       {open ? (
       <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-          <Stack gap="md" style={{ flex: 1, paddingTop: theme.spacing.md }}>
-            <Row style={{ paddingHorizontal: theme.screenEdge.standard }} align="center">
-              <Text variant="sectionTitle" style={{ flex: 1 }}>
-                {title}
-              </Text>
+          <View style={{ flex: 1, paddingTop: theme.spacing.xs }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: theme.screenEdge.standard, minHeight: 44 }}>
+              <Text style={{ flex: 1, fontSize: 20, fontWeight: '700', letterSpacing: -0.3 }}>{title}</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Kapat"
                 onPress={() => setOpen(false)}
+                style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.fill }}
+              >
+                <Ionicons name="close" size={18} color={theme.colors.textPrimary} />
+              </Pressable>
+            </View>
+
+            <View style={{ paddingHorizontal: theme.screenEdge.standard, marginTop: theme.spacing.sm }}>
+              <View
                 style={{
-                  width: theme.touchTarget.minimum,
-                  height: theme.touchTarget.minimum,
-                  borderRadius: 14,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: theme.colors.fill,
+                  paddingHorizontal: 8,
+                  flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.surfacePrimary,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
+                  gap: 6,
                 }}
               >
-                <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
-              </Pressable>
-            </Row>
-
-            <Stack style={{ paddingHorizontal: theme.screenEdge.standard }}>
-              <TextField
-                placeholder="Ara..."
-                value={search}
-                onChangeText={setSearch}
-                autoFocus
-                autoCapitalize="none"
-              />
-            </Stack>
+                <Ionicons name="search" size={17} color={theme.colors.textSecondary} />
+                <TextInput
+                  placeholder="Ara"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={search}
+                  onChangeText={setSearch}
+                  autoFocus
+                  autoCapitalize="none"
+                  selectionColor={theme.colors.brandPrimary}
+                  style={{ flex: 1, fontSize: 17, color: theme.colors.textPrimary, padding: 0 }}
+                />
+              </View>
+            </View>
 
             <FlatList
               data={filtered}
               keyExtractor={(item) => item.id}
               contentContainerStyle={{
                 paddingHorizontal: theme.screenEdge.standard,
+                paddingTop: theme.spacing.md,
                 paddingBottom: theme.spacing.xxl,
               }}
               keyboardShouldPersistTaps="handled"
@@ -163,65 +164,66 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: theme.spacing.sm,
+                      gap: 12,
                       minHeight: 56,
                       paddingHorizontal: theme.spacing.md,
-                      borderRadius: theme.radius.widget,
+                      borderRadius: theme.radius.group,
                       backgroundColor: theme.colors.surfacePrimary,
                       marginBottom: theme.spacing.xs,
                       opacity: creating ? 0.6 : 1,
                     }}
                   >
-                    <Ionicons name="add-circle-outline" size={20} color={theme.colors.textPrimary} />
-                    <Text variant="body" style={{ color: theme.colors.textPrimary }}>
-                      {creating ? 'Ekleniyor...' : `"${trimmedSearch}" ekle`}
-                    </Text>
+                    <Ionicons name="add-circle" size={22} color={theme.colors.textPrimary} />
+                    <Text style={{ fontWeight: '500' }}>{creating ? 'Ekleniyor...' : `"${trimmedSearch}" ekle`}</Text>
                   </Pressable>
                 ) : null
               }
               ListEmptyComponent={
-                <Text variant="body" color="textSecondary" style={{ paddingTop: theme.spacing.lg }}>
+                <Text color="textSecondary" style={{ paddingTop: theme.spacing.lg }}>
                   {emptyLabel}
                 </Text>
               }
-              renderItem={({ item }) => {
+              ItemSeparatorComponent={() => (
+                <View style={{ height: 1, marginLeft: 62, backgroundColor: theme.colors.separator }} />
+              )}
+              renderItem={({ item, index }) => {
                 const active = item.id === selectedId;
                 return (
-                  <Pressable
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
-                    onPress={() => {
-                      onSelect(item.id);
-                      setSearch('');
-                      setOpen(false);
-                    }}
+                  <View
                     style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: theme.spacing.sm,
-                      minHeight: 60,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.border,
+                      backgroundColor: theme.colors.surfacePrimary,
+                      borderTopLeftRadius: index === 0 ? theme.radius.group : 0,
+                      borderTopRightRadius: index === 0 ? theme.radius.group : 0,
+                      borderBottomLeftRadius: index === filtered.length - 1 ? theme.radius.group : 0,
+                      borderBottomRightRadius: index === filtered.length - 1 ? theme.radius.group : 0,
+                      overflow: 'hidden',
                     }}
                   >
-                    {renderLeading ? (
-                      renderLeading(item)
-                    ) : (
-                      <Ionicons name={iconFor(item)} size={22} color={theme.colors.textPrimary} />
-                    )}
-                    <Text variant="cardTitle" numberOfLines={1} style={{ flex: 1 }}>
-                      {item.name}
-                    </Text>
-                    <Ionicons
-                      name={active ? 'radio-button-on' : 'radio-button-off'}
-                      size={22}
-                      color={active ? theme.colors.action : theme.colors.mutedControl}
-                    />
-                  </Pressable>
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: active }}
+                      onPress={() => {
+                        onSelect(item.id);
+                        setSearch('');
+                        setOpen(false);
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: theme.spacing.md }}
+                    >
+                      {renderLeading ? (
+                        renderLeading(item)
+                      ) : (
+                        <Ionicons name={iconFor(item)} size={22} color={theme.colors.textPrimary} />
+                      )}
+                      <Text numberOfLines={1} style={{ flex: 1, fontWeight: active ? '600' : '400' }}>
+                        {item.name}
+                      </Text>
+                      {active ? <Ionicons name="checkmark" size={20} color={theme.colors.attentionMarker} /> : null}
+                    </Pressable>
+                  </View>
                 );
               }}
             />
-          </Stack>
+          </View>
         </SafeAreaView>
       </Modal>
       ) : null}

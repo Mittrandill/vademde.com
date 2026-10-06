@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -758,9 +758,10 @@ function ObligationForm({
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
           <Stack gap="lg">
             <ScreenHeader
-            title={isEditing ? 'Borç / Alacağı Düzenle' : 'Yeni Borç / Alacak'}
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-          />
+              inline
+              title={isEditing ? 'Düzenle' : 'Yeni kayıt'}
+              leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+            />
 
             {!isEditing ? (
               <ScanPromptBanner description="Çek, senet, fatura veya kredi belgesini tara; tür, tutar ve vade otomatik dolsun." />
@@ -778,8 +779,6 @@ function ObligationForm({
               }}
               stretch
             />
-
-            <TextField label="BAŞLIK" placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
 
             <Stack gap="sm">
               <Text variant="label" color="textSecondary">
@@ -800,57 +799,56 @@ function ObligationForm({
               )}
             </Stack>
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                {isPerInstallmentMode
-                  ? `${periodLabels.unitTitle.toLocaleUpperCase('tr-TR')} BAŞINA TUTAR (${valueUnit.quantityLabel})`
-                  : `TUTAR (${valueUnit.quantityLabel})`}
-              </Text>
+            <FieldGroup>
+              <TextField label="Başlık" placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
               {isPlanEditing ? (
-                <Text variant="body" color="textSecondary">
-                  {formatValueUnitAmount(planTotalMinor, valueUnitCode)} — aşağıdaki taksit planının toplamıdır.
-                </Text>
+                <FormRow
+                  label="Tutar"
+                  value={`${formatValueUnitAmount(planTotalMinor, valueUnitCode)} — taksit planının toplamı`}
+                />
               ) : (
                 <AmountField
+                  label={
+                    isPerInstallmentMode
+                      ? `${periodLabels.unitTitle} başına tutar (${valueUnit.quantityLabel})`
+                      : `Tutar (${valueUnit.quantityLabel})`
+                  }
                   placeholder={valueUnit.precision === 0 ? '1' : '0,00'}
                   precision={valueUnit.precision}
                   value={totalAmount}
                   onChangeText={setTotalAmount}
                 />
               )}
-              {/* Girilen tutarın toplam mı yoksa her vadenin tutarı mı olduğu, kullanıcının
-                  gördüğü ilk şey olmalı — maaş/kira gibi kayıtlarda toplamın vadelere
-                  bölünmesi sessiz ve fark edilmesi güç bir hataya yol açıyordu. */}
-              {showAmountModeSelector ? (
-                <Stack gap="xs">
-                  <SegmentedControl
-                    options={[
-                      { key: 'total', label: 'Toplam tutar' },
-                      { key: 'per_installment', label: `Her ${periodLabels.unit} tutarı` },
-                    ]}
-                    value={amountMode}
-                    onChange={(value) => {
-                      setAmountMode(value);
-                      setAmountModeTouched(true);
-                    }}
-                    stretch
-                  />
-                  <Text variant="caption" color="textSecondary">
-                    {isPerInstallmentMode
-                      ? `Girilen tutar her ${periodLabels.unit} için ayrı ayrı işlenir; toplam ${formatValueUnitAmount(totalAmountMinor, valueUnitCode)} olur.`
-                      : `Girilen tutar toplam borçtur; ${installmentCount} ${periodLabels.unitDative} bölünür.`}
-                  </Text>
-                </Stack>
-              ) : null}
-            </Stack>
+              {isPlanEditing ? null : (
+                <DateField
+                  label={!isEditing && installmentCount > 1 ? 'İlk vade' : 'Vade'}
+                  value={dueDate}
+                  onChangeText={setDueDate}
+                />
+              )}
+            </FieldGroup>
 
-            {isPlanEditing ? null : (
-              <DateField
-                label={!isEditing && installmentCount > 1 ? 'İLK VADE' : 'VADE'}
-                value={dueDate}
-                onChangeText={setDueDate}
-              />
-            )}
+            {showAmountModeSelector ? (
+              <Stack gap="xs">
+                <SegmentedControl
+                  options={[
+                    { key: 'total', label: 'Toplam tutar' },
+                    { key: 'per_installment', label: `Her ${periodLabels.unit} tutarı` },
+                  ]}
+                  value={amountMode}
+                  onChange={(value) => {
+                    setAmountMode(value);
+                    setAmountModeTouched(true);
+                  }}
+                  stretch
+                />
+                <Text variant="caption" color="textSecondary">
+                  {isPerInstallmentMode
+                    ? `Girilen tutar her ${periodLabels.unit} için ayrı ayrı işlenir; toplam ${formatValueUnitAmount(totalAmountMinor, valueUnitCode)} olur.`
+                    : `Girilen tutar toplam borçtur; ${installmentCount} ${periodLabels.unitDative} bölünür.`}
+                </Text>
+              </Stack>
+            ) : null}
 
             {isPlanEditing ? (
               <InstallmentPlanEditor
