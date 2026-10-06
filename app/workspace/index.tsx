@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Group, GroupedRow, GroupedRowIcon, Pressable, Row, Stack, Tag, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
 import { deleteWorkspace, listMyWorkspaces, updateWorkspaceName, type Workspace } from '@/features/workspaces/api';
@@ -138,8 +138,7 @@ export default function WorkspacesScreen() {
             <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.xxs }}>
               Her çalışma alanının verisi tamamen ayrıdır. Aktif olanı seç; ana sayfa ona göre değişir.
             </Text>
-            <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
-              <Stack gap="xxs">
+            <Group inset={62}>
                 {workspaces.map((w) => {
                   const isOwner = w.owner_id === session?.user?.id;
                   const isActive = w.id === activeWorkspaceId;
@@ -174,30 +173,10 @@ export default function WorkspacesScreen() {
                         choosingPrimary && isOwner ? primaryMutation.mutate(w.id) : setActiveWorkspaceId(w.id)
                       }
                     >
-                      <Row gap="sm" align="center" style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
-                        <View
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 14,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: isActive ? theme.colors.textPrimary : theme.colors.backgroundPrimary,
-                          }}
-                        >
-                          <Text
-                            variant="label"
-                            mono
-                            style={{
-                              color: isActive ? theme.colors.backgroundPrimary : theme.colors.textPrimary,
-                              textTransform: 'none',
-                            }}
-                          >
-                            {workspaceInitials(w.name)}
-                          </Text>
-                        </View>
+                      <Row gap="sm" align="center" style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 10, minHeight: 56 }}>
+                        <GroupedRowIcon name={w.type === 'business' ? 'briefcase' : 'person'} tone={isActive ? 'brand' : 'default'} />
                         <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-                          <Text variant="cardTitle" numberOfLines={1}>
+                          <Text numberOfLines={1} style={{ fontWeight: isActive ? '600' : '500' }}>
                             {w.name}
                           </Text>
                           <Text variant="caption" color={readOnly ? 'danger' : 'textSecondary'} numberOfLines={1}>
@@ -207,19 +186,9 @@ export default function WorkspacesScreen() {
                           </Text>
                         </Stack>
                         {isOwner ? (
-                          <View
-                            style={{
-                              borderWidth: 1,
-                              borderColor: theme.colors.border,
-                              borderRadius: 6,
-                              paddingHorizontal: 6,
-                              paddingVertical: 2,
-                            }}
-                          >
-                            <Text variant="caption" mono color="textSecondary">
-                              Sahip
-                            </Text>
-                          </View>
+                          <Text color="textSecondary" style={{ fontSize: 15 }}>
+                            Sahip
+                          </Text>
                         ) : null}
                         <Pressable
                           accessibilityLabel="Ekip"
@@ -239,49 +208,46 @@ export default function WorkspacesScreen() {
                           </>
                         ) : null}
                         <View style={{ width: 18, alignItems: 'center' }}>
-                          {isActive ? <Ionicons name="checkmark" size={18} color={theme.colors.textPrimary} /> : null}
+                          {isActive ? <Ionicons name="checkmark" size={18} color={theme.colors.attentionMarker} /> : null}
                         </View>
                       </Row>
                     </Pressable>
                   );
                 })}
-              </Stack>
-            </View>
+            </Group>
           </Stack>
         )}
 
-        <Stack gap="sm">
-          {activeWorkspaceId ? (
-            <Button
-              label="Ekibi Yönet"
-              variant="secondary"
-              icon="people-outline"
+        <Stack gap="xs">
+          <Group inset={62}>
+            {activeWorkspaceId ? (
+              <GroupedRow
+                leading={<GroupedRowIcon name="people" />}
+                title="Ekibi yönet"
+                onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: activeWorkspaceId } })}
+              />
+            ) : null}
+            <GroupedRow
+              leading={<GroupedRowIcon name="enter" />}
+              title="Davet koduyla katıl"
+              onPress={() => router.push('/workspace/join')}
+            />
+            {/* Limit dolduğunda satır gizlenmez — kullanıcı neden oluşturamadığını görmeli ve
+                doğrudan planlara gidebilmeli. Sunucu tarafında da ayrıca engellenir
+                (enforce_workspace_plan_limit trigger'ı). */}
+            <GroupedRow
+              leading={<GroupedRowIcon name={atWorkspaceLimit ? 'lock-closed' : 'add'} />}
+              title={atWorkspaceLimit ? 'Yeni alan için planı yükselt' : 'Yeni çalışma alanı'}
+              trailing={atWorkspaceLimit ? <Tag tone="brand" label="Plus" /> : undefined}
               onPress={() =>
-                router.push({ pathname: '/workspace/[id]/members', params: { id: activeWorkspaceId } })
+                atWorkspaceLimit
+                  ? router.push('/paywall')
+                  : router.push({ pathname: '/workspace-setup', params: { step: 'create' } })
               }
             />
-          ) : null}
-          <Button
-            label="Davet Koduyla Katıl"
-            variant="secondary"
-            icon="enter-outline"
-            onPress={() => router.push('/workspace/join')}
-          />
-          {/* Limit dolduğunda buton gizlenmez — kullanıcı neden oluşturamadığını görmeli ve
-              doğrudan planlara gidebilmeli. Sunucu tarafında da ayrıca engellenir
-              (enforce_workspace_plan_limit trigger'ı). */}
-          <Button
-            label={atWorkspaceLimit ? 'Yeni Alan İçin Planı Yükselt' : 'Yeni Çalışma Alanı Oluştur'}
-            variant="secondary"
-            icon={atWorkspaceLimit ? 'lock-closed-outline' : 'add-circle-outline'}
-            onPress={() =>
-              atWorkspaceLimit
-                ? router.push('/paywall')
-                : router.push({ pathname: '/workspace-setup', params: { step: 'create' } })
-            }
-          />
+          </Group>
           {atWorkspaceLimit ? (
-            <Text variant="caption" color="textSecondary">
+            <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: 4 }}>
               {planState?.plan === 'free'
                 ? `Ücretsiz planda ${planState.workspaceLimit} çalışma alanı oluşturabilirsiniz.`
                 : `Planınızda ${planState?.workspaceLimit} çalışma alanı hakkınız var ve tamamı kullanılıyor.`}
