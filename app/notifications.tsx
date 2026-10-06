@@ -1,17 +1,14 @@
 import { useState } from 'react';
-import { Alert, InteractionManager, Platform, SectionList, View } from 'react-native';
+import { Alert, InteractionManager, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { ActionSheet, EmptyState, Pagination, Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
+import { ActionSheet, EmptyState, Group, GroupedRowIcon, Pagination, Pressable, Skeleton, Stack, Text } from '@/components/primitives';
 import type { ActionSheetOption } from '@/components/primitives/ActionSheet';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { ObligationIcon } from '@/components/finance/ObligationIcon';
-import { BankLogo } from '@/components/finance/BankLogo';
 import {
   countRecentReminders,
   dismissAllReminders,
@@ -154,73 +151,59 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="lg" style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.md }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: theme.screenEdge.standard,
+          paddingTop: theme.spacing.xxs,
+          paddingBottom: theme.spacing.xxl,
+          flexGrow: 1,
+        }}
+      >
         <ScreenHeader
           title="Bildirimler"
-          right={{
-            icon: 'ellipsis-horizontal',
-            accessibilityLabel: 'Diğer işlemler',
-            onPress: () => setBulkMenuOpen(true),
-          }}
+          rightLabel={{ label: 'İşlemler', onPress: () => setBulkMenuOpen(true) }}
         />
-      </Stack>
 
-      {remindersQuery.isLoading ? (
-        <Stack gap="sm" style={{ padding: theme.screenEdge.standard }}>
-          <Skeleton height={64} borderRadius={theme.radius.widget} />
-          <Skeleton height={64} borderRadius={theme.radius.widget} />
-          <Skeleton height={64} borderRadius={theme.radius.widget} />
-        </Stack>
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            paddingHorizontal: theme.screenEdge.standard,
-            paddingTop: theme.spacing.md,
-            paddingBottom: theme.spacing.xxl,
-            flexGrow: 1,
-          }}
-          renderSectionHeader={({ section }) => (
-            <Text
-              variant="caption"
-              color="textSecondary"
-              style={{ backgroundColor: theme.colors.backgroundPrimary, paddingVertical: theme.spacing.sm }}
-            >
-              {section.title}
-            </Text>
-          )}
-          renderItem={({ item }) => (
-            <NotificationRow
-              item={item}
-              onMarkRead={(id) => markReadMutation.mutate(id)}
-              onDismiss={(id) => dismissMutation.mutate(id)}
-              onAddToCalendar={(obligation) => calendarMutation.mutate(obligation)}
-              onCreateReminder={(obligation) => reminderMutation.mutate(obligation)}
-            />
-          )}
-          ListFooterComponent={
-            totalPages > 1 ? (
-              <Pagination
-                page={effectivePage}
-                totalPages={totalPages}
-                onChange={setPage}
-                loading={remindersQuery.isFetching}
-              />
-            ) : null
-          }
-          ListEmptyComponent={
-            remindersQuery.isSuccess ? (
-              <EmptyState
-                icon="notifications-outline"
-                title="Henüz bildirim yok"
-                message="Bir hatırlatma gönderildiğinde burada görünecek."
-              />
-            ) : null
-          }
-        />
-      )}
+        {remindersQuery.isLoading ? (
+          <Stack gap="sm" style={{ paddingTop: theme.spacing.lg }}>
+            <Skeleton height={64} borderRadius={theme.radius.group} />
+            <Skeleton height={64} borderRadius={theme.radius.group} />
+            <Skeleton height={64} borderRadius={theme.radius.group} />
+          </Stack>
+        ) : sections.length === 0 && remindersQuery.isSuccess ? (
+          <EmptyState
+            icon="notifications-outline"
+            title="Henüz bildirim yok"
+            message="Bir hatırlatma gönderildiğinde burada görünecek."
+          />
+        ) : (
+          sections.map((section) => (
+            <View key={section.title} style={{ marginTop: theme.spacing.lg }}>
+              <Text variant="label" color="textSecondary" style={{ marginBottom: 10 }}>
+                {section.title}
+              </Text>
+              <Group inset={62}>
+                {section.data.map((item) => (
+                  <NotificationRow
+                    key={item.id}
+                    item={item}
+                    onMarkRead={(id) => markReadMutation.mutate(id)}
+                    onDismiss={(id) => dismissMutation.mutate(id)}
+                    onAddToCalendar={(obligation) => calendarMutation.mutate(obligation)}
+                    onCreateReminder={(obligation) => reminderMutation.mutate(obligation)}
+                  />
+                ))}
+              </Group>
+            </View>
+          ))
+        )}
+
+        {totalPages > 1 ? (
+          <View style={{ marginTop: theme.spacing.md }}>
+            <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} loading={remindersQuery.isFetching} />
+          </View>
+        ) : null}
+      </ScrollView>
 
       <ActionSheet
         visible={bulkMenuOpen}
@@ -261,6 +244,9 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
   if (!content) return null;
 
   const isUnread = !item.read_at;
+  const overdue = item.stage === 'overdue_1_day';
+  const tone = item.kind === 'statement_upload' ? 'default' : overdue ? 'danger' : item.obligation?.direction === 'receivable' ? 'success' : 'brandSoft';
+  const icon = item.kind === 'statement_upload' ? 'card' : overdue ? 'alert-circle' : 'alarm';
 
   const options: ActionSheetOption[] = [];
   if (item.obligation) {
@@ -280,20 +266,9 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
     }
   }
   if (isUnread) {
-    options.push({
-      key: 'read',
-      label: 'Okundu İşaretle',
-      icon: 'checkmark-done-outline',
-      onPress: () => onMarkRead(item.id),
-    });
+    options.push({ key: 'read', label: 'Okundu İşaretle', icon: 'checkmark-done-outline', onPress: () => onMarkRead(item.id) });
   }
-  options.push({
-    key: 'dismiss',
-    label: 'Bildirimi Temizle',
-    icon: 'trash-outline',
-    danger: true,
-    onPress: () => onDismiss(item.id),
-  });
+  options.push({ key: 'dismiss', label: 'Bildirimi Temizle', icon: 'trash-outline', danger: true, onPress: () => onDismiss(item.id) });
 
   return (
     <>
@@ -302,78 +277,50 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
           if (isUnread) onMarkRead(item.id);
           content.onPress();
         }}
+        onLongPress={() => setSheetOpen(true)}
+        style={{ paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}
       >
-        <View
-          style={{
-            paddingVertical: theme.spacing.sm,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            opacity: isUnread ? 1 : 0.7,
-          }}
-        >
-          <Row gap="sm" align="flex-start">
-            {item.kind === 'statement_upload' ? (
-              <BankLogo bankCode={item.account?.bank_code} fallbackName={item.account?.name} size={40} />
-            ) : (
-              <ObligationIcon
-                documentType={item.obligation?.document_type ?? 'diger'}
-                bankCode={item.obligation?.bank_code}
-                serviceCode={item.obligation?.service_code}
-                fallbackName={item.obligation?.title}
-                size={36}
-              />
-            )}
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Row gap="xs" align="center">
-                {isUnread ? (
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.attentionMarker }} />
-                ) : null}
-                <Text variant="cardTitle" style={{ flex: 1 }}>
-                  {content.title}
+        <GroupedRowIcon name={icon} tone={tone} />
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text style={{ fontWeight: '600' }}>{content.title}</Text>
+          <Text color="textSecondary" style={{ fontSize: 15, lineHeight: 20 }}>
+            {content.body}
+          </Text>
+          <Text variant="caption" color="textSecondary" style={{ marginTop: 4 }}>
+            {timeFormatter.format(new Date(item.remind_at))}
+          </Text>
+          {item.obligation ? (
+            <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  if (isUnread) onMarkRead(item.id);
+                  router.push({
+                    pathname: '/payments/new',
+                    params: { obligationId: item.obligation!.id, direction: item.obligation!.direction },
+                  });
+                }}
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600' }}>
+                  {item.obligation.direction === 'payable' ? 'Ödendi işaretle' : 'Tahsil edildi işaretle'}
                 </Text>
-              </Row>
-              <Text variant="body" color="textSecondary">
-                {content.body}
-              </Text>
-              {item.obligation ? (
-                <Row gap="sm" style={{ marginTop: theme.spacing.xxs }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => {
-                      if (isUnread) onMarkRead(item.id);
-                      router.push({
-                        pathname: '/payments/new',
-                        params: { obligationId: item.obligation!.id, direction: item.obligation!.direction },
-                      });
-                    }}
-                    style={{ minHeight: 44, justifyContent: 'center' }}
-                  >
-                    <Text variant="body" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
-                      {item.obligation.direction === 'payable' ? 'Ödendi işaretle' : 'Tahsil edildi işaretle'}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => router.push(`/obligations/${item.obligation!.id}`)}
-                    style={{ minHeight: 44, justifyContent: 'center' }}
-                  >
-                    <Text variant="body" color="textSecondary">
-                      Kontrol et
-                    </Text>
-                  </Pressable>
-                </Row>
-              ) : null}
-            </Stack>
-            <Stack gap="xs" align="flex-end">
-              <Text variant="caption" color="textSecondary">
-                {timeFormatter.format(new Date(item.remind_at))}
-              </Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Diğer işlemler" onPress={() => setSheetOpen(true)} hitSlop={10}>
-                <Ionicons name="ellipsis-vertical" size={18} color={theme.colors.textSecondary} />
               </Pressable>
-            </Stack>
-          </Row>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push(`/obligations/${item.obligation!.id}`)}
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                <Text color="textSecondary" style={{ fontSize: 15 }}>
+                  Kontrol et
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
+        {isUnread ? (
+          <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, backgroundColor: theme.colors.brandPrimary }} />
+        ) : null}
       </Pressable>
 
       <ActionSheet visible={sheetOpen} title={content.title} onClose={() => setSheetOpen(false)} options={options} />

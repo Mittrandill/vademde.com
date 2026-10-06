@@ -1,14 +1,13 @@
-import { useState } from 'react';
-import { Alert, Share } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Alert, Share, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { ActionSheet, Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { ActionSheet, Group, Pressable, Text } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import { DetailHeroCard, DetailIdentityRow } from '@/components/finance/DetailHero';
-import { AccountIcon } from '@/components/finance/AccountIcon';
 import { AccountLabelRow } from '@/components/finance/AccountLabelRow';
 import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -133,7 +132,8 @@ export default function TransactionDetailScreen() {
     <>
       <DetailScaffold
         header={{
-          title,
+          title: '',
+          inline: true,
           right: {
             icon: 'ellipsis-horizontal',
             accessibilityLabel: 'Diğer seçenekler',
@@ -179,99 +179,59 @@ export default function TransactionDetailScreen() {
           ]}
         />
 
-        <Card>
-          <Stack gap="md">
-            {transaction.category ? (
-              <Row gap="sm" align="center">
-                <CategoryIcon icon={transaction.category.icon} color={transaction.category.color} size={36} />
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    KATEGORİ
-                  </Text>
-                  <Text variant="body">{transaction.category.name}</Text>
-                </Stack>
-              </Row>
-            ) : null}
+        <Group inset={16}>
+          <InfoRow label="Hesap">
+            <AccountLabelRow
+              bankCode={transaction.account?.bank_code}
+              accountName={transaction.account?.name}
+              accountType={transaction.account?.type}
+              cardLastFour={transaction.account?.card_last_four}
+              currencyCode={transaction.account?.currency_code}
+            />
+          </InfoRow>
+          {transaction.direction === 'transfer' && transaction.transferToAccount ? (
+            <InfoRow label="Hedef hesap">
+              <Text>{transaction.transferToAccount.name}</Text>
+            </InfoRow>
+          ) : null}
+          {transaction.category ? (
+            <InfoRow label="Kategori">
+              <Text>{transaction.category.name}</Text>
+            </InfoRow>
+          ) : null}
+          {transaction.counterparty ? (
+            <InfoRow label="Kişi / firma">
+              <Text>{transaction.counterparty.name}</Text>
+            </InfoRow>
+          ) : null}
+          {transaction.description?.trim() ? (
+            <InfoRow label="Not">
+              <Text numberOfLines={2} style={{ textAlign: 'right' }}>
+                {transaction.description.trim()}
+              </Text>
+            </InfoRow>
+          ) : null}
+        </Group>
 
-            {transaction.category ? <Divider /> : null}
-
-            <Row gap="sm" align="center">
-              <AccountIcon
-                bankCode={transaction.account?.bank_code}
-                accountType={transaction.account?.type}
-                currencyCode={transaction.account?.currency_code}
-                fallbackName={transaction.account?.name}
-                size={36}
-              />
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                  HESAP
-                </Text>
-                <AccountLabelRow
-                  bankCode={transaction.account?.bank_code}
-                  accountName={transaction.account?.name}
-                  accountType={transaction.account?.type}
-                  cardLastFour={transaction.account?.card_last_four}
-                  currencyCode={transaction.account?.currency_code}
-                />
-              </Stack>
-            </Row>
-
-            {transaction.direction === 'transfer' && transaction.transferToAccount ? (
-              <>
-                <Divider />
-                <Row gap="sm" align="center">
-                  <AccountIcon
-                    bankCode={transaction.transferToAccount.bank_code}
-                    accountType={transaction.transferToAccount.type}
-                    currencyCode={transaction.transferToAccount.currency_code}
-                    fallbackName={transaction.transferToAccount.name}
-                    size={36}
-                  />
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                      HEDEF HESAP
-                    </Text>
-                    <Text variant="body">{transaction.transferToAccount.name}</Text>
-                  </Stack>
-                </Row>
-              </>
-            ) : null}
-
-            {transaction.counterparty ? (
-              <>
-                <Divider />
-                <Row gap="sm" align="center">
-                  <PersonAvatar name={transaction.counterparty.name} size={36} />
-                  <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                      KİŞİ / FİRMA
-                    </Text>
-                    <Text variant="body">{transaction.counterparty.name}</Text>
-                  </Stack>
-                </Row>
-              </>
-            ) : null}
-
-            {receiptQuery.data ? (
-              <>
-                <Divider />
-                <Pressable accessibilityRole="button" accessibilityLabel="Dekontu aç" onPress={handleOpenReceipt}>
-                  <Row gap="sm" align="center">
-                    <Ionicons name="attach" size={24} color={theme.colors.textPrimary} style={{ width: 36, textAlign: 'center' }} />
-                    <Stack gap="xxs" style={{ flex: 1 }}>
-                      <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                        DEKONT
-                      </Text>
-                      <Text variant="body">Dekontu aç</Text>
-                    </Stack>
-                    <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-                  </Row>
-                </Pressable>
-              </>
-            ) : null}
-          </Stack>
-        </Card>
+        {receiptQuery.data ? (
+          <View style={{ gap: 10 }}>
+            <Text variant="label" color="textSecondary">
+              Belge
+            </Text>
+            <Group inset={16}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dekontu aç"
+                onPress={handleOpenReceipt}
+                style={{ minHeight: 56, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+              >
+                <Ionicons name="attach" size={22} color={theme.colors.textPrimary} />
+                <Text style={{ flex: 1, fontWeight: '500' }}>Dekontu aç</Text>
+                <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
+              </Pressable>
+            </Group>
+          </View>
+        ) : null}
       </DetailScaffold>
 
       <ActionSheet
@@ -308,5 +268,17 @@ export default function TransactionDetailScreen() {
         }
       />
     </>
+  );
+}
+
+// Tuval satırı (.row): etiket solda ikincil, değer sağda.
+function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <Text color="textSecondary" style={{ flex: 1 }}>
+        {label}
+      </Text>
+      <View style={{ maxWidth: '62%', alignItems: 'flex-end' }}>{children}</View>
+    </View>
   );
 }

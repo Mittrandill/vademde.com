@@ -1,8 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import type { StyleProp, TextStyle } from 'react-native';
 
-import { useTheme } from '@/theme';
-import { Card, Divider, ProgressRing, Row, Stack, Text } from '@/components/primitives';
+import { ProgressRing, Row, Stack, Text } from '@/components/primitives';
 
 export interface DetailHeroCardProps {
   /** Hero yüzeyi her zaman temanın nötr "elevated" tonundadır (docs §12.4) — varsayılan true. */
@@ -15,20 +14,16 @@ export interface DetailHeroCardProps {
 // transactions/[id] hero kartlarının ortak kabuğu: her ekran hangi bölümlerin
 // bulunacağına kendi karar verir (identity, metrik, özet vb.), kabuk sadece bunları
 // dizip aralarına ayraç koyar.
-export function DetailHeroCard({ elevated = true, sections }: DetailHeroCardProps) {
+export function DetailHeroCard({ sections }: DetailHeroCardProps) {
   const visible = sections.filter(Boolean);
 
+  // Tuvalde detay hero'su kartsız, ortalanmış bir istif: ikon, başlık, tutar, alt bilgi.
   return (
-    <Card elevated={elevated} variant="hero">
-      <Stack gap="lg">
-        {visible.map((section, index) => (
-          <Fragment key={index}>
-            {section}
-            {index < visible.length - 1 ? <Divider /> : null}
-          </Fragment>
-        ))}
-      </Stack>
-    </Card>
+    <Stack gap="xs" align="center" style={{ paddingTop: 4 }}>
+      {visible.map((section, index) => (
+        <Fragment key={index}>{section}</Fragment>
+      ))}
+    </Stack>
   );
 }
 
@@ -48,41 +43,21 @@ export function DetailIdentityRow({
   title,
   subtitle,
   badge,
-  circleBackground = true,
   titleNumberOfLines = 2,
 }: DetailIdentityRowProps) {
-  const theme = useTheme();
-
   return (
-    <Row gap="sm" align="center">
-      {circleBackground ? (
-        <Stack
-          align="center"
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: theme.radius.input,
-            backgroundColor: theme.colors.backgroundPrimary,
-            justifyContent: 'center',
-          }}
-        >
-          {icon}
-        </Stack>
-      ) : (
-        icon
-      )}
-      <Stack gap="xxs" style={{ flex: 1 }}>
-        <Text variant="cardTitle" numberOfLines={titleNumberOfLines}>
-          {title}
+    <Stack gap="xxs" align="center">
+      {icon}
+      <Text style={{ fontWeight: '600', marginTop: 8, textAlign: 'center' }} numberOfLines={titleNumberOfLines}>
+        {title}
+      </Text>
+      {subtitle ? (
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          {subtitle}
         </Text>
-        {subtitle ? (
-          <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </Stack>
+      ) : null}
       {badge ?? null}
-    </Row>
+    </Stack>
   );
 }
 
