@@ -4,17 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 
 import { useTheme } from '@/theme';
-import { Text } from '@/components/primitives';
 import { useQuickAddStore } from '@/store/quickAddStore';
 
-type IconName = keyof typeof Ionicons.glyphMap;
-
-const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
-  index: { active: 'home', inactive: 'home-outline' },
-  hareketler: { active: 'swap-horizontal', inactive: 'swap-horizontal' },
-  tara: { active: 'scan', inactive: 'scan' },
-  takvim: { active: 'calendar', inactive: 'calendar-outline' },
-  'daha-fazla': { active: 'grid', inactive: 'grid-outline' },
+const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  index: 'home',
+  hareketler: 'swap-horizontal',
+  tara: 'scan',
+  takvim: 'calendar',
+  'daha-fazla': 'grid',
 };
 
 const LABELS: Record<string, string> = {
@@ -25,22 +22,28 @@ const LABELS: Record<string, string> = {
   'daha-fazla': 'Daha Fazla',
 };
 
-// design Main.html alt çubuğu: tam genişlikte düz yüzey + üst çizgi; ortada yukarı taşan
-// yuvarlatılmış kare "Tara" düğmesi (action rengi, çubuk renginde halka). Aktif sekme:
-// kalın etiket + altında nokta.
-const TARA_SIZE = 58;
-const TARA_RING = 5;
-const TARA_LIFT = 22;
+// Kayan çubuğun üstünden taşan Tara dairesinin çapı ve barın tepesinden ne kadar
+// yukarı taştığı — barın kendi yüksekliğinden (theme.layout.tabBarHeight) bağımsız,
+// burada sabit tutulur ki iki değer birbirine göre elle ayarlanabilsin.
+const TARA_CIRCLE_SIZE = 60;
+const TARA_OVERLAP = 16;
 
+// docs/08-tasarim-sistemi.md §12.10 — ekran kenarlarından içeride, yüksek radiuslu grafit yüzey.
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const showQuickAdd = useQuickAddStore((s) => s.show);
 
-  // Çubuğun üst kenarı eski yüzen çubuğunkiyle aynı yükseklikte kalır (theme.layout.* ile
-  // hesaplanan, tara.tsx'in kamera kontrollerini konumlandırdığı değer); altındaki alan
-  // güvenli alanı doldurur.
-  const bottomInset = insets.bottom * 0.5 + theme.layout.tabBarBottomGap;
+  const taraIndex = state.routes.findIndex((route) => route.name === 'tara');
+  const taraRoute = taraIndex >= 0 ? state.routes[taraIndex] : null;
+  // Diğer sekmeler tek bir "space-between" satırında olunca, odak durumuna göre değişen
+  // genişlikleri yüzünden aralarından biri (ör. Hareketler) matematiksel olarak tam barın
+  // ortasına, yani tam Tara dairesinin altına denk gelip onun arkasında kayboluyordu.
+  // Bunun yerine ortada dairenin genişliği kadar SABİT boş bir alan bırakan iki ayrı yarım
+  // (sol/sağ) render edilir — hiçbir sekme artık o bölgeye asla giremez.
+  const taraPosition = taraIndex >= 0 ? taraIndex : state.routes.length;
+  const leftRoutes = state.routes.slice(0, taraPosition);
+  const rightRoutes = state.routes.slice(taraPosition + 1);
 
   function navigateTo(route: (typeof state.routes)[number], focused: boolean) {
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -50,108 +53,164 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   }
 
   // Kayıt sekmesi değişiminde global LayoutAnimation.configureNext KULLANILMAZ: bu legacy API
-  // Fabric/New Architecture'da bir sonraki native layout commit'inin TAMAMINA uygulanır ve
-  // başka bir shadow tree güncellemesiyle çakışınca segfault veriyordu (bkz. TestFlight
-  // crash raporları: UIManager::animationTick / LayoutAnimationDelegateProxy).
+  // Fabric/New Architecture'da bir sonraki native layout commit'inin TAMAMINA uygulanır
+  // (yalnızca bu bileşene değil). Kaydet/Sil sonrası router.replace('/(tabs)/...') ile her
+  // sekme geçişinde bu tetiklenip, aynı anda çalışan başka bir shadow tree güncellemesiyle
+  // (liste yeniden render, ekran unmount) çakışınca Fabric segfault veriyordu (bkz. TestFlight
+  // crash raporları: "kayıt sonrası" ve "silme sonrası" çökmeler, ikisi de
+  // UIManager::animationTick / LayoutAnimationDelegateProxy içinde crash).
   return (
     <View
-      accessibilityRole="tablist"
       style={{
         position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        minHeight: theme.layout.tabBarHeight + bottomInset,
-        paddingBottom: bottomInset,
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        backgroundColor: theme.colors.surfacePrimary,
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.border,
-        paddingHorizontal: theme.spacing.xs,
+        left: theme.spacing.lg,
+        right: theme.spacing.lg,
+        // Alt güvenli alanın (ev göstergesi) tamamı kadar boşluk bırakmak, barı gereğinden
+        // yukarıda gösteriyordu — yarısı kadarını kullanmak barı ekranın alt kenarına
+        // belirgin şekilde yaklaştırırken ev göstergesiyle çakışmayı da önlüyor.
+        bottom: insets.bottom * 0.5 + theme.layout.tabBarBottomGap,
       }}
     >
-      {state.routes.map((route, index) => {
-        const focused = state.index === index;
-        const icons = ICONS[route.name] ?? { active: 'ellipse', inactive: 'ellipse-outline' };
-        const label = LABELS[route.name] ?? route.name;
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          height: theme.layout.tabBarHeight,
+          borderRadius: theme.radius.heroWidget,
+          backgroundColor: theme.colors.surfaceElevated,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          paddingHorizontal: theme.spacing.xs,
+          shadowColor: '#000',
+          shadowOpacity: 0.18,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 8,
+        }}
+      >
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' }}>
+          {leftRoutes.map((route) => {
+            const focused = state.index === state.routes.indexOf(route);
+            return (
+              <TabItem
+                key={route.key}
+                focused={focused}
+                icon={ICONS[route.name] ?? 'ellipse'}
+                label={LABELS[route.name] ?? route.name}
+                onPress={() => navigateTo(route, focused)}
+              />
+            );
+          })}
+        </View>
 
-        if (route.name === 'tara') {
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityLabel="Belge tara"
-              accessibilityState={{ selected: focused }}
-              onPress={() => navigateTo(route, focused)}
-              // Uzun basış: Hızlı ekle sheet'i (design HizliEkle.html).
-              onLongPress={showQuickAdd}
-              accessibilityHint="Uzun basarak hızlı ekle menüsünü aç"
-              style={{ flex: 1, alignItems: 'center', gap: 6, marginTop: -TARA_LIFT }}
-            >
-              <View
-                style={{
-                  width: TARA_SIZE,
-                  height: TARA_SIZE,
-                  borderRadius: 20,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.action,
-                  borderWidth: TARA_RING,
-                  borderColor: theme.colors.surfacePrimary,
-                  // Halka çubuk rengindedir; boyut dışa taşmasın diye kutu büyütülmez, iç ölçü sabit kalır.
-                  boxSizing: 'content-box',
-                }}
-              >
-                <Ionicons name={icons.active} size={26} color={theme.colors.onAction} />
-              </View>
-              <Text variant="caption" maxFontSizeMultiplier={1.15} style={{ fontSize: 11, fontWeight: '600' }} color="textSecondary">
-                {label}
-              </Text>
-            </Pressable>
-          );
-        }
+        {/* Tara dairesinin tam altına denk gelen, hiçbir sekmenin giremeyeceği sabit boşluk. */}
+        <View style={{ width: TARA_CIRCLE_SIZE }} />
 
-        return (
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' }}>
+          {rightRoutes.map((route) => {
+            const focused = state.index === state.routes.indexOf(route);
+            return (
+              <TabItem
+                key={route.key}
+                focused={focused}
+                icon={ICONS[route.name] ?? 'ellipse'}
+                label={LABELS[route.name] ?? route.name}
+                onPress={() => navigateTo(route, focused)}
+              />
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Tara, barın normal akışındaki bir sekme değil — barın tam ortasında, tepesinden
+          taşarak yüzen ayrı bir dairesel aksiyon düğmesi (bkz. yukarıdaki TARA_CIRCLE_SIZE/
+          TARA_OVERLAP notu). Bağımsız, tam genişlikte mutlak konumlu bir katman olarak
+          çizildiği için barın içindeki sekmelerden etkilenmeden her zaman tam ortada kalır.
+          Her zaman marka rengiyle (seçili gibi) görünür — gerçek odak durumundan bağımsız,
+          çünkü bu sekme bir "hedef" değil sabit bir aksiyon (tarama) olarak tasarlandı.
+          */}
+      {taraRoute ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: -TARA_OVERLAP,
+            alignItems: 'center',
+          }}
+        >
           <Pressable
-            key={route.key}
-            accessibilityRole="tab"
-            accessibilityLabel={label}
-            accessibilityState={{ selected: focused }}
-            onPress={() => navigateTo(route, focused)}
+            accessibilityRole="button"
+            accessibilityLabel={LABELS.tara}
+            hitSlop={8}
+            onPress={() => navigateTo(taraRoute, state.index === taraIndex)}
+            // Uzun basış: Hızlı ekle sheet'i.
+            onLongPress={showQuickAdd}
+            accessibilityHint="Uzun basarak hızlı ekle menüsünü aç"
             style={{
-              flex: 1,
-              minHeight: theme.touchTarget.minimum,
+              width: TARA_CIRCLE_SIZE,
+              height: TARA_CIRCLE_SIZE,
+              borderRadius: TARA_CIRCLE_SIZE / 2,
               alignItems: 'center',
-              gap: theme.spacing.xxs,
-              paddingTop: 10,
+              justifyContent: 'center',
+              backgroundColor: theme.colors.brandPrimary,
+              borderWidth: 3,
+              borderColor: theme.colors.backgroundPrimary,
+              shadowColor: '#000',
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 10,
             }}
           >
-            <Ionicons
-              name={focused ? icons.active : icons.inactive}
-              size={23}
-              color={focused ? theme.colors.textPrimary : theme.colors.textSecondary}
-            />
-            <Text
-              variant="caption"
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.15}
-              color={focused ? 'textPrimary' : 'textSecondary'}
-              style={{ fontSize: 11, fontWeight: focused ? '700' : '500' }}
-            >
-              {label}
-            </Text>
-            <View
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: focused ? theme.colors.attentionMarker : 'transparent',
-              }}
-            />
+            <Ionicons name={ICONS.tara} size={26} color={theme.colors.brandPrimaryText} />
           </Pressable>
-        );
-      })}
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+interface TabItemProps {
+  focused: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}
+
+function TabItem({ focused, icon, label, onPress }: TabItemProps) {
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: focused }}
+      style={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: theme.spacing.xxs,
+        paddingVertical: theme.spacing.xs,
+        paddingHorizontal: theme.spacing.sm,
+      }}
+    >
+      <Ionicons
+        name={icon}
+        size={22}
+        color={focused ? theme.colors.brandPrimary : theme.colors.textSecondary}
+      />
+      {/* Etiket yerine görsel referanstaki gibi odaklı sekmenin altında sade bir nokta gösterge. */}
+      <View
+        style={{
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: focused ? theme.colors.brandPrimary : 'transparent',
+        }}
+      />
+    </Pressable>
   );
 }

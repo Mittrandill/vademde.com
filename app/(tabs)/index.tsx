@@ -11,7 +11,6 @@ import { PAYWALL_LAST_SHOWN_KEY } from '@/utils/storageKeys';
 import { useTheme } from '@/theme';
 import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import { HomeHero } from '@/components/finance/HomeHero';
-import { VadeLineSection } from '@/components/finance/VadeLineSection';
 import { AiInsightsCard } from '@/components/finance/AiInsightsCard';
 import { CashAlertBanner } from '@/components/finance/CashAlertBanner';
 import { QuickActions } from '@/components/finance/QuickActions';
@@ -121,7 +120,6 @@ export default function HomeScreen() {
   }, [workspacesQuery.isFetchedAfterMount, workspacesQuery.isFetching, workspaces.length]);
 
   const now = new Date();
-  const todayLabel = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now);
   const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
 
   const accountsQuery = useQuery({
@@ -283,66 +281,50 @@ export default function HomeScreen() {
             // Kayan tab bar'ın altında kalmasın diye normalden fazla alt boşluk
             // (bkz. TabBar.tsx: mutlak konumlu, ~64+inset yükseklik).
             paddingBottom: theme.layout.tabBarClearance,
-            gap: theme.spacing.lg,
+            gap: 20,
           }}
         >
           <Stack gap="xs">
-            <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text variant="label" color="textSecondary">
-                  {todayLabel}
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Çalışma alanını değiştir"
+                onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
+                disabled={workspaces.length <= 1}
+                style={{ flex: 1, gap: 2 }}
+              >
+                <Text variant="caption" color="textSecondary">
+                  Çalışma alanı
                 </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Çalışma alanını değiştir"
-                  onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
-                  disabled={workspaces.length <= 1}
-                  style={{ minHeight: 30 }}
-                >
-                  <Row gap="xs" align="center">
-                    <Text variant="cardTitle" numberOfLines={1} style={{ fontSize: 19, fontWeight: '700', flexShrink: 1 }}>
-                      {activeWorkspace?.name ?? '—'}
-                    </Text>
-                    {workspaces.length > 1 ? (
-                      <Ionicons
-                        name={switcherOpen ? 'chevron-up' : 'chevron-down'}
-                        size={18}
-                        color={theme.colors.textPrimary}
-                      />
-                    ) : null}
-                  </Row>
-                </Pressable>
-              </Stack>
-              <Row gap="xs">
-                {[
-                  { icon: 'notifications-outline' as const, label: 'Bildirimler', route: '/notifications' as const },
-                  { icon: 'settings-outline' as const, label: 'Ayarlar', route: '/settings' as const },
-                ].map((item) => (
-                  <Pressable
-                    key={item.route}
-                    accessibilityRole="button"
-                    accessibilityLabel={item.label}
-                    onPress={() => router.push(item.route)}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: theme.colors.surfacePrimary,
-                      borderWidth: 1,
-                      borderColor: theme.colors.border,
-                    }}
-                  >
-                    <Ionicons name={item.icon} size={21} color={theme.colors.textPrimary} />
-                  </Pressable>
-                ))}
-              </Row>
+                <Row gap="xs" align="center">
+                  <Text numberOfLines={1} style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, flexShrink: 1 }}>
+                    {activeWorkspace?.name ?? '—'}
+                  </Text>
+                  {workspaces.length > 1 ? (
+                    <Ionicons name={switcherOpen ? 'chevron-up' : 'chevron-down'} size={19} color={theme.colors.textSecondary} />
+                  ) : null}
+                </Row>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Bildirimler"
+                onPress={() => router.push('/notifications')}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.fill,
+                }}
+              >
+                <Ionicons name="notifications" size={19} color={theme.colors.textPrimary} />
+              </Pressable>
             </Row>
             {switcherOpen ? (
               <Stack
                 gap="xxs"
-                style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.widget, padding: theme.spacing.xs }}
+                style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, padding: theme.spacing.xs }}
               >
                 {workspaces.map((w) => (
                   <Pressable
@@ -353,9 +335,7 @@ export default function HomeScreen() {
                     }}
                     style={{ padding: theme.spacing.sm, minHeight: 44, justifyContent: 'center' }}
                   >
-                    <Text variant="body" style={{ color: w.id === activeWorkspaceId ? theme.colors.action : theme.colors.textPrimary }}>
-                      {w.name}
-                    </Text>
+                    <Text style={{ fontWeight: w.id === activeWorkspaceId ? '700' : '400' }}>{w.name}</Text>
                   </Pressable>
                 ))}
               </Stack>
@@ -379,10 +359,6 @@ export default function HomeScreen() {
 
           <CashAlertBanner />
 
-          <VadeLineSection obligations={activeObligations} rates={valueUnitRatesQuery.data ?? []} />
-
-          <AiInsightsCard />
-
           <QuickActions />
 
           <UpcomingDueList obligations={activeObligations} />
@@ -392,6 +368,8 @@ export default function HomeScreen() {
           {activeWorkspaceId ? <DraftDocumentsQueue workspaceId={activeWorkspaceId} /> : null}
 
           <CreditCardDueWidget obligation={creditCardObligation} />
+
+          <AiInsightsCard />
 
           {/* Hesaplar/Kişiler/Kategoriler artık "Daha Fazla" sekmesinden erişiliyor. */}
           <RecentTransactionsList transactions={recentTransactionsQuery.data ?? []} />

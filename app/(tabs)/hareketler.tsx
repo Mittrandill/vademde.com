@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { FlatList, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -8,22 +8,21 @@ import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import {
+  Card,
   EmptyState,
+  Group,
   ListEnd,
   ListSkeleton,
   LIST_PAGE_SIZE,
   LoadMore,
+  MONTH_NAMES,
   MonthStepper,
   MonthYearSheet,
   Pressable,
-  Row,
   ScrollableTabs,
-  Stack,
   Text,
-  TextField,
 } from '@/components/primitives';
 import { AccountIcon } from '@/components/finance/AccountIcon';
-import { AccountLabelRow } from '@/components/finance/AccountLabelRow';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -66,6 +65,7 @@ interface HareketRow {
   serviceCode?: string | null;
   categoryIcon?: string | null;
   categoryColor?: string | null;
+  categoryName?: string | null;
   installmentId?: string | null;
   // Yalnızca kind === 'transaction' satırlarında doldurulur — hesap kimliğini alt
   // başlıkta banka logolu, yapılandırılmış bir satır olarak göstermek için (bkz.
@@ -130,7 +130,6 @@ export default function HareketlerScreen() {
   // Krediler sayfasındaki Tarih düğmesiyle aynı: varsayılan en yeni önce (azalan).
   const [sortAscending, setSortAscending] = useState(false);
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [monthSheetOpen, setMonthSheetOpen] = useState(false);
   const [month, setMonth] = useState(() => {
     const now = new Date();
@@ -232,6 +231,7 @@ export default function HareketlerScreen() {
         direction: t.direction,
         bankCode: t.account?.bank_code ?? null,
         categoryIcon: t.category?.icon ?? null,
+        categoryName: t.category?.name ?? null,
         categoryColor: t.category?.color ?? null,
         counterpartyName: t.counterparty?.name ?? null,
         accountName: t.account?.name ?? null,
@@ -393,10 +393,13 @@ export default function HareketlerScreen() {
     const flush = () => {
       if (group.length === 0) return;
       const net = sumSigned(group.filter((r) => rowSign(r) > 0)) - sumSigned(group.filter((r) => rowSign(r) < 0));
-      items.push({ type: 'day', key: `day-${currentKey}`, date: group[0].date, netMinor: net });
-      group.forEach((r) =>
-        items.push({ type: 'row', key: `${r.kind}-${r.id}${r.installmentId ? `-${r.installmentId}` : ''}`, row: r })
-      );
+      items.push({
+        type: 'day',
+        key: `day-${currentKey}`,
+        date: group[0].date,
+        netMinor: net,
+        rows: group.map((r) => ({ key: `${r.kind}-${r.id}${r.installmentId ? `-${r.installmentId}` : ''}`, row: r })),
+      });
       group = [];
     };
     for (const r of visibleRows) {
@@ -419,83 +422,60 @@ export default function HareketlerScreen() {
   // Tek dikey scroll sahibi: başlık, ay gezgini ve filtreler FlatList'in ListHeaderComponent'inde.
   const isInitialLoading = isLoading && rows.length === 0;
   const isFetching = transactionsQuery.isFetching || obligationsQuery.isFetching || installmentsQuery.isFetching;
-  const showSearch = searchOpen || searchInput.length > 0;
   const netTotal = monthTotals.income - monthTotals.expense;
 
   const listHeader = (
-    <Stack gap="md" style={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.sm }}>
-      <Row align="center">
-        <Text variant="pageTitle" style={{ flex: 1 }}>
-          Hareketler
-        </Text>
-        <Row gap="xs">
-          <Pressable
-            onPress={() => setSearchOpen((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel="Ara"
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: theme.colors.surfacePrimary,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-            }}
-          >
-            <Ionicons name="search" size={21} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Pressable
-            onPress={showQuickAdd}
-            accessibilityRole="button"
-            accessibilityLabel="Yeni hareket"
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: theme.colors.action,
-            }}
-          >
-            <Ionicons name="add" size={26} color={theme.colors.onAction} />
-          </Pressable>
-        </Row>
-      </Row>
+    <View style={{ paddingTop: theme.spacing.xxs, paddingBottom: theme.spacing.xs, gap: 12 }}>
+      <View style={{ height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+        <Pressable
+          onPress={() => setSortAscending((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel="Tarihe göre sırala"
+          style={headerButtonStyle(theme.colors.fill)}
+        >
+          <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={18} color={theme.colors.textPrimary} />
+        </Pressable>
+        <Pressable
+          onPress={showQuickAdd}
+          accessibilityRole="button"
+          accessibilityLabel="Yeni hareket"
+          style={headerButtonStyle(theme.colors.fill)}
+        >
+          <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
+        </Pressable>
+      </View>
+      <Text variant="pageTitle">Hareketler</Text>
 
-      {showSearch ? (
-        <Row gap="xs" align="center">
-          <TextField
-            placeholder="Açıklama veya başlıkta ara"
-            value={searchInput}
-            onChangeText={setSearchInput}
-            returnKeyType="search"
-            autoCorrect={false}
-            style={{ flex: 1 }}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Tarihe göre sırala"
-            onPress={() => setSortAscending((v) => !v)}
-            style={{
-              height: theme.buttonHeight.primary,
-              paddingHorizontal: theme.spacing.sm,
-              borderRadius: theme.radius.input,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: theme.spacing.xxs,
-            }}
-          >
-            <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={14} color={theme.colors.textSecondary} />
-            <Text variant="body" color="textSecondary">
-              Tarih
-            </Text>
+      <View
+        style={{
+          height: 36,
+          borderRadius: 10,
+          backgroundColor: theme.colors.fill,
+          paddingHorizontal: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <Ionicons name="search" size={17} color={theme.colors.textSecondary} />
+        <TextInput
+          placeholder="Ara"
+          placeholderTextColor={theme.colors.textSecondary}
+          value={searchInput}
+          onChangeText={setSearchInput}
+          returnKeyType="search"
+          autoCorrect={false}
+          selectionColor={theme.colors.brandPrimary}
+          style={{ flex: 1, fontSize: 17, color: theme.colors.textPrimary, padding: 0 }}
+        />
+        {searchInput.length > 0 ? (
+          <Pressable accessibilityLabel="Aramayı temizle" onPress={() => setSearchInput('')} hitSlop={8}>
+            <Ionicons name="close-circle" size={17} color={theme.colors.mutedControl} />
           </Pressable>
-        </Row>
-      ) : null}
+        ) : null}
+      </View>
+
+      <ScrollableTabs tabs={FILTERS} activeKey={filter} onChange={(key) => setFilter(key as FilterKey)} />
 
       <MonthStepper
         year={month.year}
@@ -504,37 +484,36 @@ export default function HareketlerScreen() {
         onPressLabel={() => setMonthSheetOpen(true)}
       />
 
-      <Row style={{ justifyContent: 'space-between' }}>
-        {[
-          { label: 'Gelir', minor: monthTotals.income, sign: '+', color: theme.colors.receivable },
-          { label: 'Gider', minor: monthTotals.expense, sign: '−', color: theme.colors.textPrimary },
-          {
-            label: 'Net',
-            minor: Math.abs(netTotal),
-            sign: netTotal >= 0 ? '+' : '−',
-            color: netTotal >= 0 ? theme.colors.receivable : theme.colors.textPrimary,
-          },
-        ].map((item) => (
-          <Stack key={item.label} gap="xxs">
-            <Text variant="label" color="textSecondary">
-              {item.label}
-            </Text>
-            <Text variant="cardTitle" tabular style={{ color: item.color }}>
-              {item.sign}
-              {formatMinorAmount(item.minor)}
-            </Text>
-          </Stack>
-        ))}
-      </Row>
-
-      <ScrollableTabs tabs={FILTERS} activeKey={filter} onChange={(key) => setFilter(key as FilterKey)} />
+      <Card style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="caption" color="textSecondary">
+            {MONTH_NAMES[month.month]} · {monthRows.length} hareket
+          </Text>
+          <Text
+            variant="displayAmount"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            style={{ fontSize: 22, lineHeight: 28, color: netTotal >= 0 ? theme.colors.receivable : theme.colors.textPrimary }}
+          >
+            {netTotal >= 0 ? '+' : '−'}
+            {formatMinorAmount(Math.abs(netTotal))}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 2 }}>
+          <Text tabular style={{ fontSize: 15, fontWeight: '600', color: theme.colors.receivable }}>
+            +{formatMinorAmount(monthTotals.income)}
+          </Text>
+          <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
+            −{formatMinorAmount(monthTotals.expense)}
+          </Text>
+        </View>
+      </Card>
 
       {error ? (
-        <Text variant="body" color="danger">
-          {error instanceof Error ? error.message : 'Hareketler yüklenemedi'}
-        </Text>
+        <Text color="danger">{error instanceof Error ? error.message : 'Hareketler yüklenemedi'}</Text>
       ) : null}
-    </Stack>
+    </View>
   );
 
   return (
@@ -551,13 +530,7 @@ export default function HareketlerScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
-        renderItem={({ item }) =>
-          item.type === 'day' ? (
-            <DayHeader date={item.date} netMinor={item.netMinor} />
-          ) : (
-            <HareketRowView item={item.row} />
-          )
-        }
+        renderItem={({ item }) => <DayGroup date={item.date} rows={item.rows} />}
         ListEmptyComponent={
           isInitialLoading ? (
             <ListSkeleton rows={5} />
@@ -604,8 +577,7 @@ export default function HareketlerScreen() {
 }
 
 type ListItem =
-  | { type: 'day'; key: string; date: string; netMinor: number }
-  | { type: 'row'; key: string; row: HareketRow };
+  | { type: 'day'; key: string; date: string; netMinor: number; rows: { key: string; row: HareketRow }[] };
 
 // Gelir (+1) / gider (-1) / etkisiz (0): işlemde yöne, borç/alacakta payable/receivable'a göre.
 function rowSign(r: HareketRow): number {
@@ -614,9 +586,14 @@ function rowSign(r: HareketRow): number {
   return 0;
 }
 
-const dayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+const dayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
 
-function DayHeader({ date, netMinor }: { date: string; netMinor: number }) {
+function headerButtonStyle(backgroundColor: string) {
+  return { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor } as const;
+}
+
+// Tuval Hareketler: gün başlığı büyük harf küçük etiket (.ov), altında o günün satırları tek gruplu yüzeyde.
+function DayGroup({ date, rows }: { date: string; rows: { key: string; row: HareketRow }[] }) {
   const theme = useTheme();
   const d = new Date(date);
   const today = new Date();
@@ -625,25 +602,19 @@ function DayHeader({ date, netMinor }: { date: string; netMinor: number }) {
       new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) /
       86_400_000
   );
-  const prefix = diff === 0 ? 'Bugün · ' : diff === 1 ? 'Dün · ' : '';
+  const label = diff === 0 ? 'Bugün' : diff === 1 ? 'Dün' : dayFormatter.format(d);
 
   return (
-    <Row style={{ justifyContent: 'space-between', paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xxs }}>
-      <Text variant="label" color="textSecondary" style={{ textTransform: 'none' }}>
-        {prefix}
-        {dayFormatter.format(d)}
+    <View style={{ marginTop: theme.spacing.lg }}>
+      <Text variant="label" color="textSecondary" style={{ marginBottom: 10 }}>
+        {label}
       </Text>
-      {netMinor !== 0 ? (
-        <Text
-          variant="label"
-          tabular
-          style={{ textTransform: 'none', color: netMinor > 0 ? theme.colors.receivable : theme.colors.textSecondary }}
-        >
-          {netMinor > 0 ? '+' : '−'}
-          {formatMinorAmount(Math.abs(netMinor))}
-        </Text>
-      ) : null}
-    </Row>
+      <Group inset={62}>
+        {rows.map(({ key, row }) => (
+          <HareketRowView key={key} item={row} />
+        ))}
+      </Group>
+    </View>
   );
 }
 
@@ -651,7 +622,14 @@ function HareketRowView({ item }: { item: HareketRow }) {
   const theme = useTheme();
   const sign = rowSign(item);
   const prefix = sign > 0 ? '+' : sign < 0 ? '−' : '';
-  const amountColor = sign > 0 ? 'receivable' : 'textPrimary';
+  const amountColor = sign > 0 ? 'receivable' : item.direction === 'transfer' ? 'textSecondary' : 'textPrimary';
+  const account =
+    item.kind === 'transaction'
+      ? item.accountName
+      : item.paidAccountName ?? null;
+  const subtitle = [item.kind === 'transaction' ? categoryOrType(item) : item.subtitle, account]
+    .filter((part) => !!part && part !== item.title)
+    .join(' · ');
 
   return (
     <Pressable
@@ -659,14 +637,7 @@ function HareketRowView({ item }: { item: HareketRow }) {
       onPress={() =>
         item.kind === 'obligation' ? router.push(`/obligations/${item.id}`) : router.push(`/transactions/${item.id}`)
       }
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: theme.spacing.sm,
-        paddingVertical: theme.spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
-      }}
+      style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
     >
       {item.kind === 'obligation' ? (
         <ObligationIcon
@@ -674,65 +645,46 @@ function HareketRowView({ item }: { item: HareketRow }) {
           bankCode={item.bankCode}
           serviceCode={item.serviceCode}
           fallbackName={item.title}
-          size={40}
+          size={34}
         />
       ) : item.categoryIcon ? (
-        <CategoryIcon icon={item.categoryIcon} color={item.categoryColor} size={40} />
+        <CategoryIcon icon={item.categoryIcon} color={item.categoryColor} size={34} />
       ) : item.direction === 'transfer' && (item.transferToBankCode || item.transferToAccountName) ? (
-        // Transferde asıl ikon paranın gittiği hesabı temsil eder (ör. kredi kartı ödemesinde
-        // kartın kendi logosu) — kaynak hesap alt satırda kalır.
         <AccountIcon
           bankCode={item.transferToBankCode}
           accountType={item.transferToAccountType}
           currencyCode={item.transferToCurrencyCode}
           fallbackName={item.transferToAccountName}
-          size={40}
+          size={34}
         />
       ) : (
-        <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={40} />
+        <BankLogo bankCode={item.bankCode} fallbackIcon={TRANSACTION_DIRECTION_ICON[item.direction]} size={34} />
       )}
-      <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-        <Text variant="cardTitle" numberOfLines={1}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text numberOfLines={1} style={{ fontWeight: '500' }}>
           {item.title}
         </Text>
-        {item.kind === 'transaction' && item.accountName ? (
-          <AccountLabelRow
-            bankCode={item.bankCode}
-            accountName={item.accountName}
-            accountType={item.accountType}
-            cardLastFour={item.cardLastFour}
-            currencyCode={item.accountCurrencyCode}
-          />
-        ) : item.kind === 'obligation' && (item.paidAccountName || item.paidAccountBankCode) ? (
-          // Bu taksit/borç bir hesaptan ödendi — ödemenin yapıldığı hesap burada gösterilir.
-          <AccountLabelRow
-            bankCode={item.paidAccountBankCode}
-            accountName={item.paidAccountName}
-            accountType={item.paidAccountType}
-            cardLastFour={item.paidAccountCardLastFour}
-            currencyCode={item.paidAccountCurrencyCode}
-          />
-        ) : item.subtitle ? (
+        {subtitle ? (
           <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            {item.subtitle}
+            {subtitle}
           </Text>
         ) : null}
-      </Stack>
-      <Stack gap="xxs" align="flex-end">
-        <Text variant="cardTitle" tabular color={amountColor}>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+        <Text tabular style={{ fontWeight: '600', color: theme.colors[amountColor] }}>
           {prefix}
           {item.valueUnitType === 'kiymetli_maden'
             ? formatValueUnitAmount(item.amountMinor, item.currencyCode)
             : formatMinorAmount(item.amountMinor, item.currencyCode)}
         </Text>
-        {item.status ? (
-          <StatusBadge status={item.status} />
-        ) : item.direction === 'transfer' ? (
-          <Text variant="caption" color="textSecondary">
-            Transfer
-          </Text>
-        ) : null}
-      </Stack>
+        {item.status ? <StatusBadge status={item.status} /> : null}
+      </View>
     </Pressable>
   );
+}
+
+// İşlem satırının alt başlığı: kategori adı yoksa yön etiketi (Gelir/Gider/Transfer).
+function categoryOrType(item: HareketRow): string {
+  if (item.categoryName) return item.categoryName;
+  return item.direction === 'transfer' ? 'Transfer' : '';
 }

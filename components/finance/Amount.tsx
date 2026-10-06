@@ -54,7 +54,7 @@ export function Amount({
       : formatMinorAmount(amountMinor, currencyCode);
 
   return (
-    <Text variant={variant} color={color} tabular style={style} {...rest}>
+    <Text variant={variant} color={color} tabular style={[variant === 'body' ? { fontWeight: '600' } : null, style]} {...rest}>
       {prefix}
       {formatted}
     </Text>

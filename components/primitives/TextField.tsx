@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
 import { MAX_FONT_SCALE } from '@/theme/typography';
+import { FieldLabel, FieldShell } from './FormRow';
 import { Pressable } from './Pressable';
 import { Stack } from './Stack';
 import { Text } from './Text';
@@ -54,81 +55,79 @@ export function TextField({
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
   const { layout, text } = splitStyle(style);
+  const hasError = !!error || !!invalid;
 
-  const borderColor =
-    error || invalid ? theme.colors.danger : focused ? theme.colors.action : theme.colors.border;
-
+  // vademde.css .f: etiket üstte (13 pt, ikincil), değer altta (17 pt); odakta soldan 3 pt Saffron çizgi.
   const field = (
-    <View
-      style={[
-        {
-          backgroundColor: theme.colors.surfacePrimary,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor,
+    <FieldShell focused={focused} error={hasError}>
+      <View
+        style={{
           paddingHorizontal: theme.spacing.md,
-          paddingVertical: label ? theme.spacing.xs + 2 : 0,
-          minHeight: label ? 64 : theme.buttonHeight.primary,
-          justifyContent: 'center',
+          paddingVertical: label ? 11 : 0,
+          minHeight: label ? 60 : theme.buttonHeight.primary,
           flexDirection: 'row',
           alignItems: 'center',
           gap: theme.spacing.xs,
-        },
-        error ? null : layout,
-      ]}
-    >
-      <View style={{ flex: 1, gap: 3, justifyContent: 'center' }}>
-        {label ? (
-          <Text variant="label" color="textSecondary" numberOfLines={1} style={{ fontSize: 10, lineHeight: 12 }}>
-            {label}
-          </Text>
+        }}
+      >
+        <View style={{ flex: 1, gap: 2, justifyContent: 'center', minWidth: 0 }}>
+          {label ? (
+            <FieldLabel focused={focused} error={hasError}>
+              {label}
+            </FieldLabel>
+          ) : null}
+          <TextInput
+            placeholderTextColor={placeholderTextColor ?? theme.colors.mutedControl}
+            maxFontSizeMultiplier={maxFontSizeMultiplier}
+            accessibilityLabel={label ?? rest.accessibilityLabel}
+            selectionColor={theme.colors.brandPrimary}
+            onFocus={(event) => {
+              setFocused(true);
+              onFocus?.(event);
+            }}
+            onBlur={(event) => {
+              setFocused(false);
+              onBlur?.(event);
+            }}
+            style={[
+              theme.typography.body,
+              {
+                color: theme.colors.textPrimary,
+                padding: 0,
+                // Çok satırlı girişlerde yükseklik içerikten gelir; tek satırda sabit satır yüksekliği.
+                minHeight: 24,
+              },
+              text,
+            ]}
+            {...rest}
+          />
+        </View>
+        {rightIcon ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onRightIconPress}
+            hitSlop={8}
+            style={{ minWidth: theme.touchTarget.minimum, minHeight: theme.touchTarget.minimum, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name={rightIcon} size={theme.iconSize.lg} color={theme.colors.textSecondary} />
+          </Pressable>
         ) : null}
-        <TextInput
-          placeholderTextColor={placeholderTextColor ?? theme.colors.mutedControl}
-          maxFontSizeMultiplier={maxFontSizeMultiplier}
-          accessibilityLabel={label ?? rest.accessibilityLabel}
-          onFocus={(event) => {
-            setFocused(true);
-            onFocus?.(event);
-          }}
-          onBlur={(event) => {
-            setFocused(false);
-            onBlur?.(event);
-          }}
-          style={[
-            theme.typography.body,
-            {
-              color: theme.colors.textPrimary,
-              padding: 0,
-              // Çok satırlı girişlerde yükseklik içerikten gelir; tek satırda sabit satır yüksekliği.
-              minHeight: 24,
-            },
-            text,
-          ]}
-          {...rest}
-        />
       </View>
-      {rightIcon ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onRightIconPress}
-          hitSlop={8}
-          style={{ minWidth: theme.touchTarget.minimum, minHeight: theme.touchTarget.minimum, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name={rightIcon} size={theme.iconSize.lg} color={theme.colors.textSecondary} />
-        </Pressable>
-      ) : null}
-    </View>
+    </FieldShell>
   );
 
-  if (!error) return field;
+  const wrapped = <View style={layout as object}>{field}</View>;
+  if (!error) return wrapped;
 
   return (
     <Stack gap="xxs" style={layout}>
       {field}
-      <Text variant="caption" color="danger">
-        {error}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: theme.spacing.md }}>
+        <Ionicons name="alert-circle" size={14} color={theme.colors.danger} />
+        <Text variant="caption" color="danger" style={{ flex: 1 }}>
+          {error}
+        </Text>
+      </View>
     </Stack>
   );
 }

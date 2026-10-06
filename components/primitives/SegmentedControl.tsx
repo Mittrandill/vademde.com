@@ -1,10 +1,9 @@
 import { memo } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/colors';
 import { Pressable } from './Pressable';
-import { Row } from './Stack';
 import { Text } from './Text';
 
 export interface SegmentedControlOption<T extends string> {
@@ -17,46 +16,34 @@ export interface SegmentedControlProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   size?: 'default' | 'compact';
+  /** Geriye dönük uyumluluk: iOS segmenti her zaman hafif dolgu zemin kullanır. */
   trackColor?: keyof ThemeColors;
-  /** Satırın tamamını kaplar ve segmentleri eşit böler (iOS segmented control gibi). */
+  /** Geriye dönük uyumluluk: segmentler varsayılan olarak satırı eşit böler. */
   stretch?: boolean;
   /** Uzun filtre satırlarında seçenekleri küçültmeden sabit genişlikle yatay kaydırır. */
   scrollable?: boolean;
 }
 
-// Kredi detayındaki onaylı sekme deseninin uygulama genelindeki tek kaynağı: grafit dış
-// yüzey, input-radius dikdörtgen seçenekler ve Saffron seçili durum. Başlık/açıklama bu
-// bileşenin parçası değildir; ekran yalnızca seçenekleri ve seçili değeri sağlar.
+// vademde.css .seg: hafif dolgu zemin, 10 radius, 2 pt boşluk; seçili seçenek yükseltilmiş yüzey
+// (8 radius, ince gölge), 14 pt/500 (seçili 600), 32 pt yükseklik.
 function SegmentedControlInner<T extends string>({
   options,
   value,
   onChange,
-  size = 'default',
-  trackColor = 'surfacePrimary',
-  stretch = false,
   scrollable = false,
 }: SegmentedControlProps<T>) {
   const theme = useTheme();
-  const compact = size === 'compact';
-
-  function handleSelect(key: T) {
-    if (key === value) return;
-    // LayoutAnimation.configureNext KULLANILMAZ — bu bileşen liste/query invalidation
-    // içeren ekranlarda (hareketler, obligations vb.) da kullanılıyor; global legacy
-    // animasyon burada da aynı Fabric segfault sınıfına yol açabilir (bkz. TabBar.tsx).
-    onChange(key);
-  }
+  const selectedBackground = theme.scheme === 'dark' ? '#5A5C62' : theme.colors.surfaceElevated;
 
   const control = (
-    <Row
-      gap="xs"
+    <View
       style={{
-        alignSelf: stretch && !scrollable ? 'stretch' : 'flex-start',
-        backgroundColor: theme.colors[trackColor],
-        borderRadius: theme.radius.widget,
-        padding: theme.spacing.xs,
-        height: 60,
-        alignItems: 'center',
+        flexDirection: 'row',
+        backgroundColor: theme.colors.fill,
+        borderRadius: theme.radius.control,
+        padding: 2,
+        gap: 2,
+        alignSelf: scrollable ? 'flex-start' : 'stretch',
       }}
     >
       {options.map((option) => {
@@ -64,41 +51,39 @@ function SegmentedControlInner<T extends string>({
         return (
           <Pressable
             key={option.key}
-            onPress={() => handleSelect(option.key)}
-            hitSlop={{ top: 0, bottom: 0, left: 0, right: 0 }}
+            onPress={() => {
+              if (!selected) onChange(option.key);
+            }}
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={`${option.label} seçeneği`}
             style={{
-              flex: stretch && !scrollable ? 1 : undefined,
-              width: scrollable ? 108 : undefined,
-              minWidth: scrollable ? 108 : 0,
-              paddingHorizontal:
-                stretch && !scrollable ? theme.spacing.xxs : compact ? theme.spacing.sm : theme.spacing.lg,
-              height: 44,
-              borderRadius: theme.radius.input,
+              flex: scrollable ? undefined : 1,
+              minWidth: scrollable ? 92 : 0,
+              paddingHorizontal: scrollable ? theme.spacing.md : 2,
+              height: 32,
+              borderRadius: 8,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: selected ? theme.colors.brandPrimary : 'transparent',
+              backgroundColor: selected ? selectedBackground : 'transparent',
+              shadowColor: '#000',
+              shadowOpacity: selected ? 0.12 : 0,
+              shadowRadius: 3,
+              shadowOffset: { width: 0, height: 1 },
             }}
           >
             <Text
-              variant="caption"
               numberOfLines={1}
-              adjustsFontSizeToFit={stretch && !scrollable}
-              minimumFontScale={0.85}
-              style={{
-                color: selected ? theme.colors.brandPrimaryText : theme.colors.textSecondary,
-                fontWeight: '600',
-                textAlign: 'center',
-              }}
+              adjustsFontSizeToFit={!scrollable}
+              minimumFontScale={0.8}
+              style={{ fontSize: 14, fontWeight: selected ? '600' : '500', textAlign: 'center' }}
             >
               {option.label}
             </Text>
           </Pressable>
         );
       })}
-    </Row>
+    </View>
   );
 
   if (!scrollable) return control;
@@ -116,7 +101,4 @@ function SegmentedControlInner<T extends string>({
   );
 }
 
-// Aynı props ile gereksiz yeniden render'ı önler (ör. onboarding/filtre ekranlarında
-// options modül sabiti ve onChange bir state setter olduğundan referanslar sabittir).
-// memo, jenerik imzayı silmesin diye orijinal fonksiyon tipine cast edilir.
 export const SegmentedControl = memo(SegmentedControlInner) as typeof SegmentedControlInner;

@@ -34,17 +34,15 @@ export function MonthStepper({ year, month, onChange, onPressLabel }: MonthStepp
       accessibilityLabel={label}
       onPress={() => shift(delta)}
       style={{
-        width: theme.touchTarget.minimum,
-        height: theme.touchTarget.minimum,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        backgroundColor: theme.colors.surfacePrimary,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: theme.colors.fill,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Ionicons name={icon} size={theme.iconSize.lg} color={theme.colors.textPrimary} />
+      <Ionicons name={icon} size={18} color={theme.colors.textPrimary} />
     </Pressable>
   );
 
@@ -57,7 +55,7 @@ export function MonthStepper({ year, month, onChange, onPressLabel }: MonthStepp
         disabled={!onPressLabel}
         style={{ minHeight: theme.touchTarget.minimum, justifyContent: 'center' }}
       >
-        <Text variant="cardTitle" style={{ fontSize: 17 }}>
+        <Text variant="cardTitle">
           {MONTH_NAMES[month]} {year}
         </Text>
       </Pressable>

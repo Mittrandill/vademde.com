@@ -10,58 +10,74 @@ import { Text } from './Text';
 export interface ButtonProps {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  /** primary = Saffron aksiyon; secondary = hafif dolgu; danger = dolgulu kırmızı; dangerText = kırmızı metin;
+   * text = çerçevesiz metin; ink = metin renginde dolgu (Apple ile giriş). */
+  variant?: 'primary' | 'secondary' | 'danger' | 'dangerText' | 'text' | 'ink';
+  /** default 52 pt; compact 44 pt; sm 36 pt kapsül (vademde.css .btn.sm). */
+  size?: 'default' | 'compact' | 'sm';
   loading?: boolean;
   disabled?: boolean;
   /** Etiketin solunda küçük bir ikon — verilmezse düz metin buton olarak kalır. */
   icon?: keyof typeof Ionicons.glyphMap;
 }
 
-// docs/08-tasarim-sistemi.md §12.16 — birincil buton Saffron, koyu metin, 54-56 pt;
-// yükleme sırasında buton boyutu değişmez.
-function ButtonComponent({ label, onPress, variant = 'primary', loading, disabled, icon }: ButtonProps) {
+// vademde.css .btn: 52 pt, 14 radius, 17 pt/600. Devre dışı: hafif dolgu + soluk metin (opaklık değil).
+function ButtonComponent({ label, onPress, variant = 'primary', size = 'default', loading, disabled, icon }: ButtonProps) {
   const theme = useTheme();
+  const { colors } = theme;
 
-  const background =
-    variant === 'primary'
-      ? theme.colors.brandPrimary
-      : variant === 'danger'
-        ? theme.colors.danger
-        : theme.colors.surfacePrimary;
+  let background: string = colors.brandPrimary;
+  let textColor: string = colors.onAction;
+  if (variant === 'secondary') {
+    background = colors.fill;
+    textColor = colors.textPrimary;
+  } else if (variant === 'danger') {
+    background = colors.danger;
+    textColor = '#FFFFFF';
+  } else if (variant === 'dangerText') {
+    background = 'transparent';
+    textColor = colors.danger;
+  } else if (variant === 'text') {
+    background = 'transparent';
+    textColor = colors.textPrimary;
+  } else if (variant === 'ink') {
+    background = colors.textPrimary;
+    textColor = colors.backgroundPrimary;
+  }
+  if (disabled && variant !== 'text' && variant !== 'dangerText') {
+    background = colors.fill;
+    textColor = colors.mutedControl;
+  }
 
-  // Tasarım: ana buton 56 pt / 16 radius, etiket 17 pt kalın; ikincil buton yüzey + ince çerçeve.
-  const textColor =
-    variant === 'secondary' ? theme.colors.textPrimary : variant === 'danger' ? '#FFFFFF' : theme.colors.onAction;
+  const height = size === 'sm' ? 36 : size === 'compact' || variant === 'text' || variant === 'dangerText' ? 44 : theme.buttonHeight.primary;
+  const fontSize = size === 'sm' ? 15 : 17;
 
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!(disabled || loading) }}
       style={{
-        height: theme.buttonHeight.primary,
-        paddingHorizontal: theme.spacing.lg,
-        borderRadius: 16,
+        height,
+        paddingHorizontal: size === 'sm' ? 14 : theme.spacing.lg,
+        borderRadius: size === 'sm' ? 18 : theme.radius.button,
         backgroundColor: background,
-        borderWidth: variant === 'secondary' ? 1 : 0,
-        borderColor: theme.colors.border,
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: disabled ? theme.opacity.disabled : 1,
+        alignSelf: size === 'sm' ? 'flex-start' : undefined,
+        opacity: disabled && (variant === 'text' || variant === 'dangerText') ? theme.opacity.disabled : 1,
       }}
     >
       {loading ? (
         <ActivityIndicator color={textColor} />
-      ) : icon ? (
+      ) : (
         <Row gap="xs" align="center">
-          <Ionicons name={icon} size={20} color={textColor} />
-          <Text variant="cardTitle" style={{ color: textColor, fontSize: 17, fontWeight: '700' }}>
+          {icon ? <Ionicons name={icon} size={size === 'sm' ? 16 : 20} color={textColor} /> : null}
+          <Text variant="cardTitle" style={{ color: textColor, fontSize, fontWeight: '600' }}>
             {label}
           </Text>
         </Row>
-      ) : (
-        <Text variant="cardTitle" style={{ color: textColor, fontSize: 17, fontWeight: '700' }}>
-          {label}
-        </Text>
       )}
     </Pressable>
   );

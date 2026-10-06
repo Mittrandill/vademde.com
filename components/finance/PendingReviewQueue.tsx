@@ -3,63 +3,67 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { Pressable, SourceTag, Text } from '@/components/primitives';
-import { DOCUMENT_TYPE_ICON, DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
+import { Group, Pressable, Text } from '@/components/primitives';
 import type { PendingReviewDocument } from '@/features/dashboard/api';
 
 export interface PendingReviewQueueProps {
   documents: PendingReviewDocument[];
 }
 
-// design Main.html "Kontrol bekliyor": OCR sonrası onay bekleyen belgeler (kural 1: AI çıktısı
-// kullanıcı onayından geçer). Her satır kontrol ekranına gider.
+// Tuval AnaSayfa "N belge onay bekliyor": üst üste binen belge küçük resimleri + iki satır metin.
+// Kural 1: OCR sonucu kullanıcı onayından geçer; satır ilk belgenin kontrol ekranına gider.
 export function PendingReviewQueue({ documents }: PendingReviewQueueProps) {
   const theme = useTheme();
-
   if (documents.length === 0) return null;
+  const first = documents[0];
 
   return (
-    <View style={{ gap: theme.spacing.xs }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: theme.spacing.xs }}>
-        <Text variant="sectionTitle">Kontrol bekliyor</Text>
-        <Text variant="label" color="textSecondary" tabular>
-          {documents.length}
-        </Text>
-      </View>
-      <View style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.widget }}>
-        {documents.map((doc, index) => (
-          <Pressable
-            key={doc.id}
-            accessibilityRole="button"
-            onPress={() => router.push(`/documents/${doc.id}/review`)}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: theme.spacing.sm,
-              minHeight: 64,
-              paddingHorizontal: theme.spacing.md,
-              paddingVertical: theme.spacing.sm,
-              borderBottomWidth: index === documents.length - 1 ? 0 : 1,
-              borderBottomColor: theme.colors.border,
-            }}
-          >
-            <Ionicons
-              name={(doc.document_type && DOCUMENT_TYPE_ICON[doc.document_type]) || 'document-outline'}
-              size={theme.iconSize.xxl}
-              color={theme.colors.textPrimary}
-            />
-            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <Text variant="cardTitle" numberOfLines={1}>
-                {doc.document_type ? DOCUMENT_TYPE_LABEL[doc.document_type] : 'Belge'}
-              </Text>
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                {doc.file_name}
-              </Text>
-            </View>
-            <SourceTag kind="check" />
-          </Pressable>
-        ))}
-      </View>
+    <Group inset={16}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push(`/documents/${first.id}/review`)}
+        style={{ minHeight: 56, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+      >
+        <View style={{ width: 66, height: 56 }}>
+          <Thumb style={{ left: 0, top: 0, transform: [{ rotate: '-6deg' }] }} />
+          <Thumb style={{ left: 20, top: 0 }} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ fontWeight: '600' }}>{documents.length} belge onay bekliyor</Text>
+          <Text variant="caption" color="textSecondary">
+            Bir alanda emin olmadığımız var
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
+      </Pressable>
+    </Group>
+  );
+}
+
+function Thumb({ style }: { style: object }) {
+  const theme = useTheme();
+  return (
+    <View
+      style={[
+        {
+          position: 'absolute',
+          width: 44,
+          height: 56,
+          borderRadius: 6,
+          backgroundColor: '#FBFAF6',
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          paddingVertical: 7,
+          paddingHorizontal: 6,
+          gap: 4,
+        },
+        style,
+      ]}
+    >
+      <View style={{ height: 3, borderRadius: 2, backgroundColor: '#D5D4CC', width: '55%' }} />
+      <View style={{ height: 3, borderRadius: 2, backgroundColor: '#D5D4CC' }} />
+      <View style={{ height: 3, borderRadius: 2, backgroundColor: '#9C9B93', width: '70%' }} />
+      <View style={{ height: 3, borderRadius: 2, backgroundColor: '#D5D4CC' }} />
     </View>
   );
 }

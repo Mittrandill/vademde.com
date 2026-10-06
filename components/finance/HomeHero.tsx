@@ -3,9 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { Pressable, Text } from '@/components/primitives';
+import { Card, Pressable, Text } from '@/components/primitives';
 import { formatMinorAmount } from '@/utils/money';
-import { HeroAmount } from './HeroAmount';
 
 export interface HomeHeroProps {
   totalBalanceMinor: number;
@@ -20,8 +19,13 @@ export interface HomeHeroProps {
 
 const MASK = '••••••';
 
-// Ana sayfa özeti (design Main.html): net bakiye, bu ay farkı, tahsil/ödenecek dengesi ve
-// gecikme uyarısı. Tüm tutarlar çağıranın hesapladığı TL karşılıklarıdır (iş mantığı ekranda).
+function splitAmount(text: string): { whole: string; fraction: string } {
+  const index = text.lastIndexOf(',');
+  return index === -1 ? { whole: text, fraction: '' } : { whole: text.slice(0, index), fraction: text.slice(index) };
+}
+
+// Ana Sayfa özet kartı (tuval AnaSayfa.dc.html): "Toplam bakiye" + gizle düğmesi, 40 pt tutar (kuruş ikincil),
+// "Bu ay" farkı, ince çizgi ve Alacak | Borç iki sütunu. Tüm tutarlar çağıranın hesapladığı TL karşılıklarıdır.
 export function HomeHero({
   totalBalanceMinor,
   monthNetMinor,
@@ -33,139 +37,103 @@ export function HomeHero({
   onToggleHidden,
 }: HomeHeroProps) {
   const theme = useTheme();
-  const money = (minor: number) => (hidden ? MASK : formatMinorAmount(minor));
-
-  const total = receivableMinor + payableMinor;
-  const receivableShare = total > 0 ? receivableMinor / total : 0;
+  const { colors } = theme;
+  const { whole, fraction } = splitAmount(formatMinorAmount(totalBalanceMinor));
   const positive = monthNetMinor >= 0;
-  const monthText = `${positive ? '+' : '−'}${hidden ? MASK : formatMinorAmount(Math.abs(monthNetMinor))} bu ay`;
 
   return (
-    <View style={{ gap: theme.spacing.md }}>
-      <View style={{ gap: 10 }}>
+    <View style={{ gap: theme.spacing.sm }}>
+      <Card style={{ padding: 20 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
-            Net bakiye
+          <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>
+            Toplam bakiye
           </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={hidden ? 'Tutarları göster' : 'Tutarları gizle'}
             onPress={onToggleHidden}
-            style={{
-              width: theme.touchTarget.minimum,
-              height: theme.touchTarget.minimum,
-              alignItems: 'flex-end',
-              justifyContent: 'center',
-            }}
+            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.fill, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Ionicons
-              name={hidden ? 'eye-off-outline' : 'eye-outline'}
-              size={theme.iconSize.lg}
-              color={theme.colors.textSecondary}
-            />
+            <Ionicons name={hidden ? 'eye-off' : 'eye'} size={17} color={colors.textPrimary} />
           </Pressable>
         </View>
 
-        <HeroAmount amountMinor={totalBalanceMinor} hidden={hidden} />
+        <Text variant="displayBalance" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={{ marginTop: 8 }}>
+          {hidden ? MASK : whole}
+          {hidden ? null : (
+            <Text variant="displayBalance" color="textSecondary" style={{ fontWeight: '600' }}>
+              {fraction}
+            </Text>
+          )}
+        </Text>
 
-        <View
-          accessible
-          accessibilityLabel={hidden ? 'Bu ay farkı gizli' : monthText}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-        >
-          <Ionicons
-            name={positive ? 'arrow-up-outline' : 'arrow-down-outline'}
-            size={theme.iconSize.md}
-            color={positive ? theme.colors.receivable : theme.colors.textPrimary}
-            style={{ transform: [{ rotate: positive ? '45deg' : '-45deg' }] }}
-          />
-          <Text
-            variant="label"
-            tabular
-            style={{
-              textTransform: 'none',
-              fontSize: 13,
-              color: positive ? theme.colors.receivable : theme.colors.textPrimary,
-            }}
-          >
-            {monthText}
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+          <Text color="textSecondary" style={{ fontSize: 15 }}>
+            Bu ay
+          </Text>
+          <Text tabular style={{ fontSize: 15, fontWeight: '600', color: positive ? colors.receivable : colors.textPrimary }}>
+            {positive ? '+' : '−'}
+            {hidden ? MASK : formatMinorAmount(Math.abs(monthNetMinor))}
           </Text>
         </View>
-      </View>
 
-      <View style={{ gap: 14 }}>
-        {/* Denge çubuğu: yeşil tahsil, mor ödenecek. Veri yoksa yalnızca iz gösterilir. */}
-        <View style={{ flexDirection: 'row', gap: 3, height: 10 }}>
-          {total === 0 ? (
-            <View style={{ flex: 1, borderRadius: 5, backgroundColor: theme.colors.border }} />
-          ) : (
-            <>
-              {receivableMinor > 0 ? (
-                <View
-                  style={{
-                    flex: Math.max(receivableShare, 0.04),
-                    borderRadius: 5,
-                    backgroundColor: theme.colors.receivable,
-                  }}
-                />
-              ) : null}
-              {payableMinor > 0 ? (
-                <View
-                  style={{
-                    flex: Math.max(1 - receivableShare, 0.04),
-                    borderRadius: 5,
-                    backgroundColor: theme.colors.payable,
-                  }}
-                />
-              ) : null}
-            </>
-          )}
-        </View>
+        <View style={{ height: 1, backgroundColor: colors.separator, marginTop: 16 }} />
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <View style={{ gap: 4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: theme.colors.receivable }} />
-              <Text variant="caption" color="textSecondary">
-                Tahsil edilecek
-              </Text>
-            </View>
-            <Text variant="cardTitle" tabular>
-              {money(receivableMinor)}
-            </Text>
-          </View>
-          <View style={{ gap: 4, alignItems: 'flex-end' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text variant="caption" color="textSecondary">
-                Ödenecek
-              </Text>
-              <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: theme.colors.payable }} />
-            </View>
-            <Text variant="cardTitle" tabular>
-              {money(payableMinor)}
-            </Text>
-          </View>
-        </View>
-
-        {overdueCount > 0 ? (
+        <View style={{ flexDirection: 'row', marginTop: 16 }}>
           <Pressable
-            accessibilityRole="link"
+            accessibilityRole="button"
             onPress={() => router.push('/obligations')}
-            style={{
-              minHeight: theme.touchTarget.minimum,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-            }}
+            style={{ flex: 1, gap: 4 }}
           >
-            <Ionicons name="alert-circle-outline" size={theme.iconSize.lg} color={theme.colors.danger} />
-            <Text variant="cardTitle" style={{ fontSize: 13, color: theme.colors.danger, flex: 1 }}>
-              {money(overdueMinor)} gecikmiş · {overdueCount} kayıt
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success }} />
+              <Text color="textSecondary" style={{ fontSize: 13 }}>
+                Alacak
+              </Text>
+            </View>
+            <Text variant="displayAmount" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontSize: 20, lineHeight: 24 }}>
+              {hidden ? MASK : formatMinorAmount(receivableMinor)}
             </Text>
-            <Ionicons name="chevron-forward" size={theme.iconSize.md} color={theme.colors.danger} />
           </Pressable>
-        ) : null}
-      </View>
+          <View style={{ width: 1, height: 40, backgroundColor: colors.separator }} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/obligations')}
+            style={{ flex: 1, gap: 4, paddingLeft: 16 }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.mutedControl }} />
+              <Text color="textSecondary" style={{ fontSize: 13 }}>
+                Borç
+              </Text>
+            </View>
+            <Text variant="displayAmount" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontSize: 20, lineHeight: 24 }}>
+              {hidden ? MASK : formatMinorAmount(payableMinor)}
+            </Text>
+          </Pressable>
+        </View>
+      </Card>
+
+      {overdueCount > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/obligations')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            padding: 14,
+            borderRadius: theme.radius.widget,
+            backgroundColor: 'rgba(255,98,92,0.12)',
+          }}
+        >
+          <Ionicons name="alert-circle" size={22} color={colors.danger} />
+          <Text style={{ flex: 1, fontSize: 15 }}>
+            <Text style={{ fontWeight: '600' }}>{hidden ? MASK : formatMinorAmount(overdueMinor)}</Text> gecikmiş · {overdueCount} kayıt
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.mutedControl} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

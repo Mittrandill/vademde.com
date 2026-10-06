@@ -93,13 +93,8 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
 
   return (
     <View style={{ gap: theme.spacing.xs }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: theme.spacing.xs }}>
-        <Text variant="sectionTitle">İşlenmeyi bekliyor</Text>
-        <Text variant="label" color="textSecondary" tabular>
-          {drafts.length}
-        </Text>
-      </View>
-      <View style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.widget }}>
+      <Text variant="sectionTitle">İşlenmeyi bekliyor</Text>
+      <View style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, overflow: 'hidden' }}>
         {drafts.map((doc, index) => (
           <View
             key={doc.id}
@@ -111,7 +106,7 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
               paddingHorizontal: theme.spacing.md,
               paddingVertical: theme.spacing.sm,
               borderBottomWidth: index === drafts.length - 1 ? 0 : 1,
-              borderBottomColor: theme.colors.border,
+              borderBottomColor: theme.colors.separator,
             }}
           >
             <Ionicons name="document-outline" size={theme.iconSize.xxl} color={theme.colors.textPrimary} />

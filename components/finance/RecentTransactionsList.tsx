@@ -3,13 +3,12 @@ import { router } from 'expo-router';
 import type { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { Card, Divider, EmptyState, Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
+import { EmptyState, Group, Pressable, Row, SectionHeader, Text } from '@/components/primitives';
 import { AccountIcon } from './AccountIcon';
 import { AccountLabelRow } from './AccountLabelRow';
 import { Amount } from './Amount';
 import { BankLogo } from './BankLogo';
 import { CategoryIcon } from './CategoryIcon';
-import { DateBlock } from './DateBlock';
 import { ObligationIcon } from './ObligationIcon';
 import { PersonAvatar } from './PersonAvatar';
 import { getPaymentObligation, type TransactionWithRelations } from '@/features/transactions/api';
@@ -26,25 +25,19 @@ const DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 export function RecentTransactionsList({ transactions }: RecentTransactionsListProps) {
   return (
-    <Stack gap="sm">
-      <SectionHeader
-        title="Son Hareketler"
-        actionLabel="Tümünü Gör"
-        onActionPress={() => router.push('/(tabs)/hareketler')}
-      />
+    <View>
+      <SectionHeader title="Son hareketler" actionLabel="Tümü" onActionPress={() => router.push('/(tabs)/hareketler')} />
 
       {transactions.length === 0 ? (
         <EmptyState icon="receipt-outline" message="Henüz hareket yok." />
       ) : (
-        // Hareketler sekmesindeki listeyle aynı desen: tek arka plan üzerinde satır
-        // araları çizgiyle ayrılır, her satır ayrı bir kart olmaz.
-        <Card style={{ padding: 0 }}>
-          {transactions.map((t, index) => (
-            <RecentTransactionRow key={t.id} transaction={t} isLast={index === transactions.length - 1} />
+        <Group inset={62}>
+          {transactions.map((t) => (
+            <RecentTransactionRow key={t.id} transaction={t} isLast={false} />
           ))}
-        </Card>
+        </Group>
       )}
-    </Stack>
+    </View>
   );
 }
 
@@ -65,20 +58,19 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
     <View>
       <Pressable
         onPress={() => router.push(`/transactions/${t.id}`)}
-        style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm }}
+        style={{ minHeight: 56, paddingHorizontal: theme.spacing.md, paddingVertical: 10 }}
       >
-        <Row gap="sm" align="center">
-          <DateBlock date={t.occurred_at} />
+        <Row gap="sm" align="center" style={{ gap: 12 }}>
           {paymentObligation ? (
             <ObligationIcon
               documentType={paymentObligation.document_type}
               bankCode={paymentObligation.bank_code}
               serviceCode={paymentObligation.service_code}
               fallbackName={paymentObligation.title}
-              size={36}
+              size={34}
             />
           ) : t.category?.icon ? (
-            <CategoryIcon icon={t.category.icon} color={t.category.color} size={36} />
+            <CategoryIcon icon={t.category.icon} color={t.category.color} size={34} />
           ) : t.direction === 'transfer' && t.transferToAccount ? (
             // Transferde asıl ikon paranın gittiği hesabı temsil eder (ör. bir kredi kartı
             // ödemesinde asıl ikon kartın kendi logosudur) — kaynak hesap alt satırda kalır.
@@ -87,20 +79,20 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
               accountType={t.transferToAccount.type}
               currencyCode={t.transferToAccount.currency_code}
               fallbackName={t.transferToAccount.name}
-              size={36}
+              size={34}
             />
           ) : t.counterparty ? (
-            <PersonAvatar name={t.counterparty.name} size={36} />
+            <PersonAvatar name={t.counterparty.name} size={34} />
           ) : (
             <BankLogo
               bankCode={null}
               fallbackName={t.account?.name}
               fallbackIcon={DIRECTION_ICON[t.direction] ?? 'ellipse-outline'}
-              size={36}
+              size={34}
             />
           )}
-          <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-            <Text variant="cardTitle" numberOfLines={1}>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <Text numberOfLines={1} style={{ fontWeight: '500' }}>
               {t.counterparty?.name ||
                 t.description?.trim() ||
                 t.category?.name ||
@@ -121,7 +113,7 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
                 {t.counterparty.name}
               </Text>
             ) : null}
-          </Stack>
+          </View>
           <Amount
             amountMinor={t.amount_minor}
             currencyCode={t.currency_code}
@@ -134,7 +126,6 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
           />
         </Row>
       </Pressable>
-      {!isLast ? <Divider style={{ marginHorizontal: theme.spacing.md }} /> : null}
     </View>
   );
 }

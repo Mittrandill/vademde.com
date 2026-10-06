@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { Pressable, Row, SectionHeader, Stack, Text } from '@/components/primitives';
+import { Pressable, Row, Stack, Text } from '@/components/primitives';
 import { useQuickActionsStore } from '@/store/quickActionsStore';
 
 interface QuickActionDef {
@@ -22,10 +22,11 @@ interface QuickActionDef {
 // kendi rengini taşımaz (bkz. render: tek, tutarlı bir marka rengi kullanılır) —
 // kullanıcı geri bildirimi: renk renk rozetler "hazır AI şablonu" gibi duruyordu.
 const QUICK_ACTION_POOL: QuickActionDef[] = [
-  { id: 'yeni-hareket', icon: 'add-circle-outline', label: 'Yeni Hareket', href: '/transactions/new' },
-  { id: 'transfer', icon: 'swap-horizontal-outline', label: 'Transfer', href: '/transactions/new?direction=transfer' },
+  { id: 'yeni-hareket', icon: 'add', label: 'Yeni hareket', href: '/transactions/new' },
+  { id: 'odeme', icon: 'checkmark', label: 'Ödeme', href: '/payments/new' },
+  { id: 'transfer', icon: 'swap-horizontal', label: 'Transfer', href: '/transactions/new?direction=transfer' },
   { id: 'yeni-borc-alacak', icon: 'document-text-outline', label: 'Yeni Borç/Alacak', href: '/obligations/new' },
-  { id: 'raporlar', icon: 'bar-chart-outline', label: 'Raporlar', href: '/reports' },
+  { id: 'raporlar', icon: 'bar-chart', label: 'Raporlar', href: '/reports' },
   { id: 'hesaplar', icon: 'wallet-outline', label: 'Hesaplar', href: '/accounts' },
   { id: 'kredi-kartlarim', icon: 'card-outline', label: 'Kredi Kartlarım', href: '/accounts/credit-cards' },
   { id: 'tara', icon: 'scan-outline', label: 'Tara', href: '/(tabs)/tara' },
@@ -45,70 +46,54 @@ export function QuickActions() {
   // hata göstermeye gerek yok.
   const actions = actionIds.map((id) => POOL_BY_ID.get(id)).filter((a): a is QuickActionDef => !!a);
 
+  // vademde.css AnaSayfa: 4 sütun, 56 pt kart kutusu + 12 pt etiket. Uzun basış listeyi düzenler.
   return (
-    <Stack gap="sm">
-      <SectionHeader title="Hızlı İşlemler" actionLabel="Düzenle" onActionPress={() => setEditOpen(true)} />
-
+    <View>
       {actions.length === 0 ? (
         <Pressable onPress={() => setEditOpen(true)}>
           <Row
             gap="sm"
             align="center"
-            style={{
-              padding: theme.spacing.md,
-              borderRadius: theme.radius.widget,
-              borderWidth: 1,
-              borderStyle: 'dashed',
-              borderColor: theme.colors.border,
-            }}
+            style={{ padding: theme.spacing.md, borderRadius: theme.radius.widget, backgroundColor: theme.colors.fill }}
           >
             <Ionicons name="add-circle-outline" size={22} color={theme.colors.textSecondary} />
-            <Text variant="body" color="textSecondary">
-              Hızlı işlem eklemek için dokunun
-            </Text>
+            <Text color="textSecondary">Hızlı işlem eklemek için dokunun</Text>
           </Row>
         </Pressable>
       ) : (
-        // Daha Fazla'daki "Kayıt Türleri" kutularıyla (HubTile/IconChip) birebir aynı
-        // iskelet VE renk: nötr/gri kenarlıklı kutu — marka renginin (Saffron) transparan
-        // tonu yerine (bkz. kullanıcı geri bildirimi: "sarı değil beyaz tonlarda olsun").
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {/* align="flex-start": Row'un varsayılanı (center) etiketi 2 satıra taşan
-              kutuları, tek satırlık komşularına göre daha uzun yaptığı için ikon
-              kutularını farklı yükseklikte ortalayıp kaydırıyordu — üstten hizalamak
-              tüm ikonları aynı y konumunda sabitler. */}
-          <Row gap="md" align="flex-start">
-            {actions.map((action) => (
-              <Pressable
-                key={action.id}
-                onPress={() => router.push(action.href)}
-                style={{ width: 76, alignItems: 'center', gap: theme.spacing.xs }}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: theme.spacing.md }}>
+          {actions.map((action) => (
+            <Pressable
+              key={action.id}
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              accessibilityHint="Uzun basarak hızlı işlemleri düzenle"
+              onPress={() => router.push(action.href)}
+              onLongPress={() => setEditOpen(true)}
+              style={{ width: '25%', alignItems: 'center', gap: 6 }}
+            >
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.surfacePrimary,
+                }}
               >
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: theme.radius.input,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                  }}
-                >
-                  <Ionicons name={action.icon} size={24} color={theme.colors.textSecondary} />
-                </View>
-                <Text variant="caption" numberOfLines={2} style={{ textAlign: 'center' }}>
-                  {action.label}
-                </Text>
-              </Pressable>
-            ))}
-          </Row>
-        </ScrollView>
+                <Ionicons name={action.icon} size={24} color={theme.colors.textPrimary} />
+              </View>
+              <Text numberOfLines={2} style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', textAlign: 'center' }}>
+                {action.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       )}
 
       <QuickActionsEditSheet visible={editOpen} onClose={() => setEditOpen(false)} />
-    </Stack>
+    </View>
   );
 }
 

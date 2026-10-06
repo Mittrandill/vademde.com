@@ -1,5 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
-
 import { useTheme } from '@/theme';
 import { Pressable } from './Pressable';
 import { Row } from './Stack';
@@ -9,26 +7,24 @@ export interface SectionHeaderProps {
   title: string;
   actionLabel?: string;
   onActionPress?: () => void;
+  /** title = 20 pt/700 bölüm başlığı (.h2, varsayılan); overline = büyük harf küçük etiket (.ov). */
+  variant?: 'title' | 'overline';
 }
 
-// docs/08-tasarim-sistemi.md §12.6 — bölüm başlıkları büyük harf caption; ağırlık
-// içerikte kalsın diye 21pt sectionTitle yerine ikincil renkli küçük etiket kullanılır.
-export function SectionHeader({ title, actionLabel, onActionPress }: SectionHeaderProps) {
+// vademde.css .shd: solda başlık, sağda 15 pt/500 ikincil bağlantı ("Takvim", "Tümü").
+export function SectionHeader({ title, actionLabel, onActionPress, variant = 'title' }: SectionHeaderProps) {
   const theme = useTheme();
 
   return (
-    <Row align="center">
-      <Text variant="label" color="textSecondary" style={{ flex: 1 }}>
+    <Row align="center" style={{ alignItems: 'flex-end', marginTop: theme.spacing.xl, marginBottom: 10 }}>
+      <Text variant={variant === 'overline' ? 'label' : 'sectionTitle'} color={variant === 'overline' ? 'textSecondary' : 'textPrimary'} style={{ flex: 1 }}>
         {title}
       </Text>
       {actionLabel && onActionPress ? (
         <Pressable onPress={onActionPress} hitSlop={12}>
-          <Row gap="xxs">
-            <Text variant="caption" color="textSecondary">
-              {actionLabel}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={theme.colors.textSecondary} />
-          </Row>
+          <Text color="textSecondary" style={{ fontSize: 15, fontWeight: '500' }}>
+            {actionLabel}
+          </Text>
         </Pressable>
       ) : null}
     </Row>

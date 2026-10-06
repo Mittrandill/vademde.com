@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Pressable, Text } from '@/components/primitives';
+import { GroupedRowIcon, Pressable, Text } from '@/components/primitives';
 import { listInsights } from '@/features/insights/api';
 import { useAiAccess } from '@/features/insights/useAiAccess';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -35,22 +35,22 @@ export function AiInsightsCard() {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        padding: theme.spacing.md,
+        gap: 12,
+        padding: 14,
         borderRadius: theme.radius.widget,
         backgroundColor: theme.colors.surfacePrimary,
       }}
     >
-      <Ionicons name="sparkles-outline" size={22} color={theme.colors.textPrimary} />
+      <GroupedRowIcon name="sparkles" tone="violet" />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="cardTitle">{insights.length} öneri</Text>
+        <Text style={{ fontWeight: '600' }}>{insights.length} öneri</Text>
         {savingMinor > 0 ? (
           <Text variant="caption" color="textSecondary">
             Ayda {formatMinorAmount(savingMinor).replace(/,00$/, '')} tasarruf edebilirsin
           </Text>
         ) : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.colors.mutedControl} />
+      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }

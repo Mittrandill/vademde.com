@@ -26,23 +26,21 @@ export function CashAlertBanner() {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        padding: theme.spacing.md,
+        padding: 14,
         borderRadius: theme.radius.widget,
-        borderWidth: 1.5,
-        borderStyle: 'dashed',
-        borderColor: theme.colors.attentionMarker,
+        backgroundColor: 'rgba(255,176,0,0.14)',
       }}
     >
-      <Ionicons name="trending-down-outline" size={22} color={theme.colors.attentionMarker} />
+      <Ionicons name="trending-down" size={22} color={theme.colors.attentionMarker} />
       <View style={{ flex: 1 }}>
-        <Text variant="cardTitle">
+        <Text style={{ fontWeight: '600', fontSize: 15 }}>
           {risky.name} {dayMonth.format(new Date(risky.forecast.firstNegative.date))} tarihinde eksiye düşebilir
         </Text>
         <Text variant="caption" color="textSecondary">
           Ayrıntıyı ve çözüm önerilerini gör
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.colors.mutedControl} />
+      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }

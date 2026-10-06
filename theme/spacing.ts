@@ -17,10 +17,15 @@ export const screenEdge = {
   narrow: 16,
 } as const;
 
+// vademde.css: .card 20, .grp 14, .btn 14, .seg 10 (seçenek 8), .tag 6, .ic 9–12, .pill 17.
 export const radius = {
   widget: 20,
   heroWidget: 30,
-  input: 15,
+  input: 14,
+  group: 14,
+  button: 14,
+  control: 10,
+  tag: 6,
   pill: 999,
 } as const;
 
@@ -29,7 +34,7 @@ export const touchTarget = {
 } as const;
 
 export const buttonHeight = {
-  primary: 56,
+  primary: 52,
 } as const;
 
 // Filtre/segment satırları uygulama genelinde aynı yükseklikte olmalı; aksi halde her
