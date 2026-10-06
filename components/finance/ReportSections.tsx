@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { Stack, Text } from '@/components/primitives';
+import { GroupedRowIcon, Stack, Text } from '@/components/primitives';
 import { formatMinorAmount } from '@/utils/money';
 import { CategoryIcon } from './CategoryIcon';
 import { PersonAvatar } from './PersonAvatar';
@@ -18,6 +18,14 @@ import type {
   CounterpartyBreakdownItem,
   MonthlyTotal,
 } from '@/features/reports/api';
+
+// Tuval Raporlar: liste blokları tek yüzeyde (14 radius), satır arası ince ayırıcı.
+const panelStyle = (theme: ReturnType<typeof useTheme>) => ({
+  backgroundColor: theme.colors.surfacePrimary,
+  borderRadius: theme.radius.group,
+  paddingHorizontal: theme.spacing.md,
+  overflow: 'hidden' as const,
+});
 
 const wholeAmount = (minor: number, currency = 'TRY') => formatMinorAmount(minor, currency).replace(/,00(?=\D*$)/, '');
 
@@ -84,7 +92,7 @@ export interface KpiProps {
 export function KpiRow({ items }: { items: KpiProps[] }) {
   const theme = useTheme();
   return (
-    <View>
+    <View style={panelStyle(theme)}>
       {items.map((item, index) => (
         <View
           key={item.label}
@@ -92,7 +100,7 @@ export function KpiRow({ items }: { items: KpiProps[] }) {
             gap: 4,
             paddingVertical: theme.spacing.sm,
             borderBottomWidth: index === items.length - 1 ? 0 : 1,
-            borderBottomColor: theme.colors.border,
+            borderBottomColor: theme.colors.separator,
           }}
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
@@ -122,7 +130,7 @@ export function SmartSummary({ text, onPress }: { text: string; onPress?: () => 
         backgroundColor: theme.colors.surfacePrimary,
       }}
     >
-      <Ionicons name="analytics-outline" size={22} color={theme.colors.textPrimary} />
+      <GroupedRowIcon name="sparkles" tone="violet" />
       <View style={{ flex: 1, gap: 4 }}>
         <Text variant="label" color="textSecondary">
           Özet
@@ -158,7 +166,7 @@ export function MonthBars({ data }: { data: MonthlyTotal[] }) {
                 height: Math.max(3, (m.expenseMinor / max) * barHeight),
                 borderTopLeftRadius: 3,
                 borderTopRightRadius: 3,
-                backgroundColor: theme.colors.textPrimary,
+                backgroundColor: theme.colors.accentViolet,
               }}
             />
             <View
@@ -182,7 +190,7 @@ export function MonthBars({ data }: { data: MonthlyTotal[] }) {
       </View>
       <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
         {[
-          { label: 'Gider', color: theme.colors.textPrimary },
+          { label: 'Gider', color: theme.colors.accentViolet },
           { label: 'Gelir', color: theme.colors.receivable },
         ].map((l) => (
           <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -218,7 +226,7 @@ export function CategoryRows({
     );
   }
   return (
-    <View>
+    <View style={panelStyle(theme)}>
       {items.slice(0, 8).map((item, index) => {
         const before = previous?.get(item.name) ?? null;
         const pct = before && before > 0 ? Math.round(((item.amountMinor - before) / before) * 100) : null;
@@ -231,12 +239,12 @@ export function CategoryRows({
               gap: 6,
               paddingVertical: 10,
               borderBottomWidth: index === Math.min(items.length, 8) - 1 ? 0 : 1,
-              borderBottomColor: theme.colors.border,
+              borderBottomColor: theme.colors.separator,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
               <CategoryIcon icon={item.icon} color={item.color} size={32} />
-              <Text variant="cardTitle" numberOfLines={1} style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{ flex: 1, fontWeight: '500' }}>
                 {item.name}
               </Text>
               {pct !== null ? (
@@ -260,13 +268,13 @@ export function CategoryRows({
                 {wholeAmount(item.amountMinor)}
               </Text>
             </View>
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.fill, overflow: 'hidden' }}>
               <View
                 style={{
                   width: `${Math.max(2, item.percentage * 100)}%`,
                   height: 6,
                   borderRadius: 3,
-                  backgroundColor: theme.colors.textPrimary,
+                  backgroundColor: theme.colors.accentViolet,
                 }}
               />
             </View>
@@ -287,7 +295,7 @@ export function CounterpartyRows({ items }: { items: CounterpartyBreakdownItem[]
     );
   }
   return (
-    <View>
+    <View style={panelStyle(theme)}>
       {items.slice(0, 6).map((item, index) => (
         <View
           key={item.counterpartyId}
@@ -297,7 +305,7 @@ export function CounterpartyRows({ items }: { items: CounterpartyBreakdownItem[]
             gap: theme.spacing.sm,
             paddingVertical: 10,
             borderBottomWidth: index === Math.min(items.length, 6) - 1 ? 0 : 1,
-            borderBottomColor: theme.colors.border,
+            borderBottomColor: theme.colors.separator,
           }}
         >
           <PersonAvatar name={item.name} size={36} />
@@ -330,7 +338,7 @@ export function CashFlowRows({ buckets }: { buckets: CashFlowBucket[] }) {
   }
   const max = Math.max(1, ...buckets.flatMap((b) => [b.payableMinor, b.receivableMinor]));
   return (
-    <View>
+    <View style={panelStyle(theme)}>
       {buckets.map((b, index) => {
         const net = b.receivableMinor - b.payableMinor;
         return (
@@ -342,7 +350,7 @@ export function CashFlowRows({ buckets }: { buckets: CashFlowBucket[] }) {
               gap: 6,
               paddingVertical: 10,
               borderBottomWidth: index === buckets.length - 1 ? 0 : 1,
-              borderBottomColor: theme.colors.border,
+              borderBottomColor: theme.colors.separator,
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -358,7 +366,7 @@ export function CashFlowRows({ buckets }: { buckets: CashFlowBucket[] }) {
               { value: b.payableMinor, color: theme.colors.payable },
               { value: b.receivableMinor, color: theme.colors.receivable },
             ].map((bar, i) => (
-              <View key={i} style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
+              <View key={i} style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.fill, overflow: 'hidden' }}>
                 <View style={{ width: `${Math.max(bar.value > 0 ? 2 : 0, (bar.value / max) * 100)}%`, height: 6, backgroundColor: bar.color }} />
               </View>
             ))}
@@ -392,7 +400,7 @@ export function AccountRows({ items }: { items: AccountBalanceReportItem[] }) {
     );
   }
   return (
-    <View>
+    <View style={panelStyle(theme)}>
       {items.map((item, index) => (
         <View
           key={item.accountId}
@@ -402,7 +410,7 @@ export function AccountRows({ items }: { items: AccountBalanceReportItem[] }) {
             gap: theme.spacing.sm,
             paddingVertical: 10,
             borderBottomWidth: index === items.length - 1 ? 0 : 1,
-            borderBottomColor: theme.colors.border,
+            borderBottomColor: theme.colors.separator,
           }}
         >
           <BankLogo bankCode={item.bankCode} fallbackIcon="wallet-outline" size={36} />
@@ -440,7 +448,7 @@ export function RateRows({ rates, ageText }: { rates: ValueUnitRate[]; ageText: 
               gap: theme.spacing.sm,
               paddingVertical: 8,
               borderBottomWidth: index === rates.length - 1 ? 0 : 1,
-              borderBottomColor: theme.colors.border,
+              borderBottomColor: theme.colors.separator,
             }}
           >
             <ValueUnitBadge unitCode={rate.unit_code} size={32} />

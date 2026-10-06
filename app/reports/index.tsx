@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { DateRangeSheet, Pressable, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
+import { Card, DateRangeSheet, Pressable, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { HeroAmount } from '@/components/finance/HeroAmount';
 import { OverdueObligationsList } from '@/components/finance/OverdueObligationsList';
@@ -460,15 +460,15 @@ export default function ReportsScreen() {
             <>
               {summaryText ? <SmartSummary text={summaryText} onPress={() => router.push('/insights')} /> : null}
 
-              <Stack gap="xs">
-                <Text variant="label" color="textSecondary">
+              <Card style={{ gap: 4 }}>
+                <Text variant="caption" color="textSecondary">
                   Net
                 </Text>
-                <HeroAmount amountMinor={Math.abs(net)} baseSize={48} color={net >= 0 ? 'receivable' : 'textPrimary'} />
+                <HeroAmount amountMinor={Math.abs(net)} baseSize={32} color={net >= 0 ? 'receivable' : 'textPrimary'} />
                 <Text variant="caption" color="textSecondary">
                   {net >= 0 ? 'Gelir gideri aştı' : 'Gider geliri aştı'}
                 </Text>
-              </Stack>
+              </Card>
 
               <KpiRow
                 items={[
