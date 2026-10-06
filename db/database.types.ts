@@ -610,6 +610,8 @@ export type Database = {
           parent_obligation_id: string | null
           remaining_amount_minor: number
           service_code: string | null
+          trial_ends_on: string | null
+          billing_period: string | null
           status: string
           title: string
           total_amount_minor: number
@@ -634,6 +636,8 @@ export type Database = {
           parent_obligation_id?: string | null
           remaining_amount_minor?: number
           service_code?: string | null
+          trial_ends_on?: string | null
+          billing_period?: string | null
           status?: string
           title: string
           total_amount_minor: number
@@ -658,6 +662,8 @@ export type Database = {
           parent_obligation_id?: string | null
           remaining_amount_minor?: number
           service_code?: string | null
+          trial_ends_on?: string | null
+          billing_period?: string | null
           status?: string
           title?: string
           total_amount_minor?: number

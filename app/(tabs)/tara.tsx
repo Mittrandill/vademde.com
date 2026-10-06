@@ -13,6 +13,7 @@ import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { QuotaExceededSheet, ScanHelpSheet } from '@/components/finance/ScanSheets';
 import {
   QuotaExceededError,
   findDuplicateDocument,
@@ -78,11 +79,6 @@ const HERO_GLOW_OUTER = 224;
 const HERO_GLOW_INNER = 176;
 const HERO_BUTTON = 128;
 
-const SCAN_INFO_TEXT =
-  'Belgeyi kamerayla çekin, galeriden ya da dosyalardan seçin. Vademde belgedeki tutar, vade ve taraf bilgilerini okur; ' +
-  'sonuç her zaman onay ekranında karşınıza gelir ve siz onaylamadan finansal kayda dönüşmez. ' +
-  'Okuma başarısız olursa belge kaybolmaz, manuel girişe geçebilirsiniz.';
-
 export default function TaraScreen() {
   const qrHandledRef = useRef(false);
   function handleBarcode({ data }: { data: string }) {
@@ -144,6 +140,8 @@ export default function TaraScreen() {
   const [error, setError] = useState<string | null>(null);
   const [consentGranted, setConsentGranted] = useState<boolean | null>(null);
   const [pendingAsset, setPendingAsset] = useState<PendingAsset | null>(null);
+  const [quotaSheetOpen, setQuotaSheetOpen] = useState(false);
+  const [helpSheetOpen, setHelpSheetOpen] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(OCR_CONSENT_KEY).then((value) => setConsentGranted(value === 'true'));
@@ -312,11 +310,7 @@ export default function TaraScreen() {
   // docs/10-abonelik-gelir-modeli.md §14.1 — kota bittiğinde manuel giriş açık kalır;
   // kullanıcı planını yükseltebilir.
   function showQuotaExceededAlert() {
-    Alert.alert('Aylık OCR kotanız doldu', 'Belgeyi manuel olarak girebilir veya planınızı yükseltebilirsiniz.', [
-      { text: 'Manuel Giriş', onPress: () => router.push('/transactions/new') },
-      { text: 'Planı Yükselt', onPress: () => router.push('/paywall') },
-      { text: 'Vazgeç', style: 'cancel' },
-    ]);
+    setQuotaSheetOpen(true);
   }
 
   async function requestScan(uri: string, fileName: string, mimeType: string) {
@@ -560,7 +554,7 @@ export default function TaraScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Tarama hakkında bilgi"
-                onPress={() => Alert.alert('Belge tarama nasıl çalışır?', SCAN_INFO_TEXT)}
+                onPress={() => setHelpSheetOpen(true)}
                 style={[styles.infoButton, { borderColor: theme.colors.border }]}
               >
                 <Ionicons name="information" size={16} color={theme.colors.textSecondary} />
@@ -640,6 +634,21 @@ export default function TaraScreen() {
             <Button label="Manuel Giriş" variant="secondary" onPress={() => router.push('/transactions/new')} />
           ) : null}
         </ScrollView>
+      <QuotaExceededSheet
+        visible={quotaSheetOpen}
+        onClose={() => setQuotaSheetOpen(false)}
+        used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
+        quota={ocrUsageQuery.data?.quota ?? 0}
+        onUpgrade={() => {
+          setQuotaSheetOpen(false);
+          router.push('/paywall');
+        }}
+        onManual={() => {
+          setQuotaSheetOpen(false);
+          router.push('/transactions/new');
+        }}
+      />
+      <ScanHelpSheet visible={helpSheetOpen} onClose={() => setHelpSheetOpen(false)} />
       </SafeAreaView>
     );
   }
@@ -750,6 +759,21 @@ export default function TaraScreen() {
             </Pressable>
           </Row>
         </Stack>
+      <QuotaExceededSheet
+        visible={quotaSheetOpen}
+        onClose={() => setQuotaSheetOpen(false)}
+        used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
+        quota={ocrUsageQuery.data?.quota ?? 0}
+        onUpgrade={() => {
+          setQuotaSheetOpen(false);
+          router.push('/paywall');
+        }}
+        onManual={() => {
+          setQuotaSheetOpen(false);
+          router.push('/transactions/new');
+        }}
+      />
+      <ScanHelpSheet visible={helpSheetOpen} onClose={() => setHelpSheetOpen(false)} />
       </SafeAreaView>
     </View>
   );

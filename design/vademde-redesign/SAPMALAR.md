@@ -61,3 +61,15 @@ Tasarımla kod çeliştiğinde kod esas alınır; her sapma burada kayıtlıdır
 - **Vadeli kayıt detayı:** hero altında "Ödendi işaretle" birincil eylemi; taksit işaretleri tasarım eşlemesinde. Belge görüntüsü satırı ve "Geçmiş" zaman çizelgesi yok.
 - **Vadeli kayıt formu, ödeme formu, Belge inceleme, Dekont:** alan etiketleri mono, başlık `ScreenHeader`, belge önizlemesi koyu çerçevede. Satır satır `FieldGroup` düzenine ve alan bazlı "belgeden okundu / kontrol et" rozetlerine geçilmedi.
 - Bildirimlerdeki satır içi eylemler hâlâ yok.
+
+## Kapanış turu (6 Ekim 2026)
+- **Push bildirimi metni:** `send-reminders` artık "Türkiye İş Bankası 10.000 TL Tutarındaki Kredi Ödemeniz 3 Gün Sonra" biçiminde (özne: banka → servis → karşı taraf → başlık; tür+yön eşlemesi; aşama: 7/3 Gün Sonra, Bugün, 1 Gün Gecikti). Uygulama içi Bildirimler aynı cümleyi `utils/reminderMessage.ts` ile üretir; iki eşleme (Deno ve uygulama) elle senkron tutulur. `names.ts` banka/servis listesinden üretilmiş kopyadır.
+- **Bildirimler ekranı:** BUGÜN / BU HAFTA / GEÇMİŞ grupları; satır içi "Ödendi / Tahsil edildi işaretle" ödeme formunu açar (tek dokunuşta kayıt yok — ödeme hesabı/tutar onayı gerekir), "Kontrol et" kaydı açar.
+- **Nakit riski:** `planned_account_id` kolonu eklenmedi; mevcut `obligations.account_id` kullanılıyor (HANDOFF §5.6'dan sapma). `generate-insights` artık 14 günlük nakit riski kuralını da çalıştırır (`kind='nakit'`). **Kur etkisi** kuralı yok: `value_unit_rates` yalnızca güncel kuru tutuyor, geçmiş kur tablosu gerekir.
+- **Abonelik alanları:** `obligations.trial_ends_on` ve `billing_period ('monthly'|'yearly')` eklendi (NULL = bugünkü aylık davranış). Yıllıkta vadeler 12 ayda bir dizilir, Aboneliklerim aylık toplama 12'ye bölerek katar; "Deneme bitiyor" (≤14 gün) ve "Yıllık" grupları var. Mevcut kayıtlar etkilenmez.
+- **Kayıt ekranı:** isteğe bağlı Ad soyad (`handle_new_user` zaten `full_name` meta verisini okuyor) ve zorunlu koşullar/gizlilik onayı eklendi. Parola kuralı çipleri ve "7 gün ücretsiz Plus" rozeti eklenmedi (kural/plan mantığı yok).
+- **Tara:** Kota doldu ve "nasıl çalışır" `Alert` yerine sheet. "Belgeyi taslak olarak sakla" tasarımda var ama taslak kuyruğu olmadığı için eklenmedi.
+- **Tarih seçiciler:** `DateField` artık `DatePickerSheet` kullanır; tüm formlar otomatik geçti.
+- **Belge inceleme:** alan güven göstergesi `SourceTag` ("Belgeden" / "Kontrol et"); kırmızı metin kaldırıldı.
+- **Uygulama ikonu:** "Mor" seçenek seçiciden kaldırıldı; `app.json` alternatif ikon tanımı, daha önce seçmiş kullanıcıların ikonu sıfırlanmasın diye bilerek duruyor.
+- **Hâlâ yok:** ana ekran widget'ları (App Group + native build gerekir), canlı belge algılama, dolar bazlı aboneliğin geçmiş TL karşılığı, Yasal bölüm çipleri, vadeli kayıt formlarının satır satır `FieldGroup` düzeni.

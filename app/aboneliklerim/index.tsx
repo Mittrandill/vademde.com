@@ -33,8 +33,11 @@ interface SubscriptionRow {
   item: ObligationDueItem;
   dueDate: Date;
   daysLeft: number;
-  /** Aylık maliyetin TL karşılığı; kuru olmayan birimde null. */
+  /** Aylık maliyetin TL karşılığı (yıllıkta 12'ye bölünür); kuru olmayan birimde null. */
   referenceMinor: number | null;
+  yearly: boolean;
+  /** Deneme bitişine kalan gün; deneme yoksa veya bittiyse null. */
+  trialDaysLeft: number | null;
 }
 
 function startOfDay(d: Date) {
@@ -42,8 +45,8 @@ function startOfDay(d: Date) {
 }
 
 // Aboneliklerim: obligations.document_type = 'abonelik' kayıtlarının sıradaki (ödenmemiş en
-// yakın) taksiti. Yeni veri/şema yok; her abonelik aylık taksit planı olarak tutulduğundan
-// bir taksitin tutarı aylık maliyettir. TRY dışı kayıtlar güncel kurla TL'ye çevrilir
+// yakın) taksiti. billing_period boşsa abonelik aylık plandır ve taksit tutarı aylık maliyettir;
+// 'yearly' ise tutar yıllıktır ve aylık toplama 12'ye bölünerek girer. TRY dışı kayıtlar güncel kurla TL'ye çevrilir
 // (kalıcı saklanmaz, bkz. docs/01 §3.5).
 export default function SubscriptionsScreen() {
   const theme = useTheme();
@@ -78,12 +81,18 @@ export default function SubscriptionsScreen() {
     }
     return [...next.values()].map((item) => {
       const dueDate = startOfDay(new Date(item.due_date as string));
+      const yearly = item.billing_period === 'yearly';
+      const trialDays = item.trial_ends_on
+        ? Math.round((startOfDay(new Date(item.trial_ends_on)).getTime() - today.getTime()) / DAY_MS)
+        : null;
+      const fullReference = convertToReferenceMinor(item.total_amount_minor, item.currency_code, rates)?.amountMinor ?? null;
       return {
+        yearly,
+        trialDaysLeft: trialDays !== null && trialDays >= 0 ? trialDays : null,
         item,
         dueDate,
         daysLeft: Math.round((dueDate.getTime() - today.getTime()) / DAY_MS),
-        referenceMinor:
-          convertToReferenceMinor(item.total_amount_minor, item.currency_code, rates)?.amountMinor ?? null,
+        referenceMinor: fullReference === null ? null : yearly ? Math.round(fullReference / 12) : fullReference,
       };
     });
   }, [installmentsQuery.data, rates]);
@@ -110,17 +119,23 @@ export default function SubscriptionsScreen() {
     }
     const now = new Date();
     const buckets: { title: string; rows: SubscriptionRow[] }[] = [
+      { title: 'Deneme bitiyor', rows: [] },
       { title: 'Bu hafta', rows: [] },
       { title: 'Bu ay', rows: [] },
       { title: 'Daha sonra', rows: [] },
+      { title: 'Yıllık', rows: [] },
     ];
     for (const r of sorted) {
       const idx =
-        r.daysLeft <= 7
+        r.trialDaysLeft !== null && r.trialDaysLeft <= 14
           ? 0
-          : r.dueDate.getMonth() === now.getMonth() && r.dueDate.getFullYear() === now.getFullYear()
-            ? 1
-            : 2;
+          : r.yearly
+            ? 4
+            : r.daysLeft <= 7
+              ? 1
+              : r.dueDate.getMonth() === now.getMonth() && r.dueDate.getFullYear() === now.getFullYear()
+                ? 2
+                : 3;
       buckets[idx].rows.push(r);
     }
     return buckets.filter((b) => b.rows.length > 0);
@@ -189,9 +204,18 @@ export default function SubscriptionsScreen() {
 
 function SubscriptionRowView({ row, last }: { row: SubscriptionRow; last: boolean }) {
   const theme = useTheme();
-  const { item, daysLeft, dueDate, referenceMinor } = row;
+  const { item, daysLeft, dueDate, referenceMinor, yearly, trialDaysLeft } = row;
   const foreign = item.currency_code !== 'TRY';
-  const tag = daysLeft <= 0 ? 'Bugün' : daysLeft === 1 ? 'Yarın' : `${daysLeft} gün`;
+  const tag =
+    trialDaysLeft !== null && trialDaysLeft <= 14
+      ? trialDaysLeft === 0
+        ? 'Deneme bugün bitiyor'
+        : `Deneme ${trialDaysLeft} gün`
+      : daysLeft <= 0
+        ? 'Bugün'
+        : daysLeft === 1
+          ? 'Yarın'
+          : `${daysLeft} gün`;
   const name = (item.service_code && SERVICE_NAME[item.service_code]) || item.title;
   const subtitle = [item.category?.name, item.account?.name, dayMonth.format(dueDate)].filter(Boolean).join(' · ');
   const amountText =
@@ -224,6 +248,7 @@ function SubscriptionRowView({ row, last }: { row: SubscriptionRow; last: boolea
       <View style={{ alignItems: 'flex-end', gap: 4 }}>
         <Text variant="cardTitle" tabular>
           {amountText}
+          {yearly ? ' /yıl' : ''}
         </Text>
         {foreign && referenceMinor !== null ? (
           <Text variant="caption" color="textSecondary" tabular>

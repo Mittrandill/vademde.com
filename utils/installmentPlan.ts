@@ -128,11 +128,13 @@ export function buildAmortizedInstallments(
 export function buildFixedInstallments(
   amountPerInstallmentMinor: number,
   count: number,
-  firstDueDate: string
+  firstDueDate: string,
+  // Vadeler arası ay sayısı: aylık 1 (varsayılan), yıllık abonelikte 12.
+  stepMonths = 1
 ): InstallmentPlanItem[] {
   return Array.from({ length: count }, (_, index) => ({
     installmentNumber: index + 1,
-    dueDate: addMonthsToIsoDate(firstDueDate, index),
+    dueDate: addMonthsToIsoDate(firstDueDate, index * stepMonths),
     amountMinor: amountPerInstallmentMinor,
     principalMinor: amountPerInstallmentMinor,
     interestMinor: 0,

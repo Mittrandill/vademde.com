@@ -23,19 +23,10 @@ import {
   type DeliveredReminder,
 } from '@/features/reminders/api';
 import { addObligationToCalendar, createObligationReminder, type CalendarExportObligation } from '@/services/calendarReminders';
-import { formatMinorAmount } from '@/utils/money';
+import { buildObligationReminderMessage } from '@/utils/reminderMessage';
 import { showSuccessAlert } from '@/utils/alerts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
-
-// services/notifications.ts REMINDER_STAGES ile aynı önek/etiket — burada gösterilen
-// metin, cihaza planlanan gerçek OS bildiriminin başlığıyla birebir eşleşir.
-const STAGE_PREFIX: Record<string, string> = {
-  '7_days_before': '7 gün kaldı — ',
-  '3_days_before': '3 gün kaldı — ',
-  due_day: '',
-  overdue_1_day: 'Gecikti — ',
-};
 
 const timeFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -44,11 +35,11 @@ function startOfDay(date: Date): Date {
 }
 
 // listRecentReminders yalnızca 'delivered' (push'u gerçekten gönderilmiş) satırları döner,
-// bunların remind_at'i her zaman bugün ya da geçmiştir — "YARIN"/"BU HAFTA"/"DAHA SONRA"
-// hiçbir zaman oluşmaz, bu yüzden yalnızca iki başlık yeterli.
+// bunların remind_at'i her zaman bugün ya da geçmiştir.
 function sectionTitleFor(remindAt: Date, today: Date): string {
-  const diffDays = Math.round((startOfDay(remindAt).getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
-  return diffDays === 0 ? 'BUGÜN' : 'GEÇMİŞ';
+  const diffDays = Math.round((today.getTime() - startOfDay(remindAt).getTime()) / (24 * 60 * 60 * 1000));
+  if (diffDays <= 0) return 'BUGÜN';
+  return diffDays < 7 ? 'BU HAFTA' : 'GEÇMİŞ';
 }
 
 interface ReminderContent {
@@ -66,12 +57,12 @@ function contentFor(reminder: DeliveredReminder): ReminderContent | null {
     };
   }
   if (reminder.obligation) {
-    const label = reminder.obligation.direction === 'payable' ? 'Ödeme vadesi' : 'Tahsilat vadesi';
-    return {
-      title: `${STAGE_PREFIX[reminder.stage] ?? ''}${label}`,
-      body: `${reminder.obligation.title} — ${formatMinorAmount(reminder.obligation.remaining_amount_minor, reminder.obligation.currency_code)}`,
-      onPress: () => router.push(`/obligations/${reminder.obligation!.id}`),
-    };
+    const message = buildObligationReminderMessage(
+      reminder.obligation,
+      reminder.obligation.remaining_amount_minor,
+      reminder.stage
+    );
+    return { ...message, onPress: () => router.push(`/obligations/${reminder.obligation!.id}`) };
   }
   return null;
 }
@@ -157,7 +148,7 @@ export default function NotificationsScreen() {
     if (!groups.has(title)) groups.set(title, []);
     groups.get(title)!.push(reminder);
   }
-  const sections = ['BUGÜN', 'GEÇMİŞ']
+  const sections = ['BUGÜN', 'BU HAFTA', 'GEÇMİŞ']
     .filter((title) => groups.has(title))
     .map((title) => ({ title, data: groups.get(title)! }));
 
@@ -344,6 +335,34 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
               <Text variant="body" color="textSecondary">
                 {content.body}
               </Text>
+              {item.obligation ? (
+                <Row gap="sm" style={{ marginTop: theme.spacing.xxs }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      if (isUnread) onMarkRead(item.id);
+                      router.push({
+                        pathname: '/payments/new',
+                        params: { obligationId: item.obligation!.id, direction: item.obligation!.direction },
+                      });
+                    }}
+                    style={{ minHeight: 44, justifyContent: 'center' }}
+                  >
+                    <Text variant="body" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
+                      {item.obligation.direction === 'payable' ? 'Ödendi işaretle' : 'Tahsil edildi işaretle'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.push(`/obligations/${item.obligation!.id}`)}
+                    style={{ minHeight: 44, justifyContent: 'center' }}
+                  >
+                    <Text variant="body" color="textSecondary">
+                      Kontrol et
+                    </Text>
+                  </Pressable>
+                </Row>
+              ) : null}
             </Stack>
             <Stack gap="xs" align="flex-end">
               <Text variant="caption" color="textSecondary">

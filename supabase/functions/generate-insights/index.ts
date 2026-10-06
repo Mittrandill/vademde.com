@@ -29,7 +29,7 @@ const tl = (minor: number) =>
 
 interface Fact {
   key: string;
-  kind: 'abonelik' | 'aliskanlik';
+  kind: 'abonelik' | 'aliskanlik' | 'nakit';
   impactMinor: number | null;
   actionRoute: string;
   // Şablon (Gemini başarısız olursa kullanılır) ve modele verilen olgular.
@@ -140,6 +140,105 @@ async function risingCategories(db: ReturnType<typeof createClient>, workspaceId
   return facts;
 }
 
+// Kural 3: TL hesap önümüzdeki 14 gün içinde eksiye düşecek (nakit riski). Mantık
+// features/cashflow/forecast.ts ve send-cash-alerts ile aynıdır: güncel bakiye − hesaba bağlı
+// (obligations.account_id) ödemeler + tahsilatlar. Rakamlar yalnızca sorgudan gelir.
+const CASH_WINDOW_DAYS = 14;
+const CASH_ACTIVE_STATUSES = ['taslak', 'inceleme_gerekli', 'bekliyor', 'kismen_odendi', 'gecikti', 'kismen_tahsil_edildi'];
+
+function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function cashRisk(db: ReturnType<typeof createClient>, workspaceId: string): Promise<Fact[]> {
+  const { data: accounts } = await db
+    .from('accounts')
+    .select('id, name, opening_balance_minor')
+    .eq('workspace_id', workspaceId)
+    .eq('is_archived', false)
+    .eq('currency_code', 'TRY')
+    .neq('type', 'credit_card');
+  if (!accounts?.length) return [];
+
+  const todayIso = isoDay(new Date());
+  const limit = new Date();
+  limit.setDate(limit.getDate() + CASH_WINDOW_DAYS);
+  const limitIso = isoDay(limit);
+
+  const { data: obligations } = await db
+    .from('obligations')
+    .select('id, direction, account_id, due_date, remaining_amount_minor')
+    .eq('workspace_id', workspaceId)
+    .in('account_id', accounts.map((a: any) => a.id))
+    .in('status', CASH_ACTIVE_STATUSES)
+    .eq('currency_code', 'TRY');
+  if (!obligations?.length) return [];
+
+  const { data: transactions } = await db
+    .from('transactions')
+    .select('account_id, transfer_to_account_id, direction, amount_minor')
+    .eq('workspace_id', workspaceId);
+  const deltas = new Map<string, number>();
+  const add = (id: string, v: number) => deltas.set(id, (deltas.get(id) ?? 0) + v);
+  for (const tx of (transactions ?? []) as any[]) {
+    if (tx.direction === 'income') add(tx.account_id, tx.amount_minor);
+    else if (tx.direction === 'expense') add(tx.account_id, -tx.amount_minor);
+    else if (tx.direction === 'transfer') {
+      add(tx.account_id, -tx.amount_minor);
+      if (tx.transfer_to_account_id) add(tx.transfer_to_account_id, tx.amount_minor);
+    }
+  }
+
+  const { data: installments } = await db
+    .from('installments')
+    .select('obligation_id, due_date, remaining_amount_minor')
+    .in('obligation_id', obligations.map((o: any) => o.id))
+    .gt('remaining_amount_minor', 0)
+    .neq('status', 'iptal_edildi');
+  const byObligation = new Map<string, { due_date: string; remaining_amount_minor: number }[]>();
+  for (const i of (installments ?? []) as any[]) byObligation.set(i.obligation_id, [...(byObligation.get(i.obligation_id) ?? []), i]);
+
+  const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+  const facts: Fact[] = [];
+  for (const account of accounts as any[]) {
+    const events = new Map<string, number>();
+    for (const o of (obligations as any[]).filter((x) => x.account_id === account.id)) {
+      const rows = byObligation.get(o.id) ?? (o.due_date ? [{ due_date: o.due_date, remaining_amount_minor: o.remaining_amount_minor }] : []);
+      for (const row of rows) {
+        if (row.remaining_amount_minor <= 0 || row.due_date > limitIso) continue;
+        const key = row.due_date < todayIso ? todayIso : row.due_date;
+        events.set(key, (events.get(key) ?? 0) + (o.direction === 'payable' ? -row.remaining_amount_minor : row.remaining_amount_minor));
+      }
+    }
+    if (events.size === 0) continue;
+
+    let balance = account.opening_balance_minor + (deltas.get(account.id) ?? 0);
+    let lowest = balance;
+    let firstNegative: string | null = null;
+    for (let i = 0; i <= CASH_WINDOW_DAYS; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const key = isoDay(d);
+      balance += events.get(key) ?? 0;
+      if (balance < lowest) lowest = balance;
+      if (balance < 0 && !firstNegative) firstNegative = key;
+    }
+    if (!firstNegative) continue;
+
+    const when = dayMonth.format(new Date(firstNegative));
+    facts.push({
+      key: `cash:${account.id}:${firstNegative}`,
+      kind: 'nakit',
+      impactMinor: lowest,
+      actionRoute: `/cash-alert/${account.id}`,
+      templateTitle: `${account.name} eksiye düşebilir`,
+      templateBody: `${when} tarihinde bakiye eksiye inebilir; önümüzdeki ${CASH_WINDOW_DAYS} günde en düşük bakiye ${tl(lowest)}.`,
+      facts: { account: account.name, firstNegativeDate: when, lowestBalance: tl(lowest), windowDays: CASH_WINDOW_DAYS },
+    });
+  }
+  return facts;
+}
+
 // Gemini'den kısa, doğal Türkçe başlık/gövde ister; sayı doğrulaması başarısızsa null döner.
 async function polish(facts: Fact[]): Promise<Map<string, { title: string; body: string }> | null> {
   if (facts.length === 0) return new Map();
@@ -226,7 +325,11 @@ Deno.serve(async (req: Request) => {
   const { data: subscription } = await userClient.from('subscriptions').select('plan').maybeSingle();
   if (!subscription || subscription.plan === 'free') return json({ error: 'plus_required' }, 403);
 
-  const facts = [...(await duplicateSubscriptions(userClient, workspaceId)), ...(await risingCategories(userClient, workspaceId))];
+  const facts = [
+    ...(await duplicateSubscriptions(userClient, workspaceId)),
+    ...(await risingCategories(userClient, workspaceId)),
+    ...(await cashRisk(userClient, workspaceId)),
+  ];
 
   const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data: existing } = await service

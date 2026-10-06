@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, SourceTag, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -975,13 +975,15 @@ export default function DocumentReviewScreen() {
     return field?.confidence ?? null;
   }
 
+  // OcrKontrol.html: alan kaynağı etiketi. Düşük güven "Kontrol et" (attentionMarker, kesik çizgi);
+  // yeterli güven "Belgeden". Kırmızı yalnızca gecikme/silme içindir.
   function LowConfidenceHint({ fieldName }: { fieldName: string }) {
     const confidence = fieldConfidence(fieldName);
-    if (confidence === null || confidence >= LOW_CONFIDENCE_THRESHOLD) return null;
+    if (confidence === null) return null;
     return (
-      <Text variant="caption" style={{ color: theme.colors.danger }}>
-        Kontrol et — düşük güven
-      </Text>
+      <View style={{ alignSelf: 'flex-start' }}>
+        <SourceTag kind={confidence < LOW_CONFIDENCE_THRESHOLD ? 'check' : 'document'} />
+      </View>
     );
   }
 

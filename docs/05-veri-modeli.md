@@ -15,7 +15,8 @@
 | counterparties | Cariler: kişi, firma ve personel (`type` = `individual` \| `company` \| `personel`) |
 | transactions | Gerçekleşmiş para hareketleri |
 | obligations | Vadeli borç ve alacaklar |
-| ai_insights | Akıllı öneriler (Plus): kural çıktısı olgular + kısa metin, durum new/dismissed/applied; yazma yalnızca `generate-insights` (service role), kullanıcı yalnızca `status` günceller |
+| ai_insights | Akıllı öneriler (Plus): kural çıktısı olgular + kısa metin, durum new/dismissed/applied; yazma yalnızca `generate-insights` (service role), kullanıcı yalnızca `status` günceller |
+
 | card_installment_purchases | Kredi kartı taksitli alışverişleri (toplam, taksit sayısı, ilk ekstre ayı); ödenen taksit ekstre aylarından türetilir |
 | cash_alert_log | Nakit uyarısı bildirim günlüğü (yalnızca service role; hesap başına haftada en fazla 1 bildirim) |
 | installments | Taksit satırları |
@@ -88,3 +89,9 @@ Bu tablolardaki temel kavramlar için bkz. `14-kararlar-ve-terminoloji.md` — E
 ### Çek/senet yaşam döngüsü (2026-10)
 
 - `obligations.instrument_status` (`portfoy`, `ciro_edildi`, `tahsile_verildi`, `tahsil_edildi`, `karsiliksiz`, `odendi`) ve `instrument_status_changed_at`: yalnızca `document_type in ('cek','senet')` için dolu (check constraint). Alınmış çek/senet portföyde başlar (tetikleyici); kapanışta durum tetikleyiciyle güncellenir; ciro istemciden `ciro_edildi` yapılır; `mark_instrument_bounced(uuid)` RPC'si ciro edilmiş çekte kapanan fatura ve çeki yeniden açar (atomik, RLS'li).
+
+### 9.x Abonelik alanları (obligations)
+- `obligations.trial_ends_on date` (isteğe bağlı) — deneme bitiş tarihi; Aboneliklerim "Deneme bitiyor" grubu için.
+- `obligations.billing_period text` (`'monthly' | 'yearly'`, NULL = aylık) — yalnızca `document_type = 'abonelik'` için doldurulur; yıllıkta vadeler 12 ayda bir dizilir.
+- Mevcut kayıtlarda iki alan da NULL kalır; davranış değişmez. Geri alma: iki kolonun silinmesi.
+

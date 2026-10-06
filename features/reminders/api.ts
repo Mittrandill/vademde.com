@@ -54,6 +54,7 @@ export interface DeliveredReminder extends Reminder {
     remaining_amount_minor: number;
     currency_code: string;
     due_date: string | null;
+    counterparty: { name: string } | null;
   } | null;
   account: {
     id: string;
@@ -65,7 +66,7 @@ export interface DeliveredReminder extends Reminder {
 export const REMINDERS_PAGE_SIZE = 10;
 
 const RECENT_REMINDERS_SELECT =
-  '*, obligation:obligations(id, title, direction, document_type, bank_code, service_code, remaining_amount_minor, currency_code, due_date), account:accounts(id, name, bank_code)';
+  '*, obligation:obligations(id, title, direction, document_type, bank_code, service_code, remaining_amount_minor, currency_code, due_date, counterparty:counterparties(name)), account:accounts(id, name, bank_code)';
 
 export interface ListRecentRemindersFilter {
   workspaceId: string;

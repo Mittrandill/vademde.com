@@ -14,8 +14,14 @@ export async function signInWithPassword(email: string, password: string) {
   if (error) throw error;
 }
 
-export async function signUpWithPassword(email: string, password: string) {
-  const { error } = await supabase.auth.signUp({ email, password });
+// full_name, handle_new_user tetikleyicisi tarafından profiles.full_name'e yazılır.
+export async function signUpWithPassword(email: string, password: string, fullName?: string) {
+  const name = fullName?.trim();
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: name ? { data: { full_name: name } } : undefined,
+  });
   if (error) throw error;
 }
 

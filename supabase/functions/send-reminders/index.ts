@@ -8,6 +8,7 @@
 // hatırlatmalar artık yalnızca burada, tam zamanı geldiğinde (remind_at <= now()) Expo Push
 // API üzerinden gönderilir.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { BANK_NAMES, SERVICE_NAMES } from './names.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -19,12 +20,45 @@ const CHANNEL_ID = 'obligation-reminders';
 // obligations tablosundaki terminal durumlar — docs/01-finansal-kayit-modeli.md §3.4
 const TERMINAL_OBLIGATION_STATUSES = new Set(['odendi', 'tahsil_edildi', 'iptal_edildi']);
 
-// services/notifications.ts REMINDER_STAGES ile birebir aynı önek/etiketler.
-const STAGE_PREFIX: Record<string, string> = {
-  '7_days_before': '7 gün kaldı — ',
-  '3_days_before': '3 gün kaldı — ',
-  due_day: '',
-  overdue_1_day: 'Gecikti — ',
+// services/notifications.ts REMINDER_STAGES ile birebir aynı aşamalar; cümlenin sonundaki zaman ifadesi.
+const STAGE_WHEN: Record<string, string> = {
+  '7_days_before': '7 Gün Sonra',
+  '3_days_before': '3 Gün Sonra',
+  due_day: 'Bugün',
+  overdue_1_day: '1 Gün Gecikti',
+};
+
+// Cümledeki "{Tür} {Ödemeniz|Tahsilatınız}" kısmı. Türkçe iyelik eki programatik türetilemediği
+// için elle yazılmış eşleme; yön ve tür bilinmiyorsa genel "Ödemeniz / Tahsilatınız".
+const PAYABLE_NOUN: Record<string, string> = {
+  kredi: 'Kredi Ödemeniz',
+  kredi_karti_ekstresi: 'Kredi Kartı Ödemeniz',
+  nakit_avans: 'Nakit Avans Ödemeniz',
+  cek: 'Çek Ödemeniz',
+  senet: 'Senet Ödemeniz',
+  fatura: 'Fatura Ödemeniz',
+  abonelik: 'Abonelik Ödemeniz',
+  kira: 'Kira Ödemeniz',
+  maas: 'Maaş Ödemeniz',
+  vergi_sgk: 'Vergi / SGK Ödemeniz',
+  tedarikci_borcu: 'Tedarikçi Ödemeniz',
+  sozlesme_odeme_plani: 'Sözleşme Ödemeniz',
+};
+const RECEIVABLE_NOUN: Record<string, string> = {
+  cek: 'Çek Tahsilatınız',
+  senet: 'Senet Tahsilatınız',
+  borc_verme: 'Borç Tahsilatınız',
+  musteri_alacagi: 'Müşteri Tahsilatınız',
+  kira: 'Kira Tahsilatınız',
+};
+
+const UNIT_LABEL: Record<string, string> = {
+  TRY: 'TL',
+  gram_altin: 'Gram Altın',
+  ceyrek_altin: 'Çeyrek Altın',
+  yarim_altin: 'Yarım Altın',
+  tam_altin: 'Tam Altın',
+  cumhuriyet_altini: 'Cumhuriyet Altını',
 };
 
 interface ReminderRow {
@@ -42,22 +76,33 @@ interface ReminderRow {
     status: string;
     remaining_amount_minor: number;
     currency_code: string;
+    document_type: string | null;
+    bank_code: string | null;
+    service_code: string | null;
+    counterparty: { name: string } | null;
   } | null;
   account: { id: string; name: string } | null;
 }
 
-function formatMinorAmount(amountMinor: number, currencyCode: string): string {
-  const value = (Number.isFinite(amountMinor) ? amountMinor : 0) / 100;
-  try {
-    return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${value.toFixed(2)} ${currencyCode}`;
-  }
+// "10.000 TL", "10.000,50 TL", "2 Çeyrek Altın". Kuruşsuz tutarda ondalık yazılmaz.
+// Sikke birimlerinde (çeyrek vb.) tutar adet olarak saklanır (ondalık yok, bkz. valueUnits/units.ts).
+function formatAmount(amountMinor: number, currencyCode: string): string {
+  const isCoin = ['ceyrek_altin', 'yarim_altin', 'tam_altin', 'cumhuriyet_altini'].includes(currencyCode);
+  const value = isCoin ? amountMinor : (Number.isFinite(amountMinor) ? amountMinor : 0) / 100;
+  const hasFraction = Math.abs(value - Math.round(value)) > 1e-9;
+  const text = new Intl.NumberFormat('tr-TR', {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+  return `${text} ${UNIT_LABEL[currencyCode] ?? currencyCode}`;
+}
+
+// Cümlenin öznesi: bankalı türlerde banka adı, abonelikte servis adı, aksi halde karşı taraf, o da yoksa başlık.
+function subjectFor(o: NonNullable<ReminderRow['obligation']>): string {
+  if (o.bank_code && BANK_NAMES[o.bank_code]) return BANK_NAMES[o.bank_code];
+  if (o.service_code && SERVICE_NAMES[o.service_code]) return SERVICE_NAMES[o.service_code];
+  if (o.counterparty?.name) return o.counterparty.name;
+  return o.title;
 }
 
 function contentFor(
@@ -72,16 +117,22 @@ function contentFor(
     };
   }
   if (reminder.obligation) {
-    const label = reminder.obligation.direction === 'payable' ? 'Ödeme vadesi' : 'Tahsilat vadesi';
-    const prefix = STAGE_PREFIX[reminder.stage] ?? '';
+    const o = reminder.obligation;
+    const type = o.document_type ?? '';
+    const noun =
+      o.direction === 'payable'
+        ? (PAYABLE_NOUN[type] ?? 'Ödemeniz')
+        : (RECEIVABLE_NOUN[type] ?? 'Tahsilatınız');
+    const when = STAGE_WHEN[reminder.stage] ?? '';
     // Taksitli borçlarda (kredi vb.) gösterilecek tutar bir sonraki bekleyen taksidin
     // kendi tutarıdır, obligation'ın toplam bakiyesi değil — services/notifications.ts'teki
     // getNextPendingInstallment ile aynı mantık (bkz. o dosyadaki yorum).
-    const amountMinor = nextInstallmentAmountMinor ?? reminder.obligation.remaining_amount_minor;
+    const amountMinor = nextInstallmentAmountMinor ?? o.remaining_amount_minor;
+    const title = o.direction === 'payable' ? 'Ödeme Hatırlatması' : 'Tahsilat Hatırlatması';
     return {
-      title: `${prefix}${label}`,
-      body: `${reminder.obligation.title} — ${formatMinorAmount(amountMinor, reminder.obligation.currency_code)}`,
-      data: { obligationId: reminder.obligation.id, stage: reminder.stage },
+      title,
+      body: `${subjectFor(o)} ${formatAmount(amountMinor, o.currency_code)} Tutarındaki ${noun} ${when}`.trim(),
+      data: { obligationId: o.id, stage: reminder.stage },
     };
   }
   return null;
@@ -99,7 +150,7 @@ Deno.serve(async (_req: Request) => {
   const { data: dueReminders, error: fetchError } = await adminClient
     .from('reminders')
     .select(
-      '*, obligation:obligations(id, title, direction, status, remaining_amount_minor, currency_code), account:accounts(id, name)'
+      '*, obligation:obligations(id, title, direction, status, remaining_amount_minor, currency_code, document_type, bank_code, service_code, counterparty:counterparties(name)), account:accounts(id, name)'
     )
     .eq('status', 'scheduled')
     .is('dismissed_at', null)

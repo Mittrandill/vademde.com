@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Divider, Row, Stack, Text, TextField } from '@/components/primitives';
+import { Button, Divider, Pressable, Row, Stack, Text, TextField } from '@/components/primitives';
 import { VademdeMark } from '@/components/brand/VademdeMark';
 import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
 import { signInWithApple, signInWithGoogle, signUpWithPassword } from '@/features/auth/api';
@@ -14,6 +15,8 @@ import { translateAuthError } from '@/features/auth/errors';
 export default function SignUpScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
+  const [fullName, setFullName] = useState('');
+  const [accepted, setAccepted] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -25,9 +28,13 @@ export default function SignUpScreen() {
 
   async function handleSubmit() {
     setError(null);
+    if (!accepted) {
+      setError('Devam etmek için Kullanım Koşulları ve Gizlilik Politikası’nı kabul etmelisin.');
+      return;
+    }
     setLoading(true);
     try {
-      await signUpWithPassword(email.trim(), password);
+      await signUpWithPassword(email.trim(), password, fullName);
       setConfirmationSent(true);
     } catch (err) {
       setError(translateAuthError(err, 'Kayıt oluşturulamadı'));
@@ -98,6 +105,14 @@ export default function SignUpScreen() {
               <>
                 <Stack gap="sm">
                   <TextField
+                    label="AD SOYAD (İSTEĞE BAĞLI)"
+                    placeholder="Adın ve soyadın"
+                    autoCapitalize="words"
+                    textContentType="name"
+                    value={fullName}
+                    onChangeText={setFullName}
+                  />
+                  <TextField
                     label="E-POSTA"
                     placeholder="ornek@eposta.com"
                     autoCapitalize="none"
@@ -115,6 +130,29 @@ export default function SignUpScreen() {
                     onRightIconPress={() => setPasswordVisible((v) => !v)}
                   />
                 </Stack>
+
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: accepted }}
+                  onPress={() => setAccepted((v) => !v)}
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 44 }}
+                >
+                  <Ionicons
+                    name={accepted ? 'checkbox' : 'square-outline'}
+                    size={24}
+                    color={accepted ? theme.colors.textPrimary : theme.colors.mutedControl}
+                  />
+                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
+                    <Link href="/legal/terms-of-service">
+                      <Text variant="caption" style={{ textDecorationLine: 'underline' }}>Kullanım Koşulları</Text>
+                    </Link>
+                    {' ve '}
+                    <Link href="/legal/privacy-policy">
+                      <Text variant="caption" style={{ textDecorationLine: 'underline' }}>Gizlilik Politikası</Text>
+                    </Link>
+                    ’nı okudum, kabul ediyorum.
+                  </Text>
+                </Pressable>
 
                 {error ? (
                   <Text variant="caption" color="danger">

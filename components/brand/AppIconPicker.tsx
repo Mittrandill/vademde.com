@@ -12,12 +12,12 @@ const ICON_OPTIONS: { key: IconOptionKey; label: string; source: number }[] = [
   { key: 'DEFAULT', label: 'Varsayılan', source: require('../../assets/app-icons/varsayilan.png') },
   { key: 'koyu', label: 'Koyu', source: require('../../assets/app-icons/koyu.png') },
   { key: 'monokrom', label: 'Monokrom', source: require('../../assets/app-icons/monokrom.png') },
-  { key: 'mor', label: 'Mor', source: require('../../assets/app-icons/mor.png') },
 ];
 
 // Ayarlar'daki "UYGULAMA İKONU" bölümü: kullanıcı, Vademde_Tam_Logo_Paketi_v2.0'daki hazır
 // varyantlardan (bkz. assets/app-icons/) birini seçerek ana ekrandaki uygulama simgesini
-// değiştirebilir — bkz. @howincodes/expo-dynamic-app-icon ve app.json plugin tanımı. Yalnızca
+// değiştirebilir. "mor" ikonu seçicden kaldırıldı ama app.json'daki alternatif ikon tanımı bilerek
+// duruyor: daha önce seçmiş kullanıcıların ikonu bir sonraki native build'de sıfırlanmasın — bkz. @howincodes/expo-dynamic-app-icon ve app.json plugin tanımı. Yalnızca
 // native (Development Build/EAS) derlemede çalışır; Expo Go bu API'yi desteklemez.
 export function AppIconPicker() {
   const theme = useTheme();

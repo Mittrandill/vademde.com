@@ -185,6 +185,11 @@ function ObligationForm({
   );
   const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? null);
   const [serviceCode, setServiceCode] = useState<string | null>(initial?.service_code ?? null);
+  // Aboneliklere özel iki isteğe bağlı alan; NULL billing_period bugünkü aylık plandır.
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(
+    initial?.billing_period === 'yearly' ? 'yearly' : 'monthly'
+  );
+  const [trialEndsOn, setTrialEndsOn] = useState(initial?.trial_ends_on ?? '');
   const [title, setTitle] = useState(initial?.title ?? initialTitle ?? '');
   // docs/01-finansal-kayit-modeli.md §3.5 — birim, kayıt oluşturulduktan sonra
   // değiştirilemez; edit modda initial.currency_code sabit kalır (aşağıda salt-okunur
@@ -283,6 +288,8 @@ function ObligationForm({
   // aynı gerekçeyle KİŞİ/FİRMA yerine isteğe bağlı SERVİS seçimi gösterilir.
   const isLoanType = documentType === 'kredi';
   const isSubscriptionType = documentType === 'abonelik';
+  // Yıllık aboneliklerde vadeler 12 ayda bir dizilir; diğer tüm türlerde aylık.
+  const stepMonths = isSubscriptionType && billingPeriod === 'yearly' ? 12 : 1;
   // Nakit avans: borçlu taraf kart hesabıdır (kişi/firma alanı anlamsız, kredi/abonelik ile
   // aynı gerekçe — bkz. COUNTERPARTY_LESS_DOCUMENT_TYPES), HESAP zorunludur ve yalnızca kredi
   // kartı hesapları arasından seçilir; ayrıca çekilen nakit gerçekten bir hesaba yatırılabilir.
@@ -343,7 +350,7 @@ function ObligationForm({
   // yeniden dizilir — ödenmiş taksitlerin tarihi geçmişi yansıttığı için sabit kalır.
   function updatePlanStartDate(value: string) {
     setPlanRows((rows) =>
-      rows.map((r) => (r.locked ? r : { ...r, dueDate: addMonthsToIsoDate(value, r.installmentNumber - 1) }))
+      rows.map((r) => (r.locked ? r : { ...r, dueDate: addMonthsToIsoDate(value, (r.installmentNumber - 1) * stepMonths) }))
     );
   }
 
@@ -355,7 +362,7 @@ function ObligationForm({
         {
           id: null,
           installmentNumber: (last?.installmentNumber ?? 0) + 1,
-          dueDate: last ? addMonthsToIsoDate(last.dueDate, 1) : new Date().toISOString().slice(0, 10),
+          dueDate: last ? addMonthsToIsoDate(last.dueDate, stepMonths) : new Date().toISOString().slice(0, 10),
           amountStr: last?.amountStr ?? '',
           locked: false,
           markPaid: false,
@@ -377,7 +384,7 @@ function ObligationForm({
         next.push({
           id: null,
           installmentNumber: (last?.installmentNumber ?? 0) + 1,
-          dueDate: last ? addMonthsToIsoDate(last.dueDate, 1) : new Date().toISOString().slice(0, 10),
+          dueDate: last ? addMonthsToIsoDate(last.dueDate, stepMonths) : new Date().toISOString().slice(0, 10),
           amountStr: amountStr?.trim() ? amountStr : (last?.amountStr ?? ''),
           locked: false,
           markPaid: false,
@@ -462,7 +469,7 @@ function ObligationForm({
   function buildPlan(): InstallmentPlanItem[] {
     if (installmentCount <= 1 || enteredAmountMinor <= 0) return [];
     return isPerInstallmentMode
-      ? buildFixedInstallments(enteredAmountMinor, installmentCount, dueDate)
+      ? buildFixedInstallments(enteredAmountMinor, installmentCount, dueDate, stepMonths)
       : buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent);
   }
 
@@ -577,6 +584,8 @@ function ObligationForm({
           category_id: categoryId,
           bank_code: bankCodeForType,
           service_code: serviceCodeForType,
+          billing_period: isSubscriptionType ? billingPeriod : null,
+          trial_ends_on: isSubscriptionType && /^\d{4}-\d{2}-\d{2}$/.test(trialEndsOn.trim()) ? trialEndsOn.trim() : null,
           total_amount_minor: isPlanEditing ? planTotalMinor : totalAmountMinor,
         });
         await syncObligationReminder(activeWorkspaceId, obligation);
@@ -606,6 +615,8 @@ function ObligationForm({
         category_id: categoryId,
         bank_code: bankCodeForType,
         service_code: serviceCodeForType,
+        billing_period: isSubscriptionType ? billingPeriod : null,
+        trial_ends_on: isSubscriptionType && /^\d{4}-\d{2}-\d{2}$/.test(trialEndsOn.trim()) ? trialEndsOn.trim() : null,
       });
 
       if (installmentPlanItems.length > 0) {
@@ -968,6 +979,24 @@ function ObligationForm({
                   SERVİS (İSTEĞE BAĞLI)
                 </Text>
                 <ServicePicker selectedId={serviceCode} onSelect={setServiceCode} />
+              </Stack>
+            ) : null}
+
+            {isSubscriptionType ? (
+              <Stack gap="sm">
+                <Text variant="label" color="textSecondary">
+                  YENİLEME
+                </Text>
+                <SegmentedControl
+                  stretch
+                  options={[
+                    { key: 'monthly', label: 'Aylık' },
+                    { key: 'yearly', label: 'Yıllık' },
+                  ]}
+                  value={billingPeriod}
+                  onChange={setBillingPeriod}
+                />
+                <DateField label="DENEME BİTİŞ TARİHİ (İSTEĞE BAĞLI)" value={trialEndsOn} onChangeText={setTrialEndsOn} />
               </Stack>
             ) : null}
 
