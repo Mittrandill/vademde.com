@@ -5,8 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
-import { Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Group, GroupedRowIcon, Pressable, Tag, Text } from '@/components/primitives';
 import { openReceipt, type PendingReceipt } from '@/features/receipts/api';
 
 interface ReceiptAttachFieldProps {
@@ -107,118 +106,69 @@ export function ReceiptAttachField({
 
   const isImage = !!value && value.mimeType.startsWith('image/');
 
-  return (
-    <Stack gap="sm">
-      <Text variant="caption" color="textSecondary">
-        DEKONT (İSTEĞE BAĞLI)
-      </Text>
+  const rowStyle = {
+    minHeight: 56,
+    paddingVertical: 10,
+    paddingHorizontal: theme.spacing.md,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+  };
 
+  // Tuval OdemeKaydet "Dekont ekle": gruplu yüzeyde tek satır (ikon + metin + ikincil ek bilgi).
+  return (
+    <Group inset={62}>
       {value ? (
-        <Row
-          gap="sm"
-          align="center"
-          style={{
-            padding: theme.spacing.sm,
-            borderRadius: theme.radius.widget,
-            backgroundColor: theme.colors.surfacePrimary,
-          }}
-        >
+        <View style={rowStyle}>
           {isImage ? (
-            <Image source={{ uri: value.uri }} style={{ width: 44, height: 44, borderRadius: 10 }} />
+            <Image source={{ uri: value.uri }} style={{ width: 34, height: 34, borderRadius: 9 }} />
           ) : (
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: withAlpha(theme.colors.accentViolet, 0.16),
-              }}
-            >
-              <Ionicons name="document-text" size={22} color={theme.colors.accentViolet} />
-            </View>
+            <GroupedRowIcon name="document-text" tone="violet" />
           )}
-          <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
+          <Text numberOfLines={1} style={{ flex: 1 }}>
             {value.fileName}
           </Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Dekontu kaldır" onPress={() => onChange(null)} hitSlop={10}>
-            <Ionicons name="close-circle" size={22} color={theme.colors.textSecondary} />
+            <Ionicons name="close-circle" size={22} color={theme.colors.mutedControl} />
           </Pressable>
-        </Row>
+        </View>
       ) : existingReceiptId ? (
-        <Row
-          gap="sm"
-          align="center"
-          style={{
-            padding: theme.spacing.sm,
-            borderRadius: theme.radius.widget,
-            backgroundColor: theme.colors.surfacePrimary,
-          }}
-        >
-          <Ionicons name="attach" size={22} color={theme.colors.textPrimary} />
-          <Text variant="body" style={{ flex: 1 }}>
-            Dekont ekli
-          </Text>
+        <View style={rowStyle}>
+          <GroupedRowIcon name="attach" />
+          <Text style={{ flex: 1 }}>Dekont ekli</Text>
           <Pressable accessibilityRole="button" onPress={openExisting} hitSlop={8}>
-            <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
-              Aç
-            </Text>
+            <Text style={{ fontSize: 15, fontWeight: '600' }}>Aç</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={choose} hitSlop={8}>
-            <Text variant="caption" color="textSecondary">
+            <Text color="textSecondary" style={{ fontSize: 15 }}>
               Değiştir
             </Text>
           </Pressable>
           {onRemoveExisting ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Dekontu ödemeden ayır" onPress={onRemoveExisting} hitSlop={8}>
-              <Ionicons name="close-circle" size={20} color={theme.colors.textSecondary} />
+              <Ionicons name="close-circle" size={20} color={theme.colors.mutedControl} />
             </Pressable>
           ) : null}
-        </Row>
+        </View>
       ) : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={allowed ? 'Dekont ekle' : 'Dekont ekle, Plus planına özel'}
           onPress={choose}
+          style={rowStyle}
         >
-          <Row
-            gap="sm"
-            align="center"
-            style={{
-              minHeight: 56,
-              paddingHorizontal: theme.spacing.md,
-              borderRadius: theme.radius.input,
-              borderWidth: 1.5,
-              borderStyle: 'dashed',
-              borderColor: allowed ? theme.colors.brandPrimary : theme.colors.border,
-            }}
-          >
-            <Ionicons
-              name={allowed ? 'attach' : 'lock-closed-outline'}
-              size={20}
-              color={allowed ? theme.colors.brandPrimary : theme.colors.textSecondary}
-            />
-            <Text variant="body" style={{ flex: 1, color: allowed ? theme.colors.brandPrimary : undefined }}>
-              Dekont, fotoğraf veya PDF ekle
+          <GroupedRowIcon name={allowed ? 'attach' : 'lock-closed'} />
+          <Text style={{ flex: 1 }}>Dekont ekle</Text>
+          {allowed ? (
+            <Text color="textSecondary" style={{ fontSize: 15 }}>
+              İsteğe bağlı
             </Text>
-            {!allowed ? (
-              <View
-                style={{
-                  paddingHorizontal: theme.spacing.xs,
-                  paddingVertical: 2,
-                  borderRadius: 999,
-                  backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16),
-                }}
-              >
-                <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>
-                  Plus
-                </Text>
-              </View>
-            ) : null}
-          </Row>
+          ) : (
+            <Tag tone="brand" label="Plus" />
+          )}
+          <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
         </Pressable>
       )}
-    </Stack>
+    </Group>
   );
 }
