@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, ScrollView } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { Button, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Button, FieldGroup, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import {
   COUNTERPARTY_TYPES,
   COUNTERPARTY_TYPE_LABEL,
@@ -122,13 +122,20 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
-        <Stack gap="lg">
-          <ScreenHeader
-            title={isEditing ? `${typeLabel} Kaydını Düzenle` : 'Yeni Cari'}
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-          />
+      <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xxl }} keyboardShouldPersistTaps="handled">
+        <ScreenHeader
+          inline
+          title={isEditing ? 'Cariyi düzenle' : 'Yeni cari'}
+          leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+          rightLabel={{
+            label: isEditing ? 'Güncelle' : 'Kaydet',
+            bold: true,
+            disabled: !name.trim() || saveMutation.isPending,
+            onPress: () => saveMutation.mutate(),
+          }}
+        />
 
+        <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
           <SegmentedControl
             options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
             value={type}
@@ -136,45 +143,38 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
             stretch
           />
 
-          <TextField
-            label="AD"
-            placeholder={type === 'company' ? 'Firma adı' : 'Ad Soyad'}
-            value={name}
-            onChangeText={setName}
-          />
-
-          <TextField
-            label="TELEFON (İSTEĞE BAĞLI)"
-            placeholder="05xx xxx xx xx"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-          />
-
-          <TextField
-            label="E-POSTA (İSTEĞE BAĞLI)"
-            placeholder="ornek@eposta.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-
-          <TextField
-            label={
-              type === 'company'
-                ? 'VERGİ NUMARASI (İSTEĞE BAĞLI)'
-                : type === 'personel'
-                  ? 'TC KİMLİK NUMARASI (İSTEĞE BAĞLI)'
-                  : 'TC/VERGİ NUMARASI (İSTEĞE BAĞLI)'
-            }
-            placeholder="Numara"
-            value={taxNumber}
-            onChangeText={setTaxNumber}
-            keyboardType="number-pad"
-          />
-
-          <TextField label="NOT (İSTEĞE BAĞLI)" placeholder="Ek bilgi" value={notes} onChangeText={setNotes} />
+          <View>
+            <FieldGroup>
+              <TextField
+                label={type === 'company' ? 'Ünvan' : 'Ad soyad'}
+                placeholder={type === 'company' ? 'Firma adı' : 'Ad Soyad'}
+                value={name}
+                onChangeText={setName}
+              />
+              <TextField
+                label={
+                  type === 'company' ? 'Vergi no' : type === 'personel' ? 'TC kimlik no' : 'TC / vergi no'
+                }
+                placeholder="İsteğe bağlı"
+                value={taxNumber}
+                onChangeText={setTaxNumber}
+                keyboardType="number-pad"
+              />
+              <TextField label="Telefon" placeholder="İsteğe bağlı" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              <TextField
+                label="E-posta"
+                placeholder="İsteğe bağlı"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <TextField label="Not" placeholder="İsteğe bağlı" value={notes} onChangeText={setNotes} />
+            </FieldGroup>
+            <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+              Aynı numarayla kayıtlı bir cari varsa listede ayırt edebilmeniz için numarayı girmenizi öneririz.
+            </Text>
+          </View>
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">
@@ -182,23 +182,16 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
             </Text>
           ) : null}
 
-          <Button
-            label={isEditing ? 'Güncelle' : 'Kaydet'}
-            onPress={() => saveMutation.mutate()}
-            loading={saveMutation.isPending}
-            disabled={!name.trim()}
-          />
-
           {isEditing ? (
             <Button
-              label="Sil"
-              variant="danger"
+              label={`${typeLabel} kaydını sil`}
+              variant="dangerText"
               onPress={confirmDelete}
               loading={deleteMutation.isPending}
               disabled={saveMutation.isPending}
             />
           ) : null}
-        </Stack>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

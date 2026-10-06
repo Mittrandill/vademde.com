@@ -9,7 +9,7 @@ import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { Button, FieldGroup, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import {
   createCategory,
@@ -135,8 +135,15 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
       <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
         <Stack gap="lg">
           <ScreenHeader
-            title={isEditing ? 'Kategoriyi Düzenle' : 'Yeni Kategori'}
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+            inline
+            title={isEditing ? 'Kategoriyi düzenle' : 'Yeni kategori'}
+            leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+            rightLabel={{
+              label: isEditing ? 'Güncelle' : 'Kaydet',
+              bold: true,
+              disabled: !name.trim() || saveMutation.isPending,
+              onPress: () => saveMutation.mutate(),
+            }}
           />
 
           <SegmentedControl
@@ -146,7 +153,9 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
             stretch
           />
 
-          <TextField label="AD" placeholder="Örn. Ulaşım" value={name} onChangeText={setName} />
+          <FieldGroup>
+            <TextField label="Ad" placeholder="Örn. Ulaşım" value={name} onChangeText={setName} />
+          </FieldGroup>
 
           <Row gap="sm" align="center">
             <CategoryIcon icon={icon} color={color} size={56} />
@@ -159,7 +168,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
           </Row>
 
           <Stack gap="sm">
-            <Text variant="caption" color="textSecondary">
+            <Text variant="label" color="textSecondary">
               SİMGE ({CATEGORY_ICON_CHOICES.length})
             </Text>
             <TextField
@@ -183,9 +192,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
                       borderRadius: theme.radius.input,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: selected ? color : theme.colors.surfaceElevated,
-                      borderWidth: selected ? 0 : 1,
-                      borderColor: theme.colors.border,
+                      backgroundColor: selected ? color : theme.colors.fill,
                     }}
                   >
                     <Ionicons name={option.icon} size={20} color={selected ? '#FFFFFF' : theme.colors.textSecondary} />
@@ -229,7 +236,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
               })}
             </Row>
             <TextField
-              label="ÖZEL RENK (HEX)"
+              label="Özel renk (hex)"
               placeholder="#3FB27F"
               value={hexInput}
               onChangeText={(value) => {
@@ -249,17 +256,10 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
             </Text>
           ) : null}
 
-          <Button
-            label={isEditing ? 'Güncelle' : 'Kaydet'}
-            onPress={() => saveMutation.mutate()}
-            loading={saveMutation.isPending}
-            disabled={!name.trim()}
-          />
-
           {isEditing ? (
             <Button
-              label="Sil"
-              variant="danger"
+              label="Kategoriyi sil"
+              variant="dangerText"
               onPress={confirmDelete}
               loading={deleteMutation.isPending}
               disabled={saveMutation.isPending}
