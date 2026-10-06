@@ -121,6 +121,15 @@ Deno.serve(async () => {
     });
   }
 
+  // Günlük anlık görüntü (value_unit_rate_history): aynı gün tekrar çalışırsa son değer kalır.
+  // Başarısız olması güncel kur akışını bozmamalı, bu yüzden hata yalnızca loglanır.
+  const rateDate = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const { error: historyError } = await supabase.from('value_unit_rate_history').upsert(
+    rows.map((row) => ({ unit_code: row.unit_code, rate_date: rateDate, try_equivalent_minor: row.try_equivalent_minor })),
+    { onConflict: 'unit_code,rate_date' }
+  );
+  if (historyError) console.error('[sync-market-rates] kur geçmişi yazılamadı', historyError.message);
+
   return new Response(
     JSON.stringify({ success: true, updated: rows.map((r) => r.unit_code), errors }),
     { headers: { 'Content-Type': 'application/json' } }

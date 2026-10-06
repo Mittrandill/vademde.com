@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +8,7 @@ import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { Row, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
+import { SectionJumpChips } from '@/components/navigation/SectionJumpChips';
 
 interface Section {
   title: string;
@@ -158,6 +160,9 @@ const SECTIONS: Section[] = [
 export default function TermsOfServiceScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
+  const scrollRef = useRef<ScrollView>(null);
+  const offsets = useRef<number[]>([]);
+  const [active, setActive] = useState(0);
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -167,7 +172,18 @@ export default function TermsOfServiceScreen() {
           left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
         />
       </View>
+      <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.xs }}>
+        <SectionJumpChips
+          titles={SECTIONS.map((x) => x.title)}
+          activeIndex={active}
+          onJump={(index) => {
+            setActive(index);
+            scrollRef.current?.scrollTo({ y: Math.max(0, (offsets.current[index] ?? 0) - 8), animated: true });
+          }}
+        />
+      </View>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{
           padding: theme.screenEdge.standard,
           paddingBottom: theme.spacing.huge,
@@ -178,8 +194,14 @@ export default function TermsOfServiceScreen() {
           SON GÜNCELLEME · 11 AĞUSTOS 2026
         </Text>
 
-        {SECTIONS.map((section) => (
-          <Stack key={section.title} gap="xs">
+        {SECTIONS.map((section, index) => (
+          <Stack
+            key={section.title}
+            gap="xs"
+            onLayout={(e) => {
+              offsets.current[index] = e.nativeEvent.layout.y;
+            }}
+          >
             <Text variant="sectionTitle">{section.title}</Text>
             <Text variant="body" style={{ lineHeight: 24 }}>
               {section.body}

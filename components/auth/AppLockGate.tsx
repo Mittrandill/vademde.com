@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, View, type AppStateStatus } from 'react-native';
+import { Alert, AppState, View, type AppStateStatus } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import { useAppLockStore } from '@/store/appLockStore';
 import { authenticate, getBiometricSupport } from '@/services/appLock';
 import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
 import { queryKeys } from '@/services/queryKeys';
+import { signOut } from '@/features/auth/api';
 
 // Uygulama arka plana alındıktan sonra bu süreyi aşarsa yeniden kilitlenir. Her sekme
 // değişiminde veya bildirim çekmecesini açıp kapatınca Face ID sormak kullanılamaz bir
@@ -129,6 +130,20 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
         </Stack>
         <View style={{ alignSelf: 'stretch' }}>
           <Button label={`${label} ile aç`} onPress={unlock} loading={checking} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              Alert.alert('Şifreyle giriş yap', 'Oturumun kapatılacak; e-posta ve şifrenle yeniden giriş yapabilirsin.', [
+                { text: 'Vazgeç', style: 'cancel' },
+                { text: 'Oturumu Kapat', style: 'destructive', onPress: () => void signOut().catch(() => undefined) },
+              ])
+            }
+            style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: theme.spacing.xs }}
+          >
+            <Text variant="body" color="textSecondary">
+              Şifreyle giriş yap
+            </Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>

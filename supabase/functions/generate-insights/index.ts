@@ -29,7 +29,7 @@ const tl = (minor: number) =>
 
 interface Fact {
   key: string;
-  kind: 'abonelik' | 'aliskanlik' | 'nakit';
+  kind: 'abonelik' | 'aliskanlik' | 'nakit' | 'kur';
   impactMinor: number | null;
   actionRoute: string;
   // Şablon (Gemini başarısız olursa kullanılır) ve modele verilen olgular.
@@ -239,6 +239,88 @@ async function cashRisk(db: ReturnType<typeof createClient>, workspaceId: string
   return facts;
 }
 
+// Kural 4: TRY dışı (döviz/altın) açık borç veya alacak, son ~30 günde kur değişimi nedeniyle
+// belirgin (≥%3) TL farkı yaratıyor. Kur geçmişi value_unit_rate_history'den gelir; en az 20 günlük
+// geçmiş yoksa kural sessizce atlanır. Rakamlar yalnızca sorgudan gelir.
+const COIN_UNITS = new Set(['ceyrek_altin', 'yarim_altin', 'tam_altin', 'cumhuriyet_altini']);
+const UNIT_NAMES: Record<string, string> = {
+  USD: 'Dolar', EUR: 'Euro', gram_altin: 'Gram altın', ceyrek_altin: 'Çeyrek altın',
+  yarim_altin: 'Yarım altın', tam_altin: 'Tam altın', cumhuriyet_altini: 'Cumhuriyet altını',
+};
+
+async function rateImpact(db: ReturnType<typeof createClient>, workspaceId: string): Promise<Fact[]> {
+  const { data: obligations } = await db
+    .from('obligations')
+    .select('direction, currency_code, remaining_amount_minor')
+    .eq('workspace_id', workspaceId)
+    .neq('currency_code', 'TRY')
+    .gt('remaining_amount_minor', 0)
+    .in('status', CASH_ACTIVE_STATUSES);
+  if (!obligations?.length) return [];
+
+  const units = [...new Set((obligations as any[]).map((o) => o.currency_code as string))];
+  const now = new Date();
+  const past = new Date(now.getTime() - 30 * 86_400_000);
+  const oldest = new Date(now.getTime() - 20 * 86_400_000);
+  const { data: history } = await db
+    .from('value_unit_rate_history')
+    .select('unit_code, rate_date, try_equivalent_minor')
+    .in('unit_code', units)
+    .order('rate_date', { ascending: true });
+
+  const month = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  const facts: Fact[] = [];
+  for (const unit of units) {
+    const rows = ((history ?? []) as any[]).filter((h) => h.unit_code === unit);
+    if (rows.length < 2) continue;
+    const latest = rows[rows.length - 1];
+    // 30 gün öncesine en yakın, ama en az 20 gün öncesinde olan kayıt.
+    const candidates = rows.filter((h) => new Date(h.rate_date) <= oldest);
+    if (candidates.length === 0) continue;
+    const base = candidates.reduce((best, h) =>
+      Math.abs(new Date(h.rate_date).getTime() - past.getTime()) < Math.abs(new Date(best.rate_date).getTime() - past.getTime()) ? h : best
+    );
+    const changePct = ((latest.try_equivalent_minor - base.try_equivalent_minor) / base.try_equivalent_minor) * 100;
+    if (Math.abs(changePct) < 3) continue;
+
+    let payableDelta = 0;
+    let receivableDelta = 0;
+    for (const o of obligations as any[]) {
+      if (o.currency_code !== unit) continue;
+      const qty = COIN_UNITS.has(unit) ? o.remaining_amount_minor : o.remaining_amount_minor / 100;
+      const delta = Math.round(qty * (latest.try_equivalent_minor - base.try_equivalent_minor));
+      if (o.direction === 'payable') payableDelta += delta;
+      else receivableDelta += delta;
+    }
+    const name = UNIT_NAMES[unit] ?? unit;
+    const pct = `%${Math.abs(Math.round(changePct))}`;
+    const direction = changePct > 0 ? 'yükseldi' : 'düştü';
+    if (Math.abs(payableDelta) >= 100_000) {
+      facts.push({
+        key: `fx-payable:${unit}:${month}`,
+        kind: 'kur',
+        impactMinor: -payableDelta,
+        actionRoute: '/accounts/value-units',
+        templateTitle: `${name} borcun ${tl(Math.abs(payableDelta))} ${payableDelta > 0 ? 'arttı' : 'azaldı'}`,
+        templateBody: `${name} son 30 günde ${pct} ${direction}; ${name.toLocaleLowerCase('tr-TR')} cinsinden açık borçlarının TL karşılığı buna göre değişti.`,
+        facts: { unit: name, change: pct, direction, payableDifferenceTl: tl(Math.abs(payableDelta)) },
+      });
+    }
+    if (Math.abs(receivableDelta) >= 100_000) {
+      facts.push({
+        key: `fx-receivable:${unit}:${month}`,
+        kind: 'kur',
+        impactMinor: receivableDelta,
+        actionRoute: '/accounts/value-units',
+        templateTitle: `${name} alacağın ${tl(Math.abs(receivableDelta))} ${receivableDelta > 0 ? 'arttı' : 'azaldı'}`,
+        templateBody: `${name} son 30 günde ${pct} ${direction}; ${name.toLocaleLowerCase('tr-TR')} cinsinden alacaklarının TL karşılığı buna göre değişti.`,
+        facts: { unit: name, change: pct, direction, receivableDifferenceTl: tl(Math.abs(receivableDelta)) },
+      });
+    }
+  }
+  return facts;
+}
+
 // Gemini'den kısa, doğal Türkçe başlık/gövde ister; sayı doğrulaması başarısızsa null döner.
 async function polish(facts: Fact[]): Promise<Map<string, { title: string; body: string }> | null> {
   if (facts.length === 0) return new Map();
@@ -329,6 +411,7 @@ Deno.serve(async (req: Request) => {
     ...(await duplicateSubscriptions(userClient, workspaceId)),
     ...(await risingCategories(userClient, workspaceId)),
     ...(await cashRisk(userClient, workspaceId)),
+    ...(await rateImpact(userClient, workspaceId)),
   ];
 
   const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
