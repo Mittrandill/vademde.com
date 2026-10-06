@@ -19,6 +19,8 @@ export interface UploadDocumentInput {
   // docs/07-guvenlik-gizlilik.md §11.3 — "orijinal belgeyi saklama veya işlem sonrası
   // silme tercihi". Belirtilmezse güvenli varsayılan false'tur.
   retainOriginal?: boolean;
+  // Kota dolu olduğunda belge OCR'sız saklanır; kota yenilenince işlenir (is_draft).
+  isDraft?: boolean;
 }
 
 // docs/12-mvp-kabul-kriterleri.md — "Aynı belge tekrar yüklendiğinde mükerrer uyarısı gösterilir."
@@ -50,6 +52,7 @@ export async function uploadAndCreateDocument({
   mimeType,
   contentHash,
   retainOriginal = false,
+  isDraft = false,
 }: UploadDocumentInput): Promise<FinancialDocument> {
   const documentId = generateUuid();
   const storagePath = `${workspaceId}/${documentId}/${sanitizeStorageFileName(fileName)}`;
@@ -77,6 +80,7 @@ export async function uploadAndCreateDocument({
       content_hash: contentHash ?? hashArrayBuffer(arrayBuffer),
       status: 'uploaded',
       retain_original: retainOriginal,
+      is_draft: isDraft,
     })
     .select('*')
     .single();
@@ -187,5 +191,30 @@ export async function markDocumentConfirmed(
 
 export async function discardDocument(documentId: string): Promise<void> {
   const { error } = await supabase.from('financial_documents').update({ status: 'discarded' }).eq('id', documentId);
+  if (error) throw error;
+}
+
+// İşlenmeyi bekleyen taslak belgeler (kota doluyken saklananlar). status 'uploaded' kaldığı sürece
+// listelenir; işlenmeye başlayınca (processing → ready_for_review) kendiliğinden düşer.
+export async function listDraftDocuments(workspaceId: string): Promise<FinancialDocument[]> {
+  const { data, error } = await supabase
+    .from('financial_documents')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .eq('is_draft', true)
+    .eq('status', 'uploaded')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return data;
+}
+
+// Kota dolduğunda yüklenmiş ama işlenememiş (status 'uploaded') belgeyi taslak listesine alır.
+export async function markDocumentAsDraft(documentId: string): Promise<void> {
+  const { error } = await supabase
+    .from('financial_documents')
+    .update({ is_draft: true })
+    .eq('id', documentId)
+    .eq('status', 'uploaded');
   if (error) throw error;
 }

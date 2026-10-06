@@ -17,6 +17,7 @@ import { CashAlertBanner } from '@/components/finance/CashAlertBanner';
 import { QuickActions } from '@/components/finance/QuickActions';
 import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
+import { DraftDocumentsQueue } from '@/components/finance/DraftDocumentsQueue';
 import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
 import { RecentTransactionsList } from '@/components/finance/RecentTransactionsList';
 import { listMyWorkspaces } from '@/features/workspaces/api';
@@ -387,6 +388,8 @@ export default function HomeScreen() {
           <UpcomingDueList obligations={activeObligations} />
 
           <PendingReviewQueue documents={pendingDocumentsQuery.data ?? []} />
+
+          {activeWorkspaceId ? <DraftDocumentsQueue workspaceId={activeWorkspaceId} /> : null}
 
           <CreditCardDueWidget obligation={creditCardObligation} />
 

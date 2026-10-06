@@ -18,6 +18,7 @@ import {
   QuotaExceededError,
   findDuplicateDocument,
   getDocument,
+  markDocumentAsDraft,
   startProcessing,
   uploadAndCreateDocument,
 } from '@/features/documents/api';
@@ -27,14 +28,10 @@ import { useMyWorkspaceRole } from '@/features/workspaces/useMyWorkspaceRole';
 import { queryKeys } from '@/services/queryKeys';
 import { hashArrayBuffer } from '@/utils/hash';
 import { parseGibInvoiceQr } from '@/utils/gibQr';
-import { RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
+import { OCR_CONSENT_KEY, OCR_CONSENT_TEXT, RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — belge görüntüsü buluta gönderilmeden önce
 // kullanıcıdan açık onay alınır (App Store gizlilik gereksinimi).
-const OCR_CONSENT_KEY = 'vademde-ocr-consent-granted';
-const OCR_CONSENT_TEXT =
-  'Belgenizdeki tarih, tutar ve ödeme bilgilerini çıkarmak için belge görüntüsü güvenli bağlantı üzerinden akıllı belge analiz hizmetine gönderilecektir. Belge, siz onaylamadan finansal kayda dönüştürülmez.';
-
 interface PendingAsset {
   uri: string;
   fileName: string;
@@ -141,6 +138,10 @@ export default function TaraScreen() {
   const [consentGranted, setConsentGranted] = useState<boolean | null>(null);
   const [pendingAsset, setPendingAsset] = useState<PendingAsset | null>(null);
   const [quotaSheetOpen, setQuotaSheetOpen] = useState(false);
+  // Kota sheet'i açıldığında saklanabilecek belge: henüz yüklenmemiş bir dosya ya da yüklenip
+  // işlenemeyen (kota 402) bir belge kaydı.
+  const [draftTarget, setDraftTarget] = useState<{ asset?: PendingAsset; documentId?: string } | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
   const [helpSheetOpen, setHelpSheetOpen] = useState(false);
 
   useEffect(() => {
@@ -241,6 +242,7 @@ export default function TaraScreen() {
     contentHash?: string
   ) {
     if (!activeWorkspaceId) return;
+    let createdDocumentId: string | undefined;
     try {
       const retainOriginalDefault = await AsyncStorage.getItem(RETAIN_ORIGINAL_DEFAULT_KEY);
       const document = await uploadAndCreateDocument({
@@ -251,13 +253,14 @@ export default function TaraScreen() {
         contentHash,
         retainOriginal: retainOriginalDefault === 'true',
       });
+      createdDocumentId = document.id;
       setDocumentId(document.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.document(activeWorkspaceId, document.id) });
       await startProcessing(document.id);
     } catch (err) {
       if (err instanceof QuotaExceededError) {
         reset();
-        showQuotaExceededAlert();
+        showQuotaExceededAlert({ documentId: createdDocumentId });
         return;
       }
       setError(err instanceof Error ? err.message : 'Belge işlenemedi');
@@ -309,8 +312,40 @@ export default function TaraScreen() {
 
   // docs/10-abonelik-gelir-modeli.md §14.1 — kota bittiğinde manuel giriş açık kalır;
   // kullanıcı planını yükseltebilir.
-  function showQuotaExceededAlert() {
+  function showQuotaExceededAlert(target?: { asset?: PendingAsset; documentId?: string }) {
+    setDraftTarget(target ?? null);
     setQuotaSheetOpen(true);
+  }
+
+  // "Belgeyi taslak olarak sakla": belge OCR'sız saklanır, kota yenilenince ana sayfadaki
+  // "İşlenmeyi bekliyor" listesinden işlenir (kota ve KVKK onayı o anda kontrol edilir).
+  async function saveAsDraft() {
+    if (!activeWorkspaceId || !draftTarget || draftSaving) return;
+    setDraftSaving(true);
+    try {
+      if (draftTarget.documentId) {
+        await markDocumentAsDraft(draftTarget.documentId);
+      } else if (draftTarget.asset) {
+        const { uri, fileName, mimeType } = draftTarget.asset;
+        const retainOriginalDefault = await AsyncStorage.getItem(RETAIN_ORIGINAL_DEFAULT_KEY);
+        await uploadAndCreateDocument({
+          workspaceId: activeWorkspaceId,
+          uri,
+          fileName,
+          mimeType,
+          retainOriginal: retainOriginalDefault === 'true',
+          isDraft: true,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardDraftDocuments(activeWorkspaceId) });
+      setQuotaSheetOpen(false);
+      setDraftTarget(null);
+      Alert.alert('Taslak olarak saklandı', 'Kotan yenilenince ana sayfadaki "İşlenmeyi bekliyor" listesinden işleyebilirsin.');
+    } catch (err) {
+      Alert.alert('Saklanamadı', err instanceof Error ? err.message : 'Belge taslak olarak saklanamadı');
+    } finally {
+      setDraftSaving(false);
+    }
   }
 
   async function requestScan(uri: string, fileName: string, mimeType: string) {
@@ -324,7 +359,7 @@ export default function TaraScreen() {
       return;
     }
     if (quotaRemaining !== undefined && quotaRemaining <= 0) {
-      showQuotaExceededAlert();
+      showQuotaExceededAlert({ asset: { uri, fileName, mimeType } });
       return;
     }
     if (consentGranted) {
@@ -639,6 +674,8 @@ export default function TaraScreen() {
         onClose={() => setQuotaSheetOpen(false)}
         used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
         quota={ocrUsageQuery.data?.quota ?? 0}
+        onSaveDraft={draftTarget ? saveAsDraft : undefined}
+        draftSaving={draftSaving}
         onUpgrade={() => {
           setQuotaSheetOpen(false);
           router.push('/paywall');
@@ -764,6 +801,8 @@ export default function TaraScreen() {
         onClose={() => setQuotaSheetOpen(false)}
         used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
         quota={ocrUsageQuery.data?.quota ?? 0}
+        onSaveDraft={draftTarget ? saveAsDraft : undefined}
+        draftSaving={draftSaving}
         onUpgrade={() => {
           setQuotaSheetOpen(false);
           router.push('/paywall');

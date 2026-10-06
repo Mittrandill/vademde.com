@@ -17,10 +17,22 @@ export interface QuotaSheetProps {
   quota: number;
   onUpgrade: () => void;
   onManual: () => void;
+  /** Verilirse "Belgeyi taslak olarak sakla" satırı çıkar. */
+  onSaveDraft?: () => void;
+  draftSaving?: boolean;
 }
 
 // Kota, takvim ayı bazında yenilenir (bkz. features/subscriptions/api.ts currentPeriodMonth).
-export function QuotaExceededSheet({ visible, onClose, used, quota, onUpgrade, onManual }: QuotaSheetProps) {
+export function QuotaExceededSheet({
+  visible,
+  onClose,
+  used,
+  quota,
+  onUpgrade,
+  onManual,
+  onSaveDraft,
+  draftSaving,
+}: QuotaSheetProps) {
   const theme = useTheme();
   const now = new Date();
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -48,6 +60,9 @@ export function QuotaExceededSheet({ visible, onClose, used, quota, onUpgrade, o
           </Text>
         </View>
         <Button label="Plus ile daha fazla tara" onPress={onUpgrade} />
+        {onSaveDraft ? (
+          <Button label="Belgeyi taslak olarak sakla" variant="secondary" onPress={onSaveDraft} loading={draftSaving} />
+        ) : null}
         <Button label="Elle gir" variant="secondary" onPress={onManual} />
       </Stack>
     </BottomSheet>

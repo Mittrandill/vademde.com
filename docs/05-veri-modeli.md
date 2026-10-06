@@ -95,3 +95,9 @@ Bu tablolardaki temel kavramlar için bkz. `14-kararlar-ve-terminoloji.md` — E
 - `obligations.billing_period text` (`'monthly' | 'yearly'`, NULL = aylık) — yalnızca `document_type = 'abonelik'` için doldurulur; yıllıkta vadeler 12 ayda bir dizilir.
 - Mevcut kayıtlarda iki alan da NULL kalır; davranış değişmez. Geri alma: iki kolonun silinmesi.
 
+
+### 9.y Taslak belgeler (financial_documents)
+- `financial_documents.is_draft boolean not null default false` — kota doluyken OCR'sız saklanan belgeler. Yalnızca `status = 'uploaded' and is_draft` olanlar ana sayfada "İşlenmeyi bekliyor" olarak listelenir; işlenmeye başlayınca liste dışına çıkar. Geri alma: kolonun silinmesi.
+
+### 9.z Kur geçmişi
+- `value_unit_rate_history(unit_code, rate_date, try_equivalent_minor)` — günlük kur anlık görüntüsü (`sync-market-rates` yazar); RLS: oturum açmış herkes okur, yazma yalnızca service role. Akıllı önerilerdeki "kur etkisi" kuralı bunu kullanır.

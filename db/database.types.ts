@@ -441,6 +441,7 @@ export type Database = {
           obligation_id: string | null
           overall_confidence: number | null
           retain_original: boolean
+          is_draft: boolean
           status: string
           storage_path: string
           suggested_category_id: string | null
@@ -467,6 +468,7 @@ export type Database = {
           obligation_id?: string | null
           overall_confidence?: number | null
           retain_original?: boolean
+          is_draft?: boolean
           status?: string
           storage_path: string
           suggested_category_id?: string | null
@@ -493,6 +495,7 @@ export type Database = {
           obligation_id?: string | null
           overall_confidence?: number | null
           retain_original?: boolean
+          is_draft?: boolean
           status?: string
           storage_path?: string
           suggested_category_id?: string | null

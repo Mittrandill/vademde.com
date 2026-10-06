@@ -46,6 +46,8 @@ export const queryKeys = {
     [workspaceId, 'transactions', 'dashboard-all-time'] as const,
   dashboardPendingDocuments: (workspaceId: string) =>
     [workspaceId, 'financial_documents', 'dashboard-pending'] as const,
+  dashboardDraftDocuments: (workspaceId: string) =>
+    [workspaceId, 'financial_documents', 'dashboard-drafts'] as const,
   recentTransactions: (workspaceId: string) =>
     [workspaceId, 'transactions', 'dashboard-recent'] as const,
   calendarObligations: (workspaceId: string, rangeKey: string) =>
