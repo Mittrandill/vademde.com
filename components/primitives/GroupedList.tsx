@@ -58,7 +58,7 @@ export function GroupedSection({ title, children, inset }: { title?: string; chi
   );
 }
 
-type IconTone = 'default' | 'brand' | 'violet' | 'success' | 'danger' | 'aqua';
+type IconTone = 'default' | 'brand' | 'brandSoft' | 'violet' | 'success' | 'danger' | 'aqua';
 
 export function GroupedRowIcon({
   name,
@@ -74,6 +74,7 @@ export function GroupedRowIcon({
   const palette: Record<IconTone, { bg: string; fg: string }> = {
     default: { bg: colors.fill, fg: colors.textPrimary },
     brand: { bg: colors.brandPrimary, fg: colors.onAction },
+    brandSoft: { bg: 'rgba(255,176,0,0.16)', fg: colors.attentionMarker },
     violet: { bg: 'rgba(107,77,255,0.14)', fg: colors.payable },
     success: { bg: 'rgba(82,206,150,0.16)', fg: colors.success },
     danger: { bg: 'rgba(255,98,92,0.14)', fg: colors.danger },

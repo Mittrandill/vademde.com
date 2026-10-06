@@ -12,7 +12,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
-import { Button, Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Button, Group, GroupedRowIcon, Pressable, Row, Text } from '@/components/primitives';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { QuotaExceededSheet, ScanHelpSheet } from '@/components/finance/ScanSheets';
 import {
   QuotaExceededError,
@@ -71,10 +72,6 @@ const FRAME_WIDTH = 280;
 const FRAME_HEIGHT = 340;
 const CORNER = 28;
 
-// Hero'daki kamera düğmesinin eşmerkezli halkaları (dıştan içe).
-const HERO_GLOW_OUTER = 224;
-const HERO_GLOW_INNER = 176;
-const HERO_BUTTON = 128;
 
 export default function TaraScreen() {
   const qrHandledRef = useRef(false);
@@ -126,11 +123,11 @@ export default function TaraScreen() {
   const tabBarOverlap = theme.layout.tabBarHeight + theme.layout.tabBarBottomGap;
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState<'front' | 'back'>('back');
-  const [torch, setTorch] = useState(false);
+  const facing = 'back' as const;
+  const torch = false;
   const [cameraReady, setCameraReady] = useState(false);
 
-  const [mode, setMode] = useState<'select' | 'camera'>('select');
+  const [mode, setMode] = useState<'select' | 'camera'>('camera');
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -412,280 +409,182 @@ export default function TaraScreen() {
   }
 
   const status = documentQuery.data?.status;
-  const progress = STATUS_PROGRESS[status ?? 'uploaded'];
 
   if (pendingAsset) {
+    // Akıllı tarama izni (KVKK): tuval diliyle — görsel, başlık, gruplu maddeler, iki düğme.
     return (
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        {/* Önizleme görseli + uzun izin metni + iki buton küçük ekranlara (ve büyük
-            yazı tipi ayarlarına) sığmıyor, alttaki "Vazgeç" ekran dışında kalıyordu.
-            flexGrow ile birlikte ScrollView: yer varsa içerik dikeyde ortalanır, yoksa
-            kaydırılır — buton her koşulda erişilebilir kalır. */}
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: 'center',
-            padding: theme.screenEdge.standard,
-            gap: theme.spacing.lg,
-          }}
+          contentContainerStyle={{ flexGrow: 1, padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xl }}
         >
+          <ScreenHeader title="Akıllı tarama izni" left={{ icon: 'close', accessibilityLabel: 'Vazgeç', onPress: handleConsentDecline }} />
           {pendingAsset.mimeType !== 'application/pdf' ? (
             <Image
               source={{ uri: pendingAsset.uri }}
-              style={{ width: '100%', height: 160, borderRadius: theme.radius.widget }}
+              style={{ width: '100%', height: 150, borderRadius: theme.radius.widget, marginTop: theme.spacing.md }}
               resizeMode="cover"
             />
           ) : null}
-          <Stack gap="xs">
-            <Text variant="pageTitle">Akıllı tarama izni</Text>
-            <Text variant="body" color="textSecondary">
-              {OCR_CONSENT_TEXT}
-            </Text>
-          </Stack>
-          <Stack gap="md">
-            {CONSENT_POINTS.map((point) => (
-              <Row key={point.title} gap="sm" align="flex-start">
-                <Ionicons name={point.icon} size={theme.iconSize.xxl} color={theme.colors.textPrimary} />
-                <Stack gap="xxs" style={{ flex: 1 }}>
-                  <Text variant="cardTitle">{point.title}</Text>
-                  <Text variant="body" color="textSecondary">
-                    {point.text}
-                  </Text>
-                </Stack>
-              </Row>
-            ))}
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => router.push('/legal/privacy-policy')}
-              style={{ minHeight: theme.touchTarget.minimum, justifyContent: 'center' }}
-            >
-              <Text variant="cardTitle" style={{ fontSize: 14, textDecorationLine: 'underline' }}>
-                KVKK aydınlatma metnini oku
-              </Text>
-            </Pressable>
-          </Stack>
-          <Stack gap="sm">
+          <Text color="textSecondary" style={{ marginTop: theme.spacing.md, fontSize: 15, lineHeight: 21 }}>
+            {OCR_CONSENT_TEXT}
+          </Text>
+          <View style={{ marginTop: theme.spacing.md }}>
+            <Group inset={62}>
+              {CONSENT_POINTS.map((point) => (
+                <View key={point.title} style={{ minHeight: 56, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', gap: 12 }}>
+                  <GroupedRowIcon name={point.icon} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontWeight: '600' }}>{point.title}</Text>
+                    <Text variant="caption" color="textSecondary">
+                      {point.text}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </Group>
+          </View>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push('/legal/privacy-policy')}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: '500', textDecorationLine: 'underline' }}>KVKK aydınlatma metnini oku</Text>
+          </Pressable>
+          <View style={{ flex: 1 }} />
+          <View style={{ gap: theme.spacing.xs, marginTop: theme.spacing.md }}>
             <Button label="İzin ver ve tara" onPress={handleConsentAccept} />
             <Button label="Şimdilik elle gireceğim" variant="secondary" onPress={handleConsentDecline} />
-          </Stack>
+          </View>
         </ScrollView>
       </SafeAreaView>
     );
   }
 
-  if (localUri) {
+  if (localUri && status === 'failed') {
+    // Tuval OcrBasarisiz: belge kaybolmaz; yeniden çek ya da elle gir (bağlayıcı kural 5).
     return (
-      <View key={reflowKey} style={{ flex: 1, backgroundColor: '#000' }}>
-        {isPdf ? (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.surfacePrimary }]} />
-        ) : (
-          <Image source={{ uri: localUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        )}
-        <SafeAreaView style={{ flex: 1 }}>
-          {/* Kapatma düğmesi eskiden position:absolute ile katmanın tepesine
-              iliştirilmişti; kamera modundaki üst kontrol satırıyla aynı hizaya
-              gelmiyor, olduğundan yukarıda duruyordu. Artık iki ekran da aynı
-              akış içindeki üst satırı kullanıyor. */}
-          <Row
-            style={{
-              justifyContent: 'flex-end',
-              paddingHorizontal: theme.screenEdge.standard,
-              paddingTop: theme.spacing.sm,
-            }}
-          >
-            <Pressable onPress={reset} hitSlop={12} style={styles.iconButton}>
-              <Ionicons name="close" size={22} color="#fff" />
-            </Pressable>
-          </Row>
-
-          {/* Yüzen TabBar bu tam ekran katmanın üstünde durduğu için içerik onun
-              üstünde kalacak kadar yukarı alınır. */}
-          <Stack style={{ flex: 1, justifyContent: 'center', paddingBottom: tabBarOverlap }}>
-            <Stack gap="lg" style={{ paddingHorizontal: theme.screenEdge.standard }}>
-              {status === 'failed' ? (
-                <Stack gap="sm" align="center">
-                  <Ionicons name="alert-circle" size={28} color={theme.colors.danger} />
-                  <Text variant="body" style={{ color: '#fff' }}>
-                    Belge işlenemedi.
-                  </Text>
-                  <Button label="Tekrar Dene" variant="secondary" onPress={reset} />
-                  {error ? (
-                    <Text variant="caption" style={{ color: theme.colors.danger }}>
-                      {error}
-                    </Text>
-                  ) : null}
-                </Stack>
-              ) : (
-                <View
-                  style={{
-                    backgroundColor: theme.colors.surfacePrimary,
-                    borderRadius: theme.radius.heroWidget,
-                    padding: theme.spacing.lg,
-                    gap: theme.spacing.md,
-                  }}
-                >
-                  <Row style={{ justifyContent: 'space-between' }}>
-                    <Text variant="sectionTitle">Okunuyor</Text>
-                    <Text variant="label" color="textSecondary" tabular>
-                      %{progress}
-                    </Text>
-                  </Row>
-                  {PROCESS_STEPS.map((step, index) => {
-                    const activeIndex = status === 'processing' ? 1 : 0;
-                    const done = status === 'ready_for_review' || index < activeIndex;
-                    const active = !done && index === activeIndex;
-                    return (
-                      <Row key={step.title} gap="sm" align="flex-start">
-                        {done ? (
-                          <Ionicons name="checkmark-circle" size={theme.iconSize.xxl} color={theme.colors.receivable} />
-                        ) : active ? (
-                          <ActivityIndicator size="small" color={theme.colors.action} style={{ width: theme.iconSize.xxl }} />
-                        ) : (
-                          <Ionicons name="ellipse-outline" size={theme.iconSize.xxl} color={theme.colors.mutedControl} />
-                        )}
-                        <Stack gap="xxs" style={{ flex: 1 }}>
-                          <Text variant="cardTitle" color={done || active ? 'textPrimary' : 'textSecondary'}>
-                            {step.title}
-                          </Text>
-                          <Text variant="caption" color="textSecondary">
-                            {step.hint}
-                          </Text>
-                        </Stack>
-                      </Row>
-                    );
-                  })}
-                  <Text variant="caption" color="textSecondary">
-                    Sonuç hazır olduğunda kontrol ekranına geçilir; hiçbir şey sen onaylamadan kaydedilmez.
-                  </Text>
-                </View>
-              )}
-            </Stack>
-          </Stack>
-        </SafeAreaView>
-      </View>
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <View style={{ flex: 1, paddingHorizontal: theme.screenEdge.standard }}>
+          <ScreenHeader title="" inline left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: reset }} />
+          <View style={{ alignItems: 'center', marginTop: theme.spacing.xl }}>
+            <View
+              style={{
+                width: 120,
+                height: 156,
+                borderRadius: 6,
+                backgroundColor: '#FBFAF6',
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                padding: 16,
+                gap: 8,
+                opacity: 0.8,
+              }}
+            >
+              <View style={{ width: 60, height: 6, borderRadius: 2, backgroundColor: '#B9B7AE' }} />
+              <View style={{ width: 86, height: 4, borderRadius: 2, backgroundColor: '#D6D4CB', marginTop: 8 }} />
+              <View style={{ width: 70, height: 4, borderRadius: 2, backgroundColor: '#D6D4CB' }} />
+              <View style={{ width: 80, height: 10, borderRadius: 2, backgroundColor: '#9C9B93', marginTop: 8 }} />
+            </View>
+            <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, marginTop: 24, textAlign: 'center' }}>
+              Belge okunamadı
+            </Text>
+            <Text color="textSecondary" style={{ marginTop: 8, textAlign: 'center', fontSize: 15, lineHeight: 20, maxWidth: 300 }}>
+              Belge kaybolmadı; yeniden çekebilir ya da bilgileri kendiniz girebilirsiniz.
+            </Text>
+          </View>
+          <View style={{ marginTop: theme.spacing.xl }}>
+            <Group inset={62}>
+              <View style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <GroupedRowIcon name="phone-portrait" />
+                <Text style={{ flex: 1, fontSize: 15 }}>Telefonu sabit tutun ve 20–30 cm yaklaşın</Text>
+              </View>
+              <View style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <GroupedRowIcon name="sunny" />
+                <Text style={{ flex: 1, fontSize: 15 }}>Işığı yandan alın; parlama tutarı kapatabilir</Text>
+              </View>
+            </Group>
+          </View>
+          {error ? (
+            <Text variant="caption" color="danger" style={{ marginTop: theme.spacing.sm }}>
+              {error}
+            </Text>
+          ) : null}
+          <View style={{ flex: 1 }} />
+          <View style={{ gap: theme.spacing.xs, paddingBottom: theme.layout.tabBarClearance }}>
+            <Button label="Yeniden çek" onPress={reset} />
+            <Button label="Bilgileri elle gir" variant="secondary" onPress={() => router.push('/transactions/new')} />
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  if (mode === 'select') {
-    const usage = ocrUsageQuery.data;
-    const quotaEmpty = usage ? usage.remaining <= 0 : false;
-    const quotaAccent = quotaEmpty ? theme.colors.danger : theme.colors.brandPrimary;
-
+  if (localUri) {
+    // Tuval Isleniyor: belge çizimi + "Belge okunuyor" + adım listesi.
+    const activeIndex = status === 'processing' ? 1 : 0;
     return (
-      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }} edges={['top', 'left', 'right']}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            padding: theme.screenEdge.standard,
-            // Yüzen tab bar (64pt) içeriği kapatmasın.
-            paddingBottom: theme.layout.tabBarClearance,
-            gap: theme.spacing.lg,
-          }}
-        >
-          <Stack gap="sm">
-            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text variant="pageTitle">Belge tara</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Tarama hakkında bilgi"
-                onPress={() => setHelpSheetOpen(true)}
-                style={[styles.infoButton, { borderColor: theme.colors.border }]}
-              >
-                <Ionicons name="information" size={16} color={theme.colors.textSecondary} />
-              </Pressable>
-            </Row>
-            <Text variant="body" color="textSecondary">
-              Çek, senet veya fatura ekleyin; Vademde belgeyi okuyup vadeli kaydı sizin onayınızla oluşturur.
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <View style={{ flex: 1, paddingHorizontal: theme.screenEdge.standard }}>
+          <ScreenHeader title="" inline left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: reset }} />
+          <View style={{ alignItems: 'center', marginTop: theme.spacing.md }}>
+            <View
+              style={{
+                width: 150,
+                height: 196,
+                borderRadius: 6,
+                overflow: 'hidden',
+                backgroundColor: '#FBFAF6',
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+              }}
+            >
+              {isPdf ? null : <Image source={{ uri: localUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  height: 2,
+                  backgroundColor: '#FFB000',
+                  shadowColor: '#FFB000',
+                  shadowOpacity: 0.6,
+                  shadowRadius: 8,
+                  transform: [{ translateY: scanAnim.interpolate({ inputRange: [0, 1], outputRange: [4, 190] }) }],
+                }}
+              />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '700', letterSpacing: -0.3, marginTop: 24 }}>Belge okunuyor</Text>
+            <Text color="textSecondary" style={{ marginTop: 4, fontSize: 15 }}>
+              Genellikle birkaç saniye sürer.
             </Text>
-            {usage ? (
-              <Row
-                gap="xs"
-                style={[
-                  styles.quotaPill,
-                  {
-                    borderColor: quotaEmpty ? withAlpha(theme.colors.danger, 0.4) : theme.colors.border,
-                    backgroundColor: theme.colors.surfacePrimary,
-                  },
-                ]}
-              >
-                <Ionicons name="document-text-outline" size={15} color={theme.colors.textSecondary} />
-                <Text variant="caption" color="textSecondary">
-                  Kalan OCR kotanız:{' '}
-                  <Text variant="caption" tabular style={{ color: quotaAccent, fontWeight: '700' }}>
-                    {usage.remaining}
-                  </Text>
-                  <Text variant="caption" color="textSecondary" tabular>
-                    {' '}
-                    / {usage.quota}
-                  </Text>
-                </Text>
-              </Row>
-            ) : null}
-          </Stack>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Kameradan tara"
-            onPress={() => setMode('camera')}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: theme.spacing.md,
-              padding: theme.spacing.lg,
-              borderRadius: theme.radius.heroWidget,
-              backgroundColor: theme.colors.action,
-            }}
-          >
-            <Ionicons name="camera-outline" size={40} color={theme.colors.onAction} />
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="sectionTitle" style={{ color: theme.colors.onAction }}>
-                Kameradan tara
-              </Text>
-              <Text variant="caption" style={{ color: theme.colors.onAction }}>
-                Belgeyi kamerayla çekerek tara
-              </Text>
-            </Stack>
-            <Ionicons name="arrow-forward" size={theme.iconSize.xxl} color={theme.colors.onAction} />
-          </Pressable>
-
-          <Stack gap="sm">
-            <SourceRow
-              icon="images-outline"
-              title="Galeriden Seç"
-              subtitle="Fotoğraf galerisinden bir belge seçin"
-              onPress={handlePickLibrary}
-            />
-            <SourceRow
-              icon="folder-open-outline"
-              title="Dosyalardan Seç"
-              subtitle="Cihazınızdaki dosyalardan belge seçin"
-              onPress={handlePickDocument}
-            />
-          </Stack>
-
-          {/* docs/10-abonelik-gelir-modeli.md §14.1 — kota bitse bile manuel giriş açık kalır. */}
-          {quotaEmpty ? (
-            <Button label="Manuel Giriş" variant="secondary" onPress={() => router.push('/transactions/new')} />
-          ) : null}
-        </ScrollView>
-      <QuotaExceededSheet
-        visible={quotaSheetOpen}
-        onClose={() => setQuotaSheetOpen(false)}
-        used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
-        quota={ocrUsageQuery.data?.quota ?? 0}
-        onSaveDraft={draftTarget ? saveAsDraft : undefined}
-        draftSaving={draftSaving}
-        onUpgrade={() => {
-          setQuotaSheetOpen(false);
-          router.push('/paywall');
-        }}
-        onManual={() => {
-          setQuotaSheetOpen(false);
-          router.push('/transactions/new');
-        }}
-      />
-      <ScanHelpSheet visible={helpSheetOpen} onClose={() => setHelpSheetOpen(false)} />
+          </View>
+          <View style={{ marginTop: theme.spacing.xl }}>
+            <Group inset={16}>
+              {PROCESS_STEPS.map((step, index) => {
+                const done = status === 'ready_for_review' || index < activeIndex;
+                const active = !done && index === activeIndex;
+                return (
+                  <View key={step.title} style={{ minHeight: 50, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text
+                      style={{ flex: 1, fontWeight: active ? '600' : '400', color: done || active ? theme.colors.textPrimary : theme.colors.mutedControl }}
+                    >
+                      {step.title}
+                    </Text>
+                    {done ? (
+                      <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                    ) : active ? (
+                      <ActivityIndicator size="small" color={theme.colors.brandPrimary} />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </Group>
+            <Text variant="caption" color="textSecondary" style={{ marginTop: theme.spacing.xs, paddingHorizontal: 4 }}>
+              Sonuç hazır olduğunda kontrol ekranına geçilir; hiçbir şey sen onaylamadan kaydedilmez.
+            </Text>
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
@@ -697,35 +596,46 @@ export default function TaraScreen() {
   if (!permission.granted) {
     return (
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-        {/* İzin ekranı da izin metni ekranıyla aynı desende kaydırılabilir: büyük yazı
-            tipi ayarlarında buton çifti ekran dışına taşmasın. */}
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: 'center',
-            padding: theme.screenEdge.standard,
-            gap: theme.spacing.xl,
-          }}
+          contentContainerStyle={{ flexGrow: 1, padding: theme.screenEdge.standard, paddingBottom: theme.layout.tabBarClearance }}
         >
-          <Stack gap="lg" align="center">
-            <Ionicons name="camera-outline" size={40} color={theme.colors.textSecondary} />
-            <Text variant="cardTitle" style={{ textAlign: 'center' }}>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.sm }}>
+            <GroupedRowIcon name="camera" tone="brandSoft" size={80} />
+            <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', textAlign: 'center', marginTop: theme.spacing.sm }}>
               Kameraya erişim gerekiyor
             </Text>
-            <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-              Çek, senet veya fatura fotoğrafını taramak için kamera izni gerekir.
+            <Text color="textSecondary" style={{ textAlign: 'center', maxWidth: 300 }}>
+              Çek, senet veya fatura fotoğrafını taramak için kamera izni gerekir. İzin vermesen de galeriden seçebilir ya da elle girebilirsin.
             </Text>
-          </Stack>
-          <Stack gap="sm">
-            <Button label="İzin Ver" onPress={requestPermission} />
-            <Button label="Vazgeç" variant="secondary" onPress={() => setMode('select')} />
-          </Stack>
+          </View>
+          <View style={{ gap: theme.spacing.xs }}>
+            <Button label="İzin ver" onPress={requestPermission} />
+            <Button label="Galeriden seç" variant="secondary" onPress={handlePickLibrary} />
+            <Button label="Bilgileri elle gir" variant="text" onPress={() => router.push('/transactions/new')} />
+          </View>
         </ScrollView>
+        <QuotaExceededSheet
+          visible={quotaSheetOpen}
+          onClose={() => setQuotaSheetOpen(false)}
+          used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
+          quota={ocrUsageQuery.data?.quota ?? 0}
+          onSaveDraft={draftTarget ? saveAsDraft : undefined}
+          draftSaving={draftSaving}
+          onUpgrade={() => {
+            setQuotaSheetOpen(false);
+            router.push('/paywall');
+          }}
+          onManual={() => {
+            setQuotaSheetOpen(false);
+            router.push('/transactions/new');
+          }}
+        />
       </SafeAreaView>
     );
   }
 
+  // Tuval Tara: tam ekran vizör — üstte kapat / "Otomatik" / "Elle gir", altta galeri · deklanşör · dosyalar.
   return (
     <View key={reflowKey} style={{ flex: 1, backgroundColor: '#000' }}>
       <CameraView
@@ -740,118 +650,75 @@ export default function TaraScreen() {
         onBarcodeScanned={handleBarcode}
       />
       <SafeAreaView style={{ flex: 1 }}>
-        <Stack style={{ flex: 1, justifyContent: 'space-between' }}>
-          <Row
-            style={{
-              justifyContent: 'space-between',
-              paddingHorizontal: theme.screenEdge.standard,
-              paddingTop: theme.spacing.sm,
-            }}
-          >
-            <Pressable onPress={() => setMode('select')} style={styles.iconButton}>
-              <Ionicons name="chevron-back" size={22} color="#fff" />
-            </Pressable>
-            <Row gap="sm">
-              <Pressable onPress={() => setTorch((t) => !t)} style={styles.iconButton}>
-                <Ionicons name={torch ? 'flash' : 'flash-off'} size={20} color="#fff" />
-              </Pressable>
-              <Pressable onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))} style={styles.iconButton}>
-                <Ionicons name="camera-reverse-outline" size={22} color="#fff" />
-              </Pressable>
-            </Row>
-          </Row>
-
-          <Stack align="center">
-            <View style={styles.scanFrame}>
-              <CornerBrackets color={theme.colors.textPrimary} />
-            </View>
-            <Text variant="caption" style={{ color: 'rgba(255,255,255,0.8)', marginTop: theme.spacing.sm }}>
-              Belgeyi çerçeve içine hizalayın
-            </Text>
-          </Stack>
-
+        <View style={{ flex: 1, justifyContent: 'space-between' }}>
           <Row
             style={{
               justifyContent: 'space-between',
               alignItems: 'center',
-              paddingHorizontal: theme.screenEdge.standard + theme.spacing.md,
-              // Deklanşörün alt yarısı yüzen TabBar'ın arkasında kalıyordu: satır
-              // yalnızca insets.bottom + 24'te duruyor, TabBar ise insets.bottom + 68'e
-              // kadar yükseliyor. Kontroller çubuğun tamamen üstüne alınır.
-              paddingBottom: tabBarOverlap + theme.spacing.lg,
+              paddingHorizontal: 16,
+              paddingTop: theme.spacing.xs,
             }}
           >
-            <Pressable onPress={handlePickLibrary} style={styles.iconButton}>
-              <Ionicons name="images-outline" size={24} color="#fff" />
+            <Pressable accessibilityLabel="Kapat" onPress={() => router.replace('/(tabs)')} style={styles.iconButton}>
+              <Ionicons name="close" size={20} color="#fff" />
             </Pressable>
-
-            <Pressable onPress={handleCapture} disabled={!cameraReady}>
-              <View style={[styles.shutterOuter, { borderColor: theme.colors.brandPrimary }]}>
-                <View style={[styles.shutterInner, { backgroundColor: theme.colors.brandPrimary }]} />
-              </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Tarama hakkında bilgi"
+              onPress={() => setHelpSheetOpen(true)}
+              style={styles.chip}
+            >
+              <Ionicons name="sparkles" size={14} color="#fff" />
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Otomatik</Text>
             </Pressable>
-
-            <Pressable onPress={handlePickDocument} style={styles.iconButton}>
-              <Ionicons name="document-text-outline" size={22} color="#fff" />
+            <Pressable accessibilityRole="button" onPress={() => router.push('/transactions/new')} style={styles.chip}>
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Elle gir</Text>
             </Pressable>
           </Row>
-        </Stack>
-      <QuotaExceededSheet
-        visible={quotaSheetOpen}
-        onClose={() => setQuotaSheetOpen(false)}
-        used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
-        quota={ocrUsageQuery.data?.quota ?? 0}
-        onSaveDraft={draftTarget ? saveAsDraft : undefined}
-        draftSaving={draftSaving}
-        onUpgrade={() => {
-          setQuotaSheetOpen(false);
-          router.push('/paywall');
-        }}
-        onManual={() => {
-          setQuotaSheetOpen(false);
-          router.push('/transactions/new');
-        }}
-      />
-      <ScanHelpSheet visible={helpSheetOpen} onClose={() => setHelpSheetOpen(false)} />
+
+          <View style={{ alignItems: 'center' }}>
+            <View style={styles.scanFrame}>
+              <CornerBrackets color="#FFB000" />
+            </View>
+            <View style={styles.hint}>
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '500' }}>Belgeyi çerçeve içine hizalayın</Text>
+            </View>
+          </View>
+
+          <View style={{ paddingBottom: tabBarOverlap + theme.spacing.lg, alignItems: 'center', gap: theme.spacing.md }}>
+            <Text style={{ color: '#FFB000', fontSize: 13, fontWeight: '600', letterSpacing: 0.5 }}>OTOMATİK</Text>
+            <Row style={{ alignSelf: 'stretch', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 34 }}>
+              <Pressable accessibilityLabel="Galeri" onPress={handlePickLibrary} style={styles.sideButtonSquare}>
+                <Ionicons name="images" size={22} color="#fff" />
+              </Pressable>
+              <Pressable accessibilityLabel="Çek" onPress={handleCapture} disabled={!cameraReady} style={styles.shutterOuter}>
+                <View style={styles.shutterInner} />
+              </Pressable>
+              <Pressable accessibilityLabel="Dosyalar" onPress={handlePickDocument} style={styles.sideButtonRound}>
+                <Ionicons name="document-text" size={22} color="#fff" />
+              </Pressable>
+            </Row>
+          </View>
+        </View>
+        <QuotaExceededSheet
+          visible={quotaSheetOpen}
+          onClose={() => setQuotaSheetOpen(false)}
+          used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
+          quota={ocrUsageQuery.data?.quota ?? 0}
+          onSaveDraft={draftTarget ? saveAsDraft : undefined}
+          draftSaving={draftSaving}
+          onUpgrade={() => {
+            setQuotaSheetOpen(false);
+            router.push('/paywall');
+          }}
+          onManual={() => {
+            setQuotaSheetOpen(false);
+            router.push('/transactions/new');
+          }}
+        />
+        <ScanHelpSheet visible={helpSheetOpen} onClose={() => setHelpSheetOpen(false)} />
       </SafeAreaView>
     </View>
-  );
-}
-
-interface SourceRowProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}
-
-function SourceRow({ icon, title, subtitle, onPress }: SourceRowProps) {
-  const theme = useTheme();
-
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress}>
-      <Card>
-        <Row gap="sm">
-          <View
-            style={[
-              styles.sourceIcon,
-              { borderRadius: theme.radius.input, backgroundColor: theme.colors.backgroundPrimary },
-            ]}
-          >
-            <Ionicons name={icon} size={24} color={theme.colors.textSecondary} />
-          </View>
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle">{title}</Text>
-            <Text variant="caption" color="textSecondary">
-              {subtitle}
-            </Text>
-          </Stack>
-          <View style={[styles.sourceChevron, { backgroundColor: theme.colors.backgroundPrimary }]}>
-            <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-          </View>
-        </Row>
-      </Card>
-    </Pressable>
   );
 }
 
@@ -883,100 +750,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  chip: {
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    backgroundColor: withAlpha('#000000', 0.4),
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   scanFrame: {
     width: FRAME_WIDTH,
     height: FRAME_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scanLine: {
-    position: 'absolute',
-    top: 0,
-    left: 8,
-    right: 8,
-    height: 3,
-    borderRadius: 2,
-    opacity: 0.85,
+  hint: {
+    marginTop: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: withAlpha('#000000', 0.5),
   },
-  progressPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  infoButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
+  sideButtonSquare: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#3A3B3E',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quotaPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  heroGlowWrap: {
-    width: HERO_GLOW_OUTER,
-    height: HERO_GLOW_OUTER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroGlowOuter: {
-    position: 'absolute',
-    width: HERO_GLOW_OUTER,
-    height: HERO_GLOW_OUTER,
-    borderRadius: HERO_GLOW_OUTER / 2,
-  },
-  heroGlowInner: {
-    position: 'absolute',
-    width: HERO_GLOW_INNER,
-    height: HERO_GLOW_INNER,
-    borderRadius: HERO_GLOW_INNER / 2,
-  },
-  heroButton: {
-    width: HERO_BUTTON,
-    height: HERO_BUTTON,
-    borderRadius: HERO_BUTTON / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroArrow: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sourceIcon: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sourceChevron: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  sideButtonRound: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3A3B3E',
     alignItems: 'center',
     justifyContent: 'center',
   },
   shutterOuter: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     borderWidth: 4,
+    borderColor: '#F6F5F1',
     alignItems: 'center',
     justifyContent: 'center',
   },
   shutterInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F6F5F1',
   },
 });
