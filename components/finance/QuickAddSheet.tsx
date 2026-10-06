@@ -93,7 +93,7 @@ export function QuickAddSheet() {
               <Text variant="cardTitle" style={{ flex: 1, fontWeight: '500' }}>
                 {item.label}
               </Text>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.mutedControl} />
+              <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
             </Pressable>
           ))}
         </View>

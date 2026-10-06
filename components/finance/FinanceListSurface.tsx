@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { Pagination, Pressable, Row, Text, TextField } from '@/components/primitives';
+import { Pagination, Pressable, Row, Text } from '@/components/primitives';
 
 export interface FinanceListSortAction {
   label: string;
@@ -113,44 +113,57 @@ export function FinanceListSurface({
 
   return (
     <View style={{ gap: theme.spacing.xs }}>
-      <Row gap="xs">
-        <TextField
-          accessibilityLabel="Listede ara"
-          placeholder={searchPlaceholder}
-          value={searchValue}
-          onChangeText={onSearchChange}
-          returnKeyType="search"
-          autoCorrect={false}
-          style={{ flex: 1 }}
-        />
+      <Row gap="xs" style={{ alignItems: 'center' }}>
+        <View
+          style={{
+            flex: 1,
+            height: 36,
+            borderRadius: 10,
+            backgroundColor: theme.colors.fill,
+            paddingHorizontal: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <Ionicons name="search" size={17} color={theme.colors.textSecondary} />
+          <TextInput
+            accessibilityLabel="Listede ara"
+            placeholder={searchPlaceholder}
+            placeholderTextColor={theme.colors.textSecondary}
+            value={searchValue}
+            onChangeText={onSearchChange}
+            returnKeyType="search"
+            autoCorrect={false}
+            selectionColor={theme.colors.brandPrimary}
+            style={{ flex: 1, fontSize: 17, color: theme.colors.textPrimary, padding: 0 }}
+          />
+        </View>
         {sortAction ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={sortAction.accessibilityLabel}
             onPress={sortAction.onPress}
             style={{
-              minWidth: theme.buttonHeight.primary,
-              height: theme.buttonHeight.primary,
-              paddingHorizontal: theme.spacing.sm,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surfacePrimary,
+              height: 36,
+              paddingHorizontal: 12,
+              borderRadius: 18,
+              backgroundColor: theme.colors.fill,
               alignItems: 'center',
               justifyContent: 'center',
               flexDirection: 'row',
-              gap: theme.spacing.xxs,
+              gap: 6,
             }}
           >
-            <Ionicons name={sortAction.icon} size={16} color={theme.colors.textSecondary} />
-            <Text variant="caption" color="textSecondary">
-              {sortAction.label}
-            </Text>
+            <Ionicons name={sortAction.icon} size={16} color={theme.colors.textPrimary} />
+            <Text style={{ fontSize: 15, fontWeight: '500' }}>{sortAction.label}</Text>
           </Pressable>
         ) : null}
       </Row>
 
-      <View>{children}</View>
+      <View style={{ marginTop: theme.spacing.xxs, backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, overflow: 'hidden' }}>
+        {children}
+      </View>
 
       {showsFooter ? (
         <Row gap="sm" style={{ minHeight: 56, justifyContent: 'space-between' }}>

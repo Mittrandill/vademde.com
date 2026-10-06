@@ -209,7 +209,7 @@ function ActionRow({
       <Text variant="cardTitle" style={{ flex: 1 }}>
         {label}
       </Text>
-      <Ionicons name="chevron-forward" size={18} color={theme.colors.mutedControl} />
+      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }

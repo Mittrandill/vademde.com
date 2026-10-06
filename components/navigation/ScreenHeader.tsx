@@ -78,7 +78,7 @@ function BackButton({ action }: { action: ScreenHeaderAction }) {
       hitSlop={8}
       style={{ height: 44, minWidth: 44, alignItems: 'flex-start', justifyContent: 'center' }}
     >
-      <Ionicons name={action.icon} size={action.icon === 'chevron-back' ? 26 : 24} color={theme.colors.textPrimary} />
+      <Ionicons name={action.icon === 'close' ? 'chevron-back' : action.icon} size={26} color={theme.colors.textPrimary} />
     </Pressable>
   );
 }

@@ -296,15 +296,15 @@ function CreditCardRowCard({ account, balanceMinor, statements, hasCurrentStatem
       accessibilityLabel={`${account.name} kart detayını aç`}
       onPress={() => router.push(`/accounts/${account.id}`)}
       style={{
-        minHeight: 86,
-        paddingHorizontal: theme.spacing.lg,
-        paddingVertical: theme.spacing.md,
+        minHeight: 60,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: theme.spacing.md,
+        gap: 12,
       }}
     >
-      <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={48} />
+      <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={34} />
       <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
         <Text variant="cardTitle" numberOfLines={1}>
           {account.name}
@@ -323,7 +323,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, hasCurrentStatem
         minimumFontScale={0.68}
         style={{ maxWidth: '34%' }}
       />
-      <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }

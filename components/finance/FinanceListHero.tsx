@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/colors';
-import { Stack, Text } from '@/components/primitives';
+import { Card, Text } from '@/components/primitives';
 
 export interface FinanceListHeroMetric {
   label: string;
@@ -20,17 +20,13 @@ export interface FinanceListHeroProps {
   metrics: FinanceListHeroMetric[];
 }
 
-// HANDOFF §2 ölçek kuralı: tam kısım 7 karakteri aşarsa font küçülür (tek satır).
-const BASE_SIZE = 52;
-const FULL_PART_LIMIT = 7;
-
 function splitAmountText(text: string) {
   const match = /^(.*?)(,\d{1,2})(\D*)$/.exec(text);
   return match ? { whole: match[1], fraction: match[2] + match[3] } : { whole: text, fraction: '' };
 }
 
-// Liste ekranları hero'su (design Krediler/VadeliKayitlar): kartsız etiket + büyük tutar +
-// ince çizgiyle ayrılmış metrik satırı. Tüm finans liste ekranları bu bileşeni kullanır.
+// Tuval liste özeti (Hesaplar "Toplam varlık", Çeklerim özet kartı): tek kartta küçük etiket, 32 pt tutar
+// ve altında sayaç sütunları. Tüm finans liste ekranları bu bileşeni kullanır.
 export function FinanceListHero({
   label,
   description,
@@ -40,81 +36,68 @@ export function FinanceListHero({
 }: FinanceListHeroProps) {
   const theme = useTheme();
   const { whole, fraction } = splitAmountText(amountText);
-  const size = Math.floor(BASE_SIZE * Math.min(1, FULL_PART_LIMIT / Math.max(whole.length, 1)));
+  const size = Math.floor(32 * Math.min(1, 9 / Math.max(whole.length, 1)));
   const shown = metrics.slice(0, 4);
-  const columns = shown.length > 3 ? 2 : Math.max(shown.length, 1);
 
   return (
-    <Stack gap="md">
-      <Stack gap="xxs">
-        <Text variant="label" color="textSecondary">
-          {label}
-        </Text>
-        <Text variant="caption" color="textSecondary">
-          {description}
-        </Text>
-      </Stack>
-
+    <Card style={{ gap: 4 }}>
+      <Text color="textSecondary" style={{ fontSize: 13 }}>
+        {label[0] + label.slice(1).toLocaleLowerCase('tr-TR')}
+      </Text>
       <View accessible accessibilityLabel={amountText} style={{ flexDirection: 'row', alignItems: 'baseline' }}>
         <Text
-          variant="displayBalance"
+          variant="displayAmount"
           color={amountColor}
           numberOfLines={1}
           adjustsFontSizeToFit
-          style={{ fontSize: size, lineHeight: Math.round(size * 1.05), flexShrink: 1 }}
+          style={{ fontSize: size, lineHeight: Math.round(size * 1.15), flexShrink: 1 }}
         >
           {whole}
         </Text>
         {fraction ? (
           <Text
-            variant="displayBalance"
+            variant="displayAmount"
             color="textSecondary"
-            style={{ fontSize: Math.round(size / 2), lineHeight: Math.round(size * 0.55), fontWeight: '600' }}
+            style={{ fontSize: size, lineHeight: Math.round(size * 1.15), fontWeight: '600' }}
           >
             {fraction}
           </Text>
         ) : null}
       </View>
+      <Text variant="caption" color="textSecondary">
+        {description}
+      </Text>
 
-      <View
-        style={{
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          borderTopWidth: 1,
-          borderBottomWidth: 1,
-          borderColor: theme.colors.border,
-          paddingVertical: theme.spacing.xs,
-        }}
-      >
-        {shown.map((metric, index) => (
-          <View
-            key={`${metric.label}-${index}`}
-            style={{
-              width: `${100 / columns}%`,
-              gap: 4,
-              paddingVertical: theme.spacing.xs,
-              paddingRight: theme.spacing.xs,
-            }}
-          >
-            <Text variant="label" color="textSecondary" numberOfLines={1}>
-              {metric.label}
-            </Text>
-            <Text
-              variant="cardTitle"
-              color={metric.valueColor}
-              tabular
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.68}
-            >
-              {metric.value}
-            </Text>
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {metric.caption}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </Stack>
+      {shown.length > 0 ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            marginTop: theme.spacing.sm,
+            paddingTop: theme.spacing.sm,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.separator,
+            gap: theme.spacing.sm,
+          }}
+        >
+          {shown.map((metric, index) => (
+            <View key={`${metric.label}-${index}`} style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ fontSize: 12 }}>
+                {metric.label[0] + metric.label.slice(1).toLocaleLowerCase('tr-TR')}
+              </Text>
+              <Text
+                color={metric.valueColor}
+                tabular
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.68}
+                style={{ fontWeight: '600' }}
+              >
+                {metric.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </Card>
   );
 }

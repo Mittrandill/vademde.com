@@ -406,8 +406,8 @@ function HeroMetric({ label, value, caption, valueColor, right, bottom }: HeroMe
         width: '50%',
         minHeight: 118,
         justifyContent: 'center',
-        paddingHorizontal: theme.spacing.lg,
-        paddingVertical: theme.spacing.md,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: 10,
         borderRightWidth: right ? 1 : 0,
         borderRightColor: theme.colors.border,
         borderBottomWidth: bottom ? 1 : 0,
@@ -446,15 +446,15 @@ function CounterpartyRow({ counterparty, netMinor }: { counterparty: Counterpart
       accessibilityLabel={`${counterparty.name} cari detayını aç`}
       onPress={() => router.push(`/counterparties/${counterparty.id}`)}
       style={{
-        minHeight: 86,
-        paddingHorizontal: theme.spacing.lg,
-        paddingVertical: theme.spacing.md,
+        minHeight: 60,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
         gap: theme.spacing.md,
       }}
     >
-      <PersonAvatar name={counterparty.name} size={48} />
+      <PersonAvatar name={counterparty.name} size={34} />
 
       <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
         <Text variant="cardTitle" numberOfLines={1}>
@@ -475,7 +475,7 @@ function CounterpartyRow({ counterparty, netMinor }: { counterparty: Counterpart
       >
         {netMinor === 0 ? '—' : `${amountPrefix}${formatMinorAmount(Math.abs(netMinor))}`}
       </Text>
-      <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }

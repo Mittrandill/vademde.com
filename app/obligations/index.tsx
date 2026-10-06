@@ -389,7 +389,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
         onLongPress={() => setSheetOpen(true)}
         disabled={deleting}
         style={{
-          minHeight: 72,
+          minHeight: 60,
           opacity: deleting ? 0.5 : 1,
           paddingVertical: theme.spacing.sm,
           flexDirection: 'row',
@@ -402,7 +402,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
           bankCode={item.bank_code}
           serviceCode={item.service_code}
           fallbackName={item.title}
-          size={48}
+          size={34}
         />
         <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
           <Text variant="cardTitle" numberOfLines={1}>
@@ -427,7 +427,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
         {deleting ? (
           <ActivityIndicator color={theme.colors.textSecondary} />
         ) : (
-          <Ionicons name="chevron-forward" size={18} color={theme.colors.mutedControl} />
+          <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
         )}
       </Pressable>
 

@@ -244,18 +244,18 @@ function AccountRow({
       accessibilityLabel={`${account.name} hesap detayını aç`}
       onPress={() => router.push(`/accounts/${account.id}`)}
       style={{
-        minHeight: 86,
-        paddingHorizontal: theme.spacing.lg,
-        paddingVertical: theme.spacing.md,
+        minHeight: 60,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
         gap: theme.spacing.md,
       }}
     >
       {type === 'cash' ? (
-        <ValueUnitBadge unitCode={account.currency_code} size={48} />
+        <ValueUnitBadge unitCode={account.currency_code} size={34} />
       ) : (
-        <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={48} />
+        <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={34} />
       )}
       <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
         <Text variant="cardTitle" numberOfLines={1}>{account.name}</Text>
@@ -272,9 +272,9 @@ function AccountRow({
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.68}
-        style={{ maxWidth: '34%', color: balanceMinor < 0 ? theme.colors.textPrimary : theme.colors.receivable }}
+        style={{ maxWidth: '34%' }}
       />
-      <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }

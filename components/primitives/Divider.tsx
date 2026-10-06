@@ -13,8 +13,8 @@ export function Divider({ orientation = 'horizontal', style, ...rest }: DividerP
     <View
       style={[
         orientation === 'vertical'
-          ? { width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.border }
-          : { height: 1, backgroundColor: theme.colors.border },
+          ? { width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.separator }
+          : { height: 1, backgroundColor: theme.colors.separator },
         style,
       ]}
       {...rest}

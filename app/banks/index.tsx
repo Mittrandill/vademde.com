@@ -212,15 +212,15 @@ function BankRow({ bank }: { bank: BankSummary }) {
       accessibilityLabel={`${bankName} detayını aç`}
       onPress={() => router.push(`/banks/${bank.bankCode}`)}
       style={{
-        minHeight: 86,
-        paddingHorizontal: theme.spacing.lg,
-        paddingVertical: theme.spacing.md,
+        minHeight: 60,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: theme.spacing.md,
+        gap: 12,
       }}
     >
-      <BankLogo bankCode={bank.bankCode} fallbackName={bankName} size={48} />
+      <BankLogo bankCode={bank.bankCode} fallbackName={bankName} size={34} />
       <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
         <Text variant="cardTitle" numberOfLines={1}>
           {bankName}
@@ -240,7 +240,7 @@ function BankRow({ bank }: { bank: BankSummary }) {
           color: bank.loanDebtMinor > 0 ? theme.colors.textPrimary : theme.colors.textSecondary,
         }}
       />
-      <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }
