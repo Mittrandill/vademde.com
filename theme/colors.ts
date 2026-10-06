@@ -29,13 +29,16 @@ export interface ThemeColors {
   danger: string;
   border: string;
   overlay: string;
+  /** İnce ayırıcı çizgi (vademde.css --sep). */
+  separator: string;
+  /** Hafif dolgu: segment zemini, ikon kutusu, çip (vademde.css --fill). */
+  fill: string;
 }
 
-// docs/08-tasarim-sistemi.md §12.5 — Graphite Finance renk sistemi
-// (yeniden tasarım: design/vademde-redesign/HANDOFF.md §1).
-// Marka tonları (brandPrimary/accentViolet) Vademde_Tam_Logo_Paketi_v2.0 ile birebir eşleşir ve
-// temadan bağımsızdır (logo kilitli). success = receivable (para girişi/doğrulandı); danger
-// yalnızca gecikme ve yıkıcı aksiyon içindir.
+// Tasarım tuvali (Vademde Ekran Tasarımı) vademde.css tokenları. Marka tonları
+// (brandPrimary/accentViolet) Vademde_Tam_Logo_Paketi_v2.0 ile birebir eşleşir ve temadan bağımsızdır.
+// Anlam renkleri açık temada metin kontrastı için koyu tonlarla (--*-t) gelir:
+// payable = mor metin (--vi-t), receivable/success = yeşil metin (--ok-t), danger = kırmızı (yalnızca gecikme/silme).
 const shared = {
   brandPrimary: '#FFB000',
   brandPrimaryText: '#1F2126',
@@ -43,7 +46,6 @@ const shared = {
   onAction: '#1F2126',
   accentViolet: '#6B4DFF',
   accentAqua: '#86DDEB',
-  // ActionSheet ve diğer modal/sheet backdrop'ları için ortak scrim (docs §12.8 — ağır efekt değil, kontrollü karartma).
   overlay: 'rgba(0, 0, 0, 0.45)',
 };
 
@@ -55,30 +57,34 @@ export const darkColors: ThemeColors = {
   textPrimary: '#F6F5F1',
   textSecondary: '#B1B2AA',
   border: '#3D3F45',
-  payable: '#8B73FF',
+  separator: 'rgba(246, 245, 241, 0.08)',
+  fill: 'rgba(246, 245, 241, 0.07)',
+  payable: '#A08CFF',
   payableFill: '#6B4DFF',
   receivable: '#52CE96',
   success: '#52CE96',
-  danger: '#FF625C',
+  danger: '#FF7A75',
   attentionMarker: '#FFB000',
-  mutedControl: '#6E7076',
+  mutedControl: '#86877F',
 };
 
 export const lightColors: ThemeColors = {
   ...shared,
-  backgroundPrimary: '#F1F2F4',
+  backgroundPrimary: '#F6F5F1',
   surfacePrimary: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  textPrimary: '#111114',
-  textSecondary: '#5E606A',
-  border: '#DCDEE3',
-  payable: '#5638F0',
-  payableFill: '#5638F1',
-  receivable: '#0F7A52',
-  success: '#0F7A52',
-  danger: '#C8361C',
-  attentionMarker: '#B07800',
-  mutedControl: '#83868F',
+  textPrimary: '#1F2126',
+  textSecondary: '#6E6F66',
+  border: '#E2E2DC',
+  separator: '#E9E9E3',
+  fill: 'rgba(31, 33, 38, 0.055)',
+  payable: '#5A3DF0',
+  payableFill: '#6B4DFF',
+  receivable: '#14804F',
+  success: '#14804F',
+  danger: '#D23B35',
+  attentionMarker: '#8A5F00',
+  mutedControl: '#8E8F86',
 };
 
 export const colorsByScheme: Record<ColorScheme, ThemeColors> = {

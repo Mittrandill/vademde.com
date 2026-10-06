@@ -3,7 +3,7 @@ import { TextInput, View, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { MAX_FONT_SCALE, fontFamily } from '@/theme/typography';
+import { MAX_FONT_SCALE, monoFamily } from '@/theme/typography';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
 
@@ -125,9 +125,9 @@ export function InputRow({
         maxFontSizeMultiplier={maxFontSizeMultiplier}
         accessibilityLabel={label}
         style={[
-          theme.typography.cardTitle,
+          theme.typography.body,
           {
-            fontFamily: mono ? fontFamily.mono.medium : fontFamily.sans.semibold,
+            fontFamily: mono ? monoFamily : undefined,
             color: theme.colors.textPrimary,
             padding: 0,
             minHeight: 24,

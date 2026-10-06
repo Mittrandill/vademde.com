@@ -3,7 +3,7 @@ import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { MAX_FONT_SCALE, fontFamily } from '@/theme/typography';
+import { MAX_FONT_SCALE } from '@/theme/typography';
 import { Pressable } from './Pressable';
 import { Stack } from './Stack';
 import { Text } from './Text';
@@ -96,9 +96,8 @@ export function TextField({
             onBlur?.(event);
           }}
           style={[
-            theme.typography.cardTitle,
+            theme.typography.body,
             {
-              fontFamily: fontFamily.sans.semibold,
               color: theme.colors.textPrimary,
               padding: 0,
               // Çok satırlı girişlerde yükseklik içerikten gelir; tek satırda sabit satır yüksekliği.

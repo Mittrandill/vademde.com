@@ -3,8 +3,6 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
-    "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
     "@expo/vector-icons": "^15.0.2",
     "@howincodes/expo-dynamic-app-icon": "^3.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
