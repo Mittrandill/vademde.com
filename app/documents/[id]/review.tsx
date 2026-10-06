@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, SourceTag, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, DateField, FieldGroup, Pressable, Row, SegmentedControl, SourceTag, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -1047,7 +1047,11 @@ export default function DocumentReviewScreen() {
           }}
         >
           <Stack gap="lg">
-            <ScreenHeader title="Kontrol et" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
+            <ScreenHeader
+              inline
+              title={`${documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? 'Belge') : 'Belge'} · Kontrol et`}
+              leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+            />
 
             {document.mime_type === 'application/pdf' ? (
               <Row
@@ -1079,8 +1083,8 @@ export default function DocumentReviewScreen() {
             ) : null}
 
             {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
-              <Text variant="label" mono color="textSecondary">
-                GENEL GÜVEN · %{Math.round((document.overall_confidence ?? 0) * 100)}
+              <Text variant="caption" color="textSecondary">
+                Genel güven · %{Math.round((document.overall_confidence ?? 0) * 100)}
               </Text>
             ) : null}
 
@@ -1123,13 +1127,6 @@ export default function DocumentReviewScreen() {
               </ScrollView>
             </Stack>
 
-            <Stack gap="sm">
-              <Text variant="label" color="textSecondary">
-                BAŞLIK
-              </Text>
-              <TextField value={title} onChangeText={setTitle} />
-            </Stack>
-
             {(direction === 'payable' || direction === 'receivable') && !isCreditCardStatement ? (
               <Stack gap="sm">
                 <Row align="center">
@@ -1142,15 +1139,24 @@ export default function DocumentReviewScreen() {
               </Stack>
             ) : null}
 
-            <Stack gap="sm">
-              <Row align="center">
-                <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                  {isLoanDocument ? 'KREDİ TUTARI (ANA PARA)' : 'TUTAR'}
-                </Text>
-                <LowConfidenceHint fieldName="totalAmount" />
-              </Row>
-              <AmountField value={amount} onChangeText={setAmount} />
-            </Stack>
+            <FieldGroup>
+              <TextField label="Başlık" value={title} onChangeText={setTitle} />
+              <AmountField
+                label={isLoanDocument ? 'Kredi tutarı (ana para)' : 'Tutar'}
+                tag={<LowConfidenceHint fieldName="totalAmount" />}
+                value={amount}
+                onChangeText={setAmount}
+              />
+              {!isLoanDocument ? (
+                <DateField label="Vade tarihi" tag={<LowConfidenceHint fieldName="dueDate" />} value={dueDate} onChangeText={setDueDate} />
+              ) : null}
+            </FieldGroup>
+            {!isLoanDocument && dueDatePeriodMismatch ? (
+              <Text variant="caption" color="danger">
+                Bu tarih, {expectedDueDateMonthLabel} dönemi için seçtiğiniz ekstreyle uyuşmuyor gibi görünüyor — doğru
+                olduğundan emin olun.
+              </Text>
+            ) : null}
 
             {isLoanDocument ? (
               <Stack gap="sm">
@@ -1186,24 +1192,6 @@ export default function DocumentReviewScreen() {
                   {formatMinorAmount(totalRepaymentMinor, valueUnitCode)}
                 </Text>
               </Row>
-            ) : null}
-
-            {!isLoanDocument ? (
-              <Stack gap="sm">
-                <Row align="center">
-                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    VADE
-                  </Text>
-                  <LowConfidenceHint fieldName="dueDate" />
-                </Row>
-                <DateField value={dueDate} onChangeText={setDueDate} />
-                {dueDatePeriodMismatch ? (
-                  <Text variant="caption" color="danger">
-                    Bu tarih, {expectedDueDateMonthLabel} dönemi için seçtiğiniz ekstreyle uyuşmuyor gibi görünüyor —
-                    doğru olduğundan emin olun.
-                  </Text>
-                ) : null}
-              </Stack>
             ) : null}
 
             {(direction === 'payable' || direction === 'receivable') && (
@@ -1521,16 +1509,19 @@ export default function DocumentReviewScreen() {
               </Text>
             ) : null}
 
+            <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
+              Onaylamadan kayıt oluşmaz
+            </Text>
             <Button
               label="Kontrol Et ve Kaydet"
               onPress={() => confirmMutation.mutate()}
               loading={confirmMutation.isPending}
               disabled={!canSubmit || !statementMatchingReady}
             />
-            <Button label="Taslak Olarak Bırak" variant="secondary" onPress={() => router.back()} />
+            <Button label="Taslak Olarak Bırak" variant="text" onPress={() => router.back()} />
             <Button
-              label="İptal Et"
-              variant="danger"
+              label="Belgeyi iptal et"
+              variant="dangerText"
               onPress={handleDiscard}
               loading={discardMutation.isPending}
             />

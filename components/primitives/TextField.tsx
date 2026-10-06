@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -20,6 +20,8 @@ export interface TextFieldProps extends TextInputProps {
   /** Şifre göster/gizle gibi tek bir sağ ikon aksiyonu (bkz. sign-in ekranı). */
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
+  /** Etiketin yanında küçük etiket (ör. OCR kaynağı: <SourceTag /> ya da "belgeden"). */
+  tag?: ReactNode;
 }
 
 // Yerleşim stilleri (flex, genişlik, kenar boşluğu) dış kaba, geri kalanı (metin stili) girdiye uygulanır;
@@ -47,6 +49,7 @@ export function TextField({
   invalid,
   rightIcon,
   onRightIconPress,
+  tag,
   onFocus,
   onBlur,
   maxFontSizeMultiplier = MAX_FONT_SCALE,
@@ -72,9 +75,12 @@ export function TextField({
       >
         <View style={{ flex: 1, gap: 2, justifyContent: 'center', minWidth: 0 }}>
           {label ? (
-            <FieldLabel focused={focused} error={hasError}>
-              {label}
-            </FieldLabel>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <FieldLabel focused={focused} error={hasError}>
+                {label}
+              </FieldLabel>
+              {tag}
+            </View>
           ) : null}
           <TextInput
             placeholderTextColor={placeholderTextColor ?? theme.colors.mutedControl}
