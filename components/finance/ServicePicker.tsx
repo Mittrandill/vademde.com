@@ -5,15 +5,18 @@ import { ServiceLogo } from './ServiceLogo';
 const SERVICE_ITEMS = SERVICES.map((service) => ({ id: service.code, name: service.name }));
 
 export interface ServicePickerProps {
+  /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
+  label?: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
   placeholder?: string;
   title?: string;
 }
 
-export function ServicePicker({ selectedId, onSelect, placeholder, title }: ServicePickerProps) {
+export function ServicePicker({ selectedId, onSelect, placeholder, title, label }: ServicePickerProps) {
   return (
     <SearchablePicker
+      label={label}
       items={SERVICE_ITEMS}
       selectedId={selectedId}
       onSelect={onSelect}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -8,8 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { withAlpha } from '@/theme/colors';
-import { AmountField, Button, Card, DateField, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { BigAmountInput, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -379,20 +378,26 @@ function TransactionForm({
     : 0;
   const posCommissionNetMinor = showPosCommissionPreview ? (amountMinorPreview as number) - posCommissionFeeMinor : 0;
 
+  const sourceAccounts = direction === 'transfer' ? transferSourceAccounts : accountsForDirection;
+  const symbol = getValueUnit(unitCode).unitType === 'fiat' ? (unitCode === 'TRY' ? '₺' : unitCode === 'USD' ? '$' : unitCode === 'EUR' ? '€' : undefined) : undefined;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }}>
-          <Stack gap="lg">
-            <ScreenHeader
-            title={isEditing ? 'Hareketi Düzenle' : 'Yeni Hareket'}
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xxl }} keyboardShouldPersistTaps="handled">
+          <ScreenHeader
+            inline
+            title={isEditing ? 'Hareketi düzenle' : direction === 'transfer' ? 'Transfer' : 'Yeni hareket'}
+            leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+            rightLabel={{
+              label: isEditing ? 'Güncelle' : 'Kaydet',
+              bold: true,
+              disabled: !canSubmit || saveMutation.isPending,
+              onPress: () => saveMutation.mutate(),
+            }}
           />
 
-            {!isEditing ? (
-              <ScanPromptBanner description="Dekont, fiş veya fatura fotoğrafını tara; tutar, tarih ve hesap otomatik dolsun." />
-            ) : null}
-
+          <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
             <SegmentedControl
               options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
               value={direction}
@@ -410,36 +415,65 @@ function TransactionForm({
               stretch
             />
 
-            <AmountField
-              label="TUTAR"
-              placeholder={unitPrecision === 0 ? '1' : '0,00'}
-              precision={unitPrecision}
-              value={amount}
-              onChangeText={setAmount}
-            />
+            <View style={{ marginTop: theme.spacing.md, marginBottom: theme.spacing.xs }}>
+              <BigAmountInput
+                value={amount}
+                onChangeText={setAmount}
+                precision={unitPrecision}
+                symbol={symbol}
+                autoFocus={!isEditing}
+              />
+            </View>
 
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                {direction === 'transfer' ? 'KAYNAK HESAP' : 'HESAP'}
-              </Text>
-              {(direction === 'transfer' ? transferSourceAccounts : accountsForDirection).length === 0 ? (
-                <Text variant="body" color="textSecondary">
-                  {direction === 'transfer'
-                    ? 'Transfer için kredi kartı dışında en az bir hesap gerekir.'
-                    : direction === 'expense' && accounts.length > 0
-                      ? 'POS dışında en az bir hesap gerekir.'
-                      : "Önce Hesaplar'dan bir hesap ekleyin."}
-                </Text>
+            {!isEditing ? (
+              <ScanPromptBanner description="Dekont, fiş veya fatura fotoğrafını tara; tutar, tarih ve hesap otomatik dolsun." />
+            ) : null}
+
+            <FieldGroup>
+              <TextField label="Açıklama" placeholder="Örn. Market alışverişi" value={description} onChangeText={setDescription} />
+              {direction === 'transfer' ? (
+                <AccountPicker
+                  accounts={accounts.filter((a) => a.id !== accountId)}
+                  selectedId={transferToAccountId}
+                  onSelect={setTransferToAccountId}
+                  title="Hedef hesap seç"
+                  placeholder="Hedef hesap seçin"
+                  label="Alan"
+                />
+              ) : categories.length === 0 ? (
+                <FormRow label="Kategori" value="Bu türde kategori bulunamadı." />
+              ) : (
+                <CategoryPicker categories={categories} selectedId={categoryId} onSelect={setCategoryId} label="Kategori" />
+              )}
+              {sourceAccounts.length === 0 ? (
+                <FormRow
+                  label={direction === 'transfer' ? 'Gönderen' : 'Hesap'}
+                  value={
+                    direction === 'transfer'
+                      ? 'Transfer için kredi kartı dışında en az bir hesap gerekir.'
+                      : direction === 'expense' && accounts.length > 0
+                        ? 'POS dışında en az bir hesap gerekir.'
+                        : "Önce Hesaplar'dan bir hesap ekleyin."
+                  }
+                />
               ) : (
                 <AccountPicker
-                  accounts={direction === 'transfer' ? transferSourceAccounts : accountsForDirection}
+                  accounts={sourceAccounts}
                   selectedId={accountId}
                   onSelect={setAccountId}
-                  title="Kaynak Hesap Seç"
-                  placeholder="Hesap seçin"
+                  title={direction === 'transfer' ? 'Gönderen hesap seç' : 'Hesap seç'}
+                  placeholder={direction === 'transfer' ? 'Gönderen hesap seçin' : 'Hesap seçin'}
+                  label={direction === 'transfer' ? 'Gönderen' : 'Hesap'}
                 />
               )}
-            </Stack>
+              <DateField label="Tarih" value={dateStr} onChangeText={setDateStr} />
+            </FieldGroup>
+
+            {direction === 'transfer' ? (
+              <Text variant="caption" color="textSecondary" style={{ textAlign: 'center', paddingHorizontal: 30 }}>
+                Transfer gelir ya da gider sayılmaz; toplam varlık değişmez.
+              </Text>
+            ) : null}
 
             {showPosCommissionPreview ? (
               <Text variant="caption" color="textSecondary">
@@ -449,39 +483,11 @@ function TransactionForm({
               </Text>
             ) : null}
 
-            {direction === 'transfer' ? (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  HEDEF HESAP
-                </Text>
-                <AccountPicker
-                  accounts={accounts.filter((a) => a.id !== accountId)}
-                  selectedId={transferToAccountId}
-                  onSelect={setTransferToAccountId}
-                  title="Hedef Hesap Seç"
-                  placeholder="Hedef hesap seçin"
-                />
-              </Stack>
-            ) : (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  KATEGORİ
-                </Text>
-                {categories.length === 0 ? (
-                  <Text variant="body" color="textSecondary">
-                    Bu türde kategori bulunamadı.
-                  </Text>
-                ) : (
-                  <CategoryPicker categories={categories} selectedId={categoryId} onSelect={setCategoryId} />
-                )}
-              </Stack>
-            )}
-
             {direction === 'transfer' ? null : (
               <>
-                <Stack gap="sm">
+                <Stack gap="xs">
                   <Text variant="label" color="textSecondary">
-                    KİŞİ / FİRMA (İSTEĞE BAĞLI)
+                    Kişi / firma
                   </Text>
                   {activeWorkspaceId ? (
                     <CounterpartyPicker
@@ -498,10 +504,10 @@ function TransactionForm({
 
                 {!isEditing && counterpartyId && openObligations.length > 0 ? (
                   <Pressable accessibilityRole="button" onPress={goToSettlement}>
-                    <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.35) }}>
+                    <Card>
                       <Row gap="sm" align="center">
                         <Stack gap="xxs" style={{ flex: 1 }}>
-                          <Text variant="cardTitle">
+                          <Text style={{ fontWeight: '600' }}>
                             {direction === 'income' ? 'Bu bir tahsilat mı?' : 'Bu bir borç ödemesi mi?'}
                           </Text>
                           <Text variant="caption" color="textSecondary">
@@ -510,15 +516,15 @@ function TransactionForm({
                             kaydedilen hareket açık kayıtları düşürmez.
                           </Text>
                         </Stack>
-                        <Ionicons name="chevron-forward" size={18} color={theme.colors.textPrimary} />
+                        <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
                       </Row>
                     </Card>
                   </Pressable>
                 ) : null}
 
-                <Stack gap="sm">
+                <Stack gap="xs">
                   <Text variant="label" color="textSecondary">
-                    ÖDEME YÖNTEMİ (İSTEĞE BAĞLI)
+                    Ödeme yöntemi
                   </Text>
                   <SegmentedControl<PaymentMethod | ''>
                     options={PAYMENT_METHODS.map((m) => ({ key: m.value, label: m.label }))}
@@ -527,27 +533,16 @@ function TransactionForm({
                     scrollable
                   />
                 </Stack>
+
+                <ReceiptAttachField
+                  value={receipt}
+                  onChange={setReceipt}
+                  existingReceiptId={existingReceiptId}
+                  onRemoveExisting={() => setRemovedExisting(true)}
+                  allowed={archive.allowed}
+                />
               </>
             )}
-
-            <DateField label="TARİH" value={dateStr} onChangeText={setDateStr} />
-
-            {direction !== 'transfer' ? (
-              <ReceiptAttachField
-                value={receipt}
-                onChange={setReceipt}
-                existingReceiptId={existingReceiptId}
-                onRemoveExisting={() => setRemovedExisting(true)}
-                allowed={archive.allowed}
-              />
-            ) : null}
-
-            <TextField
-              label="AÇIKLAMA (İSTEĞE BAĞLI)"
-              placeholder="Örn. Market alışverişi"
-              value={description}
-              onChangeText={setDescription}
-            />
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
@@ -555,23 +550,16 @@ function TransactionForm({
               </Text>
             ) : null}
 
-            <Button
-              label={isEditing ? 'Güncelle' : 'Kaydet'}
-              onPress={() => saveMutation.mutate()}
-              loading={saveMutation.isPending}
-              disabled={!canSubmit}
-            />
-
             {isEditing ? (
               <Button
-                label="Sil"
-                variant="danger"
+                label="Hareketi sil"
+                variant="dangerText"
                 onPress={confirmDelete}
                 loading={deleteMutation.isPending}
                 disabled={saveMutation.isPending}
               />
             ) : null}
-          </Stack>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

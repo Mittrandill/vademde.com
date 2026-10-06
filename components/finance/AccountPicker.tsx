@@ -14,6 +14,8 @@ const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
 };
 
 export interface AccountPickerProps {
+  /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
+  label?: string;
   accounts: Account[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -21,9 +23,10 @@ export interface AccountPickerProps {
   title?: string;
 }
 
-export function AccountPicker({ accounts, selectedId, onSelect, placeholder, title }: AccountPickerProps) {
+export function AccountPicker({ accounts, selectedId, onSelect, placeholder, title, label }: AccountPickerProps) {
   return (
     <SearchablePicker
+      label={label}
       items={accounts}
       selectedId={selectedId}
       onSelect={onSelect}

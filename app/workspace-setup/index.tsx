@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { AmountField, Button, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, FieldGroup, GroupedRowIcon, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { setupInitialWorkspaces } from '@/features/workspaces/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
@@ -130,14 +130,10 @@ export default function WorkspaceSetupScreen() {
           contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge, flexGrow: 1 }}
         >
           <Stack gap="xl">
-            <Text variant="label" mono color="textSecondary">
-              {step === 'choice' ? 'BAŞLANGIÇ' : 'SON ADIM'}
-            </Text>
-
             {step === 'choice' ? (
               <>
                 <Stack gap="xs">
-                  <Text variant="pageTitle">Nerede takip edeceksin?</Text>
+                  <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56 }}>Nerede takip edeceksin?</Text>
                   <Text variant="body" color="textSecondary">
                     Kendi çalışma alanını oluştur veya seni davet eden bir ekibe davet koduyla katıl.
                   </Text>
@@ -161,16 +157,13 @@ export default function WorkspaceSetupScreen() {
             ) : (
               <>
                 <Stack gap="xs">
-                  <Text variant="pageTitle">Çalışma alanını kur</Text>
+                  <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56 }}>Çalışma alanınızı oluşturalım</Text>
                   <Text variant="body" color="textSecondary">
                     Kişisel veya işletme bütçenizi takip etmek için bir çalışma alanı oluşturun.
                   </Text>
                 </Stack>
 
                 <Stack gap="sm" style={{ alignSelf: 'stretch' }}>
-                  <Text variant="label" color="textSecondary">
-                    NASIL KULLANACAKSINIZ?
-                  </Text>
                   <SegmentedControl
                     options={MODE_OPTIONS.map((option) => ({
                       ...option,
@@ -200,20 +193,15 @@ export default function WorkspaceSetupScreen() {
                     adlarını ve başlangıç bakiyelerini daha sonra Ayarlar&apos;dan düzenleyebilirsiniz.
                   </Text>
                 ) : (
-                  <Stack gap="sm" style={{ alignSelf: 'stretch' }}>
-                    <TextField
-                      label="ÇALIŞMA ALANI ADI"
-                      placeholder={DEFAULT_NAME[mode]}
-                      value={name}
-                      onChangeText={setName}
-                    />
+                  <FieldGroup>
+                    <TextField label="Alan adı" placeholder={DEFAULT_NAME[mode]} value={name} onChangeText={setName} />
                     <AmountField
-                      label="BAŞLANGIÇ BAKİYESİ (İSTEĞE BAĞLI)"
+                      label="Başlangıç bakiyesi (isteğe bağlı)"
                       placeholder="0,00"
                       value={openingBalance}
                       onChangeText={setOpeningBalance}
                     />
-                  </Stack>
+                  </FieldGroup>
                 )}
 
                 <Button
@@ -248,27 +236,16 @@ function ChoiceOption({
       <Row
         gap="sm"
         align="center"
-        style={{ padding: theme.spacing.md, borderRadius: 22, backgroundColor: theme.colors.surfacePrimary }}
+        style={{ minHeight: 64, padding: theme.spacing.md, borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary }}
       >
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.backgroundPrimary,
-          }}
-        >
-          <Ionicons name={icon} size={20} color={theme.colors.textPrimary} />
-        </View>
+        <GroupedRowIcon name={icon} tone="brandSoft" size={44} />
         <Stack gap="xxs" style={{ flex: 1 }}>
-          <Text variant="cardTitle">{title}</Text>
+          <Text style={{ fontWeight: '600' }}>{title}</Text>
           <Text variant="caption" color="textSecondary">
             {description}
           </Text>
         </Stack>
-        <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedControl} />
+        <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
       </Row>
     </Pressable>
   );

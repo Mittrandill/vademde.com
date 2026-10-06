@@ -18,6 +18,8 @@ export interface SearchablePickerProps<T extends { id: string; name: string }> {
   /** Ionicons yerine özel bir görsel (ör. banka logosu) göstermek için kullanılır; verilirse getIcon'a öncelikli. */
   renderLeading?: (item: T) => ReactNode;
   placeholder?: string;
+  /** Satırın sağında ikincil renkte küçük etiket (tuval: "Kategori", "Hesap"). */
+  label?: string;
   title?: string;
   emptyLabel?: string;
   /** Verilirse, aramada tam eşleşme yoksa listenin başında "Yeni ekle" satırı gösterilir. */
@@ -33,6 +35,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
   getIcon,
   renderLeading,
   placeholder = 'Seçin',
+  label,
   title = 'Seçin',
   emptyLabel = 'Eşleşen sonuç bulunamadı.',
   onCreateNew,
@@ -95,6 +98,11 @@ export function SearchablePicker<T extends { id: string; name: string }>({
             <Text numberOfLines={1} style={{ flex: 1, color: selected ? theme.colors.textPrimary : theme.colors.mutedControl }}>
               {selected ? selected.name : placeholder}
             </Text>
+            {label && selected ? (
+              <Text variant="caption" color="textSecondary">
+                {label}
+              </Text>
+            ) : null}
             <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
           </View>
         </FieldShell>

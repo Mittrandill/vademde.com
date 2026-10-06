@@ -27,3 +27,4 @@ export * from './DateSheets';
 export * from './GroupedList';
 export * from './Tag';
 export * from './Pill';
+export * from './BigAmountInput';

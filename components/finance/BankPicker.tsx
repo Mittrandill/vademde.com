@@ -5,15 +5,18 @@ import { BankLogo } from './BankLogo';
 const BANK_ITEMS = BANKS.map((bank) => ({ id: bank.code, name: bank.name }));
 
 export interface BankPickerProps {
+  /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
+  label?: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
   placeholder?: string;
   title?: string;
 }
 
-export function BankPicker({ selectedId, onSelect, placeholder, title }: BankPickerProps) {
+export function BankPicker({ selectedId, onSelect, placeholder, title, label }: BankPickerProps) {
   return (
     <SearchablePicker
+      label={label}
       items={BANK_ITEMS}
       selectedId={selectedId}
       onSelect={onSelect}

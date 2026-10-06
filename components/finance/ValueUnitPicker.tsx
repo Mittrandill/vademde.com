@@ -7,6 +7,8 @@ import { VALUE_UNITS, getValueUnit } from '@/features/valueUnits/units';
 const VALUE_UNIT_ITEMS = VALUE_UNITS.map((unit) => ({ id: unit.code, name: unit.name }));
 
 export interface ValueUnitPickerProps {
+  /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
+  label?: string;
   selectedId: string | null;
   onSelect: (code: string) => void;
   placeholder?: string;
@@ -16,9 +18,10 @@ export interface ValueUnitPickerProps {
 // BankPicker/ServicePicker ile aynı ince sarmalayıcı desen (bkz. o dosyalardaki yorum);
 // tek fark, logo asseti yerine her para birimi/altın türü için gerçek sembol/madalyon
 // ikonu taşıyan bir rozet (bkz. features/valueUnits/units.ts'teki icon/color alanları).
-export function ValueUnitPicker({ selectedId, onSelect, placeholder, title }: ValueUnitPickerProps) {
+export function ValueUnitPicker({ selectedId, onSelect, placeholder, title, label }: ValueUnitPickerProps) {
   return (
     <SearchablePicker
+      label={label}
       items={VALUE_UNIT_ITEMS}
       selectedId={selectedId}
       onSelect={onSelect}

@@ -3,15 +3,18 @@ import { CategoryIcon } from './CategoryIcon';
 import type { Category } from '@/features/categories/api';
 
 export interface CategoryPickerProps {
+  /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
+  label?: string;
   categories: Category[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   placeholder?: string;
 }
 
-export function CategoryPicker({ categories, selectedId, onSelect, placeholder }: CategoryPickerProps) {
+export function CategoryPicker({ categories, selectedId, onSelect, placeholder, label }: CategoryPickerProps) {
   return (
     <SearchablePicker
+      label={label}
       items={categories}
       selectedId={selectedId}
       onSelect={onSelect}

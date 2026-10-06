@@ -1,39 +1,25 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
-import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
+import { Card, GroupedRowIcon, Pressable, Row, Stack, Text } from '@/components/primitives';
 
 // docs/09-kullanici-akislari.md — OCR ürünün ana kayıt yöntemidir, manuel form bir yedektir
-// (bkz. CLAUDE.md bağlayıcı kural #5: manuel giriş her zaman erişilebilir kalmalı, ama bu
-// onu varsayılan/öncelikli yol yapmaz). Manuel hareket ve borç/alacak formlarının en üstüne
-// konur ki kullanıcı formu elle doldurmadan önce OCR'ı fark etsin.
+// (CLAUDE.md bağlayıcı kural #5). Tuval YeniYukumluluk: "Ödeme planını tara" kartı — Saffron kare ikon + iki satır.
 export function ScanPromptBanner({ description }: { description: string }) {
   const theme = useTheme();
   return (
     <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/tara')}>
-      <Card style={{ borderWidth: 1, borderColor: withAlpha(theme.colors.brandPrimary, 0.4) }}>
-        <Row gap="sm" align="center">
-          <Row
-            align="center"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: theme.radius.widget,
-              backgroundColor: withAlpha(theme.colors.brandPrimary, 0.12),
-              justifyContent: 'center',
-            }}
-          >
-            <Ionicons name="camera-outline" size={20} color={theme.colors.textPrimary} />
-          </Row>
+      <Card style={{ paddingVertical: 12, paddingHorizontal: 14 }}>
+        <Row gap="sm" align="center" style={{ gap: 12 }}>
+          <GroupedRowIcon name="scan" tone="brand" />
           <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle">Belgeni yükle, formu doldurmakla uğraşma</Text>
+            <Text style={{ fontWeight: '600' }}>Belgeyi tara</Text>
             <Text variant="caption" color="textSecondary">
               {description}
             </Text>
           </Stack>
-          <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+          <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
         </Row>
       </Card>
     </Pressable>

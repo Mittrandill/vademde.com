@@ -3,13 +3,16 @@ import { DOCUMENT_TYPES } from '@/features/obligations/documentTypes';
 import { CategoryIcon } from './CategoryIcon';
 
 export interface DocumentTypePickerProps {
+  /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
+  label?: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
 
-export function DocumentTypePicker({ selectedId, onSelect }: DocumentTypePickerProps) {
+export function DocumentTypePicker({ selectedId, onSelect, label }: DocumentTypePickerProps) {
   return (
     <SearchablePicker
+      label={label}
       // Sistem türleri (avans) elle seçilmez; düzenlenen kayıt zaten o türdeyse gösterilir.
       items={DOCUMENT_TYPES.filter((t) => !t.systemOnly || t.id === selectedId)}
       selectedId={selectedId}

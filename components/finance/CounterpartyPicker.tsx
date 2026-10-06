@@ -3,6 +3,8 @@ import { createCounterparty, type Counterparty, type CounterpartyType } from '@/
 import { PersonAvatar } from './PersonAvatar';
 
 export interface CounterpartyPickerProps {
+  /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
+  label?: string;
   counterparties: Counterparty[];
   workspaceId: string;
   selectedId: string | null;
@@ -22,9 +24,11 @@ export function CounterpartyPicker({
   onCreated,
   defaultType = 'individual',
   placeholder = 'Kişi / firma seçin',
+  label,
 }: CounterpartyPickerProps) {
   return (
     <SearchablePicker
+      label={label}
       items={counterparties}
       selectedId={selectedId}
       onSelect={onSelect}
