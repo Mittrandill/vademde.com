@@ -51,10 +51,11 @@ export default function ReceiptArchiveScreen() {
     return groups;
   }, [items]);
 
-  const title = counterpartyId ? `${counterpartyQuery.data?.name ?? 'Cari'} Dekontları` : 'Belge Arşivi';
+  const title = counterpartyId ? `${counterpartyQuery.data?.name ?? 'Cari'} dekontları` : 'Belge arşivi';
 
   return (
     <DetailScaffold
+      showTitle
       header={{ title }}
       isLoading={archive.isLoading || (archive.allowed && archiveQuery.isPending)}
       error={archiveQuery.error}

@@ -16,6 +16,8 @@ export interface DetailScaffoldProps {
   error?: unknown;
   errorFallbackMessage?: string;
   children: ReactNode;
+  /** true: büyük başlık gösterilir (liste benzeri ekranlar); varsayılan false — hero'lu detaylarda ad hero'dadır. */
+  showTitle?: boolean;
 }
 
 // obligations/[id], counterparties/[id], banks/[code], transactions/[id] ve accounts/[id]
@@ -27,6 +29,7 @@ export function DetailScaffold({
   error,
   errorFallbackMessage,
   children,
+  showTitle = false,
 }: DetailScaffoldProps) {
   const theme = useTheme();
   // Sistem yazı boyutu ekran açıkken değişirse (bkz. services/reflow.ts), bu paylaşılan
@@ -55,7 +58,7 @@ export function DetailScaffold({
       <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
         <Stack gap="lg">
           {/* Tuval detay ekranlarında başlık yok: ad ve tutar hero'dadır; gezinme çubuğu yalnızca geri + eylem taşır. */}
-          <ScreenHeader {...header} title="" inline />
+          {showTitle ? <ScreenHeader {...header} /> : <ScreenHeader {...header} title="" inline />}
           {children}
         </Stack>
       </ScrollView>

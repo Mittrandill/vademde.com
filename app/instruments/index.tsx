@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { EmptyState, Pressable, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
+import { Card, EmptyState, Group, Pressable, ScrollableTabs, SegmentedControl, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { HeroAmount } from '@/components/finance/HeroAmount';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -83,26 +83,28 @@ export default function InstrumentsScreen() {
           }}
         />
 
-        <ScrollableTabs
-          tabs={[
-            { key: 'receivable', label: `Alınan · ${received.length}` },
-            { key: 'payable', label: `Verilen · ${given.length}` },
+        <SegmentedControl
+          options={[
+            { key: 'payable', label: `Verdiğim · ${given.length}` },
+            { key: 'receivable', label: `Aldığım · ${received.length}` },
           ]}
-          activeKey={side}
+          value={side}
           onChange={(k) => setSide(k as Side)}
+          stretch
         />
 
         {side === 'receivable' ? (
-          <Stack gap="xs">
-            <Text variant="label" color="textSecondary">
-              Portföydeki toplam
-            </Text>
-            <HeroAmount amountMinor={portfolioTotal} baseSize={48} />
+          <Card style={{ gap: 2 }}>
             <Text variant="caption" color="textSecondary">
-              {inPortfolio.length} kayıt portföyde
-              {nearest?.due_date ? ` · en yakın vade ${dayMonth.format(new Date(nearest.due_date))}` : ''}
+              Portföydeki toplam · {inPortfolio.length} kayıt
             </Text>
-          </Stack>
+            <HeroAmount amountMinor={portfolioTotal} baseSize={32} />
+            {nearest?.due_date ? (
+              <Text variant="caption" color="textSecondary">
+                En yakın vade {dayMonth.format(new Date(nearest.due_date))}
+              </Text>
+            ) : null}
+          </Card>
         ) : null}
 
         {side === 'receivable' ? (
@@ -124,14 +126,16 @@ export default function InstrumentsScreen() {
           />
         ) : (
           groups.map((group) => (
-            <Stack key={group.title} gap="xxs">
-              <Text variant="label" color="textSecondary">
+            <View key={group.title}>
+              <Text variant="label" color="textSecondary" style={{ marginBottom: 10 }}>
                 {group.title}
               </Text>
-              {group.rows.map((o, index) => (
-                <InstrumentRow key={o.id} item={o} last={index === group.rows.length - 1} />
-              ))}
-            </Stack>
+              <Group inset={62}>
+                {group.rows.map((o, index) => (
+                  <InstrumentRow key={o.id} item={o} last={index === group.rows.length - 1} />
+                ))}
+              </Group>
+            </View>
           ))
         )}
       </ScrollView>
@@ -139,7 +143,7 @@ export default function InstrumentsScreen() {
   );
 }
 
-function InstrumentRow({ item, last }: { item: ObligationWithRelations; last: boolean }) {
+function InstrumentRow({ item }: { item: ObligationWithRelations; last: boolean }) {
   const theme = useTheme();
   const received = item.direction === 'receivable';
   const bank = item.bank_code ? BANK_NAME[item.bank_code] : null;
@@ -149,40 +153,23 @@ function InstrumentRow({ item, last }: { item: ObligationWithRelations; last: bo
     <Pressable
       accessibilityRole="button"
       onPress={() => router.push(`/obligations/${item.id}`)}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: theme.spacing.sm,
-        paddingVertical: 12,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: theme.colors.border,
-      }}
+      style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
     >
-      <BankLogo bankCode={item.bank_code} fallbackIcon="document-text-outline" size={40} />
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-          <Text variant="label" color="textSecondary">
-            {item.document_type === 'senet' ? 'Senet' : 'Çek'}
-          </Text>
-          <Text variant="cardTitle" numberOfLines={1} style={{ flexShrink: 1 }}>
-            {item.title}
-          </Text>
-        </View>
+      <BankLogo bankCode={item.bank_code} fallbackIcon="document-text-outline" size={34} />
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text numberOfLines={1} style={{ fontWeight: '500' }}>
+          {item.counterparty?.name || item.title}
+        </Text>
         <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {subtitle}
+          {item.document_type === 'senet' ? 'Senet' : 'Çek'}
+          {subtitle ? ` · ${subtitle}` : ''}
+          {item.due_date ? ` · ${dayMonth.format(new Date(item.due_date))}` : ''}
         </Text>
       </View>
-      <View style={{ alignItems: 'flex-end', gap: 3 }}>
-        <Text variant="cardTitle" tabular style={{ color: received ? theme.colors.receivable : theme.colors.textPrimary }}>
-          {received ? '+' : '−'}
-          {formatMinorAmount(item.remaining_amount_minor || item.total_amount_minor, item.currency_code)}
-        </Text>
-        {item.due_date ? (
-          <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none' }}>
-            vade {dayMonth.format(new Date(item.due_date))}
-          </Text>
-        ) : null}
-      </View>
+      <Text tabular style={{ fontWeight: '600', color: received ? theme.colors.receivable : theme.colors.textPrimary }}>
+        {received ? '+' : '−'}
+        {formatMinorAmount(item.remaining_amount_minor || item.total_amount_minor, item.currency_code)}
+      </Text>
     </Pressable>
   );
 }
