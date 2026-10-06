@@ -9,10 +9,11 @@ import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import {
-  AmountField,
-  Button,
+  BigAmountInput,
   Card,
   DateField,
+  FieldGroup,
+  FormRow,
   Pressable,
   Row,
   SegmentedControl,
@@ -457,9 +458,16 @@ function SettlementForm({
         >
           <Stack gap="lg">
             <ScreenHeader
-            title={isPayable ? 'Ödeme Yap' : 'Tahsilat Al'}
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-          />
+              inline
+              title={isPayable ? 'Ödeme yap' : 'Tahsilat al'}
+              leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+              rightLabel={{
+                label: 'Kaydet',
+                bold: true,
+                disabled: !canSubmit || saveMutation.isPending,
+                onPress: () => saveMutation.mutate(),
+              }}
+            />
 
             <Stack gap="sm">
               <Text variant="label" color="textSecondary">
@@ -564,24 +572,23 @@ function SettlementForm({
             ) : null}
 
             {method === 'ciro' ? (
-              <Stack gap="xxs">
-                <Text variant="label" color="textSecondary">
-                  TUTAR
+              <Stack gap="xxs" align="center">
+                <Text variant="caption" color="textSecondary">
+                  Tutar
                 </Text>
-                <Text variant="cardTitle" tabular>
+                <Text variant="displayAmount" tabular style={{ fontSize: 40, lineHeight: 46 }}>
                   {sourceTotalMinor > 0 ? formatMinorAmount(sourceTotalMinor, currencyCode) : 'Çek/senet seçin'}
                 </Text>
               </Stack>
             ) : (
-              <AmountField
-                label="TUTAR"
-                placeholder={precision === 0 ? '1' : '0,00'}
-                precision={precision}
+              <BigAmountInput
                 value={displayAmount}
                 onChangeText={(value) => {
                   setAmount(value);
                   setAmountTouched(true);
                 }}
+                precision={precision}
+                symbol={currencyCode === 'TRY' ? '₺' : currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : undefined}
               />
             )}
 
@@ -679,51 +686,50 @@ function SettlementForm({
                 </Stack>
               </Card>
             ) : (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  {isPayable ? 'ÖDEMENİN ÇIKTIĞI HESAP' : 'TAHSİLATIN GİRDİĞİ HESAP'}
-                </Text>
+              <FieldGroup>
                 {methodAccounts.length === 0 ? (
-                  <Text variant="body" color="textSecondary">
-                    {method === 'kredi_karti'
-                      ? isPayable
-                        ? 'Kayıtlı kredi kartı yok. Hesaplar\'dan kart ekleyin.'
-                        : 'Kart tahsilatı için POS veya banka hesabı ekleyin.'
-                      : "Önce Hesaplar'dan bir hesap ekleyin."}
-                  </Text>
+                  <FormRow
+                    label={isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
+                    value={
+                      method === 'kredi_karti'
+                        ? isPayable
+                          ? "Kayıtlı kredi kartı yok. Hesaplar'dan kart ekleyin."
+                          : 'Kart tahsilatı için POS veya banka hesabı ekleyin.'
+                        : "Önce Hesaplar'dan bir hesap ekleyin."
+                    }
+                  />
                 ) : (
                   <AccountPicker
                     accounts={methodAccounts}
                     selectedId={accountId}
                     onSelect={setAccountId}
-                    title="Hesap Seç"
-                    placeholder="Hesap seçin"
+                    title="Hesap seç"
+                    placeholder={isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
+                    label="Hesap"
                   />
                 )}
-              </Stack>
+                <DateField label="İşlem tarihi" value={dateStr} onChangeText={setDateStr} />
+                {!cashless ? (
+                  <TextField
+                    label="Açıklama (isteğe bağlı)"
+                    placeholder={isPayable ? 'Örn. Mart faturası ödemesi' : 'Örn. Mart tahsilatı'}
+                    value={description}
+                    onChangeText={setDescription}
+                  />
+                ) : null}
+              </FieldGroup>
             )}
 
-            <DateField label="İŞLEM TARİHİ" value={dateStr} onChangeText={setDateStr} />
+            {instrument || method === 'mahsup' || method === 'ciro' ? (
+              <FieldGroup>
+                <DateField label="İşlem tarihi" value={dateStr} onChangeText={setDateStr} />
+              </FieldGroup>
+            ) : null}
 
             {!cashless ? (
               <ReceiptAttachField value={receipt} onChange={setReceipt} allowed={archive.allowed} onUpgrade={() => router.push('/paywall')} />
             ) : null}
 
-            {!cashless ? (
-              <TextField
-                label="AÇIKLAMA (İSTEĞE BAĞLI)"
-                placeholder={isPayable ? 'Örn. Mart faturası ödemesi' : 'Örn. Mart tahsilatı'}
-                value={description}
-                onChangeText={setDescription}
-              />
-            ) : null}
-
-            <Button
-              label={isPayable ? 'Ödemeyi Kaydet' : 'Tahsilatı Kaydet'}
-              onPress={() => saveMutation.mutate()}
-              loading={saveMutation.isPending}
-              disabled={!canSubmit}
-            />
           </Stack>
         </ScrollView>
       </KeyboardAvoidingView>
