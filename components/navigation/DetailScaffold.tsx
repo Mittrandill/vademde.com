@@ -54,7 +54,8 @@ export function DetailScaffold({
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.huge }}>
         <Stack gap="lg">
-          <ScreenHeader {...header} />
+          {/* Tuval detay ekranlarında başlık yok: ad ve tutar hero'dadır; gezinme çubuğu yalnızca geri + eylem taşır. */}
+          <ScreenHeader {...header} title="" inline />
           {children}
         </Stack>
       </ScrollView>

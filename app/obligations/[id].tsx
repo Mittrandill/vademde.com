@@ -13,10 +13,12 @@ import {
   Card,
   DateField,
   EmptyState,
+  Group,
   Pagination,
   Pressable,
   Row,
   Stack,
+  Tag,
   Text,
 } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
@@ -400,7 +402,7 @@ export default function ObligationDetailScreen() {
               <EmptyState icon="calendar-outline" message="Henüz ödeme planı yok." />
             ) : (
               <>
-                <View>
+                <Group inset={62}>
                   {visibleInstallments.map((installment, index) => (
                     <TimelineInstallmentRow
                       key={installment.id}
@@ -412,7 +414,7 @@ export default function ObligationDetailScreen() {
                       onPay={() => setPayingInstallment(installment)}
                     />
                   ))}
-                </View>
+                </Group>
                 <Pagination page={effectivePlanPage} totalPages={planPageCount} onChange={setPlanPage} />
               </>
             )}
@@ -604,89 +606,65 @@ interface TimelineInstallmentRowProps {
 // Ödenmiş taksit dolu yeşil, sıradaki dolu Saffron, gelecek taksitler soluk anahat.
 // Markerlar arasındaki dikey çizgi ödeme takvimini gerçek bir zaman çizgisi olarak
 // okunur kılar (docs/08-tasarim-sistemi.md §12.15 — "taksit zaman çizgisi").
-function TimelineInstallmentRow({ installment, currencyCode, isNext, isLast, unitLabel, onPay }: TimelineInstallmentRowProps) {
+function TimelineInstallmentRow({ installment, currencyCode, isNext, unitLabel, onPay }: TimelineInstallmentRowProps) {
   const theme = useTheme();
   const paid = installment.remaining_amount_minor <= 0;
-
   const overdue = !paid && installment.status === 'gecikti';
-  const markerBg = paid ? theme.colors.textPrimary : isNext ? theme.colors.payable : 'transparent';
-  const markerBorder = overdue ? theme.colors.danger : paid ? theme.colors.textPrimary : isNext ? theme.colors.payable : theme.colors.mutedControl;
-  const markerTextColor = paid || isNext ? theme.colors.backgroundPrimary : overdue ? theme.colors.danger : theme.colors.textSecondary;
+  const due = new Date(installment.due_date);
+  const month = new Intl.DateTimeFormat('tr-TR', { month: 'short' }).format(due).toLocaleUpperCase('tr-TR');
+  const dateColor = overdue ? theme.colors.danger : theme.colors.textPrimary;
 
+  // Tuval KrediDetay: tarih bloğu, "N. taksit" + anapara/faiz alt satırı, sağda tutar ve "Ödendi" anahtarı.
   return (
-    <Row gap="sm" align="stretch" style={{ marginBottom: isLast ? 0 : theme.spacing.sm }}>
-      <Stack gap="xs" align="center" style={{ width: 32 }}>
-        <View
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            borderWidth: (paid || isNext) && !overdue ? 0 : 1.5,
-            borderColor: markerBorder,
-            backgroundColor: markerBg,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {paid ? (
-            <Ionicons name="checkmark" size={16} color={theme.colors.backgroundPrimary} />
-          ) : (
-            <Text variant="caption" mono style={{ color: markerTextColor, fontWeight: '600' }}>
-              {installment.installment_number}
-            </Text>
-          )}
-        </View>
-        {!isLast ? (
-          <View
-            style={{
-              flex: 1,
-              width: 2,
-              borderRadius: 1,
-              backgroundColor: paid ? theme.colors.textPrimary : theme.colors.border,
-            }}
-          />
-        ) : null}
-      </Stack>
-
-      <View style={{ flex: 1 }}>
-        <Card elevated={isNext}>
-          <Row gap="sm">
-            <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="cardTitle" numberOfLines={1}>
-                {installment.installment_number}. {unitLabel} — {shortDateFormatter.format(new Date(installment.due_date))}
-              </Text>
-              {installment.principal_minor !== null && installment.interest_minor !== null ? (
-                <Text variant="caption" color="textSecondary">
-                  Anapara {formatMinorAmount(installment.principal_minor, currencyCode)} · Faiz{' '}
-                  {formatMinorAmount(installment.interest_minor, currencyCode)}
-                </Text>
-              ) : null}
-            </Stack>
-
-            <Stack gap="xxs" align="flex-end">
-              {paid ? (
-                <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>
-                  Ödendi
-                </Text>
-              ) : (
-                <Amount amountMinor={installment.remaining_amount_minor} currencyCode={currencyCode} variant="body" />
-              )}
-              {!paid ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={onPay}
-                  hitSlop={8}
-                >
-                  <Text variant="cardTitle" style={{ color: theme.colors.payable }}>
-                    Öde
-                  </Text>
-                </Pressable>
-              ) : null}
-            </Stack>
-          </Row>
-        </Card>
+    <View style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: paid ? 0.62 : 1 }}>
+      <View style={{ width: 34, alignItems: 'center' }}>
+        <Text tabular style={{ fontSize: 18, lineHeight: 20, fontWeight: '700', color: dateColor }}>
+          {String(due.getDate()).padStart(2, '0')}
+        </Text>
+        <Text style={{ fontSize: 11, fontWeight: '600', color: overdue ? theme.colors.danger : theme.colors.textSecondary }}>{month}</Text>
       </View>
-    </Row>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text numberOfLines={1} style={{ fontWeight: isNext ? '600' : '500' }}>
+          {installment.installment_number}. {unitLabel.toLocaleLowerCase('tr-TR')}
+        </Text>
+        {installment.principal_minor !== null && installment.interest_minor !== null ? (
+          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+            Anapara {formatMinorAmount(installment.principal_minor, currencyCode)} · Faiz{' '}
+            {formatMinorAmount(installment.interest_minor, currencyCode)}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+        <Text tabular style={{ fontWeight: '600' }}>
+          {formatMinorAmount(paid ? installment.amount_minor : installment.remaining_amount_minor, currencyCode)}
+        </Text>
+        {paid ? (
+          <Tag tone="success" label="Ödendi" />
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ödendi olarak işaretle"
+            onPress={onPay}
+            hitSlop={8}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              paddingVertical: 6,
+              paddingLeft: 10,
+              paddingRight: 8,
+              borderRadius: 12,
+              backgroundColor: theme.colors.fill,
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>Ödendi</Text>
+            <View style={{ width: 34, height: 20, borderRadius: 10, backgroundColor: theme.colors.fill, justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.separator }}>
+              <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff', marginLeft: 2 }} />
+            </View>
+          </Pressable>
+        )}
+      </View>
+    </View>
   );
 }
 
