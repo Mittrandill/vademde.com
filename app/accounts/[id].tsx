@@ -577,7 +577,7 @@ export default function AccountDetailScreen() {
           title={account.name}
           amountLabel="GÜNCEL BAKİYE"
           amount={formatMinorAmount(balanceMinor, account.currency_code)}
-          amountColor={balanceMinor < 0 ? theme.colors.danger : theme.colors.textPrimary}
+          amountColor={theme.colors.textPrimary}
           progress={overdraftProgress}
           progressLabel="Ek hesap kullanımı"
           progressColor={overdraftProgress !== undefined && overdraftProgress >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary}

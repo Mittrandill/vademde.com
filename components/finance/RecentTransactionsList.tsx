@@ -99,8 +99,8 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
               size={36}
             />
           )}
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle">
+          <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="cardTitle" numberOfLines={1}>
               {t.counterparty?.name ||
                 t.description?.trim() ||
                 t.category?.name ||
@@ -127,6 +127,10 @@ function RecentTransactionRow({ transaction: t, isLast }: RecentTransactionRowPr
             currencyCode={t.currency_code}
             direction={t.direction as 'income' | 'expense' | 'transfer'}
             variant="body"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            style={{ maxWidth: '38%' }}
           />
         </Row>
       </Pressable>

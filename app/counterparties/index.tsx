@@ -373,7 +373,7 @@ function CounterpartyHero({
             label="BORCUNUZ"
             value={formatMinorAmount(payableMinor)}
             caption="Ödenecek"
-            valueColor="danger"
+            valueColor="payable"
             right
           />
           <HeroMetric
@@ -391,7 +391,7 @@ interface HeroMetricProps {
   label: string;
   value: string;
   caption: string;
-  valueColor?: 'success' | 'danger';
+  valueColor?: 'success' | 'payable';
   right?: boolean;
   bottom?: boolean;
 }

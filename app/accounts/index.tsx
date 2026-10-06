@@ -157,7 +157,7 @@ export default function AccountsScreen() {
             label="TOPLAM BAKİYE"
             description="Kredi kartları hariç hesap bakiyelerinizin TL karşılığı"
             amountText={formatMinorAmount(totalBalanceMinor)}
-            amountColor={totalBalanceMinor < 0 ? 'danger' : 'success'}
+            amountColor={totalBalanceMinor < 0 ? 'textPrimary' : 'success'}
             metrics={[
               { label: 'TOPLAM HESAP', value: allAccounts.length, caption: 'Tüm kayıtlar' },
               { label: 'KASA', value: cashCount, caption: 'Nakit hesap' },

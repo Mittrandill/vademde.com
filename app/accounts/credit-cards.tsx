@@ -199,12 +199,12 @@ export default function CreditCardsScreen() {
             label="TOPLAM KART BORCU"
             description="Kredi kartlarınızın güncel toplam borcu"
             amountText={formatMinorAmount(totalDebtMinor)}
-            amountColor={totalDebtMinor > 0 ? 'danger' : 'textPrimary'}
+            amountColor="textPrimary"
             metrics={[
               { label: 'TOPLAM KART', value: allCards.length, caption: 'Tüm kartlar' },
-              { label: 'EKSTRE BEKLEYEN', value: cardsAwaitingStatement, caption: 'Yüklenmesi gereken', valueColor: cardsAwaitingStatement > 0 ? 'danger' : undefined },
+              { label: 'EKSTRE BEKLEYEN', value: cardsAwaitingStatement, caption: 'Yüklenmesi gereken', valueColor: cardsAwaitingStatement > 0 ? 'attentionMarker' : undefined },
               { label: 'EKSTRE YÜKLENDİ', value: allCards.length - cardsAwaitingStatement, caption: 'Bu dönem', valueColor: 'success' },
-              { label: 'BORÇLU KART', value: allCards.filter((account) => (balanceByAccountId.get(account.id) ?? account.opening_balance_minor) > 0).length, caption: 'Bakiye taşıyan', valueColor: 'danger' },
+              { label: 'BORÇLU KART', value: allCards.filter((account) => (balanceByAccountId.get(account.id) ?? account.opening_balance_minor) > 0).length, caption: 'Bakiye taşıyan' },
             ]}
           />
 

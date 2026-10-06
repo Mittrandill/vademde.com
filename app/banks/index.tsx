@@ -122,7 +122,8 @@ export default function BanksScreen() {
             label="TOPLAM KREDİ BORCU"
             description="Bankalarınıza bağlı açık kredilerin kalan toplamı"
             amountText={formatMinorAmount(totals.loanDebtMinor)}
-            amountColor={totals.loanDebtMinor > 0 ? 'danger' : 'textPrimary'}
+            // Kırmızı yalnızca gecikme içindir (HANDOFF §1); borç tutarı nötr kalır.
+            amountColor={totals.overdueLoanCount > 0 ? 'danger' : 'textPrimary'}
             metrics={[
               { label: 'TOPLAM BANKA', value: allBanks.length, caption: 'Bağlı kurumlar' },
               { label: 'HESAP', value: totals.accountCount, caption: 'Banka hesapları' },
