@@ -29,11 +29,12 @@ interface AlertCardProps {
   body: string;
   cta: string;
   art: ReactNode;
+  textMaxWidth?: `${number}%`;
   onPress: () => void;
 }
 
 // Tuval dışı (kullanıcı görseli): degrade zeminli, sağda illüstrasyonlu uyarı kartı.
-function AlertCard({ id, width, tone, eyebrow, headline, headlineIsAmount, body, cta, art, onPress }: AlertCardProps) {
+function AlertCard({ id, width, tone, eyebrow, headline, headlineIsAmount, body, cta, art, textMaxWidth = '64%', onPress }: AlertCardProps) {
   const theme = useTheme();
 
   return (
@@ -70,10 +71,10 @@ function AlertCard({ id, width, tone, eyebrow, headline, headlineIsAmount, body,
         <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id}-glow)`} />
         <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id}-sheen)`} />
       </Svg>
-      <View pointerEvents="none" style={{ position: 'absolute', right: 6, bottom: 6 }}>
+      <View pointerEvents="none" style={{ position: 'absolute', right: -14, bottom: -26 }}>
         {art}
       </View>
-      <View style={{ padding: 20, gap: 4, flex: 1, maxWidth: '60%' }}>
+      <View style={{ padding: 20, gap: 4, flex: 1, maxWidth: textMaxWidth }}>
         <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>
           {eyebrow}
         </Text>
@@ -153,12 +154,13 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         id="g-overdue"
         width={cardWidth}
         tone={theme.colors.danger}
-        eyebrow={`Gecikmiş · ${overdueCount} kayıt`}
+        eyebrow="Gecikmiş"
         headline={hidden ? MASK : formatMinorAmount(overdueMinor)}
         headlineIsAmount
-        body={`${overdueCount} kaydın ödeme tarihi geçti.`}
+        body={`Ödeme tarihi geçen ${overdueCount} kaydın var.`}
         cta="Hemen incele"
-        art={<OverdueArt width={128} />}
+        art={<OverdueArt width={170} />}
+        textMaxWidth="76%"
         onPress={() => router.push({ pathname: '/obligations', params: { status: 'overdue' } })}
       />
     );
@@ -200,7 +202,7 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         headline={savingMinor > 0 ? `Ayda ${formatMinorAmount(savingMinor).replace(/,00$/, '')} tasarruf` : (top?.title ?? 'Öneriler hazır')}
         body={savingMinor > 0 && top ? top.title : 'Harcamalarına göre hazırlandı.'}
         cta="Önerileri gör"
-        art={<SparkleArt width={116} />}
+        art={<SparkleArt width={130} />}
         onPress={() => router.push('/insights')}
       />
     );

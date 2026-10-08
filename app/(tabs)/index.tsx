@@ -16,7 +16,6 @@ import { QuickActions } from '@/components/finance/QuickActions';
 import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
 import { DraftDocumentsQueue } from '@/components/finance/DraftDocumentsQueue';
-import { CreditCardDueWidget } from '@/components/finance/CreditCardDueWidget';
 import { RecentTransactionsList } from '@/components/finance/RecentTransactionsList';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { listAccounts } from '@/features/accounts/api';
@@ -241,16 +240,6 @@ export default function HomeScreen() {
     () => activeObligations.filter((o) => o.direction === 'receivable'),
     [activeObligations]
   );
-  // Her kredi kartı ekstresi için en yakın vadeli kayıt (taksit satırları tekilleştirilir).
-  const creditCardObligations = useMemo(() => {
-    const nearest = new Map<string, ObligationDueItem>();
-    for (const o of activeObligations) {
-      if (o.document_type !== 'kredi_karti_ekstresi' || o.remaining_amount_minor <= 0) continue;
-      const current = nearest.get(o.id);
-      if (!current || (o.due_date ?? '9999') < (current.due_date ?? '9999')) nearest.set(o.id, o);
-    }
-    return [...nearest.values()].sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
-  }, [activeObligations]);
 
 
   const payableTotalMinor = useMemo(
@@ -390,8 +379,6 @@ export default function HomeScreen() {
           <PendingReviewQueue documents={pendingDocumentsQuery.data ?? []} />
 
           {activeWorkspaceId ? <DraftDocumentsQueue workspaceId={activeWorkspaceId} /> : null}
-
-          <CreditCardDueWidget obligations={creditCardObligations} />
 
           {/* Hesaplar/Kişiler/Kategoriler artık "Daha Fazla" sekmesinden erişiliyor. */}
           <RecentTransactionsList transactions={recentTransactionsQuery.data ?? []} />

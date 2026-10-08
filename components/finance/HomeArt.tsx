@@ -7,17 +7,17 @@ function Art({ source, width, ratio }: { source: ImageSourcePropType; width: num
 }
 
 export function WalletArt({ width = 168 }: { width?: number }) {
-  return <Art source={require('@/assets/home/wallet.png')} width={width} ratio={629 / 720} />;
+  return <Art source={require('@/assets/home/wallet.png')} width={width} ratio={644 / 720} />;
 }
 
 export function OverdueArt({ width = 150 }: { width?: number }) {
-  return <Art source={require('@/assets/home/overdue.png')} width={width} ratio={720 / 706} />;
+  return <Art source={require('@/assets/home/overdue.png')} width={width} ratio={610 / 720} />;
 }
 
 export function CashArt({ width = 176 }: { width?: number }) {
-  return <Art source={require('@/assets/home/cash.png')} width={width} ratio={544 / 720} />;
+  return <Art source={require('@/assets/home/cash.png')} width={width} ratio={682 / 720} />;
 }
 
 export function SparkleArt({ width = 132 }: { width?: number }) {
-  return <Art source={require('@/assets/home/insight.png')} width={width} ratio={720 / 661} />;
+  return <Art source={require('@/assets/home/insight.png')} width={width} ratio={720 / 712} />;
 }
