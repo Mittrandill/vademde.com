@@ -11,8 +11,7 @@ import { PAYWALL_LAST_SHOWN_KEY } from '@/utils/storageKeys';
 import { useTheme } from '@/theme';
 import { Pressable, Row, Skeleton, Stack, Text } from '@/components/primitives';
 import { HomeHero } from '@/components/finance/HomeHero';
-import { AiInsightsCard } from '@/components/finance/AiInsightsCard';
-import { CashAlertBanner } from '@/components/finance/CashAlertBanner';
+import { HomeAlertCarousel } from '@/components/finance/HomeAlertCarousel';
 import { QuickActions } from '@/components/finance/QuickActions';
 import { UpcomingDueList } from '@/components/finance/UpcomingDueList';
 import { PendingReviewQueue } from '@/components/finance/PendingReviewQueue';
@@ -374,13 +373,15 @@ export default function HomeScreen() {
             monthNetMinor={monthNetMinor}
             receivableMinor={receivableTotalMinor}
             payableMinor={payableTotalMinor}
-            overdueMinor={dueBreakdownQuery.data?.payable.overdueMinor ?? 0}
-            overdueCount={dueBreakdownQuery.data?.payable.overdueCount ?? 0}
             hidden={balanceHidden}
             onToggleHidden={toggleBalanceHidden}
           />
 
-          <CashAlertBanner />
+          <HomeAlertCarousel
+            overdueMinor={dueBreakdownQuery.data?.payable.overdueMinor ?? 0}
+            overdueCount={dueBreakdownQuery.data?.payable.overdueCount ?? 0}
+            hidden={balanceHidden}
+          />
 
           <QuickActions />
 
@@ -391,8 +392,6 @@ export default function HomeScreen() {
           {activeWorkspaceId ? <DraftDocumentsQueue workspaceId={activeWorkspaceId} /> : null}
 
           <CreditCardDueWidget obligations={creditCardObligations} />
-
-          <AiInsightsCard />
 
           {/* Hesaplar/Kişiler/Kategoriler artık "Daha Fazla" sekmesinden erişiliyor. */}
           <RecentTransactionsList transactions={recentTransactionsQuery.data ?? []} />

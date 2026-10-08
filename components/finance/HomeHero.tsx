@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { Card, Pressable, Text } from '@/components/primitives';
+import { WalletArt } from './HomeArt';
 import { formatMinorAmount } from '@/utils/money';
 
 export interface HomeHeroProps {
@@ -11,8 +12,6 @@ export interface HomeHeroProps {
   monthNetMinor: number;
   receivableMinor: number;
   payableMinor: number;
-  overdueMinor: number;
-  overdueCount: number;
   hidden: boolean;
   onToggleHidden: () => void;
 }
@@ -31,8 +30,6 @@ export function HomeHero({
   monthNetMinor,
   receivableMinor,
   payableMinor,
-  overdueMinor,
-  overdueCount,
   hidden,
   onToggleHidden,
 }: HomeHeroProps) {
@@ -43,7 +40,10 @@ export function HomeHero({
 
   return (
     <View style={{ gap: theme.spacing.sm }}>
-      <Card style={{ padding: 20 }}>
+      <Card style={{ padding: 20, overflow: 'hidden' }}>
+        <View pointerEvents="none" style={{ position: 'absolute', right: -22, top: 56 }}>
+          <WalletArt accent={colors.attentionMarker} tone={colors.textPrimary} />
+        </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>
             Toplam bakiye
@@ -114,33 +114,6 @@ export function HomeHero({
         </View>
       </Card>
 
-      {overdueCount > 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push({ pathname: '/obligations', params: { status: 'overdue' } })}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 14,
-            padding: 16,
-            borderRadius: theme.radius.widget,
-            backgroundColor: theme.colors.surfacePrimary,
-          }}
-        >
-          <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,98,92,0.14)' }}>
-            <Ionicons name="alarm-outline" size={23} color={colors.danger} />
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text variant="caption" color="textSecondary">
-              Gecikmiş · {overdueCount} kayıt
-            </Text>
-            <Text variant="displayAmount" tabular style={{ fontSize: 22, lineHeight: 27, color: colors.danger }}>
-              {hidden ? MASK : formatMinorAmount(overdueMinor)}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedControl} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }
