@@ -8,13 +8,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { AmountField, Button, Card, DateField, FieldGroup, Pressable, Row, SegmentedControl, SourceTag, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, DateField, FieldGroup, Group, GroupedRow, Pressable, Row, SegmentedControl, SourceTag, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { DocumentTypePicker } from '@/components/finance/DocumentTypePicker';
 import { BankPicker } from '@/components/finance/BankPicker';
-import { BankLogo } from '@/components/finance/BankLogo';
 import {
   discardDocument,
   getDocument,
@@ -1035,6 +1034,10 @@ export default function DocumentReviewScreen() {
       : ocrTotalRepaymentMinor;
   const totalInterestMinor = totalRepaymentMinor !== null ? totalRepaymentMinor - principalMinor : null;
 
+  // Gezinme çubuğunda 17 pt tek satır: uzun tür adlarında (ör. Kredi Kartı Ekstresi) yalnızca "Kontrol et".
+  const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? 'Belge') : 'Belge';
+  const reviewTitle = typeLabel.length > 10 ? 'Kontrol et' : `${typeLabel} · Kontrol et`;
+
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -1049,7 +1052,7 @@ export default function DocumentReviewScreen() {
           <Stack gap="lg">
             <ScreenHeader
               inline
-              title={`${documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? 'Belge') : 'Belge'} · Kontrol et`}
+              title={reviewTitle}
               leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
             />
 
@@ -1112,19 +1115,27 @@ export default function DocumentReviewScreen() {
               <Text variant="label" color="textSecondary">
                 YÖN
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-                <SegmentedControl
-                  options={DIRECTIONS}
-                  value={direction}
-                  onChange={(value) => {
-                    setDirection(value);
-                    const willPayOut = value === 'payable' || value === 'expense';
-                    if (willPayOut && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
-                      setAccountId(null);
+              <Group inset={16}>
+                {DIRECTIONS.map((option) => (
+                  <GroupedRow
+                    key={option.key}
+                    title={option.label}
+                    chevron={false}
+                    trailing={
+                      direction === option.key ? (
+                        <Ionicons name="checkmark" size={20} color={theme.colors.brandPrimary} />
+                      ) : undefined
                     }
-                  }}
-                />
-              </ScrollView>
+                    onPress={() => {
+                      setDirection(option.key);
+                      const willPayOut = option.key === 'payable' || option.key === 'expense';
+                      if (willPayOut && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
+                        setAccountId(null);
+                      }
+                    }}
+                  />
+                ))}
+              </Group>
             </Stack>
 
             {(direction === 'payable' || direction === 'receivable') && !isCreditCardStatement ? (
@@ -1262,12 +1273,7 @@ export default function DocumentReviewScreen() {
                 <Text variant="label" color="textSecondary">
                   BANKA (İSTEĞE BAĞLI)
                 </Text>
-                <Row gap="sm" align="center">
-                  <BankLogo bankCode={bankCode} fallbackName={!bankCode ? extractedBankName : null} size={36} />
-                  <Stack style={{ flex: 1 }}>
-                    <BankPicker selectedId={bankCode} onSelect={setSelectedBankCode} />
-                  </Stack>
-                </Row>
+                <BankPicker selectedId={bankCode} onSelect={setSelectedBankCode} />
                 {!bankCode && extractedBankName ? (
                   <Text variant="caption" color="textSecondary">
                     OCR &ldquo;{extractedBankName}&rdquo; okudu ama listede eşleşen banka bulunamadı — yukarıdan manuel seç.
@@ -1278,7 +1284,7 @@ export default function DocumentReviewScreen() {
 
             {documentType === 'kredi_karti_ekstresi' && cardTransactionItems.length > 0 ? (
               <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
+                <Text variant="label" color="textSecondary">
                   EKSTRE HARCAMALARI ({cardExpenseItems.length} işlem)
                 </Text>
                 <SegmentedControl
