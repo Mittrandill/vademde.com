@@ -76,6 +76,7 @@ function toIsoDate(date: Date): string {
 }
 
 type CreditCardTab = 'genel' | 'ekstreler' | 'hareketler';
+type AccountTab = 'hareketler' | 'bilgiler' | 'kmh';
 
 interface StatementMonth {
   periodKey: string;
@@ -95,6 +96,8 @@ export default function AccountDetailScreen() {
   // Yalnızca kredi kartı hesabında kullanılır (bkz. aşağıdaki kredi kartı dalı) —
   // hook sırası bozulmasın diye diğer hesap türlerinde de koşulsuz çağrılır.
   const [tab, setTab] = useState<CreditCardTab>('ekstreler');
+  // Kredi kartı dışındaki hesaplar: Hareketler / Hesap bilgileri / Ek hesap (KMH) sekmeleri.
+  const [accountTab, setAccountTab] = useState<AccountTab>('hareketler');
   const [menuOpen, setMenuOpen] = useState(false);
   const [statementSheetMonth, setStatementSheetMonth] = useState<StatementMonth | null>(null);
   const [payingCard, setPayingCard] = useState(false);
@@ -567,6 +570,13 @@ export default function AccountDetailScreen() {
       ? [{ label: 'POS Komisyonu', value: account.pos_commission_rate != null ? `%${account.pos_commission_rate}` : 'Girilmedi' }]
       : []),
   ];
+  // Ek hesap sekmesi yalnızca banka hesabında anlamlıdır (kasa, cüzdan ve POS'ta KMH olmaz).
+  const accountTabs: { key: AccountTab; label: string }[] = [
+    { key: 'hareketler', label: `Hareketler (${allTransactions.length})` },
+    { key: 'bilgiler', label: 'Hesap bilgileri' },
+    ...(type === 'bank' ? [{ key: 'kmh' as const, label: 'Ek hesap (KMH)' }] : []),
+  ];
+  const activeAccountTab: AccountTab = accountTabs.some((t) => t.key === accountTab) ? accountTab : 'hareketler';
   return (
     <>
       <DetailScaffold
@@ -603,27 +613,6 @@ export default function AccountDetailScreen() {
           ) : null}
         </Stack>
 
-        {account.iban ? (
-          <Group inset={16}>
-            <GroupedRow
-              title="IBAN"
-              subtitle={maskIban(account.iban)}
-              chevron={false}
-              trailing={
-                <Button
-                  label="Kopyala"
-                  variant="secondary"
-                  size="sm"
-                  onPress={async () => {
-                    await Clipboard.setStringAsync(account.iban as string);
-                    showSuccessAlert('IBAN kopyalandı.', () => {});
-                  }}
-                />
-              }
-            />
-          </Group>
-        ) : null}
-
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Button
@@ -645,43 +634,71 @@ export default function AccountDetailScreen() {
           </View>
         </View>
 
-        <Stack gap="md">
-          <Text variant="sectionTitle">Bu hesaptaki hareketler</Text>
-          {sections.length === 0 ? (
-            <EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />
-          ) : (
-            <Stack gap="md">
-              {sections.map((section) => (
-                <Stack gap="xs" key={section.title}>
-                  <SectionHeader title={section.title} />
-                  <Group>
-                    {section.data.map((item) => (
-                      <TransactionRow key={item.id} item={item} accountId={account.id} />
-                    ))}
-                  </Group>
-                </Stack>
-              ))}
-            </Stack>
-          )}
-          {totalPages > 1 ? <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} /> : null}
-        </Stack>
+        <FinanceDetailTabs options={accountTabs} value={activeAccountTab} onChange={setAccountTab} />
 
-        <FinanceDetailInfoCard
-          title="Hesap Bilgileri"
-          description="Hesap türü, kimlik ve limit ayrıntıları"
-          rows={accountInfoRows}
-        />
+        {activeAccountTab === 'hareketler' ? (
+          <Stack gap="md">
+            {sections.length === 0 ? (
+              <EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />
+            ) : (
+              <Stack gap="md">
+                {sections.map((section) => (
+                  <Stack gap="xs" key={section.title}>
+                    <SectionHeader title={section.title} />
+                    <Group>
+                      {section.data.map((item) => (
+                        <TransactionRow key={item.id} item={item} accountId={account.id} />
+                      ))}
+                    </Group>
+                  </Stack>
+                ))}
+              </Stack>
+            )}
+            {totalPages > 1 ? <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} /> : null}
+          </Stack>
+        ) : activeAccountTab === 'bilgiler' ? (
+          <Stack gap="md">
+            {account.iban ? (
+              <Group inset={16}>
+                <GroupedRow
+                  title="IBAN"
+                  subtitle={maskIban(account.iban)}
+                  chevron={false}
+                  trailing={
+                    <Button
+                      label="Kopyala"
+                      variant="secondary"
+                      size="sm"
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(account.iban as string);
+                        showSuccessAlert('IBAN kopyalandı.', () => {});
+                      }}
+                    />
+                  }
+                />
+              </Group>
+            ) : null}
 
-        {hasOverdraft ? (
+            <FinanceDetailInfoCard
+              title="Hesap Bilgileri"
+              description="Hesap türü, kimlik ve limit ayrıntıları"
+              rows={accountInfoRows}
+            />
+            {type === 'pos' ? <PosCommissionCard account={account} /> : null}
+          </Stack>
+        ) : hasOverdraft ? (
           <OverdraftCard
             accountId={account.id}
             balanceMinor={balanceMinor}
             limitMinor={overdraftLimitMinor}
             currencyCode={account.currency_code}
           />
-        ) : null}
-
-        {type === 'pos' ? <PosCommissionCard account={account} /> : null}
+        ) : (
+          <EmptyState
+            icon="trending-down-outline"
+            message="Bu hesapta ek hesap (KMH) limiti tanımlı değil. Limit eklemek için hesabı düzenleyin."
+          />
+        )}
       </DetailScaffold>
 
       <ActionSheet

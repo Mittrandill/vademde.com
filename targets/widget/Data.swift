@@ -11,6 +11,8 @@ struct DueItem: Codable {
     let amount: String
     let receivable: Bool
     let overdue: Bool
+    /// bank_code (features/banks/banks.ts); widget'ta "bank_<kod>" görseli. Eski özetlerde yok.
+    let bank: String?
 }
 
 struct Snapshot: Codable {
@@ -73,10 +75,10 @@ extension Snapshot {
         monthNet: "₺35.200", monthNetShort: "+35K", weekPayable: "₺48.250", weekReceivable: "₺18.000",
         weekPayableMinor: 4_825_000, weekReceivableMinor: 1_800_000,
         items: [
-            DueItem(title: "Enerjisa", kind: "Fatura", date: sampleDay(-3), amount: "₺2.184,60", receivable: false, overdue: true),
-            DueItem(title: "Kuzey Lojistik", kind: "Çek", date: sampleDay(1), amount: "₺48.250", receivable: false, overdue: false),
-            DueItem(title: "Anadolu Ambalaj", kind: "Senet", date: sampleDay(4), amount: "₺18.000", receivable: true, overdue: false),
-            DueItem(title: "Konut kredisi", kind: "Kredi", date: sampleDay(7), amount: "₺14.872", receivable: false, overdue: false),
+            DueItem(title: "Enerjisa", kind: "Fatura", date: sampleDay(-3), amount: "₺2.184,60", receivable: false, overdue: true, bank: nil),
+            DueItem(title: "Kuzey Lojistik", kind: "Çek", date: sampleDay(1), amount: "₺48.250", receivable: false, overdue: false, bank: "akbank"),
+            DueItem(title: "Anadolu Ambalaj", kind: "Senet", date: sampleDay(4), amount: "₺18.000", receivable: true, overdue: false, bank: nil),
+            DueItem(title: "Konut kredisi", kind: "Kredi", date: sampleDay(7), amount: "₺14.872", receivable: false, overdue: false, bank: "turkiye-garanti-bankasi"),
         ])
 }
 

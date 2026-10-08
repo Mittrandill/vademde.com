@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useExitGuard } from '@/utils/useExitGuard';
+import { InstallmentPlanTable } from '@/components/finance/InstallmentPlanTable';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { AmountField, Button, Card, DateField, FieldGroup, FormRow, Group, Pagination, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
@@ -259,11 +260,16 @@ function ObligationForm({
       ? (accountsQuery.data ?? []).filter((a) => a.type !== 'pos')
       : accountsQuery.data ?? [];
 
-  const categoriesQuery = useQuery({
-    queryKey: activeWorkspaceId ? queryKeys.categories(activeWorkspaceId, categoryKind) : ['categories', 'disabled'],
-    queryFn: () => listCategories(activeWorkspaceId as string, categoryKind),
+  // Tüm kategoriler tek seferde çekilip türe göre süzülür (bkz. app/transactions/new.tsx).
+  const allCategoriesQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.categories(activeWorkspaceId) : ['categories', 'disabled'],
+    queryFn: () => listCategories(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
+  const categoriesQuery = {
+    isPending: allCategoriesQuery.isPending,
+    data: allCategoriesQuery.data?.filter((c) => c.kind === categoryKind),
+  };
 
   const counterpartiesQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.counterparties(activeWorkspaceId) : ['counterparties', 'disabled'],
@@ -862,6 +868,23 @@ function ObligationForm({
                 </Stack>
               ) : null}
 
+              {!editingPlan ? (
+                // Görüntüleme: tüm taksitli listelerle aynı ödeme planı tablosu; satıra dokununca düzenleme açılır.
+                <InstallmentPlanTable
+                  currencyCode={valueUnitCode}
+                  unitLabel={periodLabels.unit.toLocaleLowerCase('tr-TR')}
+                  rows={installmentPreview.map((item) => ({
+                    key: String(item.installmentNumber),
+                    number: item.installmentNumber,
+                    dueDate: item.dueDate,
+                    amountMinor: item.amountMinor,
+                    principalMinor: showInterestField ? item.principalMinor : null,
+                    status: isPreviewPaid(item) ? 'paid' : 'upcoming',
+                  }))}
+                  onRowPress={() => setEditingPlan(true)}
+                />
+              ) : (
+              <>
               <Group inset={16}>
                 {pageItems.map((item) => (
                   <PlanEditRow
@@ -887,6 +910,8 @@ function ObligationForm({
               </Group>
 
               <Pagination page={page} totalPages={totalPages} onChange={setPlanPage} />
+              </>
+              )}
 
               {paidPreviewCount > 0 ? (
                 <Text variant="caption" style={{ color: theme.colors.success }}>
@@ -1081,8 +1106,10 @@ function ObligationForm({
               {isSubscriptionType ? (
                 <ServicePicker label="Servis" placeholder="Servis seçin (isteğe bağlı)" selectedId={serviceCode} onSelect={setServiceCode} />
               ) : null}
-              {(categoriesQuery.data ?? []).length === 0 ? (
-                <FormRow label="Kategori" value="Bu türde kategori bulunamadı." />
+              {categoriesQuery.isPending ? (
+                <FormRow label="Kategori" value="Kategoriler yükleniyor…" />
+              ) : (categoriesQuery.data ?? []).length === 0 ? (
+                <FormRow label="Kategori" value="Bu türde kategori yok. Kategoriler'den ekleyebilirsiniz." />
               ) : (
                 <CategoryPicker
                   label="Kategori"

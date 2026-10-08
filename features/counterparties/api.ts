@@ -202,6 +202,10 @@ export interface StatementEntry {
   documentType: string | null;
   /** 'payable' | 'receivable' (kayıt/ödeme) ya da 'income' | 'expense' (hareket). */
   direction: string;
+  /** Kayıt satırlarında obligation durumu (bekliyor, odendi, tahsil_edildi…); diğerlerinde null. */
+  status: string | null;
+  /** Kayıt satırlarında vade tarihi (yyyy-MM-dd); yoksa null. */
+  dueDate: string | null;
 }
 
 const METHOD_LABEL: Record<string, string> = {
@@ -221,7 +225,12 @@ interface StatementObligationRow {
   currency_code: string;
   created_at: string;
   status: string;
+  due_date: string | null;
 }
+
+// Çek ve senet: vadesindeki ödeme/tahsilat ayrı satır olarak değil, belgenin kendi satırında
+// durum olarak (Bekliyor → Ödendi / Tahsil edildi) gösterilir.
+const INSTRUMENT_TYPES = new Set(['cek', 'senet']);
 
 interface StatementPaymentRow {
   id: string;
@@ -260,7 +269,7 @@ export async function getCounterpartyStatement(
   const [obligationsResult, transactionsResult] = await Promise.all([
     supabase
       .from('obligations')
-      .select('id, title, document_type, direction, total_amount_minor, currency_code, created_at, status')
+      .select('id, title, document_type, direction, total_amount_minor, currency_code, created_at, status, due_date')
       .eq('workspace_id', workspaceId)
       .eq('counterparty_id', counterpartyId)
       .neq('status', 'iptal_edildi')
@@ -301,30 +310,68 @@ export async function getCounterpartyStatement(
   }
 
   const entries: StatementEntry[] = [];
+  const isInstrument = (o: StatementObligationRow) => INSTRUMENT_TYPES.has(o.document_type);
+  // Bir ödemenin cari bakiyesine etkisi: borca ödeme bakiyeyi artırır, alacağa tahsilat azaltır.
+  const paymentEffect = (o: StatementObligationRow, amountMinor: number) =>
+    o.direction === 'receivable' ? -amountMinor : amountMinor;
+
+  // Çek/senetle kapatılan fatura ödemesi (settled_by_obligation_id) ayrı satır olmaz; etkisi çekin
+  // kendi satırına yazılır ("Çek · verildi" faturayı o tarihte kapatır). Çek bu caride değilse
+  // (ör. başka cariden alınıp ciro edilen çek) ödeme satırı olarak kalır.
+  const settlementEffectBySettler = new Map<string, number>();
+  // Çek/senedin kendi ödemeleri (vadesinde hesaptan çıkış/giriş) satır olarak gösterilmez.
+  const instrumentPaymentEffect = new Map<string, number>();
+  const visiblePayments: StatementPaymentRow[] = [];
+  for (const p of payments) {
+    const obligation = obligationById.get(p.obligation_id);
+    if (!obligation) continue;
+    if (p.settled_by_obligation_id && obligationById.has(p.settled_by_obligation_id)) {
+      const prev = settlementEffectBySettler.get(p.settled_by_obligation_id) ?? 0;
+      settlementEffectBySettler.set(p.settled_by_obligation_id, prev + paymentEffect(obligation, p.amount_minor));
+      continue;
+    }
+    if (isInstrument(obligation)) {
+      instrumentPaymentEffect.set(obligation.id, (instrumentPaymentEffect.get(obligation.id) ?? 0) + paymentEffect(obligation, p.amount_minor));
+      continue;
+    }
+    visiblePayments.push(p);
+  }
 
   for (const o of obligations) {
     const isReceivable = o.direction === 'receivable';
     const isSettlingInstrument = settlingInstrumentIds.has(o.id);
+    const label = DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt';
+    let balanceEffect: number;
+    let subtitle: string;
+    if (isInstrument(o)) {
+      // Faturayı kapatan çek: kapattığı tutar kadar; bağımsız çek: kalan (tutar − ödenen) kadar.
+      const own = isSettlingInstrument ? 0 : (isReceivable ? o.total_amount_minor : -o.total_amount_minor) + (instrumentPaymentEffect.get(o.id) ?? 0);
+      balanceEffect = own + (settlementEffectBySettler.get(o.id) ?? 0);
+      subtitle = `${label} · ${isReceivable ? 'alındı' : 'verildi'}`;
+    } else {
+      balanceEffect = (isReceivable ? o.total_amount_minor : -o.total_amount_minor) + (settlementEffectBySettler.get(o.id) ?? 0);
+      subtitle = `${label} · ${isReceivable ? 'Alacak' : 'Borç'}`;
+    }
     entries.push({
       key: `o:${o.id}`,
       kind: 'document',
       date: o.created_at,
       title: o.title,
-      subtitle: isSettlingInstrument
-        ? `${DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt'} · ${isReceivable ? 'alındı, vadede tahsil edilecek' : 'verildi, vadede ödenecek'}`
-        : `${DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt'} · ${isReceivable ? 'Alacak' : 'Borç'}`,
+      subtitle,
       amountMinor: o.total_amount_minor,
       currencyCode: o.currency_code,
-      balanceEffectMinor: isSettlingInstrument ? 0 : isReceivable ? o.total_amount_minor : -o.total_amount_minor,
+      balanceEffectMinor: balanceEffect,
       runningBalanceMinor: null,
       obligationId: o.id,
       transactionId: null,
       documentType: o.document_type,
       direction: o.direction,
+      status: o.status,
+      dueDate: o.due_date,
     });
   }
 
-  for (const p of payments) {
+  for (const p of visiblePayments) {
     const obligation = obligationById.get(p.obligation_id);
     if (!obligation) continue;
     const isReceivable = obligation.direction === 'receivable';
@@ -343,12 +390,14 @@ export async function getCounterpartyStatement(
       subtitle: [obligation.title, p.account?.name].filter(Boolean).join(' · ') || null,
       amountMinor: p.amount_minor,
       currencyCode: obligation.currency_code,
-      balanceEffectMinor: settlingInstrumentIds.has(obligation.id) ? 0 : isReceivable ? -p.amount_minor : p.amount_minor,
+      balanceEffectMinor: settlingInstrumentIds.has(obligation.id) ? 0 : paymentEffect(obligation, p.amount_minor),
       runningBalanceMinor: null,
       obligationId: obligation.id,
       transactionId: p.transaction_id,
       documentType: obligation.document_type,
       direction: obligation.direction,
+      status: null,
+      dueDate: null,
     });
   }
 
@@ -373,6 +422,8 @@ export async function getCounterpartyStatement(
       transactionId: t.id,
       documentType: null,
       direction: t.direction,
+      status: null,
+      dueDate: null,
     });
   }
 

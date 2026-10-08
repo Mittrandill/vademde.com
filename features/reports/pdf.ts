@@ -13,6 +13,8 @@ import type { ObligationWithRelations } from '@/features/obligations/api';
 
 export interface ReportPdfInput {
   periodLabel: string;
+  /** Raporun ait olduğu çalışma alanı (başlıkta). */
+  workspaceName?: string | null;
   incomeMinor: number;
   expenseMinor: number;
   payableTotalMinor: number;
@@ -46,180 +48,291 @@ const ALL_SECTIONS: ReportPdfSections = {
   accounts: true,
 };
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+// A4 = 210 × 297 mm = 595 × 842 pt (expo-print birimi). Kenar boşlukları @page ile verilir.
+const A4 = { width: 595, height: 842 };
+
+// Uygulama tokenları (theme/colors.ts açık tema) — kâğıtta okunur, mürekkep dostu.
+const C = {
+  ink: '#1F2126',
+  ink2: '#6E6F66',
+  ink3: '#8E8F86',
+  line: '#E9E9E3',
+  fill: '#F6F5F1',
+  graphite: '#2B2D31',
+  saffron: '#FFB000',
+  saffronText: '#8A5F00',
+  ok: '#14804F',
+  okBar: '#52CE96',
+  bad: '#D23B35',
+};
+
+const money = (minor: number, currency = 'TRY') => formatMinorAmount(minor, currency);
+
+function esc(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function renderCategoryRows(items: CategoryBreakdownItem[]): string {
-  if (items.length === 0) return '<tr><td colspan="2" class="muted">Kayıt yok.</td></tr>';
-  return items
-    .map(
-      (item) =>
-        `<tr><td>${escapeHtml(item.name)}</td><td class="amount">${formatMinorAmount(item.amountMinor)}</td></tr>`
-    )
-    .join('');
+const dateFmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function daysOverdue(due: string | null): number | null {
+  if (!due) return null;
+  const d = new Date(due);
+  const today = new Date();
+  const diff = Math.round(
+    (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) /
+      86_400_000
+  );
+  return Math.max(0, diff);
 }
 
-function renderCounterpartyRows(items: CounterpartyBreakdownItem[]): string {
-  if (items.length === 0) return '<tr><td colspan="3" class="muted">Kayıt yok.</td></tr>';
-  return items
-    .map(
-      (item) =>
-        `<tr><td>${escapeHtml(item.name)}</td><td>${item.count}</td><td class="amount">${formatMinorAmount(item.amountMinor)}</td></tr>`
-    )
-    .join('');
+/** Bölüm: başlık + isteğe bağlı açıklama + gövde; sayfa sonunda bölünmez. */
+function section(title: string, body: string, note?: string): string {
+  return `<section class="sec"><div class="sec-h"><h2>${esc(title)}</h2>${note ? `<span class="note">${esc(note)}</span>` : ''}</div>${body}</section>`;
 }
 
-function renderAccountRows(items: AccountBalanceReportItem[]): string {
-  if (items.length === 0) return '<tr><td colspan="2" class="muted">Hesap yok.</td></tr>';
-  return items
-    .map(
-      (item) =>
-        `<tr><td>${escapeHtml(item.name)}</td><td class="amount">${formatMinorAmount(item.balanceMinor, item.currencyCode)}</td></tr>`
-    )
-    .join('');
+function kpi(label: string, value: string, tone: 'ink' | 'ok' | 'bad' = 'ink', sub?: string): string {
+  return `<div class="kpi"><div class="kpi-l">${esc(label)}</div><div class="kpi-v ${tone}">${esc(value)}</div>${sub ? `<div class="kpi-s">${esc(sub)}</div>` : ''}</div>`;
 }
 
-function renderOverdueRows(items: ObligationWithRelations[]): string {
-  if (items.length === 0) return '<tr><td colspan="3" class="muted">Gecikmiş kayıt yok.</td></tr>';
-  return items
-    .map(
-      (o) =>
-        `<tr><td>${escapeHtml(o.title)}</td><td>${o.due_date ?? ''}</td><td class="amount">${formatMinorAmount(o.remaining_amount_minor, o.currency_code)}</td></tr>`
-    )
-    .join('');
+function table(head: string[], rows: string[][], alignRight: number[] = [], empty = 'Kayıt yok.'): string {
+  const th = head.map((h, i) => `<th class="${alignRight.includes(i) ? 'r' : ''}">${esc(h)}</th>`).join('');
+  const body =
+    rows.length === 0
+      ? `<tr><td colspan="${head.length}" class="muted">${esc(empty)}</td></tr>`
+      : rows.map((r) => `<tr>${r.map((c, i) => `<td class="${alignRight.includes(i) ? 'r num' : ''}">${c}</td>`).join('')}</tr>`).join('');
+  return `<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function renderMonthlyRows(items: MonthlyTotal[]): string {
-  if (items.length === 0) return '<tr><td colspan="3" class="muted">Kayıt yok.</td></tr>';
-  return items
-    .map(
-      (m) =>
-        `<tr><td>${escapeHtml(m.label)}</td><td class="amount">${formatMinorAmount(m.incomeMinor)}</td><td class="amount">${formatMinorAmount(m.expenseMinor)}</td></tr>`
-    )
+// Son 6 ay: gelir (yeşil) ve gider (Saffron) çift sütun, kılavuz çizgili satır içi SVG.
+function monthChart(items: MonthlyTotal[]): string {
+  if (items.length === 0) return '';
+  const w = 515;
+  const h = 150;
+  const axis = 44;
+  const plotH = 118;
+  const max = Math.max(1, ...items.flatMap((m) => [m.incomeMinor, m.expenseMinor]));
+  const slot = (w - axis) / items.length;
+  const barW = Math.min(18, slot / 3);
+  const y = (v: number) => 6 + plotH - (v / max) * plotH;
+  const grid = [0, 0.5, 1]
+    .map((f) => {
+      const gy = 6 + plotH - f * plotH;
+      return `<line x1="${axis}" y1="${gy}" x2="${w}" y2="${gy}" stroke="${C.line}" stroke-width="1"/><text x="${axis - 6}" y="${gy + 3}" text-anchor="end" font-size="8" fill="${C.ink3}">${esc(money(Math.round(max * f)).replace(/,\d{2}(?=\D*$)/, ''))}</text>`;
+    })
     .join('');
+  const bars = items
+    .map((m, i) => {
+      const cx = axis + slot * i + slot / 2;
+      return `<rect x="${cx - barW - 1.5}" y="${y(m.incomeMinor)}" width="${barW}" height="${6 + plotH - y(m.incomeMinor)}" rx="2" fill="${C.okBar}"/><rect x="${cx + 1.5}" y="${y(m.expenseMinor)}" width="${barW}" height="${6 + plotH - y(m.expenseMinor)}" rx="2" fill="${C.saffron}"/><text x="${cx}" y="${h - 6}" text-anchor="middle" font-size="9" fill="${C.ink2}">${esc(m.label)}</text>`;
+    })
+    .join('');
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${grid}${bars}</svg>
+  <div class="legend"><span><i style="background:${C.okBar}"></i>Gelir</span><span><i style="background:${C.saffron}"></i>Gider</span></div>`;
 }
 
-function renderCashFlowRows(buckets: CashFlowBucket[]): string {
-  return buckets
-    .map(
-      (b) =>
-        `<tr><td>${escapeHtml(b.label)}</td><td class="amount">${formatMinorAmount(b.receivableMinor)}</td><td class="amount">${formatMinorAmount(b.payableMinor)}</td></tr>`
-    )
-    .join('');
+function categoryTable(items: CategoryBreakdownItem[], barColor: string): string {
+  return table(
+    ['Kategori', 'Pay', 'Tutar'],
+    items.map((c) => {
+      const pct = Math.round(c.percentage * 100);
+      return [
+        esc(c.name),
+        `<div class="pbar"><div class="pbar-t"><div class="pbar-f" style="width:${Math.max(2, pct)}%;background:${barColor}"></div></div><span>%${pct}</span></div>`,
+        money(c.amountMinor),
+      ];
+    }),
+    [2]
+  );
 }
 
 function buildReportHtml(input: ReportPdfInput): string {
-  const generatedAt = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date());
-  const netMinor = input.incomeMinor - input.expenseMinor;
-
   const sec = input.sections ?? ALL_SECTIONS;
-  const summaryHtml = `
-  <h2>Gelir - Gider Özeti</h2>
-  <div class="summary-grid">
-    <div class="summary-cell">
-      <div class="summary-label">Gelir</div>
-      <div class="summary-value positive">${formatMinorAmount(input.incomeMinor)}</div>
-    </div>
-    <div class="summary-cell">
-      <div class="summary-label">Gider</div>
-      <div class="summary-value">${formatMinorAmount(input.expenseMinor)}</div>
-    </div>
-    <div class="summary-cell">
-      <div class="summary-label">Net</div>
-      <div class="summary-value ${netMinor >= 0 ? 'positive' : 'negative'}">${formatMinorAmount(Math.abs(netMinor))}</div>
-    </div>
-  </div>
+  const generatedAt = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date());
+  const net = input.incomeMinor - input.expenseMinor;
+  const savings = input.incomeMinor > 0 ? Math.round((net / input.incomeMinor) * 100) : null;
 
-  <h2>Aylık Karşılaştırma</h2>
-  <table>
-    <tr><td><b>Ay</b></td><td class="amount"><b>Gelir</b></td><td class="amount"><b>Gider</b></td></tr>
-    ${renderMonthlyRows(input.monthlyComparison)}
-  </table>
+  const parts: string[] = [];
 
-`;
-  const obligationsHtml = `
-  <h2>Borç / Alacak Özeti</h2>
-  <div class="summary-grid">
-    <div class="summary-cell">
-      <div class="summary-label">Borç (${input.payableCount} kayıt)</div>
-      <div class="summary-value">${formatMinorAmount(input.payableTotalMinor)}</div>
-    </div>
-    <div class="summary-cell">
-      <div class="summary-label">Alacak (${input.receivableCount} kayıt)</div>
-      <div class="summary-value positive">${formatMinorAmount(input.receivableTotalMinor)}</div>
-    </div>
-  </div>
+  if (sec.summary) {
+    parts.push(
+      section(
+        'Gelir ve gider özeti',
+        `<div class="kpis">
+          ${kpi('Gelir', money(input.incomeMinor), 'ok')}
+          ${kpi('Gider', money(input.expenseMinor))}
+          ${kpi('Net', `${net < 0 ? '−' : ''}${money(Math.abs(net))}`, net < 0 ? 'bad' : 'ok', net < 0 ? 'Gider geliri aştı' : 'Gelir gideri aştı')}
+          ${kpi('Tasarruf oranı', savings === null ? '—' : `%${savings}`, 'ink', savings === null ? 'Gelir kaydı yok' : undefined)}
+        </div>`
+      )
+    );
+    parts.push(
+      section(
+        'Son 6 ay',
+        monthChart(input.monthlyComparison) +
+          table(
+            ['Ay', 'Gelir', 'Gider', 'Net'],
+            input.monthlyComparison.map((m) => {
+              const n = m.incomeMinor - m.expenseMinor;
+              return [esc(m.label), money(m.incomeMinor), money(m.expenseMinor), `<b class="${n < 0 ? 'bad' : ''}">${n < 0 ? '−' : ''}${money(Math.abs(n))}</b>`];
+            }),
+            [1, 2, 3]
+          ),
+        'Seçili dönemden bağımsız, son 6 takvim ayı'
+      )
+    );
+  }
 
-  <h2>Gecikmiş Ödemeler</h2>
-  <table>
-    <tr><td><b>Başlık</b></td><td><b>Vade</b></td><td class="amount"><b>Tutar</b></td></tr>
-    ${renderOverdueRows(input.overdueObligations)}
-  </table>
+  if (sec.categories) {
+    parts.push(section('Giderler · kategoriye göre', categoryTable(input.expenseCategories, C.saffron)));
+    parts.push(section('Gelirler · kategoriye göre', categoryTable(input.incomeCategories, C.okBar)));
+  }
 
-  <h2>Beklenen Nakit Akışı (30 Gün)</h2>
-  <table>
-    <tr><td><b>Dönem</b></td><td class="amount"><b>Alacak</b></td><td class="amount"><b>Borç</b></td></tr>
-    ${renderCashFlowRows(input.cashFlow)}
-  </table>
-`;
-  const categoriesHtml = `
-  <h2>Kategori Bazlı Gider</h2>
-  <table>${renderCategoryRows(input.expenseCategories)}</table>
+  if (sec.obligations) {
+    parts.push(
+      section(
+        'Borç ve alacak',
+        `<div class="kpis three">
+          ${kpi('Ödenecek', money(input.payableTotalMinor), 'ink', `${input.payableCount} açık kayıt`)}
+          ${kpi('Tahsil edilecek', money(input.receivableTotalMinor), 'ok', `${input.receivableCount} açık kayıt`)}
+          ${kpi('Gecikmiş', money(input.overdueObligations.reduce((s, o) => s + o.remaining_amount_minor, 0)), input.overdueObligations.length > 0 ? 'bad' : 'ink', `${input.overdueObligations.length} kayıt`)}
+        </div>`,
+        'Rapor tarihindeki açık kayıtlar'
+      )
+    );
+    parts.push(
+      section(
+        'Gecikmiş ödemeler',
+        table(
+          ['Kayıt', 'Kişi / firma', 'Vade', 'Gecikme', 'Kalan'],
+          input.overdueObligations.map((o) => [
+            esc(o.title),
+            esc(o.counterparty?.name ?? '—'),
+            o.due_date ? dateFmt.format(new Date(o.due_date)) : '—',
+            `${daysOverdue(o.due_date) ?? 0} gün`,
+            `<b class="bad">${money(o.remaining_amount_minor, o.currency_code)}</b>`,
+          ]),
+          [3, 4],
+          'Gecikmiş kayıt yok.'
+        )
+      )
+    );
+    parts.push(
+      section(
+        'Beklenen nakit akışı',
+        table(
+          ['Dönem', 'Giriş', 'Çıkış', 'Net'],
+          input.cashFlow.map((b) => {
+            const n = b.receivableMinor - b.payableMinor;
+            return [esc(b.label), money(b.receivableMinor), money(b.payableMinor), `<b class="${n < 0 ? 'bad' : 'ok'}">${n < 0 ? '−' : '+'}${money(Math.abs(n))}</b>`];
+          }),
+          [1, 2, 3]
+        ),
+        'Önümüzdeki 30 gün'
+      )
+    );
+  }
 
-  <h2>Kategori Bazlı Gelir</h2>
-  <table>${renderCategoryRows(input.incomeCategories)}</table>
+  if (sec.counterparties) {
+    parts.push(
+      section(
+        'Kişi ve firmalar',
+        table(
+          ['Ad', 'Hareket', 'Tutar'],
+          input.counterparties.map((c) => [esc(c.name), String(c.count), money(c.amountMinor)]),
+          [1, 2]
+        )
+      )
+    );
+  }
 
-`;
-  const counterpartiesHtml = `
-  <h2>Kişi / Firma Bazlı Hareketler</h2>
-  <table>
-    <tr><td><b>Ad</b></td><td><b>Hareket</b></td><td class="amount"><b>Tutar</b></td></tr>
-    ${renderCounterpartyRows(input.counterparties)}
-  </table>
+  if (sec.accounts) {
+    const tryTotal = input.accountBalances.filter((a) => a.currencyCode === 'TRY').reduce((s, a) => s + a.balanceMinor, 0);
+    parts.push(
+      section(
+        'Hesap bakiyeleri',
+        table(
+          ['Hesap', 'Bakiye'],
+          [
+            ...input.accountBalances.map((a) => [esc(a.name), `<span class="${a.balanceMinor < 0 ? 'bad' : ''}">${money(a.balanceMinor, a.currencyCode)}</span>`]),
+            ...(input.accountBalances.length > 1 ? [['<b>Toplam (TL hesaplar)</b>', `<b>${money(tryTotal)}</b>`]] : []),
+          ],
+          [1],
+          'Hesap yok.'
+        )
+      )
+    );
+  }
 
-`;
-  const accountsHtml = `
-  <h2>Hesap Bakiyeleri</h2>
-  <table>${renderAccountRows(input.accountBalances)}</table>
-
-`;
-
-  return `
-<!doctype html>
+  return `<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=${A4.width}" />
 <style>
-  body { font-family: 'Bricolage Grotesque', -apple-system, Helvetica, Arial, sans-serif; color: #111114; padding: 32px; }
-  h1 { font-size: 24px; margin-bottom: 2px; }
-  .subtitle { color: #5E606A; font-size: 12px; margin-bottom: 24px; }
-  h2 { font-size: 15px; margin-top: 28px; margin-bottom: 8px; border-bottom: 1px solid #DCDEE3; padding-bottom: 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  td { padding: 6px 4px; border-bottom: 1px solid #E9EBEE; }
-  td.amount { text-align: right; font-variant-numeric: tabular-nums; }
-  td.muted { color: #5E606A; font-style: italic; }
-  .summary-grid { display: flex; gap: 16px; margin-top: 8px; }
-  .summary-cell { flex: 1; border: 1px solid #DCDEE3; border-radius: 10px; padding: 10px 12px; }
-  .summary-label { font-size: 10px; color: #5E606A; text-transform: uppercase; letter-spacing: 0.04em; }
-  .summary-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
-  .positive { color: #0F7A52; }
-  .negative { color: #C8361C; }
+  @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: ${C.ink}; font-size: 10pt; line-height: 1.4;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .num, td.r { font-variant-numeric: tabular-nums; }
+
+  .band { background: ${C.graphite}; color: #F6F5F1; border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  .mark { width: 34px; height: 34px; border-radius: 9px; background: ${C.saffron}; color: ${C.graphite}; font-weight: 800; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+  .brand { flex: 1; }
+  .brand b { font-size: 15pt; letter-spacing: -0.02em; display: block; }
+  .brand span { font-size: 9pt; color: #B1B2AA; }
+  .meta { text-align: right; font-size: 9pt; color: #B1B2AA; }
+  .meta b { color: #F6F5F1; font-size: 11pt; display: block; }
+
+  .sec { margin-top: 18px; break-inside: avoid; page-break-inside: avoid; }
+  .sec-h { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1.5px solid ${C.ink}; padding-bottom: 4px; margin-bottom: 8px; }
+  h2 { font-size: 11.5pt; margin: 0; letter-spacing: -0.01em; }
+  .note { font-size: 8pt; color: ${C.ink3}; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .kpis.three { grid-template-columns: repeat(3, 1fr); }
+  .kpi { background: ${C.fill}; border-radius: 8px; padding: 9px 10px; }
+  .kpi-l { font-size: 8pt; color: ${C.ink2}; text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi-v { font-size: 13pt; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .kpi-s { font-size: 8pt; color: ${C.ink3}; margin-top: 1px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th { text-align: left; font-size: 8pt; font-weight: 600; color: ${C.ink2}; text-transform: uppercase; letter-spacing: 0.03em; padding: 5px 6px; border-bottom: 1px solid ${C.line}; }
+  td { padding: 6px; border-bottom: 1px solid ${C.line}; vertical-align: middle; }
+  th.r, td.r { text-align: right; white-space: nowrap; }
+  td.muted { color: ${C.ink3}; font-style: italic; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .chart { display: block; margin: 2px 0 4px; }
+  .legend { display: flex; gap: 14px; font-size: 8pt; color: ${C.ink2}; margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 4px; margin-right: 5px; vertical-align: middle; }
+
+  .pbar { display: flex; align-items: center; gap: 6px; }
+  .pbar-t { flex: 1; height: 5px; background: ${C.fill}; border-radius: 3px; overflow: hidden; max-width: 140px; }
+  .pbar-f { height: 5px; border-radius: 3px; }
+  .pbar span { font-size: 8pt; color: ${C.ink2}; width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .ok { color: ${C.ok}; }
+  .bad { color: ${C.bad}; }
+  .ink { color: ${C.ink}; }
+
+  .foot { margin-top: 22px; padding-top: 8px; border-top: 1px solid ${C.line}; font-size: 8pt; color: ${C.ink3}; display: flex; justify-content: space-between; }
 </style>
 </head>
 <body>
-  <h1>Vademde Rapor</h1>
-  <div class="subtitle">${escapeHtml(input.periodLabel)} · Oluşturulma: ${escapeHtml(generatedAt)}</div>
-
-  ${sec.summary ? summaryHtml : ''}
-  ${sec.obligations ? obligationsHtml : ''}
-  ${sec.categories ? categoriesHtml : ''}
-  ${sec.counterparties ? counterpartiesHtml : ''}
-  ${sec.accounts ? accountsHtml : ''}
+  <div class="band">
+    <div class="mark">V</div>
+    <div class="brand"><b>Finans raporu</b><span>${esc(input.workspaceName || 'Vademde')}</span></div>
+    <div class="meta"><b>${esc(input.periodLabel)}</b>${esc(generatedAt)}</div>
+  </div>
+  ${parts.join('\n')}
+  <div class="foot"><span>Vademde ile oluşturuldu · Tutarlar kayıtlı verilerden hesaplanmıştır.</span><span>${esc(generatedAt)}</span></div>
 </body>
 </html>`;
 }
@@ -227,10 +340,10 @@ function buildReportHtml(input: ReportPdfInput): string {
 // docs/12-mvp-kabul-kriterleri.md — "Raporlar PDF ve CSV olarak dışa aktarılır."
 export async function exportReportPdf(input: ReportPdfInput): Promise<void> {
   const html = buildReportHtml(input);
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
+  const { uri } = await Print.printToFileAsync({ html, base64: false, width: A4.width, height: A4.height });
 
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Vademde Raporu' });
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Vademde Raporu', UTI: 'com.adobe.pdf' });
   }
 }

@@ -11,8 +11,8 @@ export interface ButtonProps {
   label: string;
   onPress: () => void;
   /** primary = Saffron aksiyon; secondary = hafif dolgu; danger = dolgulu kırmızı; dangerText = kırmızı metin;
-   * text = çerçevesiz metin; ink = metin renginde dolgu (Apple ile giriş). */
-  variant?: 'primary' | 'secondary' | 'danger' | 'dangerText' | 'text' | 'ink';
+   * text = çerçevesiz metin; ink = metin renginde dolgu (Apple ile giriş); dangerSoft = hafif dolgu + kırmızı metin. */
+  variant?: 'primary' | 'secondary' | 'danger' | 'dangerText' | 'dangerSoft' | 'text' | 'ink';
   /** default 52 pt; compact 44 pt; sm 36 pt kapsül (vademde.css .btn.sm). */
   size?: 'default' | 'compact' | 'sm';
   loading?: boolean;
@@ -34,6 +34,9 @@ function ButtonComponent({ label, onPress, variant = 'primary', size = 'default'
   } else if (variant === 'danger') {
     background = colors.danger;
     textColor = '#FFFFFF';
+  } else if (variant === 'dangerSoft') {
+    background = colors.fill;
+    textColor = colors.danger;
   } else if (variant === 'dangerText') {
     background = 'transparent';
     textColor = colors.danger;

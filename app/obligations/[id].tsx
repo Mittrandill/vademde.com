@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, InteractionManager, Modal, View } from 'react-native';
+import { ActivityIndicator, Alert, InteractionManager, KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,16 +7,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import {
-  AmountField,
   ActionSheet,
+  BigAmountInput,
   Button,
   Card,
   DateField,
+  FieldGroup,
   EmptyState,
   Group,
   GroupedRow,
   GroupedRowIcon,
   Pagination,
+  Pill,
   Pressable,
   Row,
   Stack,
@@ -32,7 +34,9 @@ import {
   FinanceDetailInfoCard,
   FinanceDetailTabs,
 } from '@/components/finance/FinanceDetailBlocks';
-import { AccountPicker } from '@/components/finance/AccountPicker';
+import { AccountAvatar, AccountPicker } from '@/components/finance/AccountPicker';
+import { InstallmentPlanTable, type InstallmentPlanRow } from '@/components/finance/InstallmentPlanTable';
+import { getAccountBalances } from '@/features/reports/api';
 import {
   deleteObligation,
   getObligation,
@@ -98,7 +102,6 @@ export default function ObligationDetailScreen() {
   const [tab, setTab] = useState<DetailTab>('plan');
   // null = kullanıcı henüz sayfa değiştirmedi; bu durumda sıradaki taksidin bulunduğu
   // sayfa akıllı varsayılan olarak gösterilir (aşağıda hesaplanır).
-  const [planPage, setPlanPage] = useState<number | null>(null);
   const [historyPage, setHistoryPage] = useState(0);
 
   const detailQuery = useQuery({
@@ -298,14 +301,17 @@ export default function ObligationDetailScreen() {
           ? `${statusLabel} · bugün`
           : `${statusLabel} · ${daysToDue} gün`;
 
-  const nextIndex = installments.findIndex((i) => i.id === nextInstallment?.id);
-  const smartPlanPage = nextIndex >= 0 ? Math.floor(nextIndex / TAB_PAGE_SIZE) : 0;
-  const effectivePlanPage = planPage ?? smartPlanPage;
-  const planPageCount = Math.max(1, Math.ceil(installments.length / TAB_PAGE_SIZE));
-  const visibleInstallments = installments.slice(
-    effectivePlanPage * TAB_PAGE_SIZE,
-    effectivePlanPage * TAB_PAGE_SIZE + TAB_PAGE_SIZE
-  );
+  // Ödeme planı tablosu (ortak InstallmentPlanTable): ödenmişler başta özetlenir, sıradaki vurgulanır.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const planRows: InstallmentPlanRow[] = installments.map((i) => ({
+    key: i.id,
+    number: i.installment_number,
+    dueDate: i.due_date,
+    amountMinor: i.remaining_amount_minor <= 0 ? i.amount_minor : i.remaining_amount_minor,
+    principalMinor: i.principal_minor,
+    status: i.remaining_amount_minor <= 0 ? 'paid' : i.status === 'gecikti' || i.due_date < todayIso ? 'overdue' : 'upcoming',
+  }));
+  const installmentById = new Map(installments.map((i) => [i.id, i]));
 
   const historyPageCount = Math.max(1, Math.ceil(payments.length / TAB_PAGE_SIZE));
   const effectiveHistoryPage = Math.min(historyPage, historyPageCount - 1);
@@ -601,25 +607,23 @@ export default function ObligationDetailScreen() {
           </Stack>
         ) : activeTab === 'plan' ? (
           <Stack gap="md">
-            {visibleInstallments.length === 0 ? (
+            {planRows.length === 0 ? (
               <EmptyState icon="calendar-outline" message="Henüz ödeme planı yok." />
             ) : (
-              <>
-                <Group inset={62}>
-                  {visibleInstallments.map((installment, index) => (
-                    <TimelineInstallmentRow
-                      key={installment.id}
-                      installment={installment}
-                      currencyCode={obligation.currency_code}
-                      isNext={installment.id === nextInstallment?.id}
-                      isLast={index === visibleInstallments.length - 1}
-                      unitLabel={unitLabel}
-                      onPay={() => setPayingInstallment(installment)}
-                    />
-                  ))}
-                </Group>
-                <Pagination page={effectivePlanPage} totalPages={planPageCount} onChange={setPlanPage} />
-              </>
+              <InstallmentPlanTable
+                rows={planRows}
+                currencyCode={obligation.currency_code}
+                unitLabel={unitLabel.toLocaleLowerCase('tr-TR')}
+                rowActionLabel={isClosed ? undefined : isPayable ? 'Öde' : 'Tahsil et'}
+                onRowPress={
+                  isClosed
+                    ? undefined
+                    : (row) => {
+                        const installment = installmentById.get(row.key);
+                        if (installment && installment.remaining_amount_minor > 0) setPayingInstallment(installment);
+                      }
+                }
+              />
             )}
           </Stack>
         ) : (
@@ -771,6 +775,7 @@ export default function ObligationDetailScreen() {
             }
             accounts={accountsQuery.data ?? []}
             editingPayment={editingPayment}
+            counterpartyName={obligation.counterparty?.name ?? null}
             onClose={() => {
               setPayingInstallment(null);
               setPayParamDismissed(true);
@@ -793,81 +798,6 @@ export default function ObligationDetailScreen() {
         ) : null}
       </Modal>
     </>
-  );
-}
-
-interface TimelineInstallmentRowProps {
-  installment: Installment;
-  currencyCode: string;
-  isNext: boolean;
-  isLast: boolean;
-  unitLabel: string;
-  onPay: () => void;
-}
-
-// Taksit listesi bir kredinin ödeme takvimidir: sıra numarası gerçek bilgi taşır.
-// Ödenmiş taksit dolu yeşil, sıradaki dolu Saffron, gelecek taksitler soluk anahat.
-// Markerlar arasındaki dikey çizgi ödeme takvimini gerçek bir zaman çizgisi olarak
-// okunur kılar (docs/08-tasarim-sistemi.md §12.15 — "taksit zaman çizgisi").
-function TimelineInstallmentRow({ installment, currencyCode, isNext, unitLabel, onPay }: TimelineInstallmentRowProps) {
-  const theme = useTheme();
-  const paid = installment.remaining_amount_minor <= 0;
-  const overdue = !paid && installment.status === 'gecikti';
-  const due = new Date(installment.due_date);
-  const month = new Intl.DateTimeFormat('tr-TR', { month: 'short' }).format(due).toLocaleUpperCase('tr-TR');
-  const dateColor = overdue ? theme.colors.danger : theme.colors.textPrimary;
-
-  // Tuval KrediDetay: tarih bloğu, "N. taksit" + anapara/faiz alt satırı, sağda tutar ve "Ödendi" anahtarı.
-  return (
-    <View style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: paid ? 0.62 : 1 }}>
-      <View style={{ width: 34, alignItems: 'center' }}>
-        <Text tabular style={{ fontSize: 18, lineHeight: 20, fontWeight: '700', color: dateColor }}>
-          {String(due.getDate()).padStart(2, '0')}
-        </Text>
-        <Text style={{ fontSize: 11, fontWeight: '600', color: overdue ? theme.colors.danger : theme.colors.textSecondary }}>{month}</Text>
-      </View>
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text numberOfLines={1} style={{ fontWeight: isNext ? '600' : '500' }}>
-          {installment.installment_number}. {unitLabel.toLocaleLowerCase('tr-TR')}
-        </Text>
-        {installment.principal_minor !== null && installment.interest_minor !== null ? (
-          <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            Anapara {formatMinorAmount(installment.principal_minor, currencyCode)} · Faiz{' '}
-            {formatMinorAmount(installment.interest_minor, currencyCode)}
-          </Text>
-        ) : null}
-      </View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-        <Text tabular style={{ fontWeight: '600' }}>
-          {formatMinorAmount(paid ? installment.amount_minor : installment.remaining_amount_minor, currencyCode)}
-        </Text>
-        {paid ? (
-          <Tag tone="success" label="Ödendi" />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ödendi olarak işaretle"
-            onPress={onPay}
-            hitSlop={8}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-              paddingVertical: 6,
-              paddingLeft: 10,
-              paddingRight: 8,
-              borderRadius: 12,
-              backgroundColor: theme.colors.fill,
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>Ödendi</Text>
-            <View style={{ width: 34, height: 20, borderRadius: 10, backgroundColor: theme.colors.fill, justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.separator }}>
-              <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff', marginLeft: 2 }} />
-            </View>
-          </Pressable>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -980,6 +910,8 @@ interface PaymentFormProps {
   accounts: Account[];
   /** Doluysa form düzenleme modunda açılır: mevcut ödeme güncellenir, yeni kayıt oluşturulmaz. */
   editingPayment?: Payment | null;
+  /** Bağlam satırında gösterilir (tuval: "Kuzey Lojistik · Akbank çeki"). */
+  counterpartyName?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -991,6 +923,7 @@ function PaymentForm({
   defaultAmountMinor,
   accounts,
   editingPayment,
+  counterpartyName,
   onClose,
   onSuccess,
 }: PaymentFormProps) {
@@ -1034,6 +967,13 @@ function PaymentForm({
   const [receipt, setReceipt] = useState<PendingReceipt | null>(null);
   const [removedExisting, setRemovedExisting] = useState(false);
   const existingReceiptId = removedExisting ? null : (editingPayment?.receipt_document_id ?? null);
+  // Hesap satırında güncel bakiye (tuval OdemeKaydet).
+  const balancesQuery = useQuery({
+    queryKey: workspaceId ? queryKeys.reportAccountBalances(workspaceId) : ['account-balances', 'disabled'],
+    queryFn: () => getAccountBalances(workspaceId as string),
+    enabled: !!workspaceId,
+  });
+  const balanceByAccount = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b]));
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -1101,81 +1041,136 @@ function PaymentForm({
     onSuccess,
   });
 
+  const isPayable = obligation.direction === 'payable';
+  const title = isEditing ? (isPayable ? 'Ödemeyi düzenle' : 'Tahsilatı düzenle') : isPayable ? 'Ödeme kaydet' : 'Tahsilat kaydet';
+  const fullAmountInput = formatAmountInput(
+    (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+    valueUnit.precision
+  );
+  const isFullAmount = amount === fullAmountInput;
+  const symbol = obligation.currency_code === 'TRY' ? '₺' : obligation.currency_code === 'USD' ? '$' : obligation.currency_code === 'EUR' ? '€' : undefined;
+  const contextLine = [
+    counterpartyName,
+    installment
+      ? `${installment.installment_number}. taksit · ${shortDateFormatter.format(new Date(installment.due_date))}`
+      : obligation.title,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="lg" style={{ flex: 1, padding: theme.screenEdge.standard }}>
-        <Row align="center">
-          <Text variant="pageTitle" style={{ flex: 1 }}>
-            {isEditing ? 'Ödemeyi Düzenle' : 'Ödeme Ekle'}
-          </Text>
-          <Pressable onPress={onClose} hitSlop={12}>
-            <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-          </Pressable>
-        </Row>
-
-        {installment ? (
-          <Text variant="body" color="textSecondary">
-            {installment.installment_number}. taksit — {shortDateFormatter.format(new Date(installment.due_date))}
-          </Text>
-        ) : null}
-
-        <Stack gap="sm">
-          <Text variant="label" color="textSecondary">
-            TUTAR ({valueUnit.quantityLabel})
-          </Text>
-          <AmountField
-            placeholder={valueUnit.precision === 0 ? '1' : '0,00'}
-            precision={valueUnit.precision}
-            value={amount}
-            onChangeText={setAmount}
-          />
-        </Stack>
-
-        <DateField label="ÖDEME TARİHİ" value={dateStr} onChangeText={setDateStr} />
-
-        {payableAccounts.length > 0 ? (
-          // Önceden "İSTEĞE BAĞLI" idi ve recordPayment hesapsız çağrıldığında (bkz.
-          // features/payments/api.ts) hiçbir transaction oluşturmuyordu — ödeme borcu kapatıyor
-          // ("açık bakiye" doğru düşüyor) ama hiçbir hesabın bakiyesini etkilemiyor ve Hareketler'de
-          // hiç görünmüyordu; kullanıcı parayı nereden ödediğini unutsa bile fark etmiyordu. Bu
-          // form yalnızca canlı/yeni bir ödeme için kullanılır (geçmiş taksitlerin hesapsız toplu
-          // "ödendi" işaretlenmesi ayrı bir yoldan gider, bkz. recordPastInstallmentPayments) —
-          // burada hesap artık zorunlu.
-          <Stack gap="sm">
-            <Text variant="label" color="textSecondary">
-              HESAP
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: theme.screenEdge.standard, paddingBottom: theme.spacing.xxl }}
+        >
+          {/* Tuval OdemeKaydet: Vazgeç · ortada başlık */}
+          <View style={{ height: 44, flexDirection: 'row', alignItems: 'center' }}>
+            <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12} style={{ minWidth: 70, height: 44, justifyContent: 'center' }}>
+              <Text style={{ fontSize: 17 }}>Vazgeç</Text>
+            </Pressable>
+            <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600' }}>
+              {title}
             </Text>
-            <AccountPicker accounts={payableAccounts} selectedId={accountId} onSelect={setAccountId} />
+            <View style={{ minWidth: 70 }} />
+          </View>
+
+          <Stack gap="sm" align="center" style={{ marginTop: theme.spacing.sm }}>
+            <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ fontSize: 13 }}>
+              {contextLine}
+            </Text>
+            <View style={{ alignSelf: 'stretch' }}>
+              <BigAmountInput
+                value={amount}
+                onChangeText={setAmount}
+                precision={valueUnit.precision}
+                symbol={symbol}
+                autoFocus={!isEditing}
+              />
+            </View>
+            {!isEditing && defaultAmountMinor > 0 ? (
+              <Row gap="xs" style={{ justifyContent: 'center' }}>
+                <Pill label="Tamamı" selected={isFullAmount} onPress={() => setAmount(fullAmountInput)} />
+                <Pill label="Kısmi tutar" selected={!isFullAmount} onPress={() => setAmount('')} />
+              </Row>
+            ) : null}
           </Stack>
-        ) : null}
 
-        <ReceiptAttachField
-          value={receipt}
-          onChange={setReceipt}
-          existingReceiptId={existingReceiptId}
-          onRemoveExisting={() => setRemovedExisting(true)}
-          allowed={archive.allowed}
-          onUpgrade={() => {
-            onClose();
-            setTimeout(() => router.push('/paywall'), 400);
-          }}
-        />
+          <View style={{ marginTop: theme.spacing.lg, gap: theme.spacing.sm }}>
+            <FieldGroup>
+              {payableAccounts.length > 0 ? (
+                // Önceden "İSTEĞE BAĞLI" idi ve recordPayment hesapsız çağrıldığında (bkz.
+                // features/payments/api.ts) hiçbir transaction oluşturmuyordu — ödeme borcu kapatıyor
+                // ama hiçbir hesabın bakiyesini etkilemiyor ve Hareketler'de görünmüyordu. Bu form
+                // yalnızca canlı/yeni bir ödeme için kullanılır (geçmiş taksitlerin hesapsız toplu
+                // "ödendi" işaretlenmesi ayrı bir yoldan gider, bkz. recordPastInstallmentPayments) —
+                // burada hesap zorunlu.
+                <AccountPicker
+                  accounts={payableAccounts}
+                  selectedId={accountId}
+                  onSelect={setAccountId}
+                  title="Hesap seç"
+                  renderTrigger={(selected, open) => {
+                    const balance = selected ? balanceByAccount.get(selected.id) : undefined;
+                    return (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={selected ? `Hesap: ${selected.name}` : 'Hesap seçin'}
+                        onPress={open}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: theme.spacing.md, paddingVertical: 10, minHeight: 60 }}
+                      >
+                        {selected ? (
+                          <AccountAvatar account={selected} />
+                        ) : (
+                          <Ionicons name="wallet-outline" size={20} color={theme.colors.textSecondary} />
+                        )}
+                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                          <Text numberOfLines={1} style={{ fontWeight: '500', color: selected ? theme.colors.textPrimary : theme.colors.mutedControl }}>
+                            {selected ? selected.name : isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
+                          </Text>
+                          {balance ? (
+                            <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
+                              Bakiye {formatMinorAmount(balance.balanceMinor, balance.currencyCode)}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
+                      </Pressable>
+                    );
+                  }}
+                />
+              ) : null}
+              <DateField label={isPayable ? 'Ödeme tarihi' : 'Tahsilat tarihi'} value={dateStr} onChangeText={setDateStr} />
+            </FieldGroup>
 
-        {mutation.error ? (
-          <Text variant="caption" color="danger">
-            {mutation.error instanceof Error ? mutation.error.message : 'Ödeme kaydedilemedi'}
-          </Text>
-        ) : null}
+            <ReceiptAttachField
+              value={receipt}
+              onChange={setReceipt}
+              existingReceiptId={existingReceiptId}
+              onRemoveExisting={() => setRemovedExisting(true)}
+              allowed={archive.allowed}
+              onUpgrade={() => {
+                onClose();
+                setTimeout(() => router.push('/paywall'), 400);
+              }}
+            />
 
-        <View style={{ flex: 1 }} />
+            {mutation.error ? (
+              <Text variant="caption" color="danger">
+                {mutation.error instanceof Error ? mutation.error.message : 'Ödeme kaydedilemedi'}
+              </Text>
+            ) : null}
 
-        <Button
-          label={isEditing ? 'Güncelle' : 'Kaydet'}
-          onPress={() => mutation.mutate()}
-          loading={mutation.isPending}
-          disabled={!amount || (payableAccounts.length > 0 && !accountId)}
-        />
-      </Stack>
+            <Button
+              label={isEditing ? 'Güncelle' : isPayable ? 'Ödemeyi kaydet' : 'Tahsilatı kaydet'}
+              onPress={() => mutation.mutate()}
+              loading={mutation.isPending}
+              disabled={!amount || (payableAccounts.length > 0 && !accountId)}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

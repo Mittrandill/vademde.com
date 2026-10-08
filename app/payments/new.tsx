@@ -10,10 +10,12 @@ import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import {
   BigAmountInput,
+  Button,
   Card,
   DateField,
   FieldGroup,
   FormRow,
+  Pill,
   Pressable,
   Row,
   SegmentedControl,
@@ -21,13 +23,14 @@ import {
   Text,
   TextField,
 } from '@/components/primitives';
-import { AccountPicker } from '@/components/finance/AccountPicker';
+import { AccountAvatar, AccountPicker } from '@/components/finance/AccountPicker';
 import { BankPicker } from '@/components/finance/BankPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { ReceiptAttachField } from '@/components/finance/ReceiptAttachField';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { listCounterparties } from '@/features/counterparties/api';
+import { getAccountBalances } from '@/features/reports/api';
 import {
   ACTIVE_OBLIGATION_STATUSES,
   getObligation,
@@ -337,6 +340,13 @@ function SettlementForm({
 
   const instrumentLabel = method === 'cek' ? 'Çek' : 'Senet';
   const counterpartyName = counterpartiesQuery.data?.find((c) => c.id === counterpartyId)?.name ?? null;
+  // Hesap satırında güncel bakiye (tuval OdemeKaydet: "Bakiye ₺31.400,00").
+  const balancesQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.reportAccountBalances(activeWorkspaceId) : ['account-balances', 'disabled'],
+    queryFn: () => getAccountBalances(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+  const balanceByAccount = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b]));
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -461,13 +471,46 @@ function SettlementForm({
               inline
               title={isPayable ? 'Ödeme yap' : 'Tahsilat al'}
               leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
-              rightLabel={{
-                label: 'Kaydet',
-                bold: true,
-                disabled: !canSubmit || saveMutation.isPending,
-                onPress: () => saveMutation.mutate(),
-              }}
             />
+
+            {/* Tuval OdemeKaydet: bağlam satırı, ortada büyük tutar, Tamamı / Kısmi tutar. */}
+            <Stack gap="sm" align="center">
+              {counterpartyName ? (
+                <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ fontSize: 13 }}>
+                  {[counterpartyName, selectedRecords.length === 1 ? selectedRecords[0].title : null].filter(Boolean).join(' · ')}
+                </Text>
+              ) : null}
+              {method === 'ciro' ? (
+                <Text variant="displayAmount" tabular style={{ fontSize: 40, lineHeight: 46 }}>
+                  {sourceTotalMinor > 0 ? formatMinorAmount(sourceTotalMinor, currencyCode) : 'Çek/senet seçin'}
+                </Text>
+              ) : (
+                <View style={{ alignSelf: 'stretch' }}>
+                  <BigAmountInput
+                    value={displayAmount}
+                    onChangeText={(value) => {
+                      setAmount(value);
+                      setAmountTouched(true);
+                    }}
+                    precision={precision}
+                    symbol={currencyCode === 'TRY' ? '₺' : currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : undefined}
+                  />
+                </View>
+              )}
+              {method !== 'ciro' && suggestedMinor > 0 ? (
+                <Row gap="xs" style={{ justifyContent: 'center' }}>
+                  <Pill label="Tamamı" selected={!amountTouched} onPress={() => setAmountTouched(false)} />
+                  <Pill
+                    label="Kısmi tutar"
+                    selected={amountTouched}
+                    onPress={() => {
+                      if (!amountTouched) setAmount(displayAmount);
+                      setAmountTouched(true);
+                    }}
+                  />
+                </Row>
+              ) : null}
+            </Stack>
 
             <Stack gap="sm">
               <Text variant="label" color="textSecondary">
@@ -570,27 +613,6 @@ function SettlementForm({
                 </Stack>
               </Stack>
             ) : null}
-
-            {method === 'ciro' ? (
-              <Stack gap="xxs" align="center">
-                <Text variant="caption" color="textSecondary">
-                  Tutar
-                </Text>
-                <Text variant="displayAmount" tabular style={{ fontSize: 40, lineHeight: 46 }}>
-                  {sourceTotalMinor > 0 ? formatMinorAmount(sourceTotalMinor, currencyCode) : 'Çek/senet seçin'}
-                </Text>
-              </Stack>
-            ) : (
-              <BigAmountInput
-                value={displayAmount}
-                onChangeText={(value) => {
-                  setAmount(value);
-                  setAmountTouched(true);
-                }}
-                precision={precision}
-                symbol={currencyCode === 'TRY' ? '₺' : currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : undefined}
-              />
-            )}
 
             {allocation && selectedRecords.length > 0 ? (
               <Text variant="caption" color="textSecondary">
@@ -704,8 +726,31 @@ function SettlementForm({
                     selectedId={accountId}
                     onSelect={setAccountId}
                     title="Hesap seç"
-                    placeholder={isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
-                    label="Hesap"
+                    renderTrigger={(selected, open) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={selected ? `Hesap: ${selected.name}` : 'Hesap seçin'}
+                        onPress={open}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: theme.spacing.md, paddingVertical: 10, minHeight: 60 }}
+                      >
+                        {selected ? (
+                          <AccountAvatar account={selected} />
+                        ) : (
+                          <Ionicons name="wallet-outline" size={20} color={theme.colors.textSecondary} />
+                        )}
+                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                          <Text numberOfLines={1} style={{ fontWeight: '500', color: selected ? theme.colors.textPrimary : theme.colors.mutedControl }}>
+                            {selected ? selected.name : isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
+                          </Text>
+                          {selected && balanceByAccount.has(selected.id) ? (
+                            <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
+                              Bakiye {formatMinorAmount(balanceByAccount.get(selected.id)!.balanceMinor, balanceByAccount.get(selected.id)!.currencyCode)}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
+                      </Pressable>
+                    )}
                   />
                 )}
                 <DateField label="İşlem tarihi" value={dateStr} onChangeText={setDateStr} />
@@ -729,6 +774,13 @@ function SettlementForm({
             {!cashless ? (
               <ReceiptAttachField value={receipt} onChange={setReceipt} allowed={archive.allowed} onUpgrade={() => router.push('/paywall')} />
             ) : null}
+
+            <Button
+              label={isPayable ? 'Ödemeyi kaydet' : 'Tahsilatı kaydet'}
+              onPress={() => saveMutation.mutate()}
+              disabled={!canSubmit || saveMutation.isPending}
+              loading={saveMutation.isPending}
+            />
 
           </Stack>
         </ScrollView>

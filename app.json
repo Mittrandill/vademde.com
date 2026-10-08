@@ -11,6 +11,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.akintkaya.vademde",
       "usesAppleSignIn": true,
+      "appleTeamId": "C6PQ29P4AJ",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.akintkaya.vademde.widget"

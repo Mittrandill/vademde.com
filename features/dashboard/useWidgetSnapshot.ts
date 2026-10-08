@@ -76,6 +76,8 @@ export function useWidgetSnapshot(input: Input) {
       amount: trimZeroDecimals(formatMinorAmount(o.remaining_amount_minor, o.currency_code)),
       receivable: o.direction === 'receivable',
       overdue: o.status === 'gecikti' || diff < 0,
+      // Widget'ta banka logosu (targets/widget: "bank_<kod>" görseli); yoksa yön oku gösterilir.
+      ...(o.bank_code ? { bank: o.bank_code } : {}),
     }));
 
     const inWeek = open.filter(({ diff }) => diff <= WEEK_DAYS);

@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Image, InteractionManager, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { AmountField, Button, Card, DateField, FieldGroup, Group, GroupedRow, Pressable, Row, SegmentedControl, SourceTag, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, BottomSheet, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, SourceTag, Stack, Text, TextField } from '@/components/primitives';
+import { InstallmentPlanTable, type InstallmentPlanRow } from '@/components/finance/InstallmentPlanTable';
+import { CategoryIcon } from '@/components/finance/CategoryIcon';
+import { withAlpha } from '@/theme/colors';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -46,6 +50,7 @@ import {
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import {
+  DOCUMENT_TYPES,
   DOCUMENT_TYPE_LABEL,
   DOCUMENT_TYPE_ICON,
   BANK_DOCUMENT_TYPES,
@@ -67,12 +72,8 @@ import {
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
-const DIRECTIONS: { key: Direction; label: string }[] = [
-  { key: 'payable', label: 'Ben Ödeyeceğim' },
-  { key: 'receivable', label: 'Ben Tahsil Edeceğim' },
-  { key: 'expense', label: 'Gerçekleşmiş Gider' },
-  { key: 'income', label: 'Gerçekleşmiş Gelir' },
-];
+// Bu türler her zaman vadelidir (ödendi/gider seçeneği gösterilmez).
+const ALWAYS_SCHEDULED_TYPES = new Set(['cek', 'senet', 'kredi', 'kredi_karti_ekstresi', 'nakit_avans']);
 
 const LOW_CONFIDENCE_THRESHOLD = 0.7;
 
@@ -133,6 +134,11 @@ export default function DocumentReviewScreen() {
   }>();
   const theme = useTheme();
   const reflowKey = useReflowKey();
+  const insets = useSafeAreaInsets();
+  // Belge önizlemesine dokununca tam ekran görüntü.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // Ödeme planı tablosunda dokunulan taksit (vade, tutar, ödendi düzenleme sayfası).
+  const [editingDraftIndex, setEditingDraftIndex] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
 
@@ -976,7 +982,7 @@ export default function DocumentReviewScreen() {
 
   // OcrKontrol.html: alan kaynağı etiketi. Düşük güven "Kontrol et" (attentionMarker, kesik çizgi);
   // yeterli güven "Belgeden". Kırmızı yalnızca gecikme/silme içindir.
-  function LowConfidenceHint({ fieldName }: { fieldName: string }) {
+  function confidenceTag(fieldName: string) {
     const confidence = fieldConfidence(fieldName);
     if (confidence === null) return null;
     return (
@@ -1037,247 +1043,373 @@ export default function DocumentReviewScreen() {
   // Gezinme çubuğunda 17 pt tek satır: uzun tür adlarında (ör. Kredi Kartı Ekstresi) yalnızca "Kontrol et".
   const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? 'Belge') : 'Belge';
   const reviewTitle = typeLabel.length > 10 ? 'Kontrol et' : `${typeLabel} · Kontrol et`;
+  const isPdf = document.mime_type === 'application/pdf';
+  // Ödeme planı tablosu satırları (OCR taslakları) ve özet değerler.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const planRows: InstallmentPlanRow[] = installmentDrafts
+    .filter((d) => !!d.dueDate)
+    .map((d) => ({
+      key: d.id,
+      number: d.sortOrder,
+      dueDate: d.dueDate,
+      amountMinor: parseAmountToMinor(d.amount) ?? 0,
+      status: d.paid ? 'paid' : d.dueDate < todayIso ? 'overdue' : 'upcoming',
+    }));
+  const autoPaidCount = installmentDrafts.filter((d) => d.paid && !!d.dueDate && d.dueDate < todayIso).length;
+  const firstOpenDraft = installmentDrafts.find((d) => !d.paid) ?? installmentDrafts[0];
+  const monthlyInstallmentMinor = firstOpenDraft ? parseAmountToMinor(firstOpenDraft.amount) : null;
+  const editingDraft = editingDraftIndex !== null ? (installmentDrafts[editingDraftIndex] ?? null) : null;
+  function updateDraft(patch: Partial<{ dueDate: string; amount: string; paid: boolean }>) {
+    if (editingDraftIndex === null) return;
+    setInstallmentDrafts((prev) => prev.map((d, i) => (i === editingDraftIndex ? { ...d, ...patch } : d)));
+  }
+
+  // Tuval OCR ekranları: yön iki eksende seçilir — taraf (ödeyeceğim / tahsil edeceğim) ve
+  // zaman (vadeli / ödendi). Çek, senet, kredi ve kart ekstresi her zaman vadelidir.
+  const side: 'out' | 'in' = direction === 'payable' || direction === 'expense' ? 'out' : 'in';
+  const realized = direction === 'expense' || direction === 'income';
+  const alwaysScheduled = !!documentType && ALWAYS_SCHEDULED_TYPES.has(documentType);
+  function applyDirection(next: Direction) {
+    setDirection(next);
+    const willPayOut = next === 'payable' || next === 'expense';
+    if (willPayOut && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
+      setAccountId(null);
+    }
+  }
+  const sideLabels = realized ? { out: 'Gider', in: 'Gelir' } : { out: 'Ben ödeyeceğim', in: 'Ben tahsil edeceğim' };
+  const accountRequired = realized || isCreditCardStatement || splitsCardSpending;
+  const accountLabel = isCreditCardStatement
+    ? 'Kredi kartı'
+    : realized
+      ? side === 'out'
+        ? 'Ödendiği hesap'
+        : 'Girdiği hesap'
+      : side === 'out'
+        ? 'Ödenecek hesap'
+        : 'Tahsil edilecek hesap';
+  const selectedType = DOCUMENT_TYPES.find((t) => t.id === documentType) ?? null;
+  const detectedType = !!document.document_type && document.document_type === documentType;
 
   return (
-    <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+    <SafeAreaView key={reflowKey} edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: theme.screenEdge.standard }}>
+          <ScreenHeader inline title={reviewTitle} leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }} />
+        </View>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{
-            padding: theme.screenEdge.standard,
-            // Formun sonundaki üç buton ekranın alt kenarına yapışmasın.
-            paddingBottom: theme.spacing.xxl,
-          }}
+          contentContainerStyle={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.xs, paddingBottom: theme.spacing.lg }}
         >
-          <Stack gap="lg">
-            <ScreenHeader
-              inline
-              title={reviewTitle}
-              leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
-            />
-
-            {document.mime_type === 'application/pdf' ? (
-              <Row
-                gap="sm"
-                align="center"
-                style={{
-                  height: 80,
-                  paddingHorizontal: theme.spacing.md,
-                  borderRadius: theme.radius.widget,
-                  backgroundColor: theme.colors.surfacePrimary,
-                }}
-              >
-                <Ionicons name="document-text" size={28} color={theme.colors.accentViolet} />
-                <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                  {document.file_name}
-                </Text>
-              </Row>
-            ) : imageUrl ? (
-              <View
-              style={{
-                height: 220,
-                borderRadius: theme.radius.widget,
-                backgroundColor: '#26272C',
-                overflow: 'hidden',
+          <Stack gap="md">
+            {/* Belge önizlemesi: hafif dolgulu kutuda kâğıt; sağ altta Büyüt / Aç, sol üstte güven. */}
+            <Pressable
+              accessibilityRole="imagebutton"
+              accessibilityLabel={isPdf ? 'Belgeyi aç' : 'Belgeyi büyüt'}
+              disabled={!imageUrl}
+              onPress={() => {
+                if (!imageUrl) return;
+                if (isPdf) void WebBrowser.openBrowserAsync(imageUrl);
+                else setPreviewOpen(true);
               }}
+              style={{ height: 200, borderRadius: theme.radius.group, backgroundColor: theme.colors.fill, overflow: 'hidden' }}
             >
-              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-            </View>
-            ) : null}
+              {!isPdf && imageUrl ? (
+                <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', paddingTop: 18 }}>
+                  <View
+                    style={{
+                      width: 168,
+                      height: 210,
+                      borderRadius: 4,
+                      backgroundColor: '#FBFAF6',
+                      padding: 16,
+                      gap: 7,
+                      shadowColor: '#000',
+                      shadowOpacity: 0.25,
+                      shadowRadius: 12,
+                      shadowOffset: { width: 0, height: 6 },
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Ionicons name={isPdf ? 'document-text' : 'image-outline'} size={14} color="#6E6F66" />
+                      <Text numberOfLines={1} style={{ flex: 1, fontSize: 9, fontWeight: '700', color: '#1F2126' }}>
+                        {document.file_name ?? typeLabel}
+                      </Text>
+                    </View>
+                    {[0.9, 0.7, 0.8, 0.55, 0.85, 0.6].map((w, i) => (
+                      <View key={i} style={{ height: 4, width: `${w * 100}%`, borderRadius: 2, backgroundColor: '#D5D4CC' }} />
+                    ))}
+                    <View style={{ marginTop: 8, height: 14, borderRadius: 3, borderWidth: 1.5, borderColor: theme.colors.brandPrimary, backgroundColor: 'rgba(255,176,0,0.18)' }} />
+                  </View>
+                </View>
+              )}
+              {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
+                <View style={[overlayChipStyle, { top: 10, left: 10 }]}>
+                  <Ionicons name="scan-outline" size={12} color="#FFFFFF" />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#FFFFFF' }}>
+                    Güven %{Math.round((document.overall_confidence ?? 0) * 100)}
+                  </Text>
+                </View>
+              ) : null}
+              {imageUrl ? (
+                <View style={[overlayChipStyle, { right: 10, bottom: 10 }]}>
+                  <Ionicons name={isPdf ? 'open-outline' : 'expand-outline'} size={12} color="#FFFFFF" />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#FFFFFF' }}>{isPdf ? 'PDF’i aç' : 'Büyüt'}</Text>
+                </View>
+              ) : null}
+            </Pressable>
 
-            {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
-              <Text variant="caption" color="textSecondary">
-                Genel güven · %{Math.round((document.overall_confidence ?? 0) * 100)}
-              </Text>
-            ) : null}
-
-            {/* docs/04-ocr-belge-isleme.md — okuması şüpheli alanlar kullanıcı onaylamadan
-                önce açıkça gösterilir (ör. tutar mutabakatı tutmadığında belgede ne yazdığı). */}
+            {/* docs/04-ocr-belge-isleme.md — okuması şüpheli alanlar kullanıcı onaylamadan önce açıkça gösterilir. */}
             {(warningsQuery.data ?? []).length > 0 ? (
-              <Card>
-                <Stack gap="xs">
-                  <Row gap="xs" align="center">
-                    <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
-                    <Text variant="cardTitle" style={{ color: theme.colors.danger }}>
-                      Kontrol edilmesi gerekenler
-                    </Text>
-                  </Row>
+              <View style={{ flexDirection: 'row', gap: 10, padding: 12, borderRadius: theme.radius.group, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.13) }}>
+                <Ionicons name="alert-circle" size={20} color={theme.colors.attentionMarker} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600' }}>Kontrol edilmesi gerekenler</Text>
                   {(warningsQuery.data ?? []).map((warning) => (
-                    <Text key={warning} variant="caption" color="textSecondary">
-                      • {warning}
+                    <Text key={warning} variant="caption" style={{ color: theme.colors.textPrimary }}>
+                      {warning}
                     </Text>
                   ))}
-                </Stack>
-              </Card>
+                </View>
+              </View>
             ) : null}
 
+            {/* Algılanan belge türü + Değiştir (tuval: .ic.brs + başlık + "Değiştir"). */}
+            <DocumentTypePicker
+              selectedId={documentType}
+              onSelect={setDocumentType}
+              renderTrigger={(_, open) => (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  {selectedType ? (
+                    <CategoryIcon icon={selectedType.icon} color={selectedType.color} size={36} />
+                  ) : (
+                    <View style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.fill }}>
+                      <Ionicons name="document-outline" size={18} color={theme.colors.textSecondary} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '600' }} numberOfLines={1}>
+                      {selectedType?.name ?? 'Belge türü seçin'}
+                    </Text>
+                    <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                      {detectedType ? 'Belge türü otomatik algılandı' : selectedType ? 'Belge türü elle seçildi' : 'Belge türü okunamadı'}
+                    </Text>
+                  </View>
+                  <Pressable accessibilityRole="button" onPress={open} hitSlop={8}>
+                    <Text style={{ fontSize: 15, fontWeight: '500', color: theme.colors.textSecondary }}>Değiştir</Text>
+                  </Pressable>
+                </View>
+              )}
+            />
+
             <Stack gap="xs">
-              <Text variant="label" color="textSecondary">
-                YÖN
-              </Text>
-              <Group inset={16}>
-                {DIRECTIONS.map((option) => (
-                  <GroupedRow
-                    key={option.key}
-                    title={option.label}
-                    chevron={false}
-                    trailing={
-                      direction === option.key ? (
-                        <Ionicons name="checkmark" size={20} color={theme.colors.brandPrimary} />
-                      ) : undefined
-                    }
-                    onPress={() => {
-                      setDirection(option.key);
-                      const willPayOut = option.key === 'payable' || option.key === 'expense';
-                      if (willPayOut && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
-                        setAccountId(null);
-                      }
-                    }}
-                  />
-                ))}
-              </Group>
+              <SegmentedControl
+                options={[
+                  { key: 'out', label: sideLabels.out },
+                  { key: 'in', label: sideLabels.in },
+                ]}
+                value={side}
+                onChange={(next) => applyDirection(realized ? (next === 'out' ? 'expense' : 'income') : next === 'out' ? 'payable' : 'receivable')}
+              />
+              {alwaysScheduled ? null : (
+                <SegmentedControl
+                  options={[
+                    { key: 'scheduled', label: side === 'out' ? 'Vadeli · ödenecek' : 'Vadeli · tahsil edilecek' },
+                    { key: 'realized', label: side === 'out' ? 'Ödendi · gider' : 'Tahsil edildi · gelir' },
+                  ]}
+                  value={realized ? 'realized' : 'scheduled'}
+                  onChange={(next) =>
+                    applyDirection(next === 'realized' ? (side === 'out' ? 'expense' : 'income') : side === 'out' ? 'payable' : 'receivable')
+                  }
+                />
+              )}
             </Stack>
 
-            {(direction === 'payable' || direction === 'receivable') && !isCreditCardStatement ? (
-              <Stack gap="sm">
+            {/* Kaydın kimliği üstte: başlık, belge no, kategori. */}
+            <FieldGroup>
+              <TextField label={isLoanDocument ? 'Kredi adı' : 'Başlık'} value={title} onChangeText={setTitle} />
+              {!realized ? (
+                <TextField label="Belge no" tag={confidenceTag('documentNumber')} value={documentNumber} onChangeText={setDocumentNumber} />
+              ) : null}
+              {!splitsCardSpending && (categoriesQuery.data ?? []).length > 0 ? (
+                <CategoryPicker label="Kategori" categories={categoriesQuery.data ?? []} selectedId={categoryId} onSelect={setCategoryId} />
+              ) : null}
+            </FieldGroup>
+
+            {/* Ana alanlar tek gruplu yüzeyde (tuval .grp > .f / .row). */}
+            <FieldGroup>
+              <AmountField
+                label={isLoanDocument ? 'Kredi tutarı (ana para)' : isCreditCardStatement ? 'Dönem borcu' : 'Tutar'}
+                tag={confidenceTag('totalAmount')}
+                value={amount}
+                onChangeText={setAmount}
+                style={{ fontSize: 24, fontWeight: '700' }}
+              />
+              {!isLoanDocument ? (
+                <DateField
+                  label={realized ? 'Tarih' : isCreditCardStatement ? 'Son ödeme tarihi' : 'Vade tarihi'}
+                  tag={confidenceTag('dueDate')}
+                  value={dueDate}
+                  onChangeText={setDueDate}
+                />
+              ) : null}
+              {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
+                <BankPicker label="Banka" placeholder="Banka seçin (isteğe bağlı)" selectedId={bankCode} onSelect={setSelectedBankCode} />
+              ) : null}
+              {!(documentType && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(documentType)) && activeWorkspaceId ? (
+                <CounterpartyPicker
+                  label={documentType === 'cek' || documentType === 'senet' ? (side === 'out' ? 'Lehtar' : 'Keşideci') : realized ? 'Satıcı / müşteri' : 'Kişi / firma'}
+                  workspaceId={activeWorkspaceId}
+                  counterparties={counterpartiesQuery.data ?? []}
+                  selectedId={counterpartyId}
+                  onSelect={(value) => {
+                    setCounterpartyId(value);
+                    setSettleTargetIds([]);
+                  }}
+                />
+              ) : null}
+              {accountOptions.length > 0 ? (
+                <AccountPicker
+                  accounts={accountOptions}
+                  selectedId={accountId}
+                  onSelect={setAccountId}
+                  label={accountRequired && !accountId ? `${accountLabel} · gerekli` : accountLabel}
+                  placeholder={accountRequired ? 'Hesap seçin' : 'Hesap seçin (isteğe bağlı)'}
+                />
+              ) : (
+                <FormRow
+                  label={accountLabel}
+                  value={isCreditCardStatement ? 'Bu ekstreyle eşleşen kayıtlı kredi kartı yok.' : "Önce Hesaplar'dan bir hesap ekleyin."}
+                />
+              )}
+            </FieldGroup>
+            {!realized && !isCreditCardStatement ? (
+              <Stack gap="xs">
                 <Row align="center">
                   <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    PARA BİRİMİ
+                    Para birimi
                   </Text>
-                  <LowConfidenceHint fieldName="currency" />
+                  {confidenceTag('currency')}
                 </Row>
                 <SegmentedControl options={CURRENCY_OPTIONS} value={valueUnitCode} onChange={setValueUnitCode} />
               </Stack>
             ) : null}
-
-            <FieldGroup>
-              <TextField label="Başlık" value={title} onChangeText={setTitle} />
-              <AmountField
-                label={isLoanDocument ? 'Kredi tutarı (ana para)' : 'Tutar'}
-                tag={<LowConfidenceHint fieldName="totalAmount" />}
-                value={amount}
-                onChangeText={setAmount}
-              />
-              {!isLoanDocument ? (
-                <DateField label="Vade tarihi" tag={<LowConfidenceHint fieldName="dueDate" />} value={dueDate} onChangeText={setDueDate} />
-              ) : null}
-            </FieldGroup>
-            {!isLoanDocument && dueDatePeriodMismatch ? (
-              <Text variant="caption" color="danger">
-                Bu tarih, {expectedDueDateMonthLabel} dönemi için seçtiğiniz ekstreyle uyuşmuyor gibi görünüyor — doğru
-                olduğundan emin olun.
+            {!bankCode && extractedBankName && documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
+              <Text variant="caption" color="textSecondary">
+                Belgede “{extractedBankName}” okundu ama listede eşleşen banka bulunamadı — yukarıdan seçin.
               </Text>
             ) : null}
+            {!isLoanDocument && dueDatePeriodMismatch ? (
+              <Text variant="caption" color="danger">
+                Bu tarih, {expectedDueDateMonthLabel} dönemi için seçtiğiniz ekstreyle uyuşmuyor gibi görünüyor — doğru olduğundan emin olun.
+              </Text>
+            ) : null}
+            {isCreditCardStatement && !accountId && cardLastFourFromOcr ? (
+              <Button
+                label={quickAddCardMutation.isPending ? 'Kart oluşturuluyor…' : `•••• ${cardLastFourFromOcr} kartını oluştur ve devam et`}
+                variant="secondary"
+                size="compact"
+                icon="add"
+                onPress={() => quickAddCardMutation.mutate()}
+                loading={quickAddCardMutation.isPending}
+              />
+            ) : null}
+
+            {isInstrumentDocument && counterpartyId && settlementTargets.length > 0 ? (
+              <Card>
+                <Stack gap="sm">
+                  <Stack gap="xxs">
+                    <Text variant="cardTitle">
+                      Bu {documentType === 'cek' ? 'çek' : 'senet'} hangi kaydın karşılığı?
+                    </Text>
+                    <Text variant="caption" color="textSecondary">
+                      Seçilen kayıtlar bu tutar kadar kapanır; para vadede{' '}
+                      {direction === 'receivable' ? 'tahsil edildiğinde hesaba girer' : 'ödendiğinde hesaptan çıkar'}.
+                      Seçmezseniz bağımsız yeni bir kayıt açılır ve aynı borç iki kez görünebilir.
+                    </Text>
+                  </Stack>
+                  {settlementTargets.map((target) => {
+                    const selected = settleTargetIds.includes(target.id);
+                    return (
+                      <Pressable
+                        key={target.id}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: selected }}
+                        onPress={() =>
+                          setSettleTargetIds((prev) =>
+                            prev.includes(target.id) ? prev.filter((x) => x !== target.id) : [...prev, target.id]
+                          )
+                        }
+                      >
+                        <Row gap="sm" align="center">
+                          <Ionicons
+                            name={selected ? 'checkbox' : 'square-outline'}
+                            size={22}
+                            color={selected ? theme.colors.brandPrimary : theme.colors.textSecondary}
+                          />
+                          <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
+                            {target.title}
+                          </Text>
+                          <Text variant="body" tabular>
+                            {formatMinorAmount(target.remaining_amount_minor, target.currency_code)}
+                          </Text>
+                        </Row>
+                      </Pressable>
+                    );
+                  })}
+                </Stack>
+              </Card>
+            ) : null}
+
 
             {isLoanDocument ? (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  FAİZ ORANI % (İSTEĞE BAĞLI)
-                </Text>
+              <FieldGroup>
                 <TextField
+                  label="Faiz oranı % (isteğe bağlı)"
                   keyboardType="decimal-pad"
                   placeholder="Örn. 2,5"
                   value={interestRatePercent}
                   onChangeText={setInterestRatePercent}
                 />
-              </Stack>
+                {installmentDrafts.length > 0 ? (
+                  <FormRow label="Taksit sayısı" value={String(installmentDrafts.length)} />
+                ) : null}
+                {monthlyInstallmentMinor !== null ? (
+                  <FormRow label="Aylık taksit" value={formatMinorAmount(monthlyInstallmentMinor, valueUnitCode)} />
+                ) : null}
+                {totalInterestMinor !== null ? (
+                  <FormRow label="Faiz (toplam)" value={formatMinorAmount(totalInterestMinor, valueUnitCode)} />
+                ) : null}
+                {totalRepaymentMinor !== null ? (
+                  <FormRow label="Toplam geri ödeme" value={formatMinorAmount(totalRepaymentMinor, valueUnitCode)} />
+                ) : null}
+              </FieldGroup>
             ) : null}
-
-            {isLoanDocument && totalInterestMinor !== null ? (
-              <Row style={{ justifyContent: 'space-between' }}>
-                <Text variant="label" color="textSecondary">
-                  FAİZ (TOPLAM)
-                </Text>
-                <Text variant="body" tabular>
-                  {formatMinorAmount(totalInterestMinor, valueUnitCode)}
-                </Text>
-              </Row>
-            ) : null}
-
-            {isLoanDocument && totalRepaymentMinor !== null ? (
-              <Row style={{ justifyContent: 'space-between' }}>
-                <Text variant="label" color="textSecondary">
-                  TOPLAM GERİ ÖDEME
-                </Text>
-                <Text variant="body" tabular>
-                  {formatMinorAmount(totalRepaymentMinor, valueUnitCode)}
-                </Text>
-              </Row>
-            ) : null}
-
-            {(direction === 'payable' || direction === 'receivable') && (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  BELGE TÜRÜ
-                </Text>
-                <DocumentTypePicker selectedId={documentType} onSelect={setDocumentType} />
-              </Stack>
-            )}
 
             {isLoanDocument && installmentDrafts.length > 0 ? (
-              <Card>
-                <Stack gap="sm">
-                <Text variant="caption" color="textSecondary">
-                  {installmentDrafts.length} TAKSİT OTOMATİK OLUŞTURULACAK — VADE, TUTAR VE ÖDENDİ DURUMU DÜZENLENEBİLİR
-                </Text>
-                <Text variant="caption" color="textSecondary">
-                  Vadesi geçmiş taksitler otomatik &ldquo;ödendi&rdquo; işaretlenir ve hiçbir hesabın bakiyesini etkilemez.
-                </Text>
-                {installmentDrafts.map((draft, index) => (
-                  <Stack key={draft.id} gap="xxs">
-                    <Row gap="xs" align="center">
-                      <Text variant="caption" color="textSecondary" style={{ width: 28 }}>
-                        {draft.sortOrder}.
-                      </Text>
-                      <DateField
-                        value={draft.dueDate}
-                        onChangeText={(value) =>
-                          setInstallmentDrafts((prev) =>
-                            prev.map((d, i) => (i === index ? { ...d, dueDate: value } : d))
-                          )
-                        }
-                        style={{ flex: 1 }}
-                      />
-                      <AmountField
-                        value={draft.amount}
-                        onChangeText={(value) =>
-                          setInstallmentDrafts((prev) =>
-                            prev.map((d, i) => (i === index ? { ...d, amount: value } : d))
-                          )
-                        }
-                        style={{ flex: 1 }}
-                      />
-                    </Row>
-                    <Row gap="xs" align="center" style={{ justifyContent: 'flex-end' }}>
-                      <Text variant="caption" color="textSecondary">
-                        Ödendi
-                      </Text>
-                      <Switch
-                        value={draft.paid}
-                        onValueChange={(value) =>
-                          setInstallmentDrafts((prev) =>
-                            prev.map((d, i) => (i === index ? { ...d, paid: value } : d))
-                          )
-                        }
-                        trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
-                      />
-                    </Row>
-                  </Stack>
-                ))}
-                </Stack>
-              </Card>
-            ) : null}
-
-            {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  BANKA (İSTEĞE BAĞLI)
-                </Text>
-                <BankPicker selectedId={bankCode} onSelect={setSelectedBankCode} />
-                {!bankCode && extractedBankName ? (
-                  <Text variant="caption" color="textSecondary">
-                    OCR &ldquo;{extractedBankName}&rdquo; okudu ama listede eşleşen banka bulunamadı — yukarıdan manuel seç.
+              <Stack gap="xs">
+                <Row align="center" style={{ paddingHorizontal: 4 }}>
+                  <Text variant="label" color="textSecondary" style={{ flex: 1 }}>
+                    TAKSİTLER · {installmentDrafts.length}
                   </Text>
+                  <Text variant="caption" color="textSecondary">
+                    Düzenlemek için dokunun
+                  </Text>
+                </Row>
+                <InstallmentPlanTable
+                  currencyCode={valueUnitCode}
+                  rows={planRows}
+                  onRowPress={(row) => setEditingDraftIndex(installmentDrafts.findIndex((d) => d.id === row.key))}
+                />
+                {autoPaidCount > 0 ? (
+                  <View style={{ flexDirection: 'row', gap: 10, padding: 12, borderRadius: theme.radius.group, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.13) }}>
+                    <Ionicons name="information-circle" size={18} color={theme.colors.attentionMarker} />
+                    <Text variant="caption" style={{ flex: 1, color: theme.colors.textPrimary }}>
+                      Vadesi geçmiş {autoPaidCount} taksit &ldquo;ödendi&rdquo; olarak işaretlenecek ve hiçbir hesabın bakiyesini
+                      etkilemeyecek. İstemiyorsanız taksite dokunup değiştirebilirsiniz.
+                    </Text>
+                  </View>
                 ) : null}
               </Stack>
             ) : null}
@@ -1384,126 +1516,6 @@ export default function DocumentReviewScreen() {
               </Stack>
             ) : null}
 
-            {(direction === 'payable' || direction === 'receivable') && (
-              <Stack gap="sm">
-                <Row align="center">
-                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    BELGE NO
-                  </Text>
-                  <LowConfidenceHint fieldName="documentNumber" />
-                </Row>
-                <TextField value={documentNumber} onChangeText={setDocumentNumber} />
-              </Stack>
-            )}
-
-            {!(documentType && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(documentType)) ? (
-              <Stack gap="sm">
-                <Row align="center">
-                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    KİŞİ / FİRMA
-                  </Text>
-                  <LowConfidenceHint fieldName="counterpartyName" />
-                </Row>
-                {activeWorkspaceId ? (
-                  <CounterpartyPicker
-                    workspaceId={activeWorkspaceId}
-                    counterparties={counterpartiesQuery.data ?? []}
-                    selectedId={counterpartyId}
-                    onSelect={(value) => {
-                      setCounterpartyId(value);
-                      setSettleTargetIds([]);
-                    }}
-                  />
-                ) : null}
-              </Stack>
-            ) : null}
-
-            {isInstrumentDocument && counterpartyId && settlementTargets.length > 0 ? (
-              <Card>
-                <Stack gap="sm">
-                  <Stack gap="xxs">
-                    <Text variant="cardTitle">
-                      Bu {documentType === 'cek' ? 'çek' : 'senet'} hangi kaydın karşılığı?
-                    </Text>
-                    <Text variant="caption" color="textSecondary">
-                      Seçilen kayıtlar bu tutar kadar kapanır; para vadede{' '}
-                      {direction === 'receivable' ? 'tahsil edildiğinde hesaba girer' : 'ödendiğinde hesaptan çıkar'}.
-                      Seçmezseniz bağımsız yeni bir kayıt açılır ve aynı borç iki kez görünebilir.
-                    </Text>
-                  </Stack>
-                  {settlementTargets.map((target) => {
-                    const selected = settleTargetIds.includes(target.id);
-                    return (
-                      <Pressable
-                        key={target.id}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: selected }}
-                        onPress={() =>
-                          setSettleTargetIds((prev) =>
-                            prev.includes(target.id) ? prev.filter((x) => x !== target.id) : [...prev, target.id]
-                          )
-                        }
-                      >
-                        <Row gap="sm" align="center">
-                          <Ionicons
-                            name={selected ? 'checkbox' : 'square-outline'}
-                            size={22}
-                            color={selected ? theme.colors.brandPrimary : theme.colors.textSecondary}
-                          />
-                          <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                            {target.title}
-                          </Text>
-                          <Text variant="body" tabular>
-                            {formatMinorAmount(target.remaining_amount_minor, target.currency_code)}
-                          </Text>
-                        </Row>
-                      </Pressable>
-                    );
-                  })}
-                </Stack>
-              </Card>
-            ) : null}
-
-            {/* Ekstre kategorilere ayrılıyorsa her harcama zaten kendi kategorisini taşır;
-                kart borcunun tamamına ayrıca genel bir kategori sormak anlamsız. */}
-            {!splitsCardSpending ? (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  KATEGORİ (İSTEĞE BAĞLI)
-                </Text>
-                {(categoriesQuery.data ?? []).length > 0 ? (
-                  <CategoryPicker categories={categoriesQuery.data ?? []} selectedId={categoryId} onSelect={setCategoryId} />
-                ) : null}
-              </Stack>
-            ) : null}
-
-            <Stack gap="sm">
-              <Text variant="caption" color="textSecondary">
-                {documentType === 'kredi_karti_ekstresi'
-                  ? 'EKSTRENİN AİT OLDUĞU KREDİ KARTI'
-                  : direction === 'income' || direction === 'expense'
-                    ? 'HESAP'
-                    : 'HESAP (İSTEĞE BAĞLI)'}
-              </Text>
-              {accountOptions.length === 0 ? (
-                <Text variant="body" color="textSecondary">
-                  {documentType === 'kredi_karti_ekstresi'
-                    ? 'Bu ekstreyle eşleşen kayıtlı kredi kartı yok.'
-                    : "Önce Hesaplar'dan bir hesap ekleyin."}
-                </Text>
-              ) : (
-                <AccountPicker accounts={accountOptions} selectedId={accountId} onSelect={setAccountId} />
-              )}
-              {documentType === 'kredi_karti_ekstresi' && !accountId && cardLastFourFromOcr ? (
-                <Button
-                  label={quickAddCardMutation.isPending ? 'Kart oluşturuluyor…' : `•••• ${cardLastFourFromOcr} kartını oluştur ve devam et`}
-                  variant="secondary"
-                  onPress={() => quickAddCardMutation.mutate()}
-                  loading={quickAddCardMutation.isPending}
-                />
-              ) : null}
-            </Stack>
-
             {confirmMutation.error ? (
               <Text variant="caption" color="danger">
                 {confirmMutation.error instanceof Error ? confirmMutation.error.message : 'Kayıt oluşturulamadı'}
@@ -1514,26 +1526,113 @@ export default function DocumentReviewScreen() {
                 {discardMutation.error instanceof Error ? discardMutation.error.message : 'Belge iptal edilemedi'}
               </Text>
             ) : null}
-
-            <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-              Onaylamadan kayıt oluşmaz
-            </Text>
-            <Button
-              label="Kontrol Et ve Kaydet"
-              onPress={() => confirmMutation.mutate()}
-              loading={confirmMutation.isPending}
-              disabled={!canSubmit || !statementMatchingReady}
-            />
-            <Button label="Taslak Olarak Bırak" variant="text" onPress={() => router.back()} />
-            <Button
-              label="Belgeyi iptal et"
-              variant="dangerText"
-              onPress={handleDiscard}
-              loading={discardMutation.isPending}
-            />
           </Stack>
         </ScrollView>
+        {/* Tuval: eylemler içerikle kaymayan, üst çizgili sabit alt çubukta. */}
+        <View
+          style={{
+            paddingHorizontal: theme.screenEdge.standard,
+            paddingTop: theme.spacing.sm,
+            paddingBottom: Math.max(insets.bottom, theme.spacing.sm),
+            gap: 6,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.separator,
+            backgroundColor: theme.colors.backgroundPrimary,
+          }}
+        >
+          <Row gap="xxs" align="center" style={{ justifyContent: 'center' }}>
+            <Ionicons name="lock-closed" size={12} color={theme.colors.textSecondary} />
+            <Text variant="caption" color="textSecondary">
+              Onaylamadan kayıt oluşmaz
+            </Text>
+          </Row>
+          <Button
+            label="Kontrol Et ve Kaydet"
+            onPress={() => confirmMutation.mutate()}
+            loading={confirmMutation.isPending}
+            disabled={!canSubmit || !statementMatchingReady}
+          />
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Pressable accessibilityRole="button" onPress={() => router.back()} style={{ minHeight: 40, justifyContent: 'center', paddingHorizontal: 8 }}>
+              <Text style={{ fontSize: 15, fontWeight: '500' }}>Taslak olarak bırak</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleDiscard}
+              disabled={discardMutation.isPending}
+              style={{ minHeight: 40, justifyContent: 'center', paddingHorizontal: 8 }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '500', color: theme.colors.danger }}>
+                {discardMutation.isPending ? 'İptal ediliyor…' : 'Belgeyi iptal et'}
+              </Text>
+            </Pressable>
+          </Row>
+        </View>
       </KeyboardAvoidingView>
+
+      <BottomSheet
+        visible={!!editingDraft}
+        onClose={() => setEditingDraftIndex(null)}
+        title={editingDraft ? `${editingDraft.sortOrder}. taksit` : undefined}
+      >
+        {editingDraft ? (
+          <Stack gap="md">
+            <FieldGroup>
+              <DateField label="Vade" value={editingDraft.dueDate} onChangeText={(value) => updateDraft({ dueDate: value })} />
+              <AmountField label="Taksit tutarı" value={editingDraft.amount} onChangeText={(value) => updateDraft({ amount: value })} />
+            </FieldGroup>
+            <Row align="center" style={{ justifyContent: 'space-between', paddingHorizontal: 4 }}>
+              <Stack gap="xxs" style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '500' }}>Ödendi</Text>
+                <Text variant="caption" color="textSecondary">
+                  Ödenmiş taksit hesap bakiyesini etkilemeden kapalı kaydedilir.
+                </Text>
+              </Stack>
+              <Switch
+                value={editingDraft.paid}
+                onValueChange={(value) => updateDraft({ paid: value })}
+                trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
+              />
+            </Row>
+            <Button label="Tamam" onPress={() => setEditingDraftIndex(null)} />
+          </Stack>
+        ) : null}
+      </BottomSheet>
+
+      <Modal visible={previewOpen} animationType="fade" onRequestClose={() => setPreviewOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: '#000000' }}>
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={{ flex: 1 }} resizeMode="contain" /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Kapat"
+            onPress={() => setPreviewOpen(false)}
+            style={{
+              position: 'absolute',
+              top: insets.top + 8,
+              right: 16,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(255,255,255,0.18)',
+            }}
+          >
+            <Ionicons name="close" size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const overlayChipStyle = {
+  position: 'absolute' as const,
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  gap: 4,
+  height: 26,
+  paddingHorizontal: 9,
+  borderRadius: 13,
+  backgroundColor: 'rgba(0,0,0,0.55)',
+};

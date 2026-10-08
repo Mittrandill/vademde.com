@@ -31,6 +31,8 @@ import { formatAmountInput, formatMinorAmount, parseValueUnitAmountToMinor } fro
 import { getValueUnit } from '@/features/valueUnits/units';
 import { ReceiptAttachField } from '@/components/finance/ReceiptAttachField';
 import { ScanPromptBanner } from '@/components/finance/ScanPromptBanner';
+import { TransferAccounts } from '@/components/finance/TransferAccounts';
+import { getAccountBalances } from '@/features/reports/api';
 import {
   attachReceiptFile,
   getTransactionReceipt,
@@ -172,6 +174,15 @@ function TransactionForm({
     enabled: !!activeWorkspaceId,
   });
   const accounts = accountsQuery.data ?? [];
+  // Transfer olarak açılan (hızlı işlem ya da mevcut transferi düzenleme) ekranda tür seçici
+  // gösterilmez; tuvaldeki Transfer ekranı yalnızca transferdir.
+  const transferOnly = initialDirection === 'transfer' || initial?.direction === 'transfer';
+  const balancesQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.reportAccountBalances(activeWorkspaceId) : ['account-balances', 'disabled'],
+    queryFn: () => getAccountBalances(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId && direction === 'transfer',
+  });
+  const balances = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
   // Bir kredi kartından "hesaplar arası transfer" kaynağı olmak anlamsız — kart zaten bir
   // borç hesabıdır, ondan para "çıkmaz". Kaynak listesinden çıkarılır. Hedef olarak ise
   // kredi kartı geçerlidir — kart borcuna ödeme tam olarak budur (bkz. features/reports/api.ts
@@ -198,14 +209,14 @@ function TransactionForm({
   });
   const existingReceiptId = removedExisting ? null : (existingReceiptQuery.data?.id ?? null);
 
+  // Tüm kategoriler tek seferde çekilip türe göre burada süzülür: Gider ↔ Gelir geçişinde liste
+  // yeniden yüklenirken boş görünüp "kategori bulunamadı" denmez.
   const categoriesQuery = useQuery({
-    queryKey: activeWorkspaceId
-      ? queryKeys.categories(activeWorkspaceId, direction === 'transfer' ? undefined : direction)
-      : ['categories', 'disabled'],
-    queryFn: () => listCategories(activeWorkspaceId as string, direction === 'transfer' ? undefined : direction),
-    enabled: !!activeWorkspaceId && direction !== 'transfer',
+    queryKey: activeWorkspaceId ? queryKeys.categories(activeWorkspaceId) : ['categories', 'disabled'],
+    queryFn: () => listCategories(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
   });
-  const categories = categoriesQuery.data ?? [];
+  const categories = (categoriesQuery.data ?? []).filter((c) => c.kind === direction);
 
   const counterpartiesQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.counterparties(activeWorkspaceId) : ['counterparties', 'disabled'],
@@ -401,6 +412,7 @@ function TransactionForm({
           />
 
           <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
+            {transferOnly ? null : (
             <SegmentedControl
               options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
               value={direction}
@@ -417,6 +429,28 @@ function TransactionForm({
               }}
               stretch
             />
+            )}
+
+            {direction === 'transfer' ? (
+              <TransferAccounts
+                sourceAccounts={transferSourceAccounts.filter((a) => a.id !== transferToAccountId)}
+                targetAccounts={accounts.filter((a) => a.id !== accountId)}
+                fromId={accountId}
+                toId={transferToAccountId}
+                onFromChange={setAccountId}
+                onToChange={setTransferToAccountId}
+                canSwap={
+                  !!accountId &&
+                  !!transferToAccountId &&
+                  accounts.find((a) => a.id === transferToAccountId)?.type !== 'credit_card'
+                }
+                onSwap={() => {
+                  setAccountId(transferToAccountId);
+                  setTransferToAccountId(accountId);
+                }}
+                balances={balances}
+              />
+            ) : null}
 
             <View style={{ marginTop: theme.spacing.md, marginBottom: theme.spacing.xs }}>
               <BigAmountInput
@@ -428,33 +462,43 @@ function TransactionForm({
               />
             </View>
 
-            {!isEditing ? (
+            {!isEditing && direction !== 'transfer' ? (
               <ScanPromptBanner description="Dekont, fiş veya fatura fotoğrafını tara; tutar, tarih ve hesap otomatik dolsun." />
             ) : null}
 
+            {direction === 'transfer' ? (
+              <>
+                <Text variant="caption" color="textSecondary" style={{ textAlign: 'center', paddingHorizontal: 30 }}>
+                  Transfer gelir ya da gider sayılmaz; toplam varlık değişmez.
+                </Text>
+                {transferSourceAccounts.length === 0 ? (
+                  <Text variant="caption" color="danger" style={{ textAlign: 'center' }}>
+                    Transfer için kredi kartı dışında en az bir hesap gerekir.
+                  </Text>
+                ) : null}
+                <FieldGroup>
+                  <TextField label="Not" placeholder="Örn. Çek için aktarım" value={description} onChangeText={setDescription} />
+                  <DateField label="Tarih" value={dateStr} onChangeText={setDateStr} />
+                </FieldGroup>
+              </>
+            ) : (
             <FieldGroup>
               <TextField label="Açıklama" placeholder="Örn. Market alışverişi" value={description} onChangeText={setDescription} />
-              {direction === 'transfer' ? (
-                <AccountPicker
-                  accounts={accounts.filter((a) => a.id !== accountId)}
-                  selectedId={transferToAccountId}
-                  onSelect={setTransferToAccountId}
-                  title="Hedef hesap seç"
-                  placeholder="Hedef hesap seçin"
-                  label="Alan"
-                />
+              {categoriesQuery.isPending ? (
+                <FormRow label="Kategori" value="Kategoriler yükleniyor…" />
               ) : categories.length === 0 ? (
-                <FormRow label="Kategori" value="Bu türde kategori bulunamadı." />
+                <FormRow
+                  label="Kategori"
+                  value={`${direction === 'income' ? 'Gelir' : 'Gider'} kategorisi yok. Kategoriler'den ekleyebilirsiniz.`}
+                />
               ) : (
                 <CategoryPicker categories={categories} selectedId={categoryId} onSelect={setCategoryId} label="Kategori" />
               )}
               {sourceAccounts.length === 0 ? (
                 <FormRow
-                  label={direction === 'transfer' ? 'Gönderen' : 'Hesap'}
+                  label="Hesap"
                   value={
-                    direction === 'transfer'
-                      ? 'Transfer için kredi kartı dışında en az bir hesap gerekir.'
-                      : direction === 'expense' && accounts.length > 0
+                    direction === 'expense' && accounts.length > 0
                         ? 'POS dışında en az bir hesap gerekir.'
                         : "Önce Hesaplar'dan bir hesap ekleyin."
                   }
@@ -464,19 +508,14 @@ function TransactionForm({
                   accounts={sourceAccounts}
                   selectedId={accountId}
                   onSelect={setAccountId}
-                  title={direction === 'transfer' ? 'Gönderen hesap seç' : 'Hesap seç'}
-                  placeholder={direction === 'transfer' ? 'Gönderen hesap seçin' : 'Hesap seçin'}
-                  label={direction === 'transfer' ? 'Gönderen' : 'Hesap'}
+                  title="Hesap seç"
+                  placeholder="Hesap seçin"
+                  label="Hesap"
                 />
               )}
               <DateField label="Tarih" value={dateStr} onChangeText={setDateStr} />
             </FieldGroup>
-
-            {direction === 'transfer' ? (
-              <Text variant="caption" color="textSecondary" style={{ textAlign: 'center', paddingHorizontal: 30 }}>
-                Transfer gelir ya da gider sayılmaz; toplam varlık değişmez.
-              </Text>
-            ) : null}
+            )}
 
             {showPosCommissionPreview ? (
               <Text variant="caption" color="textSecondary">

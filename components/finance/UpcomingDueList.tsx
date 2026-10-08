@@ -2,11 +2,16 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { Group, Pressable, SectionHeader, SegmentedControl, Text } from '@/components/primitives';
+import { DatePickerSheet, Group, Pressable, SectionHeader, SegmentedControl, SwipeableRow, Text } from '@/components/primitives';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
-import type { ObligationDueItem } from '@/features/obligations/api';
+import { updateObligation, type ObligationDueItem } from '@/features/obligations/api';
+import { syncObligationReminder } from '@/services/notifications';
+import { invalidatePaymentRelatedQueries } from '@/services/queryKeys';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+import { showErrorAlert } from '@/utils/alerts';
 import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 
 export interface UpcomingDueListProps {
@@ -35,6 +40,23 @@ function startOfDay(date: Date): Date {
 export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
   const theme = useTheme();
   const [range, setRange] = useState<Range>('7');
+  const queryClient = useQueryClient();
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  // Sağa kaydır → Ertele: vadeyi seçilen yeni tarihe taşır (yalnızca taksitsiz kayıtlarda; taksitli
+  // kayıtta tek taksidin tarihi kaydın kendi detayından değiştirilir).
+  const [postponing, setPostponing] = useState<ObligationDueItem | null>(null);
+
+  async function postpone(item: ObligationDueItem, dueDate: string) {
+    try {
+      const updated = await updateObligation(item.id, { due_date: dueDate });
+      if (activeWorkspaceId) {
+        await syncObligationReminder(activeWorkspaceId, updated);
+        invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      }
+    } catch (error) {
+      showErrorAlert(error);
+    }
+  }
   const today = startOfDay(new Date());
   const days = RANGES.find((r) => r.key === range)?.days ?? 7;
 
@@ -64,7 +86,37 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
         ) : (
           <Group inset={62}>
             {items.map((o) => (
-              <DueRow key={o.installment_id ?? o.id} item={o} today={today} />
+              <SwipeableRow
+                key={o.installment_id ?? o.id}
+                leftActions={[
+                  {
+                    key: 'paid',
+                    label: o.direction === 'receivable' ? 'Tahsil' : 'Ödendi',
+                    icon: 'checkmark',
+                    backgroundColor: theme.colors.receivable,
+                    color: theme.colors.onAction,
+                    onPress: () =>
+                      router.push({
+                        pathname: '/obligations/[id]',
+                        params: { id: o.id, pay: '1', ...(o.installment_id ? { installmentId: o.installment_id } : {}) },
+                      }),
+                  },
+                  ...(o.installment_id
+                    ? []
+                    : [
+                        {
+                          key: 'postpone',
+                          label: 'Ertele',
+                          icon: 'calendar' as const,
+                          backgroundColor: theme.colors.brandPrimary,
+                          color: theme.colors.onAction,
+                          onPress: () => setPostponing(o),
+                        },
+                      ]),
+                ]}
+              >
+                <DueRow item={o} today={today} />
+              </SwipeableRow>
             ))}
             {total > items.length ? (
               <Pressable
@@ -79,6 +131,18 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
           </Group>
         )}
       </View>
+
+      <DatePickerSheet
+        visible={!!postponing}
+        onClose={() => setPostponing(null)}
+        value={postponing?.due_date ?? null}
+        title="Vadeyi ertele"
+        onChange={(iso) => {
+          const item = postponing;
+          setPostponing(null);
+          if (item && iso !== item.due_date) void postpone(item, iso);
+        }}
+      />
     </View>
   );
 }
@@ -106,7 +170,7 @@ function DueRow({ item: o, today }: { item: ObligationDueItem; today: Date }) {
     <Pressable
       accessibilityRole="button"
       onPress={() => router.push(`/obligations/${o.id}`)}
-      style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+      style={{ backgroundColor: theme.colors.surfacePrimary, minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
     >
       <View style={{ width: 34, alignItems: 'center' }}>
         <Text tabular style={{ fontSize: 18, lineHeight: 20, fontWeight: '700', color: dateColor }}>

@@ -24,6 +24,8 @@ export interface SearchablePickerProps<T extends { id: string; name: string }> {
   emptyLabel?: string;
   /** Verilirse, aramada tam eşleşme yoksa listenin başında "Yeni ekle" satırı gösterilir. */
   onCreateNew?: (name: string) => Promise<void> | void;
+  /** Varsayılan alan satırı yerine çağıranın çizdiği tetikleyici (ör. Transfer'deki Gönderen/Alan satırları). */
+  renderTrigger?: (selected: T | null, open: () => void) => ReactNode;
 }
 
 function highlight(name: string, query: string): ReactNode {
@@ -52,6 +54,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
   title = 'Seçin',
   emptyLabel = 'Eşleşen sonuç bulunamadı.',
   onCreateNew,
+  renderTrigger,
 }: SearchablePickerProps<T>) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
@@ -87,6 +90,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
 
   return (
     <>
+      {renderTrigger ? renderTrigger(selected, () => setOpen(true)) : (
       <Pressable accessibilityRole="button" onPress={() => setOpen(true)}>
         <FieldShell>
           <View
@@ -120,6 +124,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
           </View>
         </FieldShell>
       </Pressable>
+      )}
 
       {/* Modal yalnızca açıkken mount edilir — bkz. DateField'daki aynı not. Bu seçici
           liste satırlarında tekrarlanabiliyor (ör. kredi kartı ekstresini kategorilere

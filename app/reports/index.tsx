@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, Share, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Alert, ScrollView, Share, View, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,26 +7,37 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { DateRangeSheet, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
+import {
+  BottomSheet,
+  DateRangeSheet,
+  GroupedRow,
+  GroupedRowIcon,
+  GroupedSection,
+  Pressable,
+  ScrollableTabs,
+  SegmentedControl,
+  Skeleton,
+  Stack,
+  Text,
+} from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { OverdueObligationsList } from '@/components/finance/OverdueObligationsList';
 import { ReportExportSheet, type ExportFormat } from '@/components/finance/ReportExportSheet';
 import { formatCacheAge } from '@/components/finance/ReferenceValueRow';
+import { FadeIn } from '@/components/finance/GlowSurface';
 import {
   AccountRows,
   CashFlowRows,
   CategoryRows,
+  ChartLegend,
   CounterpartyRows,
-  DebtMiniCard,
-  DeltaText,
-  KpiRow,
+  DebtRows,
+  KpiList,
   MonthBars,
+  MonthTable,
   NetCard,
+  percentChange,
   RateRows,
-  RatesMiniCard,
   ReportCard,
-  SectionTitle,
-  SideKpis,
   SmartSummary,
 } from '@/components/finance/ReportSections';
 import {
@@ -48,28 +59,53 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { toCsv } from '@/utils/csv';
 import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
+import { listMyWorkspaces } from '@/features/workspaces/api';
 import { formatMinorAmount, fromMinorUnits } from '@/utils/money';
 
 type Period = 'month' | '3m' | 'year' | 'all' | 'custom';
 type CategoryDirection = 'expense' | 'income';
-type SectionKey = 'ozet' | 'kategoriler' | 'kisiler' | 'borc' | 'nakit' | 'hesaplar' | 'kurlar';
+type SectionKey = 'ozet' | 'kategoriler' | 'borc' | 'kurlar' | 'diger';
+type DetailKey = 'aylar' | 'kategoriler' | 'kisiler' | 'nakit' | 'hesaplar' | 'kurlar';
 
-const PERIODS: { key: Period; label: string }[] = [
+const PERIODS: { key: Exclude<Period, 'custom'>; label: string }[] = [
   { key: 'month', label: 'Bu ay' },
   { key: '3m', label: 'Son 3 ay' },
   { key: 'year', label: 'Bu yıl' },
   { key: 'all', label: 'Tümü' },
 ];
 
+// Bölüm atlama çipleri: dokununca sayfa ilgili karta kayar.
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'ozet', label: 'Özet' },
   { key: 'kategoriler', label: 'Kategoriler' },
-  { key: 'kisiler', label: 'Kişiler' },
   { key: 'borc', label: 'Borç/alacak' },
-  { key: 'nakit', label: 'Nakit akışı' },
-  { key: 'hesaplar', label: 'Hesaplar' },
   { key: 'kurlar', label: 'Kurlar' },
+  { key: 'diger', label: 'Diğer' },
 ];
+
+const DETAIL_TITLE: Record<DetailKey, string> = {
+  aylar: 'Son 6 ay',
+  kategoriler: 'Kategoriler',
+  kisiler: 'Kişi ve firmalar',
+  nakit: 'Beklenen nakit akışı',
+  hesaplar: 'Hesap bakiyeleri',
+  kurlar: 'Güncel kurlar',
+};
+
+/** Kategoriler kartında gösterilen satır sayısı; tamamı ok düğmesinden açılır. */
+const CATEGORY_PREVIEW = 4;
+
+function capitalize(text: string): string {
+  return text.charAt(0).toLocaleUpperCase('tr-TR') + text.slice(1);
+}
+
+// Türkçe bulunma eki: "Ekim'de", "Ağustos'ta", "Mart'ta" (ünlü uyumu + sert ünsüz benzeşmesi).
+function locative(word: string): string {
+  const vowels = word.toLocaleLowerCase('tr-TR').match(/[aeıioöuü]/g) ?? [];
+  const back = ['a', 'ı', 'o', 'u'].includes(vowels[vowels.length - 1] ?? 'e');
+  const hard = /[çfhkpsşt]$/i.test(word);
+  return `${word}’${hard ? 't' : 'd'}${back ? 'a' : 'e'}`;
+}
 
 const DIRECTION_LABEL: Record<string, string> = { income: 'Gelir', expense: 'Gider', transfer: 'Transfer' };
 
@@ -151,26 +187,7 @@ function rangeLabel(period: Period, custom: CustomRange | null): string {
   return 'Tüm zamanlar';
 }
 
-// Bölüm başlangıç konumunu ölçen sarmalayıcı (bölüm atlama çipleri için).
-function Anchor({
-  id,
-  onMeasure,
-  gap = 'sm',
-  children,
-}: {
-  id: SectionKey;
-  onMeasure: (key: SectionKey, y: number) => void;
-  gap?: 'sm' | 'md';
-  children: React.ReactNode;
-}) {
-  return (
-    <Stack gap={gap} onLayout={(e) => onMeasure(id, e.nativeEvent.layout.y)}>
-      {children}
-    </Stack>
-  );
-}
-
-// Daha Fazla > Analiz'den açılan modal bir ekran (bkz. app/(tabs)/daha-fazla.tsx).
+// Daha Fazla > Analiz menüsünden açılan ekran (bkz. app/(tabs)/daha-fazla.tsx).
 export default function ReportsScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
@@ -181,6 +198,7 @@ export default function ReportsScreen() {
   const [exportOpen, setExportOpen] = useState(false);
   const [categoryDirection, setCategoryDirection] = useState<CategoryDirection>('expense');
   const [isExporting, setIsExporting] = useState(false);
+  const [detail, setDetail] = useState<DetailKey | null>(null);
   const [section, setSection] = useState<SectionKey>('ozet');
   const scrollRef = useRef<ScrollView>(null);
   const offsets = useRef<Partial<Record<SectionKey, number>>>({});
@@ -191,6 +209,8 @@ export default function ReportsScreen() {
   const periodText = rangeLabel(period, custom);
 
   const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
+  const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces(), queryFn: listMyWorkspaces });
+  const workspaceName = workspacesQuery.data?.find((w) => w.id === activeWorkspaceId)?.name ?? null;
   const planCode: PlanCode = (subscriptionQuery.data?.plan as PlanCode) ?? 'free';
   const planLimitsQuery = useQuery({
     queryKey: [...queryKeys.planLimits(), planCode],
@@ -297,7 +317,6 @@ export default function ReportsScreen() {
   const net = income - expense;
   const prev = prevSummaryQuery.data ?? null;
   const savingsRate = income > 0 ? Math.round((net / income) * 100) : null;
-  const prevSavingsRate = prev && prev.incomeMinor > 0 ? Math.round(((prev.incomeMinor - prev.expenseMinor) / prev.incomeMinor) * 100) : null;
   const overdueItems = overdueQuery.data ?? [];
   const overdueMinor = overdueItems.reduce((s, o) => s + o.remaining_amount_minor, 0);
 
@@ -312,7 +331,7 @@ export default function ReportsScreen() {
     if (prev && prev.expenseMinor > 0) {
       const pct = Math.round(((expense - prev.expenseMinor) / prev.expenseMinor) * 100);
       if (pct !== 0) {
-        const when = period === 'month' ? `${monthFormatter.format(new Date())}'da` : 'Bu dönemde';
+        const when = period === 'month' ? locative(capitalize(monthFormatter.format(new Date()))) : 'Bu dönemde';
         parts.push(`${when} gideri önceki döneme göre %${Math.abs(pct)} ${pct < 0 ? 'azalttın' : 'artırdın'}.`);
       }
     }
@@ -352,6 +371,7 @@ export default function ReportsScreen() {
     ]);
     await exportReportPdf({
       periodLabel: periodText,
+      workspaceName,
       incomeMinor: income,
       expenseMinor: expense,
       payableTotalMinor,
@@ -388,15 +408,14 @@ export default function ReportsScreen() {
     else router.replace('/(tabs)/daha-fazla');
   }
 
-  const measure = useCallback((key: SectionKey, y: number) => {
-    offsets.current[key] = y;
-  }, []);
+  function onSectionLayout(key: SectionKey, e: LayoutChangeEvent) {
+    offsets.current[key] = e.nativeEvent.layout.y;
+  }
 
   function jumpTo(key: SectionKey) {
     setSection(key);
     scrollRef.current?.scrollTo({ y: Math.max(0, (offsets.current[key] ?? 0) - 8), animated: true });
   }
-
 
   if (!activeWorkspaceId) {
     return (
@@ -416,187 +435,248 @@ export default function ReportsScreen() {
     .filter((r) => VALUE_UNITS.some((u) => u.code === r.unit_code))
     .sort((a, b) => VALUE_UNITS.findIndex((u) => u.code === a.unit_code) - VALUE_UNITS.findIndex((u) => u.code === b.unit_code));
   const newestRate = ratesWithData.reduce<string | null>((n, r) => (!n || r.cached_at > n ? r.cached_at : n), null);
+  const rateAgeText = newestRate ? `${formatCacheAge(newestRate)} güncellendi` : null;
+
+  const categories = categoryQuery.data ?? [];
+  const cashFlowNet = (cashFlowQuery.data ?? []).reduce((sum, b) => sum + b.receivableMinor - b.payableMinor, 0);
+  const counterpartyCount = counterpartyQuery.data?.length ?? 0;
+  const accountCount = accountBalancesQuery.data?.length ?? 0;
+  const prevSavingsRate =
+    prev && prev.incomeMinor > 0 ? Math.round(((prev.incomeMinor - prev.expenseMinor) / prev.incomeMinor) * 100) : null;
+
+  // "%12 geçen döneme göre ↑" gibi değişim cümlesi; önceki dönem yoksa açıklama.
+  function changeCaption(current: number, previous: number | null, unit: '%' | 'puan' = '%'): string {
+    if (previous === null) return period === 'all' ? 'Tüm zamanların toplamı' : 'Önceki dönemde kayıt yok';
+    if (unit === 'puan') {
+      const diff = current - previous;
+      return diff === 0 ? 'Geçen dönemle aynı' : `${Math.abs(diff)} puan ${diff > 0 ? 'yükseldi' : 'düştü'}`;
+    }
+    const pct = percentChange(current, previous);
+    if (pct === null) return current > 0 ? 'Önceki dönemde kayıt yok' : 'Hareket yok';
+    if (pct === 0) return 'Geçen dönemle aynı';
+    return `%${Math.abs(pct)} ${pct > 0 ? 'arttı' : 'azaldı'} · geçen döneme göre`;
+  }
+
+  const expenseColor = theme.colors.brandPrimary;
+  const incomeColor = theme.colors.receivable;
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.md, gap: theme.spacing.sm }}>
-        <ScreenHeader
-          title="Raporlar"
-          left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: closeScreen }}
-          right={{ icon: 'share-outline', accessibilityLabel: 'Dışa aktar', onPress: () => setExportOpen(true) }}
-        />
-        <ScrollableTabs
-          tabs={[...PERIODS, { key: 'custom', label: 'Özel aralık' }]}
-          activeKey={period}
-          onChange={(k) => (k === 'custom' ? setRangeOpen(true) : setPeriod(k as Period))}
-        />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-          <Ionicons name="calendar-outline" size={theme.iconSize.md} color={theme.colors.textSecondary} />
-          <Text variant="caption" color="textSecondary" tabular numberOfLines={1} style={{ flexShrink: 1 }}>
-            {periodText}
-          </Text>
-        </View>
-        <ScrollableTabs tabs={SECTIONS} activeKey={section} onChange={(k) => jumpTo(k as SectionKey)} />
-      </View>
-
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.massive, gap: theme.spacing.xl }}
+        contentContainerStyle={{ paddingHorizontal: theme.screenEdge.standard, paddingBottom: theme.spacing.massive, gap: theme.spacing.sm }}
       >
-        <Anchor id="ozet" onMeasure={measure} gap="md">
+        <ScreenHeader
+          title="Raporlar"
+          left={{ icon: 'chevron-back', accessibilityLabel: 'Geri', onPress: closeScreen }}
+          right={{ icon: 'share-outline', accessibilityLabel: 'Dışa aktar', onPress: () => setExportOpen(true) }}
+        />
+
+        {/* Dönem kartı: hazır dönemler + seçili aralık ve özel aralık seçici. */}
+        <View style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.widget, padding: theme.spacing.sm, gap: theme.spacing.sm }}>
+          <ScrollableTabs tabs={PERIODS} activeKey={period} onChange={(k) => setPeriod(k as Period)} />
+          <View style={{ height: 1, backgroundColor: theme.colors.separator }} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Dönem: ${periodText}. Aralık seç`}
+            onPress={() => setRangeOpen(true)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, paddingHorizontal: 4, minHeight: 36 }}
+          >
+            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+            <Text tabular numberOfLines={1} style={{ flex: 1, fontSize: 16, fontWeight: '600' }}>
+              {periodText}
+            </Text>
+            <View style={{ width: 1, height: 20, backgroundColor: theme.colors.separator }} />
+            <Text style={{ fontSize: 15, color: period === 'custom' ? theme.colors.attentionMarker : theme.colors.textSecondary }}>
+              Aralık seç
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <ScrollableTabs tabs={SECTIONS} activeKey={section} onChange={(k) => jumpTo(k as SectionKey)} />
+
+        <View onLayout={(e) => onSectionLayout('ozet', e)} style={{ gap: theme.spacing.sm }}>
           {loading ? (
-            <Skeleton height={180} borderRadius={theme.radius.widget} />
+            <Skeleton height={320} borderRadius={theme.radius.widget} />
           ) : (
             <>
-              {summaryText ? <SmartSummary text={summaryText} onPress={() => router.push('/insights')} /> : null}
-
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <NetCard net={net} />
-                <SideKpis
-                  items={[
-                    {
-                      key: 'gelir',
-                      label: 'Gelir',
-                      value: `+${formatMinorAmount(income).replace(/,00(?=\D*$)/, '')}`,
-                      valueColor: theme.colors.receivable,
-                      icon: 'arrow-up',
-                      iconColor: theme.colors.receivable,
-                      footer: <DeltaText current={income} previous={prev ? prev.incomeMinor : null} suffix="geçen dön." />,
-                    },
-                    {
-                      key: 'gider',
-                      label: 'Gider',
-                      value: `−${formatMinorAmount(expense).replace(/,00(?=\D*$)/, '')}`,
-                      valueColor: theme.colors.danger,
-                      icon: 'arrow-down',
-                      iconColor: theme.colors.danger,
-                      footer: <DeltaText current={expense} previous={prev ? prev.expenseMinor : null} goodWhenDown suffix="geçen dön." />,
-                    },
-                    {
-                      key: 'tasarruf',
-                      label: 'Tasarruf oranı',
-                      value: savingsRate === null ? '—' : `%${savingsRate}`,
-                      icon: 'pie-chart-outline',
-                      iconColor: theme.colors.textSecondary,
-                      footer:
-                        savingsRate !== null && prevSavingsRate !== null ? (
-                          <DeltaText current={savingsRate} previous={prevSavingsRate} suffix="puan farkla" />
-                        ) : (
-                          <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                            Gelir kaydı gerekir
-                          </Text>
-                        ),
-                    },
-                  ]}
-                />
-              </View>
-
+              {summaryText ? (
+                <FadeIn>
+                  <SmartSummary text={summaryText} onPress={() => router.push('/insights')} />
+                </FadeIn>
+              ) : null}
+              <FadeIn delay={70}>
+                <NetCard net={net} onPress={monthlyComparisonQuery.data ? () => setDetail('aylar') : undefined} />
+              </FadeIn>
+              <KpiList
+                items={[
+                  {
+                    key: 'gelir',
+                    label: 'Gelir',
+                    value: formatMinorAmount(income),
+                    valueColor: incomeColor,
+                    icon: 'arrow-up',
+                    iconColor: incomeColor,
+                    caption: changeCaption(income, prev ? prev.incomeMinor : null),
+                  },
+                  {
+                    key: 'gider',
+                    label: 'Gider',
+                    value: expense > 0 ? `−${formatMinorAmount(expense)}` : formatMinorAmount(expense),
+                    valueColor: theme.colors.danger,
+                    icon: 'arrow-down',
+                    iconColor: theme.colors.danger,
+                    caption: changeCaption(expense, prev ? prev.expenseMinor : null),
+                  },
+                  {
+                    key: 'tasarruf',
+                    label: 'Tasarruf oranı',
+                    value: savingsRate === null ? '—' : `%${savingsRate}`,
+                    icon: 'pie-chart-outline',
+                    iconColor: theme.colors.textSecondary,
+                    caption:
+                      savingsRate === null
+                        ? 'Gelir kaydı olan dönemlerde hesaplanır.'
+                        : changeCaption(savingsRate, prevSavingsRate, 'puan'),
+                  },
+                ]}
+              />
               {monthlyComparisonQuery.data ? (
-                <ReportCard title="Son 6 ay">
-                  <MonthBars data={monthlyComparisonQuery.data} />
+                <ReportCard
+                  title="Son 6 ay"
+                  right={
+                    <ChartLegend
+                      items={[
+                        { label: 'Gider', color: expenseColor },
+                        { label: 'Gelir', color: incomeColor },
+                      ]}
+                    />
+                  }
+                  onMore={() => setDetail('aylar')}
+                  moreLabel="Aylık tabloyu aç"
+                >
+                  <MonthBars data={monthlyComparisonQuery.data} expenseColor={expenseColor} incomeColor={incomeColor} />
                 </ReportCard>
               ) : null}
-
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <DebtMiniCard
-                  payableMinor={payableTotalMinor}
-                  payableCount={payableObligations.length}
-                  receivableMinor={receivableTotalMinor}
-                  receivableCount={receivableObligations.length}
-                  onPress={() => jumpTo('borc')}
-                />
-                <RatesMiniCard
-                  rates={ratesWithData}
-                  ageText={newestRate ? `${formatCacheAge(newestRate)} güncellendi` : null}
-                  onPress={() => jumpTo('kurlar')}
-                />
-              </View>
             </>
           )}
-        </Anchor>
+        </View>
 
-        <Anchor id="kategoriler" onMeasure={measure}>
+        <View onLayout={(e) => onSectionLayout('kategoriler', e)}>
           <ReportCard
             title="Kategoriler"
             right={
-              <ScrollableTabs
-                tabs={[
-                  { key: 'expense', label: 'Gider' },
-                  { key: 'income', label: 'Gelir' },
-                ]}
-                activeKey={categoryDirection}
-                onChange={(k) => setCategoryDirection(k as CategoryDirection)}
-              />
+              <View style={{ width: 128 }}>
+                <SegmentedControl
+                  size="compact"
+                  options={[
+                    { key: 'expense', label: 'Gider' },
+                    { key: 'income', label: 'Gelir' },
+                  ]}
+                  value={categoryDirection}
+                  onChange={(k) => setCategoryDirection(k as CategoryDirection)}
+                  stretch
+                />
+              </View>
             }
+            onMore={categories.length > 0 ? () => setDetail('kategoriler') : undefined}
+            moreLabel="Tüm kategorileri aç"
           >
             <CategoryRows
-              bare
-              items={categoryQuery.data ?? []}
+              items={categories}
               previous={prevCategoryMap}
               emptyLabel="Bu dönemde kayıt yok."
               goodWhenDown={categoryDirection === 'expense'}
+              barColor={categoryDirection === 'expense' ? expenseColor : incomeColor}
+              limit={CATEGORY_PREVIEW}
             />
           </ReportCard>
-        </Anchor>
+        </View>
 
-        <Anchor id="kisiler" onMeasure={measure}>
-          <SectionTitle>Kişi ve firmalar</SectionTitle>
-          <CounterpartyRows items={counterpartyQuery.data ?? []} />
-        </Anchor>
+        <View onLayout={(e) => onSectionLayout('borc', e)}>
+          <ReportCard title="Borç ve alacak" onMore={() => router.push('/obligations')} moreLabel="Borç ve alacak listesini aç">
+            <DebtRows
+              payableMinor={payableTotalMinor}
+              payableCount={payableObligations.length}
+              receivableMinor={receivableTotalMinor}
+              receivableCount={receivableObligations.length}
+              overdueMinor={overdueMinor}
+              overdueCount={overdueItems.length}
+              onPress={(key) => router.push(key === 'overdue' ? '/obligations?status=overdue' : '/obligations')}
+            />
+          </ReportCard>
+        </View>
 
-        <Anchor id="borc" onMeasure={measure}>
-          <SectionTitle>Borç ve alacak</SectionTitle>
-          <KpiRow
-            items={[
-              {
-                label: 'Ödenecek',
-                value: formatMinorAmount(payableTotalMinor),
-                footer: (
-                  <Text variant="caption" color="textSecondary">
-                    {payableObligations.length} kayıt
+        <View onLayout={(e) => onSectionLayout('kurlar', e)}>
+          <ReportCard title="Güncel kurlar" onMore={() => setDetail('kurlar')} moreLabel="Tüm kurları aç">
+            <RateRows rates={ratesWithData} ageText={rateAgeText} limit={3} />
+          </ReportCard>
+        </View>
+
+        <View onLayout={(e) => onSectionLayout('diger', e)} style={{ marginTop: theme.spacing.xs }}>
+          <GroupedSection title="DİĞER RAPORLAR">
+            <GroupedRow
+              leading={<GroupedRowIcon name="people" />}
+              title="Kişi ve firmalar"
+              value={counterpartyCount > 0 ? `${counterpartyCount} kişi` : undefined}
+              onPress={() => setDetail('kisiler')}
+            />
+            <GroupedRow
+              leading={<GroupedRowIcon name="trending-up" tone="success" />}
+              title="Beklenen nakit akışı"
+              subtitle="Önümüzdeki 30 gün"
+              trailing={
+                cashFlowQuery.data ? (
+                  <Text tabular style={{ fontSize: 15, color: cashFlowNet >= 0 ? theme.colors.receivable : theme.colors.danger }}>
+                    {cashFlowNet >= 0 ? '+' : '−'}
+                    {formatMinorAmount(Math.abs(cashFlowNet)).replace(/,00(?=\D*$)/, '')}
                   </Text>
-                ),
-              },
-              {
-                label: 'Tahsil edilecek',
-                value: formatMinorAmount(receivableTotalMinor),
-                valueColor: theme.colors.receivable,
-                footer: (
-                  <Text variant="caption" color="textSecondary">
-                    {receivableObligations.length} kayıt
-                  </Text>
-                ),
-              },
-              {
-                label: 'Gecikmiş',
-                value: formatMinorAmount(overdueMinor),
-                valueColor: overdueMinor > 0 ? theme.colors.danger : undefined,
-                footer: (
-                  <Text variant="caption" color="textSecondary">
-                    {overdueItems.length} kayıt
-                  </Text>
-                ),
-              },
-            ]}
-          />
-          <OverdueObligationsList obligations={overdueItems} />
-        </Anchor>
-
-        <Anchor id="nakit" onMeasure={measure}>
-          <SectionTitle>Beklenen nakit akışı</SectionTitle>
-          <CashFlowRows buckets={cashFlowQuery.data ?? []} />
-        </Anchor>
-
-        <Anchor id="hesaplar" onMeasure={measure}>
-          <SectionTitle>Hesap bakiyeleri</SectionTitle>
-          <AccountRows items={accountBalancesQuery.data ?? []} />
-        </Anchor>
-
-        <Anchor id="kurlar" onMeasure={measure}>
-          <SectionTitle>Güncel kurlar</SectionTitle>
-          <RateRows rates={ratesWithData} ageText={newestRate ? `${formatCacheAge(newestRate)} güncellendi` : null} />
-        </Anchor>
+                ) : undefined
+              }
+              onPress={() => setDetail('nakit')}
+            />
+            <GroupedRow
+              leading={<GroupedRowIcon name="wallet" tone="violet" />}
+              title="Hesap bakiyeleri"
+              value={accountCount > 0 ? `${accountCount} hesap` : undefined}
+              onPress={() => setDetail('hesaplar')}
+            />
+          </GroupedSection>
+        </View>
       </ScrollView>
+
+      <BottomSheet visible={!!detail} onClose={() => setDetail(null)} title={detail ? DETAIL_TITLE[detail] : undefined}>
+        <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: theme.spacing.sm }}>
+          {detail === 'aylar' ? <MonthTable data={monthlyComparisonQuery.data ?? []} /> : null}
+          {detail === 'kategoriler' ? (
+            <>
+              <Text variant="caption" color="textSecondary" style={{ marginBottom: 6 }}>
+                {periodText} · {categoryDirection === 'expense' ? 'gider' : 'gelir'} kategorileri
+              </Text>
+              <CategoryRows
+                items={categories}
+                previous={prevCategoryMap}
+                emptyLabel="Bu dönemde kayıt yok."
+                goodWhenDown={categoryDirection === 'expense'}
+                barColor={categoryDirection === 'expense' ? expenseColor : incomeColor}
+                limit={categories.length}
+              />
+            </>
+          ) : null}
+          {detail === 'kisiler' ? (
+            <>
+              <Text variant="caption" color="textSecondary" style={{ marginBottom: 6 }}>
+                {periodText} · en çok hareket olanlar
+              </Text>
+              <CounterpartyRows items={counterpartyQuery.data ?? []} />
+            </>
+          ) : null}
+          {detail === 'nakit' ? <CashFlowRows buckets={cashFlowQuery.data ?? []} /> : null}
+          {detail === 'hesaplar' ? <AccountRows items={accountBalancesQuery.data ?? []} /> : null}
+          {detail === 'kurlar' ? <RateRows rates={ratesWithData} ageText={rateAgeText} /> : null}
+        </ScrollView>
+      </BottomSheet>
 
       <DateRangeSheet
         visible={rangeOpen}

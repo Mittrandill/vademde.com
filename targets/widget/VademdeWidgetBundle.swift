@@ -10,6 +10,7 @@ struct VademdeWidgetBundle: WidgetBundle {
         SummaryWidget()
         LockDaysWidget()
         LockNextWidget()
+        LockInlineWidget()
         LockNetWidget()
     }
 }

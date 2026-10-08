@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import {
+  ActionSheet,
   Card,
+  closeSwipeableRows,
   EmptyState,
   Group,
   ListEnd,
@@ -20,7 +22,9 @@ import {
   MonthYearSheet,
   Pressable,
   ScrollableTabs,
+  SwipeableRow,
   Text,
+  UndoToast,
 } from '@/components/primitives';
 import { AccountIcon } from '@/components/finance/AccountIcon';
 import {
@@ -33,7 +37,9 @@ import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
-import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
+import { deleteTransaction, listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
+import { invalidatePaymentRelatedQueries } from '@/services/queryKeys';
+import { showErrorAlert } from '@/utils/alerts';
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { queryKeys } from '@/services/queryKeys';
@@ -98,6 +104,9 @@ interface HareketRow {
   paidAccountType?: string | null;
   paidAccountCardLastFour?: string | null;
   paidAccountCurrencyCode?: string | null;
+  // Yalnızca kind === 'transaction': kaydırma/uzun basma eylemlerinde (Kopyala) ön dolum için.
+  accountId?: string | null;
+  counterpartyId?: string | null;
 }
 
 const TRANSACTION_DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -131,6 +140,46 @@ export default function HareketlerScreen() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [filters, setFilters] = useState<HareketFilters>(EMPTY_FILTERS);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  // Tuval HareketlerKaydir: sola kaydır → Düzenle / Sil, uzun bas → menü. Silme 4 sn "Geri al"
+  // bildirimiyle bekletilir; süre dolunca kayıt silinir, bu arada satır listeden gizlenir.
+  const queryClient = useQueryClient();
+  const [menuRow, setMenuRow] = useState<HareketRow | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<HareketRow | null>(null);
+  const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function commitDelete(row: HareketRow) {
+    deleteTransaction(row.id)
+      .then(() => {
+        if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      })
+      .catch((error) => showErrorAlert(error))
+      .finally(() => setPendingDelete((current) => (current?.id === row.id ? null : current)));
+  }
+
+  function requestDelete(row: HareketRow) {
+    if (deleteTimer.current && pendingDelete) {
+      clearTimeout(deleteTimer.current);
+      commitDelete(pendingDelete);
+    }
+    setPendingDelete(row);
+    deleteTimer.current = setTimeout(() => {
+      deleteTimer.current = null;
+      commitDelete(row);
+    }, 4000);
+  }
+
+  function undoDelete() {
+    if (deleteTimer.current) clearTimeout(deleteTimer.current);
+    deleteTimer.current = null;
+    setPendingDelete(null);
+  }
+
+  const rowActions: RowActions = {
+    hiddenId: pendingDelete?.id ?? null,
+    onEdit: (row) => router.push({ pathname: '/transactions/new', params: { id: row.id } }),
+    onDelete: requestDelete,
+    onLongPress: setMenuRow,
+  };
   const filter: FilterKey = filters.type;
   const setFilter = (type: FilterKey) => setFilters((f) => ({ ...f, type }));
   const [searchInput, setSearchInput] = useState('');
@@ -251,6 +300,8 @@ export default function HareketlerScreen() {
         transferToAccountName: t.transferToAccount?.name ?? null,
         transferToAccountType: t.transferToAccount?.type ?? null,
         transferToCurrencyCode: t.transferToAccount?.currency_code ?? null,
+        accountId: t.account_id,
+        counterpartyId: t.counterparty_id,
       }));
 
     const installmentItems = wantsObligations ? (installmentsQuery.data ?? []) : [];
@@ -593,7 +644,8 @@ export default function HareketlerScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
-        renderItem={({ item }) => <DayGroup date={item.date} rows={item.rows} />}
+        onScrollBeginDrag={closeSwipeableRows}
+        renderItem={({ item }) => <DayGroup date={item.date} rows={item.rows} actions={rowActions} />}
         ListEmptyComponent={
           isInitialLoading ? (
             <ListSkeleton rows={5} />
@@ -644,6 +696,65 @@ export default function HareketlerScreen() {
         month={month.month}
         onChange={setMonth}
       />
+
+      <ActionSheet
+        visible={!!menuRow}
+        title={menuRow?.title ?? ''}
+        onClose={() => setMenuRow(null)}
+        options={
+          menuRow
+            ? [
+                {
+                  key: 'edit',
+                  label: 'Düzenle',
+                  icon: 'create-outline',
+                  onPress: () => rowActions.onEdit(menuRow),
+                },
+                ...(menuRow.direction === 'transfer'
+                  ? []
+                  : [
+                      {
+                        key: 'copy',
+                        label: 'Kopyala',
+                        description: 'Aynı hesap, yön ve açıklamayla yeni hareket',
+                        icon: 'copy-outline' as const,
+                        onPress: () =>
+                          router.push({
+                            pathname: '/transactions/new',
+                            params: {
+                              direction: menuRow.direction,
+                              ...(menuRow.accountId ? { accountId: menuRow.accountId } : {}),
+                              ...(menuRow.counterpartyId ? { counterpartyId: menuRow.counterpartyId } : {}),
+                              description: menuRow.title,
+                            },
+                          }),
+                      },
+                      {
+                        key: 'receipt',
+                        label: 'Fiş ekle',
+                        description: 'Hareketi açıp dekont/fiş ekleyin',
+                        icon: 'attach-outline' as const,
+                        onPress: () => rowActions.onEdit(menuRow),
+                      },
+                    ]),
+                {
+                  key: 'delete',
+                  label: 'Sil',
+                  icon: 'trash-outline',
+                  danger: true,
+                  onPress: () => rowActions.onDelete(menuRow),
+                },
+              ]
+            : []
+        }
+      />
+
+      <UndoToast
+        visible={!!pendingDelete}
+        message="Hareket silindi"
+        onUndo={undoDelete}
+        bottom={theme.layout.tabBarClearance - 8}
+      />
     </SafeAreaView>
   );
 }
@@ -665,7 +776,15 @@ function headerButtonStyle(backgroundColor: string) {
 }
 
 // Tuval Hareketler: gün başlığı büyük harf küçük etiket (.ov), altında o günün satırları tek gruplu yüzeyde.
-function DayGroup({ date, rows }: { date: string; rows: { key: string; row: HareketRow }[] }) {
+interface RowActions {
+  /** Silinmek üzere bekleyen (geri alınabilir) satır; listede gizlenir. */
+  hiddenId: string | null;
+  onEdit: (row: HareketRow) => void;
+  onDelete: (row: HareketRow) => void;
+  onLongPress: (row: HareketRow) => void;
+}
+
+function DayGroup({ date, rows, actions }: { date: string; rows: { key: string; row: HareketRow }[]; actions: RowActions }) {
   const theme = useTheme();
   const d = new Date(date);
   const today = new Date();
@@ -675,6 +794,8 @@ function DayGroup({ date, rows }: { date: string; rows: { key: string; row: Hare
       86_400_000
   );
   const label = diff === 0 ? 'Bugün' : diff === 1 ? 'Dün' : dayFormatter.format(d);
+  const visible = rows.filter(({ row }) => row.id !== actions.hiddenId);
+  if (visible.length === 0) return null;
 
   return (
     <View style={{ marginTop: theme.spacing.lg }}>
@@ -682,15 +803,41 @@ function DayGroup({ date, rows }: { date: string; rows: { key: string; row: Hare
         {label}
       </Text>
       <Group inset={62}>
-        {rows.map(({ key, row }) => (
-          <HareketRowView key={key} item={row} />
+        {visible.map(({ key, row }) => (
+          <SwipeableRow
+            key={key}
+            rightActions={
+              row.kind === 'transaction'
+                ? [
+                    {
+                      key: 'edit',
+                      label: 'Düzenle',
+                      icon: 'create-outline',
+                      backgroundColor: theme.colors.mutedControl,
+                      color: '#FFFFFF',
+                      onPress: () => actions.onEdit(row),
+                    },
+                    {
+                      key: 'delete',
+                      label: 'Sil',
+                      icon: 'trash-outline',
+                      backgroundColor: theme.colors.danger,
+                      color: '#FFFFFF',
+                      onPress: () => actions.onDelete(row),
+                    },
+                  ]
+                : []
+            }
+          >
+            <HareketRowView item={row} onLongPress={row.kind === 'transaction' ? () => actions.onLongPress(row) : undefined} />
+          </SwipeableRow>
         ))}
       </Group>
     </View>
   );
 }
 
-function HareketRowView({ item }: { item: HareketRow }) {
+function HareketRowView({ item, onLongPress }: { item: HareketRow; onLongPress?: () => void }) {
   const theme = useTheme();
   const sign = rowSign(item);
   const prefix = sign > 0 ? '+' : sign < 0 ? '−' : '';
@@ -709,7 +856,9 @@ function HareketRowView({ item }: { item: HareketRow }) {
       onPress={() =>
         item.kind === 'obligation' ? router.push(`/obligations/${item.id}`) : router.push(`/transactions/${item.id}`)
       }
-      style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      style={{ backgroundColor: theme.colors.surfacePrimary, minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
     >
       {item.kind === 'obligation' ? (
         <ObligationIcon

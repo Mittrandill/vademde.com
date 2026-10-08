@@ -10,8 +10,6 @@ import {
   Card,
   EmptyState,
   Group,
-  GroupedRow,
-  GroupedRowIcon,
   Pagination,
   Pressable,
   Row,
@@ -28,8 +26,7 @@ import {
 import { ReceiptRow } from '@/components/finance/ReceiptRow';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
-import { DueBreakdown } from '@/components/finance/DueBreakdown';
-import { StatusBadge } from '@/components/finance/StatusBadge';
+import { OBLIGATION_STATUS_LABEL, StatusBadge, type ObligationStatus } from '@/components/finance/StatusBadge';
 import {
   deleteCounterparty,
   getCounterparty,
@@ -40,7 +37,6 @@ import {
 } from '@/features/counterparties/api';
 import {
   listObligations,
-  getDueBreakdown,
   ACTIVE_OBLIGATION_STATUSES,
   type ObligationWithRelations,
 } from '@/features/obligations/api';
@@ -48,7 +44,7 @@ import { listReceiptArchive, useDocumentArchiveAccess } from '@/features/receipt
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
-import { groupByDay } from '@/utils/groupByDay';
+import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { showSuccessAlert } from '@/utils/alerts';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 
@@ -158,21 +154,6 @@ export default function CounterpartyDetailScreen() {
   const counterparty = counterpartyQuery.data;
   const ledger = ledgerQuery.data;
 
-  // docs/01-finansal-kayit-modeli.md §3.2.1 — personel maaşı/kira gibi tekrarlayan
-  // kayıtlarda cari bakiyesi tüm gelecek vadeleri içerir. Kullanıcının "4 aylık maaşın
-  // tamamını bugünün borcu olarak görmek normal mi?" sorusunun cevabı: rakam doğru ama tek
-  // başına eksik — bu kırılım hangi kısmın gecikmiş, hangisinin bu ay ödeneceğini ayırır.
-  const dueBreakdownQuery = useQuery({
-    queryKey:
-      activeWorkspaceId && id
-        ? queryKeys.dueBreakdown(activeWorkspaceId, `counterparty:${id}`)
-        : ['due-breakdown', 'disabled'],
-    queryFn: () =>
-      getDueBreakdown({ workspaceId: activeWorkspaceId as string, counterpartyId: id as string }),
-    enabled: !!activeWorkspaceId && !!id,
-  });
-  const breakdown = dueBreakdownQuery.data;
-
   if (!counterparty) {
     return (
       <DetailScaffold
@@ -186,7 +167,10 @@ export default function CounterpartyDetailScreen() {
     );
   }
 
-  const allOpenObligations = openObligationsQuery.data ?? [];
+  // Tüm listeler en yeni tarih üstte (vade; vadesi olmayanlarda oluşturma tarihi).
+  const allOpenObligations = [...(openObligationsQuery.data ?? [])].sort((a, b) =>
+    (b.due_date ?? b.created_at).localeCompare(a.due_date ?? a.created_at)
+  );
   const obligationsTotalPages = Math.max(1, Math.ceil(allOpenObligations.length / TAB_PAGE_SIZE));
   const effectiveObligationsPage = Math.min(obligationsPage, obligationsTotalPages - 1);
   const openObligations = allOpenObligations.slice(
@@ -201,7 +185,6 @@ export default function CounterpartyDetailScreen() {
     effectiveTransactionsPage * STATEMENT_PAGE_SIZE,
     effectiveTransactionsPage * STATEMENT_PAGE_SIZE + STATEMENT_PAGE_SIZE
   );
-  const transactionSections = groupByDay(pagedEntries, (item) => item.date);
 
   // Cari bakiye işaretlidir: pozitif = bu cari size borçlu, negatif = siz borçlusunuz.
   const netMinor = ledger?.netMinor ?? 0;
@@ -377,24 +360,6 @@ export default function CounterpartyDetailScreen() {
         />
       </View>
 
-      {breakdown && breakdown.payable.remainingTotalMinor > 0 ? (
-        <Stack gap="sm">
-          <Text variant="label" color="textSecondary">
-            ÖDENECEKLER
-          </Text>
-          <DueBreakdown data={breakdown.payable} direction="payable" />
-        </Stack>
-      ) : null}
-
-      {breakdown && breakdown.receivable.remainingTotalMinor > 0 ? (
-        <Stack gap="sm">
-          <Text variant="label" color="textSecondary">
-            TAHSİL EDİLECEKLER
-          </Text>
-          <DueBreakdown data={breakdown.receivable} direction="receivable" />
-        </Stack>
-      ) : null}
-
       {instrumentNote ? (
         <Text variant="caption" color="textSecondary">
           {instrumentNote}
@@ -462,21 +427,10 @@ export default function CounterpartyDetailScreen() {
         </Stack>
       ) : (
         <Stack gap="md">
-          {statementQuery.isPending ? null : transactionSections.length === 0 ? (
+          {statementQuery.isPending ? null : pagedEntries.length === 0 ? (
             <EmptyState icon="receipt-outline" message="Bu cariyle henüz hareket yok." />
           ) : (
-            <Stack gap="md">
-              {transactionSections.map((section) => (
-                <Stack gap="xs" key={section.title}>
-                  <SectionHeader title={section.title} />
-                  <Group>
-                    {section.data.map((item) => (
-                      <StatementRow key={item.key} entry={item} />
-                    ))}
-                  </Group>
-                </Stack>
-              ))}
-            </Stack>
+            <StatementTable entries={pagedEntries} />
           )}
           {transactionsTotalPages > 1 ? (
             <Pagination page={effectiveTransactionsPage} totalPages={transactionsTotalPages} onChange={setTransactionsPage} />
@@ -594,11 +548,62 @@ function QuickAction({
   );
 }
 
+// Cari listelerinin ortak satırı (Ana Sayfa'daki Yaklaşan vadeler satırının ikonlu hâli): solda
+// belge/ödeme ikonu, ortada başlık ve tarihli alt satır, sağda tutar ve altında bakiye/durum.
+function LedgerRow({
+  leading,
+  title,
+  caption,
+  amount,
+  amountColor,
+  footer,
+  onPress,
+}: {
+  leading: React.ReactNode;
+  title: string;
+  caption: string;
+  amount: string;
+  amountColor: string;
+  footer?: React.ReactNode;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      disabled={!onPress}
+      style={{ minHeight: 60, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+    >
+      {leading}
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text numberOfLines={1} style={{ fontWeight: '500' }}>
+          {title}
+        </Text>
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          {caption}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+        <Text tabular style={{ fontSize: 15, fontWeight: '600', color: amountColor }}>
+          {amount}
+        </Text>
+        {footer}
+      </View>
+    </Pressable>
+  );
+}
+
 function OpenObligationRow({ obligation }: { obligation: ObligationWithRelations }) {
   const theme = useTheme();
   const overdue = obligation.status === 'gecikti';
+  const caption = [
+    obligation.due_date ? `Vade ${dateFormatter.format(new Date(obligation.due_date))}` : 'Vade yok',
+    DOCUMENT_TYPE_LABEL[obligation.document_type] ?? null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
-    <GroupedRow
+    <LedgerRow
       leading={
         <ObligationIcon
           documentType={obligation.document_type}
@@ -609,31 +614,109 @@ function OpenObligationRow({ obligation }: { obligation: ObligationWithRelations
         />
       }
       title={obligation.title}
-      subtitle={obligation.due_date ? shortDateFormatter.format(new Date(obligation.due_date)) : 'Vade yok'}
-      chevron={false}
-      trailing={
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Text tabular style={{ fontSize: 15, fontWeight: '600', color: overdue ? theme.colors.danger : theme.colors.textPrimary }}>
-            {formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)}
-          </Text>
-          <StatusBadge status={obligation.status} />
-        </View>
-      }
+      caption={caption}
+      amount={formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)}
+      amountColor={overdue ? theme.colors.danger : obligation.direction === 'receivable' ? theme.colors.success : theme.colors.textPrimary}
+      footer={<StatusBadge status={obligation.status} />}
       onPress={() => router.push(`/obligations/${obligation.id}`)}
     />
   );
 }
 
-// Cari ekstresi satırı. Fatura/borç kaydı kendi belge ikonuyla, ödeme/tahsilat ok ikonuyla,
-// kayda bağlı olmayan hareket nötr ikonla gösterilir. Tutarın işareti cari bakiyesine etkisidir;
-// altındaki "Bakiye" satırı o satırdan sonraki cari durumudur (tek para birimli ekstrede).
-function StatementRow({ entry }: { entry: StatementEntry }) {
+const INSTRUMENT_TYPES = new Set(['cek', 'senet']);
+
+// Tuval KisiHareketler: İşlem | Tutar | Bakiye sütunları, aylara gruplu (ay başlığında işlem sayısı ve
+// ay sonundaki cari bakiyesi). Ödeme/tahsilat tutarı yeşil; bakiye o satırdan sonraki cari durumudur
+// (tek para birimli ekstrede). Çek/senedin vadedeki ödemesi ayrı satır olmaz, durumu çekin satırında yazar.
+const TABLE_COLUMNS = { amount: 84, balance: 92 };
+const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+
+const wholeAmount = (minor: number, currency: string) =>
+  formatMinorAmount(minor, currency).replace(/,00(?=\D*$)/, '');
+
+const signed = (minor: number, currency: string) => `${minor < 0 ? '−' : ''}${wholeAmount(Math.abs(minor), currency)}`;
+
+function StatementTable({ entries }: { entries: StatementEntry[] }) {
   const theme = useTheme();
-  const effect = entry.balanceEffectMinor;
-  const amountColor =
-    effect > 0 ? theme.colors.success : effect < 0 ? theme.colors.textPrimary : theme.colors.textSecondary;
-  const sign = effect > 0 ? '+' : effect < 0 ? '−' : '';
-  const running = entry.runningBalanceMinor;
+  // Girdiler en yeniden eskiye sıralı; ay grupları aynı sırayı korur.
+  const months: { key: string; label: string; items: StatementEntry[] }[] = [];
+  for (const entry of entries) {
+    const date = new Date(entry.date);
+    const key = `${date.getFullYear()}-${date.getMonth()}`;
+    let group = months[months.length - 1];
+    if (!group || group.key !== key) {
+      group = { key, label: monthFormatter.format(date).toLocaleUpperCase('tr-TR'), items: [] };
+      months.push(group);
+    }
+    group.items.push(entry);
+  }
+
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: theme.spacing.md, paddingBottom: 6 }}>
+        <Text variant="caption" color="textSecondary" style={{ flex: 1, fontWeight: '600' }}>
+          İşlem
+        </Text>
+        <Text variant="caption" color="textSecondary" style={{ width: TABLE_COLUMNS.amount, textAlign: 'right', fontWeight: '600' }}>
+          Tutar
+        </Text>
+        <Text variant="caption" color="textSecondary" style={{ width: TABLE_COLUMNS.balance, textAlign: 'right', fontWeight: '600' }}>
+          Bakiye
+        </Text>
+      </View>
+      <View style={{ borderRadius: theme.radius.group, overflow: 'hidden', backgroundColor: theme.colors.surfacePrimary }}>
+        {months.map((month) => {
+          // Ay sonundaki bakiye: ayın en yeni satırından sonraki cari durumu.
+          const closing = month.items[0];
+          return (
+            <View key={month.key}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: theme.spacing.md,
+                  paddingVertical: 8,
+                  backgroundColor: theme.colors.backgroundPrimary,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.colors.separator,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary }}>
+                  {month.label} · {month.items.length} işlem
+                </Text>
+                {closing.runningBalanceMinor !== null ? (
+                  <Text tabular style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary }}>
+                    {signed(closing.runningBalanceMinor, closing.currencyCode)}
+                  </Text>
+                ) : null}
+              </View>
+              {month.items.map((entry, index) => (
+                <StatementTableRow key={entry.key} entry={entry} last={index === month.items.length - 1} />
+              ))}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const DONE_STATUSES = new Set(['odendi', 'tahsil_edildi']);
+
+function StatementTableRow({ entry, last }: { entry: StatementEntry; last: boolean }) {
+  const theme = useTheme();
+  const isInstrument = entry.kind === 'document' && !!entry.documentType && INSTRUMENT_TYPES.has(entry.documentType);
+  // Ödeme/tahsilat ve cari lehine işleyen satırlar yeşil (tuval .cok).
+  const amountColor = entry.kind === 'payment' ? theme.colors.success : theme.colors.textPrimary;
+
+  const caption = [
+    shortDateFormatter.format(new Date(entry.date)),
+    isInstrument && entry.dueDate ? `vade ${shortDateFormatter.format(new Date(entry.dueDate))}` : entry.subtitle,
+    isInstrument && entry.status ? (DONE_STATUSES.has(entry.status) ? OBLIGATION_STATUS_LABEL[entry.status as ObligationStatus] : 'Bekliyor') : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   function open() {
     if (entry.obligationId) router.push(`/obligations/${entry.obligationId}`);
@@ -641,39 +724,34 @@ function StatementRow({ entry }: { entry: StatementEntry }) {
   }
 
   return (
-    <GroupedRow
-      leading={
-        entry.kind === 'document' && entry.documentType ? (
-          <ObligationIcon documentType={entry.documentType} fallbackName={entry.title} size={34} />
-        ) : (
-          <GroupedRowIcon
-            name={entry.kind === 'payment' ? (entry.direction === 'receivable' ? 'arrow-down' : 'arrow-up') : 'swap-vertical'}
-            tone={entry.kind === 'payment' ? 'success' : 'default'}
-          />
-        )
-      }
-      title={entry.title}
-      subtitle={entry.subtitle || undefined}
-      chevron={false}
-      trailing={
-        <View style={{ alignItems: 'flex-end', gap: 2 }}>
-          <Text tabular style={{ fontSize: 15, fontWeight: '600', color: amountColor }}>
-            {sign}
-            {formatMinorAmount(entry.amountMinor, entry.currencyCode)}
-          </Text>
-          {running !== null ? (
-            <Text variant="caption" color="textSecondary" tabular>
-              Bakiye {running < 0 ? '−' : ''}
-              {formatMinorAmount(Math.abs(running), entry.currencyCode)}
-            </Text>
-          ) : entry.balanceEffectMinor === 0 ? (
-            <Text variant="caption" color="textSecondary">
-              bakiyeyi etkilemez
-            </Text>
-          ) : null}
-        </View>
-      }
+    <Pressable
+      accessibilityRole="button"
       onPress={open}
-    />
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        minHeight: 58,
+        paddingVertical: 8,
+        paddingHorizontal: theme.spacing.md,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: theme.colors.separator,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: '500' }}>
+          {entry.title}
+        </Text>
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          {caption}
+        </Text>
+      </View>
+      <Text tabular numberOfLines={1} style={{ width: TABLE_COLUMNS.amount, textAlign: 'right', fontSize: 15, color: amountColor }}>
+        {wholeAmount(entry.amountMinor, entry.currencyCode)}
+      </Text>
+      <Text tabular numberOfLines={1} style={{ width: TABLE_COLUMNS.balance, textAlign: 'right', fontSize: 15, fontWeight: '600' }}>
+        {entry.runningBalanceMinor !== null ? signed(entry.runningBalanceMinor, entry.currencyCode) : '—'}
+      </Text>
+    </Pressable>
   );
 }
