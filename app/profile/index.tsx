@@ -14,6 +14,7 @@ import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
 import {
   Button,
+  FieldGroup,
   GroupedRow,
   GroupedRowIcon,
   GroupedSection,
@@ -21,6 +22,7 @@ import {
   Pressable,
   Row,
   Stack,
+  Tag,
   Text,
   TextField,
 } from '@/components/primitives';
@@ -78,8 +80,8 @@ export default function ProfileScreen() {
   const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
   const planCode = subscriptionQuery.data?.plan ?? 'free';
   const planLabel =
-    ({ free: 'ÜCRETSİZ PLAN', plus: 'PLUS PLAN', isletme: 'İŞLETME PLANI' } as Record<string, string>)[planCode] ??
-    planCode.toUpperCase();
+    ({ free: 'Ücretsiz plan', plus: 'Plus plan', isletme: 'İşletme planı' } as Record<string, string>)[planCode] ??
+    planCode;
 
   useEffect(() => {
     if (profileQuery.data) {
@@ -196,7 +198,17 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
-        <ScreenHeader title="Profil" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
+        <ScreenHeader
+          inline
+          title="Profil"
+          left={{ icon: 'close', accessibilityLabel: 'Geri', onPress: () => router.back() }}
+          rightLabel={{
+            label: 'Kaydet',
+            bold: true,
+            disabled: !nameChanged || updateNameMutation.isPending,
+            onPress: () => updateNameMutation.mutate(),
+          }}
+        />
       </View>
 
       <ScrollView
@@ -211,19 +223,19 @@ export default function ProfileScreen() {
           <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending} accessibilityLabel="Fotoğraf değiştir">
             <View
               style={{
-                width: 84,
-                height: 84,
+                width: 88,
+                height: 88,
                 borderRadius: theme.radius.pill,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: theme.colors.textPrimary,
+                backgroundColor: theme.colors.brandPrimary,
                 overflow: 'hidden',
               }}
             >
               {profileQuery.data?.avatar_url ? (
-                <Image source={{ uri: profileQuery.data.avatar_url }} style={{ width: 84, height: 84 }} />
+                <Image source={{ uri: profileQuery.data.avatar_url }} style={{ width: 88, height: 88 }} />
               ) : (
-                <Text variant="pageTitle" style={{ color: theme.colors.backgroundPrimary }}>
+                <Text style={{ fontSize: 30, lineHeight: 36, fontWeight: '600', color: theme.colors.onAction }}>
                   {initialsFrom(displayName, email)}
                 </Text>
               )}
@@ -231,8 +243,8 @@ export default function ProfileScreen() {
                 <View
                   style={{
                     position: 'absolute',
-                    width: 84,
-                    height: 84,
+                    width: 88,
+                    height: 88,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: withAlpha('#000000', 0.4),
@@ -260,35 +272,25 @@ export default function ProfileScreen() {
               <Ionicons name="pencil" size={15} color={theme.colors.textPrimary} />
             </View>
           </Pressable>
-          <Text variant="sectionTitle" numberOfLines={1}>
-            {displayName || 'Profilini tamamla'}
-          </Text>
-          <Text variant="label" mono color="textSecondary">
-            {planLabel}
-          </Text>
+          <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={{ fontSize: 15, fontWeight: '500', color: theme.colors.textSecondary }}>
+              {profileQuery.data?.avatar_url ? 'Fotoğrafı değiştir' : 'Fotoğraf ekle'}
+            </Text>
+          </Pressable>
+          <View style={{ alignItems: 'center' }}>
+            <Tag label={planLabel} tone={planCode === 'free' ? 'neutral' : 'brand'} />
+          </View>
         </Stack>
 
-        <Stack gap="sm">
-          <TextField label="AD SOYAD" placeholder="Adın ve soyadın" value={fullName} onChangeText={setFullName} />
-          <TextField label="E-POSTA" value={email ?? ''} editable={false} />
+        <Stack gap="xs">
+          <FieldGroup>
+            <TextField label="Ad soyad" placeholder="Adın ve soyadın" value={fullName} onChangeText={setFullName} />
+            <TextField label="E-posta" value={email ?? ''} editable={false} />
+          </FieldGroup>
           {updateNameMutation.error ? (
             <Text variant="caption" color="danger">
               {updateNameMutation.error instanceof Error ? updateNameMutation.error.message : 'Kaydedilemedi'}
             </Text>
-          ) : null}
-          {nameChanged ? (
-            <Row gap="sm">
-              <View style={{ flex: 1 }}>
-                <Button label="Kaydet" onPress={() => updateNameMutation.mutate()} loading={updateNameMutation.isPending} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Button
-                  label="Vazgeç"
-                  variant="secondary"
-                  onPress={() => setFullName(profileQuery.data?.full_name ?? '')}
-                />
-              </View>
-            </Row>
           ) : null}
         </Stack>
 
@@ -302,7 +304,7 @@ export default function ProfileScreen() {
         {isChangingPassword ? (
           <Stack gap="sm">
             <TextField
-              label="YENİ ŞİFRE"
+              label="Yeni şifre"
               secureTextEntry={!passwordVisible}
               value={newPassword}
               onChangeText={setNewPassword}
@@ -311,7 +313,7 @@ export default function ProfileScreen() {
               autoFocus
             />
             <TextField
-              label="YENİ ŞİFRE (TEKRAR)"
+              label="Yeni şifre (tekrar)"
               secureTextEntry={!passwordVisible}
               value={confirmPassword}
               onChangeText={setConfirmPassword}

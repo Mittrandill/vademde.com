@@ -8,7 +8,7 @@ import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Pressable, Row, SegmentedControl, Stack, Text } from '@/components/primitives';
+import { Button, Pressable, Row, SegmentedControl, Stack, Tag, Text } from '@/components/primitives';
 import {
   currentPeriodMonth,
   getAllPlanLimits,
@@ -209,9 +209,20 @@ export default function PaywallScreen() {
           paddingBottom: theme.spacing.xs,
         }}
       >
-        <Text variant="label" mono style={{ color: theme.colors.payable }}>
-          VADEMDE PREMIUM
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Satın alımları geri yükle"
+          onPress={handleRestore}
+          disabled={isRestoring}
+          hitSlop={8}
+          style={{ minHeight: 44, justifyContent: 'center' }}
+        >
+          {isRestoring ? (
+            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+          ) : (
+            <Text style={{ fontSize: 17, fontWeight: '500', color: theme.colors.textSecondary }}>Geri yükle</Text>
+          )}
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Kapat"
@@ -219,10 +230,8 @@ export default function PaywallScreen() {
           style={{
             width: 44,
             height: 44,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            backgroundColor: theme.colors.surfacePrimary,
+            borderRadius: 22,
+            backgroundColor: theme.colors.fill,
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -259,7 +268,7 @@ export default function PaywallScreen() {
             }}
           >
             <Stack gap="xs">
-              <Text variant="pageTitle">Tarayan hiç yazmaz.</Text>
+              <Text variant="pageTitle">İşinize uygun planı seçin</Text>
               <Text variant="body" color="textSecondary">
                 {PLAN_STATUS_LABELS[currentPlan] ?? PLAN_STATUS_LABELS.free}
                 {ocrUsageQuery.data
@@ -293,11 +302,11 @@ export default function PaywallScreen() {
                 >
                   <View
                     style={{
-                      padding: 18,
-                      borderRadius: 22,
+                      padding: 16,
+                      borderRadius: theme.radius.group,
                       backgroundColor: theme.colors.surfacePrimary,
                       borderWidth: 2,
-                      borderColor: selected ? theme.colors.textPrimary : 'transparent',
+                      borderColor: selected ? theme.colors.brandPrimary : 'transparent',
                       gap: theme.spacing.xxs,
                     }}
                   >
@@ -306,18 +315,9 @@ export default function PaywallScreen() {
                         <Row gap="xs" align="center">
                           <Text variant="sectionTitle">{PLAN_SHORT_LABELS[plan] ?? plan}</Text>
                           {planTrialDays ? (
-                            <View
-                              style={{
-                                backgroundColor: theme.colors.action,
-                                borderRadius: 5,
-                                paddingHorizontal: 6,
-                                paddingVertical: 2,
-                              }}
-                            >
-                              <Text variant="caption" mono style={{ color: theme.colors.brandPrimaryText }}>
-                                {planTrialDays} GÜN ÜCRETSİZ
-                              </Text>
-                            </View>
+                            <Tag label={`${planTrialDays} gün ücretsiz`} tone="brand" />
+                          ) : plan === 'plus' ? (
+                            <Tag label="Önerilen" tone="brand" />
                           ) : null}
                         </Row>
                         <Text variant="caption" color="textSecondary">
@@ -325,7 +325,7 @@ export default function PaywallScreen() {
                         </Text>
                       </Stack>
                       <Row gap="sm" align="center">
-                        <Text variant="cardTitle" mono tabular>
+                        <Text variant="cardTitle" tabular>
                           {pkg ? `${pkg.product.priceString}${billingPeriod === 'yearly' ? '/yıl' : '/ay'}` : '—'}
                         </Text>
                         <View
@@ -333,10 +333,15 @@ export default function PaywallScreen() {
                             width: 24,
                             height: 24,
                             borderRadius: 12,
-                            borderWidth: selected ? 7 : 1.5,
-                            borderColor: selected ? theme.colors.textPrimary : theme.colors.mutedControl,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: selected ? 0 : 1.5,
+                            borderColor: theme.colors.mutedControl,
+                            backgroundColor: selected ? theme.colors.brandPrimary : 'transparent',
                           }}
-                        />
+                        >
+                          {selected ? <Ionicons name="checkmark" size={15} color={theme.colors.onAction} /> : null}
+                        </View>
                       </Row>
                     </Row>
                     {selected && billingPeriod === 'yearly' && pkg ? (
@@ -355,7 +360,7 @@ export default function PaywallScreen() {
               </Text>
               <View
                 style={{
-                  borderRadius: theme.radius.widget,
+                  borderRadius: theme.radius.group,
                   backgroundColor: theme.colors.surfacePrimary,
                   padding: theme.spacing.md,
                 }}
@@ -369,7 +374,7 @@ export default function PaywallScreen() {
             gap="xs"
             style={{
               borderTopWidth: 1,
-              borderTopColor: theme.colors.border,
+              borderTopColor: theme.colors.separator,
               paddingHorizontal: theme.screenEdge.standard,
               paddingTop: theme.spacing.sm,
               paddingBottom: theme.spacing.xs,
@@ -399,21 +404,6 @@ export default function PaywallScreen() {
             {/* App Store Review Guideline 3.1.2 — otomatik yenilenen abonelik satan ekranda
                 Gizlilik Politikası ve Kullanım Koşulları'na işlevsel bağlantı zorunludur. */}
             <Row gap="md" style={{ justifyContent: 'center' }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Satın alımları geri yükle"
-                onPress={handleRestore}
-                disabled={isRestoring}
-                hitSlop={8}
-              >
-                {isRestoring ? (
-                  <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-                ) : (
-                  <Text variant="caption" color="textPrimary" style={{ fontWeight: '600' }}>
-                    Geri yükle
-                  </Text>
-                )}
-              </Pressable>
               <Pressable onPress={() => router.push('/legal/terms-of-service')} hitSlop={8}>
                 <Text variant="caption" style={{ textDecorationLine: 'underline' }} color="textSecondary">
                   Kullanım Koşulları
@@ -442,16 +432,14 @@ function ComparisonTable({ planLimits, selectedPlan }: { planLimits: PlanLimits[
       <Row
         align="center"
         gap="xs"
-        style={{ paddingBottom: theme.spacing.xs, borderBottomWidth: 1.5, borderBottomColor: theme.colors.textPrimary }}
+        style={{ paddingBottom: theme.spacing.xs, borderBottomWidth: 1, borderBottomColor: theme.colors.separator }}
       >
         <View style={{ flex: TABLE_LABEL_WIDTH_FLEX }} />
         {columns.map((plan) => (
           <View key={plan} style={{ flex: TABLE_COLUMN_FLEX, alignItems: 'center' }}>
             <Text
-              variant="label"
-              mono
               numberOfLines={1}
-              style={{ color: plan === selectedPlan ? theme.colors.textPrimary : theme.colors.textSecondary }}
+              style={{ fontSize: 13, fontWeight: '600', color: plan === selectedPlan ? theme.colors.textPrimary : theme.colors.textSecondary }}
             >
               {PLAN_SHORT_LABELS[plan]}
             </Text>
@@ -466,7 +454,7 @@ function ComparisonTable({ planLimits, selectedPlan }: { planLimits: PlanLimits[
           style={{
             paddingVertical: 11,
             borderBottomWidth: index < COMPARISON_ROWS.length - 1 ? 1 : 0,
-            borderBottomColor: theme.colors.border,
+            borderBottomColor: theme.colors.separator,
           }}
         >
           <Text variant="caption" style={{ flex: TABLE_LABEL_WIDTH_FLEX }}>
@@ -479,7 +467,6 @@ function ComparisonTable({ planLimits, selectedPlan }: { planLimits: PlanLimits[
               <View key={limits.plan} style={{ flex: TABLE_COLUMN_FLEX, alignItems: 'center' }}>
                 <Text
                   variant="caption"
-                  mono
                   tabular
                   style={{
                     fontWeight: selected ? '600' : '500',
