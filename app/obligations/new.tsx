@@ -9,7 +9,7 @@ import { useTheme } from '@/theme';
 import { useExitGuard } from '@/utils/useExitGuard';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { AmountField, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, Button, Card, DateField, FieldGroup, FormRow, Group, Pagination, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -235,6 +235,10 @@ function ObligationForm({
   // (bkz. app/documents/[id]/review.tsx) — elle giriş yolunda eksikti.
   const [paidOverrides, setPaidOverrides] = useState<Record<number, boolean>>({});
   const [depositAccountId, setDepositAccountId] = useState<string | null>(null);
+  // 2. adım (taksit planı) yalnızca yeni kayıtta ve taksit sayısı 1'den fazlaysa açılır.
+  const [step, setStep] = useState<1 | 2>(1);
+  const [planPage, setPlanPage] = useState(0);
+  const [editingPlan, setEditingPlan] = useState(false);
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
 
@@ -475,7 +479,41 @@ function ObligationForm({
       : buildAmortizedInstallments(totalAmountMinor, installmentCount, dueDate, interestRatePercent);
   }
 
-  const installmentPreview = isEditing ? [] : buildPlan();
+  // Önizleme satırları kaydetmeden önce elle düzenlenebilir (vade tarihi / tutar), OCR onay
+  // ekranındaki gibi. Düzenlemeler yalnızca üretildikleri planın imzasına bağlıdır: taksit
+  // sayısı/tutar/başlangıç/faiz değişince plan yeniden üretilir ve düzenlemeler sıfırlanır.
+  const basePlan = isEditing ? [] : buildPlan();
+  const planSignature = basePlan.map((i) => `${i.dueDate}:${i.amountMinor}`).join('|');
+  const [planEditState, setPlanEditState] = useState<{
+    signature: string;
+    edits: Record<number, { dueDate?: string; amountStr?: string }>;
+  }>({ signature: '', edits: {} });
+  const planEdits = planEditState.signature === planSignature ? planEditState.edits : {};
+
+  function editPlanItem(installmentNumber: number, patch: { dueDate?: string; amountStr?: string }) {
+    setPlanEditState({
+      signature: planSignature,
+      edits: { ...planEdits, [installmentNumber]: { ...planEdits[installmentNumber], ...patch } },
+    });
+  }
+
+  function buildEffectivePlan(): InstallmentPlanItem[] {
+    return basePlan.map((item) => {
+      const edit = planEdits[item.installmentNumber];
+      if (!edit) return item;
+      const amountMinor =
+        edit.amountStr !== undefined
+          ? (parseValueUnitAmountToMinor(edit.amountStr, valueUnitCode) ?? item.amountMinor)
+          : item.amountMinor;
+      return {
+        ...item,
+        dueDate: edit.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(edit.dueDate) ? edit.dueDate : item.dueDate,
+        amountMinor,
+        principalMinor: Math.max(amountMinor - item.interestMinor, 0),
+      };
+    });
+  }
+  const installmentPreview = buildEffectivePlan();
 
   const todayIso = new Date().toISOString().slice(0, 10);
   function isPreviewPaid(item: InstallmentPlanItem): boolean {
@@ -485,6 +523,8 @@ function ObligationForm({
     setPaidOverrides((prev) => ({ ...prev, [installmentNumber]: value }));
   }
   const paidPreviewCount = installmentPreview.filter(isPreviewPaid).length;
+  const needsPlanStep = !isEditing && installmentCount > 1;
+  const inPlanStep = step === 2 && needsPlanStep;
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -597,7 +637,7 @@ function ObligationForm({
       // Faiz oranı girildiyse taksitler azalan bakiye üzerinden hesaplanır; obligation'ın
       // toplamı taksitlerin gerçek toplamı (anapara+faiz) olmalı ki kalan borç/ilerleme
       // hesapları doğru kalsın.
-      const installmentPlanItems = buildPlan();
+      const installmentPlanItems = buildEffectivePlan();
       const obligationTotalMinor =
         installmentPlanItems.length > 0
           ? installmentPlanItems.reduce((sum, item) => sum + item.amountMinor, 0)
@@ -758,6 +798,117 @@ function ObligationForm({
   const detailAccounts = isLendingType ? lendingSourceAccounts : isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts;
   const accountRowLabel = isLendingType ? 'Kaynak hesap' : isCashAdvanceType || isCardStatementType ? 'Kredi kartı' : 'Hesap';
 
+  if (inPlanStep) {
+    const totalPages = Math.max(1, Math.ceil(installmentPreview.length / PLAN_PAGE_SIZE));
+    const page = Math.min(planPage, totalPages - 1);
+    const pageItems = installmentPreview.slice(page * PLAN_PAGE_SIZE, (page + 1) * PLAN_PAGE_SIZE);
+    const planTotal = installmentPreview.reduce((sum, i) => sum + i.amountMinor, 0);
+
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }} keyboardShouldPersistTaps="handled">
+            <Stack gap="lg">
+              <ScreenHeader inline title="Taksit planı" leftLabel={{ label: 'Geri', onPress: () => setStep(1) }} />
+
+              <Stack gap="xs">
+                <Row align="center" gap="sm">
+                  <Stack gap="xxs" style={{ flex: 1 }}>
+                    <Text variant="caption" color="textSecondary">
+                      {installmentPreview.length} {periodLabels.unit.toLocaleLowerCase('tr-TR')} · Toplam
+                    </Text>
+                    <Text variant="displayAmount" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                      {formatMinorAmount(planTotal, valueUnitCode)}
+                    </Text>
+                  </Stack>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setEditingPlan((value) => !value)}
+                    style={{
+                      height: 34,
+                      paddingHorizontal: 16,
+                      borderRadius: 17,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: editingPlan ? theme.colors.action : theme.colors.fill,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: editingPlan ? theme.colors.onAction : theme.colors.textPrimary }}>
+                      {editingPlan ? 'Bitti' : 'Düzenle'}
+                    </Text>
+                  </Pressable>
+                </Row>
+                <Text variant="caption" color="textSecondary">
+                  Tarih ve tutarları değiştirmek için Düzenle’ye basın; anahtarı açtığınız vadeler ödendi kaydedilir.
+                </Text>
+              </Stack>
+
+              {showInterestField ? (
+                <Stack gap="xs">
+                  <FieldGroup>
+                    <TextField
+                      label="Aylık faiz oranı % (isteğe bağlı)"
+                      placeholder="2,5"
+                      keyboardType="decimal-pad"
+                      value={interestRateStr}
+                      onChangeText={setInterestRateStr}
+                    />
+                  </FieldGroup>
+                  <Text variant="caption" color="textSecondary">
+                    {isCashAdvanceType
+                      ? 'Taksitler azalan bakiye üzerinden hesaplanır; faiz değişince plan yeniden oluşur ve elle yaptığınız düzenlemeler sıfırlanır.'
+                      : 'Anapara üzerinden azalan bakiyeyle hesaplanır; faiz değişince plan yeniden oluşur ve elle yaptığınız düzenlemeler sıfırlanır.'}
+                  </Text>
+                </Stack>
+              ) : null}
+
+              <Group inset={16}>
+                {pageItems.map((item) => (
+                  <PlanEditRow
+                    key={item.installmentNumber}
+                    item={item}
+                    precision={valueUnit.precision}
+                    currencyCode={valueUnitCode}
+                    paid={isPreviewPaid(item)}
+                    editing={editingPlan}
+                    dateStr={planEdits[item.installmentNumber]?.dueDate ?? item.dueDate}
+                    amountStr={
+                      planEdits[item.installmentNumber]?.amountStr ??
+                      formatAmountInput(
+                        (item.amountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+                        valueUnit.precision
+                      )
+                    }
+                    onDateChange={(value) => editPlanItem(item.installmentNumber, { dueDate: value })}
+                    onAmountChange={(value) => editPlanItem(item.installmentNumber, { amountStr: value })}
+                    onTogglePaid={(value) => togglePreviewPaid(item.installmentNumber, value)}
+                  />
+                ))}
+              </Group>
+
+              <Pagination page={page} totalPages={totalPages} onChange={setPlanPage} />
+
+              {paidPreviewCount > 0 ? (
+                <Text variant="caption" style={{ color: theme.colors.success }}>
+                  {paidPreviewCount} {periodLabels.unit.toLocaleLowerCase('tr-TR')} ödendi olarak kaydedilecek. Bu ödemeler
+                  geçmiş tarihli işlenir ve hesap bakiyelerinizi değiştirmez.
+                </Text>
+              ) : null}
+
+              {saveMutation.error ? (
+                <Text variant="caption" color="danger">
+                  {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
+                </Text>
+              ) : null}
+
+              <Button label="Kaydet" onPress={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={!canSubmit} />
+            </Stack>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -803,6 +954,32 @@ function ObligationForm({
               ) : (
                 <ValueUnitPicker label="Değer birimi" selectedId={valueUnitCode} onSelect={setValueUnitCode} />
               )}
+              <DocumentTypePicker
+                label="Belge türü"
+                selectedId={documentType}
+                onSelect={(value) => {
+                  setDocumentType(value);
+                  // Tutar modu belge türünün doğal anlamını izler (kredide toplam, maaş/kirada
+                  // her vade) — kullanıcı seçimi elle değiştirmediyse tür değişince güncellenir.
+                  if (!amountModeTouched) setAmountMode(getDefaultAmountMode(value));
+                  // Nakit avans/kredi kartı ekstresinde HESAP yalnızca kredi kartı olabilir —
+                  // önceden seçilmiş bir kart-dışı hesap varsa (veya tersi yönde geçilirken)
+                  // geçersiz kalmasın diye temizlenir.
+                  if (
+                    (value === 'nakit_avans' || value === 'kredi_karti_ekstresi') &&
+                    !creditCardAccounts.some((a) => a.id === accountId)
+                  ) {
+                    setAccountId(null);
+                  }
+                  // Ödünç verme her zaman bir alacaktır (kişi size borçlanır) — yön otomatik
+                  // kilitlenir. HESAP yalnızca gerçek bakiyesi olan (kasa/banka) hesaplardan
+                  // seçilebilir; geçersiz kalan bir seçim varsa temizlenir.
+                  if (value === LENDING_DOCUMENT_TYPE) {
+                    setDirection('receivable');
+                    if (!lendingSourceAccounts.some((a) => a.id === accountId)) setAccountId(null);
+                  }
+                }}
+              />
               <TextField label="Başlık" placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
               {isPlanEditing ? (
                 <FormRow
@@ -893,32 +1070,6 @@ function ObligationForm({
                   }}
                 />
               ) : null}
-              <DocumentTypePicker
-                label="Belge türü"
-                selectedId={documentType}
-                onSelect={(value) => {
-                  setDocumentType(value);
-                  // Tutar modu belge türünün doğal anlamını izler (kredide toplam, maaş/kirada
-                  // her vade) — kullanıcı seçimi elle değiştirmediyse tür değişince güncellenir.
-                  if (!amountModeTouched) setAmountMode(getDefaultAmountMode(value));
-                  // Nakit avans/kredi kartı ekstresinde HESAP yalnızca kredi kartı olabilir —
-                  // önceden seçilmiş bir kart-dışı hesap varsa (veya tersi yönde geçilirken)
-                  // geçersiz kalmasın diye temizlenir.
-                  if (
-                    (value === 'nakit_avans' || value === 'kredi_karti_ekstresi') &&
-                    !creditCardAccounts.some((a) => a.id === accountId)
-                  ) {
-                    setAccountId(null);
-                  }
-                  // Ödünç verme her zaman bir alacaktır (kişi size borçlanır) — yön otomatik
-                  // kilitlenir. HESAP yalnızca gerçek bakiyesi olan (kasa/banka) hesaplardan
-                  // seçilebilir; geçersiz kalan bir seçim varsa temizlenir.
-                  if (value === LENDING_DOCUMENT_TYPE) {
-                    setDirection('receivable');
-                    if (!lendingSourceAccounts.some((a) => a.id === accountId)) setAccountId(null);
-                  }
-                }}
-              />
               {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
                 <BankPicker
                   label="Banka"
@@ -1066,55 +1217,6 @@ function ObligationForm({
               />
             )}
 
-            {showInterestField ? (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  AYLIK FAİZ ORANI % (İSTEĞE BAĞLI)
-                </Text>
-                <TextField
-                  placeholder="2,5"
-                  keyboardType="decimal-pad"
-                  value={interestRateStr}
-                  onChangeText={setInterestRateStr}
-                />
-                <Text variant="caption" color="textSecondary">
-                  {isCashAdvanceType
-                    ? 'TUTAR alanı çekilen nakittir; taksitler azalan bakiye üzerinden hesaplanır — çekilen tutar değişmez, yalnızca toplam ödemeye faiz eklenir.'
-                    : 'TUTAR alanı anaparadır; taksitler azalan bakiye üzerinden hesaplanır (banka kredisi gibi).'}
-                </Text>
-              </Stack>
-            ) : null}
-
-            {installmentPreview.length > 0 ? (
-              <Stack gap="sm">
-                <Row align="center">
-                  <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    {`${periodLabels.unitTitle.toLocaleUpperCase('tr-TR')} ÖNİZLEME`}
-                  </Text>
-                  <Text variant="caption" color="textSecondary">
-                    Toplam {formatMinorAmount(installmentPreview.reduce((sum, i) => sum + i.amountMinor, 0))}
-                  </Text>
-                </Row>
-                {/* Geçmişe dönük plan girenler için toplu işaretleme özeti — kullanıcı kaç
-                    vadenin ödendi sayılacağını kaydetmeden önce görür. */}
-                {paidPreviewCount > 0 ? (
-                  <Text variant="caption" style={{ color: theme.colors.success }}>
-                    {paidPreviewCount} {periodLabels.unit} ödendi olarak kaydedilecek (
-                    {formatMinorAmount(
-                      installmentPreview.filter(isPreviewPaid).reduce((sum, i) => sum + i.amountMinor, 0)
-                    )}
-                    ). Bu ödemeler geçmiş tarihli işlenir ve hesap bakiyelerinizi değiştirmez.
-                  </Text>
-                ) : null}
-                <InstallmentPreviewTimeline
-                  items={installmentPreview}
-                  unitLabel={periodLabels.unit}
-                  isPaid={isPreviewPaid}
-                  onTogglePaid={togglePreviewPaid}
-                />
-              </Stack>
-            ) : null}
-
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
                 {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
@@ -1122,9 +1224,9 @@ function ObligationForm({
             ) : null}
 
             <Button
-              label={isEditing ? 'Güncelle' : 'Kaydet'}
-              onPress={() => saveMutation.mutate()}
-              loading={saveMutation.isPending}
+              label={needsPlanStep ? 'Devam' : isEditing ? 'Güncelle' : 'Kaydet'}
+              onPress={() => (needsPlanStep ? setStep(2) : saveMutation.mutate())}
+              loading={!needsPlanStep && saveMutation.isPending}
               disabled={!canSubmit}
             />
 
@@ -1395,117 +1497,73 @@ function InstallmentPlanEditor({
   );
 }
 
-// app/obligations/[id].tsx'teki gerçek taksit listesinin ("taksit zaman çizgisi",
-// docs/08-tasarim-sistemi.md §12.15) önizleme karşılığı — numaralı işaretçiler + bağlayan
-// dikey çizgi + kart satırları aynı görsel dilde, ama bunlar henüz kaydedilmemiş taslak
-// veri olduğu için ödendi/sıradaki durumu yok: yalnızca ilk taksit vurgulanır (bir sonraki
-// ödeme olacağı için), diğerleri nötr anahat kalır.
-function InstallmentPreviewTimeline({
-  items,
-  unitLabel,
-  isPaid,
+const PLAN_PAGE_SIZE = 10;
+const planDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+// 2. adım satırı: özet (başlık, tarih · tutar) + küçük ödendi anahtarı. Sayfadaki "Düzenle"
+// açıkken satır 1. adımdaki alan stiliyle (etiket üstte) tarih ve tutar alanlarına dönüşür.
+function PlanEditRow({
+  item,
+  dateStr,
+  amountStr,
+  precision,
+  currencyCode,
+  paid,
+  editing,
+  onDateChange,
+  onAmountChange,
   onTogglePaid,
 }: {
-  items: InstallmentPlanItem[];
-  unitLabel: string;
-  /** Verilirse her satırda "Ödendi" anahtarı gösterilir (bkz. toplu ödendi akışı). */
-  isPaid?: (item: InstallmentPlanItem) => boolean;
-  onTogglePaid?: (installmentNumber: number, value: boolean) => void;
+  item: InstallmentPlanItem;
+  dateStr: string;
+  amountStr: string;
+  precision: 0 | 2;
+  currencyCode: string;
+  paid: boolean;
+  editing: boolean;
+  onDateChange: (value: string) => void;
+  onAmountChange: (value: string) => void;
+  onTogglePaid: (value: boolean) => void;
 }) {
-  const theme = useTheme();
-  const editable = !!isPaid && !!onTogglePaid;
+  const due = new Date(`${item.dueDate}T00:00:00`);
+  const summary = `${Number.isNaN(due.getTime()) ? item.dueDate : planDateFormatter.format(due)} · ${formatValueUnitAmount(item.amountMinor, currencyCode)}`;
 
   return (
-    <Stack gap="xxs">
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1;
-        const paid = isPaid?.(item) ?? false;
-        // Ödendi işaretlenen satır yeşil dolu; işaretlenmemişlerde ilk satır "sıradaki"
-        // olarak Saffron vurgulanır (gerçek taksit listesiyle aynı görsel dil).
-        const isNext = !paid && items.findIndex((i) => !(isPaid?.(i) ?? false)) === index;
-        const markerBg = paid ? theme.colors.success : isNext ? theme.colors.brandPrimary : 'transparent';
-        const markerBorder = paid
-          ? theme.colors.success
-          : isNext
-            ? theme.colors.brandPrimary
-            : theme.colors.border;
-        const markerTextColor = paid || isNext ? theme.colors.brandPrimaryText : theme.colors.textSecondary;
-
-        return (
-          <Row
-            key={item.installmentNumber}
-            gap="sm"
-            align="stretch"
-            style={{ marginBottom: isLast ? 0 : theme.spacing.sm }}
-          >
-            <Stack gap="xs" align="center" style={{ width: 32 }}>
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  borderWidth: paid || isNext ? 0 : 1.5,
-                  borderColor: markerBorder,
-                  backgroundColor: markerBg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {paid ? (
-                  <Ionicons name="checkmark" size={16} color={theme.colors.brandPrimaryText} />
-                ) : (
-                  <Text variant="caption" style={{ color: markerTextColor, fontWeight: '700' }}>
-                    {item.installmentNumber}
-                  </Text>
-                )}
-              </View>
-              {!isLast ? (
-                <View
-                  style={{
-                    flex: 1,
-                    width: 2,
-                    borderRadius: 1,
-                    backgroundColor: paid ? theme.colors.success : theme.colors.border,
-                  }}
-                />
-              ) : null}
-            </Stack>
-
-            <View style={{ flex: 1 }}>
-              <Card elevated={isNext}>
-                <Stack gap="sm">
-                  <Row gap="sm" align="center">
-                    <Stack gap="xxs" style={{ flex: 1 }}>
-                      <Text variant="cardTitle" numberOfLines={1}>
-                        {item.installmentNumber}. {unitLabel} — {shortDateFormatter.format(new Date(item.dueDate))}
-                      </Text>
-                      {item.interestMinor > 0 ? (
-                        <Text variant="caption" color="textSecondary">
-                          Anapara {formatMinorAmount(item.principalMinor)} · Faiz {formatMinorAmount(item.interestMinor)}
-                        </Text>
-                      ) : null}
-                    </Stack>
-                    <Text variant="body" tabular>
-                      {formatMinorAmount(item.amountMinor)}
-                    </Text>
-                  </Row>
-                  {editable ? (
-                    <Row gap="sm" align="center">
-                      <Text
-                        variant="caption"
-                        style={{ flex: 1, color: paid ? theme.colors.success : theme.colors.textSecondary }}
-                      >
-                        {paid ? 'Ödendi' : 'Ödenmedi'}
-                      </Text>
-                      <Switch value={paid} onValueChange={(value) => onTogglePaid?.(item.installmentNumber, value)} />
-                    </Row>
-                  ) : null}
-                </Stack>
-              </Card>
-            </View>
-          </Row>
-        );
-      })}
-    </Stack>
+    <View style={{ paddingVertical: 10, paddingHorizontal: 16, gap: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 40 }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ fontWeight: '500' }}>{item.installmentNumber}. taksit</Text>
+          {editing ? null : (
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {summary}
+              {item.interestMinor > 0 ? ` · faiz ${formatMinorAmount(item.interestMinor)}` : ''}
+            </Text>
+          )}
+        </View>
+        {/* Küçültülmüş anahtar: ölçek yerleşimi etkilemesin diye sabit boyutlu kapta. */}
+        <View style={{ width: 40, height: 26, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+          <Switch
+            accessibilityLabel={`${item.installmentNumber}. taksit ödendi`}
+            value={paid}
+            onValueChange={onTogglePaid}
+            style={{ transform: [{ scale: 0.72 }] }}
+          />
+        </View>
+      </View>
+      {editing ? (
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <FieldGroup>
+              <DateField label="Vade" value={dateStr} onChangeText={onDateChange} />
+            </FieldGroup>
+          </View>
+          <View style={{ flex: 1 }}>
+            <FieldGroup>
+              <AmountField label="Tutar" placeholder={precision === 0 ? '1' : '0,00'} precision={precision} value={amountStr} onChangeText={onAmountChange} />
+            </FieldGroup>
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }

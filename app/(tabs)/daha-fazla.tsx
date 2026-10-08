@@ -142,12 +142,6 @@ export default function MoreScreen() {
             href="/instruments"
           />
           <MenuRow
-            icon="flash"
-            label="Faturalarım"
-            detail={countText(totalsByType?.fatura?.count)}
-            href={{ pathname: '/obligations', params: { type: 'fatura' } }}
-          />
-          <MenuRow
             icon="cash"
             label="Kredilerim"
             detail={countText(totalsByType?.kredi?.count)}
