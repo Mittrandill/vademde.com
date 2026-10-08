@@ -23,6 +23,12 @@ import {
   Text,
 } from '@/components/primitives';
 import { AccountIcon } from '@/components/finance/AccountIcon';
+import {
+  EMPTY_FILTERS,
+  TransactionFilterSheet,
+  countActiveFilters,
+  type HareketFilters,
+} from '@/components/finance/TransactionFilterSheet';
 import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
@@ -33,7 +39,7 @@ import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/a
 import { queryKeys } from '@/services/queryKeys';
 import { useQuickAddStore } from '@/store/quickAddStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
+import { formatMinorAmount, formatValueUnitAmount, parseAmountToMinor } from '@/utils/money';
 
 type FilterKey = 'all' | 'income' | 'expense' | 'payable' | 'receivable' | 'transfer';
 
@@ -123,7 +129,10 @@ export default function HareketlerScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const [filter, setFilter] = useState<FilterKey>('all');
+  const [filters, setFilters] = useState<HareketFilters>(EMPTY_FILTERS);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const filter: FilterKey = filters.type;
+  const setFilter = (type: FilterKey) => setFilters((f) => ({ ...f, type }));
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const showQuickAdd = useQuickAddStore((s) => s.show);
@@ -152,7 +161,7 @@ export default function HareketlerScreen() {
 
   // Filtre, arama veya sıralama değiştiğinde geçerli sayfa anlamsızlaşır — render sırasında
   // (obligations/index.tsx'teki aynı desen) 1. sayfaya dönülür, ekstra render turu olmadan.
-  const resetKey = `${filter}|${search}|${sortAscending ? 'asc' : 'desc'}|${month.year}-${month.month}`;
+  const resetKey = `${JSON.stringify(filters)}|${search}|${sortAscending ? 'asc' : 'desc'}|${month.year}-${month.month}`;
   const [lastResetKey, setLastResetKey] = useState(resetKey);
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey);
@@ -361,16 +370,56 @@ export default function HareketlerScreen() {
 
   // Ay filtresi istemci tarafındadır: kaynaklar zaten tek seferde (FETCH_SIZE) çekiliyor;
   // veri sorguları ve filtre mantığı değişmedi, yalnızca görünür dilim aya göre daraltılır.
+  const rateList = valueUnitRatesQuery.data ?? [];
+
+  // Tarih aralığı + Daralt/Tutar filtreleri istemci tarafındadır (kaynaklar zaten tek seferde çekiliyor).
+  const matchesFilters = (r: HareketRow, f: HareketFilters): boolean => {
+    const d = new Date(r.date);
+    if (f.range === 'last3') {
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      if (d < from || d >= to) return false;
+    } else if (d.getFullYear() !== month.year || d.getMonth() !== month.month) {
+      return false;
+    }
+    if (f.accounts.length) {
+      const name = r.accountName ?? r.paidAccountName;
+      if (!name || !f.accounts.includes(name)) return false;
+    }
+    if (f.categories.length && (!r.categoryName || !f.categories.includes(r.categoryName))) return false;
+    if (f.counterparties.length) {
+      const name = r.counterpartyName ?? r.subtitle;
+      if (!name || !f.counterparties.includes(name)) return false;
+    }
+    const min = f.minAmount ? parseAmountToMinor(f.minAmount) : null;
+    const max = f.maxAmount ? parseAmountToMinor(f.maxAmount) : null;
+    if (min !== null || max !== null) {
+      const ref = sumToReferenceMinor([{ amountMinor: r.amountMinor, unitCode: r.currencyCode }], rateList);
+      if (min !== null && ref < min) return false;
+      if (max !== null && ref > max) return false;
+    }
+    return true;
+  };
+
   const monthRows = useMemo(
-    () =>
-      rows.filter((r) => {
-        const d = new Date(r.date);
-        return d.getFullYear() === month.year && d.getMonth() === month.month;
-      }),
-    [rows, month]
+    () => rows.filter((r) => matchesFilters(r, filters)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, filters, month, rateList]
   );
 
-  const rateList = valueUnitRatesQuery.data ?? [];
+  const filterOptions = useMemo(() => {
+    const uniq = (values: (string | null | undefined)[]) =>
+      [...new Set(values.filter((v): v is string => !!v && v.trim().length > 0))].sort((a, b) => a.localeCompare(b, 'tr'));
+    return {
+      accounts: uniq(rows.map((r) => r.accountName ?? r.paidAccountName)),
+      categories: uniq(rows.map((r) => r.categoryName)),
+      counterparties: uniq(rows.map((r) => r.counterpartyName)),
+    };
+  }, [rows]);
+
+  const activeFilterCount = countActiveFilters(filters);
+
   const sumSigned = (items: HareketRow[]) =>
     sumToReferenceMinor(
       items.map((r) => ({ amountMinor: r.amountMinor, unitCode: r.currencyCode })),
@@ -428,6 +477,18 @@ export default function HareketlerScreen() {
     <View style={{ paddingTop: theme.spacing.xxs, paddingBottom: theme.spacing.xs, gap: 12 }}>
       <View style={{ height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
         <Pressable
+          onPress={() => setFilterSheetOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Filtrele"
+          style={headerButtonStyle(activeFilterCount > 0 ? theme.colors.brandPrimary : theme.colors.fill)}
+        >
+          <Ionicons
+            name="options-outline"
+            size={19}
+            color={activeFilterCount > 0 ? theme.colors.onAction : theme.colors.textPrimary}
+          />
+        </Pressable>
+        <Pressable
           onPress={() => setSortAscending((v) => !v)}
           accessibilityRole="button"
           accessibilityLabel="Tarihe göre sırala"
@@ -477,17 +538,19 @@ export default function HareketlerScreen() {
 
       <ScrollableTabs tabs={FILTERS} activeKey={filter} onChange={(key) => setFilter(key as FilterKey)} />
 
-      <MonthStepper
-        year={month.year}
-        month={month.month}
-        onChange={setMonth}
-        onPressLabel={() => setMonthSheetOpen(true)}
-      />
+      {filters.range === 'month' ? (
+        <MonthStepper
+          year={month.year}
+          month={month.month}
+          onChange={setMonth}
+          onPressLabel={() => setMonthSheetOpen(true)}
+        />
+      ) : null}
 
       <Card style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="caption" color="textSecondary">
-            {MONTH_NAMES[month.month]} · {monthRows.length} hareket
+            {filters.range === 'last3' ? 'Son 3 ay' : MONTH_NAMES[month.month]} · {monthRows.length} hareket
           </Text>
           <Text
             variant="displayAmount"
@@ -538,10 +601,10 @@ export default function HareketlerScreen() {
             <View style={{ paddingTop: theme.spacing.xl }}>
               <EmptyState
                 icon="receipt-outline"
-                title={search ? 'Sonuç bulunamadı' : 'Bu ayda hareket yok'}
+                title={search || activeFilterCount > 0 ? 'Sonuç bulunamadı' : 'Bu ayda hareket yok'}
                 message={
-                  search
-                    ? 'Farklı bir arama terimi deneyin.'
+                  search || activeFilterCount > 0
+                    ? 'Arama terimini veya filtreleri değiştirin.'
                     : 'Başka bir ay seçin ya da sağ üstteki + ile kayıt ekleyin.'
                 }
               />
@@ -563,6 +626,15 @@ export default function HareketlerScreen() {
             </View>
           )
         }
+      />
+
+      <TransactionFilterSheet
+        visible={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        value={filters}
+        onApply={setFilters}
+        options={filterOptions}
+        countFor={(draft) => (draft.type === filters.type ? rows.filter((r) => matchesFilters(r, draft)).length : null)}
       />
 
       <MonthYearSheet
