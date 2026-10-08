@@ -105,8 +105,13 @@ export default function CardInstallmentsScreen() {
           />
         ) : (
           <>
-            <Stack gap="xs">
-              <Text variant="label" color="textSecondary">
+            <View style={{
+                gap: theme.spacing.xs,
+                padding: theme.spacing.lg,
+                borderRadius: theme.radius.widget,
+                backgroundColor: theme.colors.surfacePrimary,
+              }}>
+              <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
                 Gelecek ekstrelere yansıyacak
               </Text>
               <HeroAmount amountMinor={totalRemaining} baseSize={48} />
@@ -114,9 +119,14 @@ export default function CardInstallmentsScreen() {
                 {active.length} taksitli alışveriş
                 {lastMonth ? ` · son taksit ${MONTH_NAMES[Number(lastMonth.slice(5, 7)) - 1]} ${lastMonth.slice(0, 4)}` : ''}
               </Text>
-            </Stack>
+            </View>
 
-            <Stack gap="xs">
+            <View style={{
+                gap: theme.spacing.sm,
+                padding: theme.spacing.lg,
+                borderRadius: theme.radius.widget,
+                backgroundColor: theme.colors.surfacePrimary,
+              }}>
               <Text variant="label" color="textSecondary">
                 Ekstre başına taksit yükü
               </Text>
@@ -140,13 +150,13 @@ export default function CardInstallmentsScreen() {
                   </Text>
                 </View>
               ))}
-            </Stack>
+            </View>
 
-            <Stack gap="xxs">
-              <Text variant="label" color="textSecondary">
+            <Stack gap="xs">
+              <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
                 Alışverişler
               </Text>
-              {progress.map((p, index) => (
+              {progress.map((p) => (
                 <Pressable
                   key={p.purchase.id}
                   accessibilityRole="button"
@@ -154,9 +164,9 @@ export default function CardInstallmentsScreen() {
                   onLongPress={() => confirmDelete(p.purchase.id, p.purchase.merchant)}
                   style={{
                     gap: theme.spacing.xs,
-                    paddingVertical: theme.spacing.sm,
-                    borderBottomWidth: index === progress.length - 1 ? 0 : 1,
-                    borderBottomColor: theme.colors.border,
+                    padding: theme.spacing.md,
+                    borderRadius: theme.radius.group,
+                    backgroundColor: theme.colors.surfacePrimary,
                   }}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.sm }}>
@@ -187,7 +197,7 @@ export default function CardInstallmentsScreen() {
           </>
         )}
 
-        <Text variant="caption" color="textSecondary">
+        <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.xxs }}>
           Taksitler her ay ilgili ekstre dönemine sayılır; ödenen taksit sayısı ekstre aylarından hesaplanır.
         </Text>
       </ScrollView>
