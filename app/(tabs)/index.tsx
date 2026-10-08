@@ -314,6 +314,22 @@ export default function HomeScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Ara"
+                onPress={() => router.push('/search')}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.fill,
+                  marginRight: 8,
+                }}
+              >
+                <Ionicons name="search" size={19} color={theme.colors.textPrimary} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
                 accessibilityLabel="Bildirimler"
                 onPress={() => router.push('/notifications')}
                 style={{
