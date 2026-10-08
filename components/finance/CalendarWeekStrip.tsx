@@ -20,6 +20,7 @@ const WEEKDAY_LABELS = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'];
 // öne çıkarılır"; CalendarMonthGrid'deki aynı vurgu kuralı (kalın çerçeve) burada da
 // kullanılır ki iki görünüm arasında tutarlı bir görsel dil korunsun.
 const STRONG_DOCUMENT_TYPES = new Set(['cek', 'senet']);
+const LOAN_DOCUMENT_TYPES = new Set(['kredi']);
 const weekRangeFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
 const weekRangeFormatterWithYear = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -88,6 +89,7 @@ export function CalendarWeekStrip({
             const hasPayable = items.some((o) => o.direction === 'payable');
             const hasReceivable = items.some((o) => o.direction === 'receivable');
             const hasStrong = items.some((o) => STRONG_DOCUMENT_TYPES.has(o.document_type));
+            const hasLoan = items.some((o) => LOAN_DOCUMENT_TYPES.has(o.document_type));
             const isSelected = isSameDay(day, selectedDate);
             const isToday = isSameDay(day, today);
 
@@ -105,8 +107,6 @@ export function CalendarWeekStrip({
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: isSelected ? theme.colors.brandPrimary : 'transparent',
-                      borderWidth: hasStrong && !isToday ? 2 : 0,
-                      borderColor: theme.colors.accentViolet,
                     }}
                   >
                     <Text
@@ -123,7 +123,7 @@ export function CalendarWeekStrip({
                       {day.getDate()}
                     </Text>
                   </View>
-                  {hasPayable || hasReceivable ? (
+                  {hasPayable || hasReceivable || hasStrong || hasLoan ? (
                     <Row gap="xxs">
                       {hasPayable ? (
                         <View
@@ -133,6 +133,16 @@ export function CalendarWeekStrip({
                       {hasReceivable ? (
                         <View
                           style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.success }}
+                        />
+                      ) : null}
+                      {hasStrong ? (
+                        <View
+                          style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.accentViolet }}
+                        />
+                      ) : null}
+                      {hasLoan ? (
+                        <View
+                          style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.attentionMarker }}
                         />
                       ) : null}
                     </Row>
