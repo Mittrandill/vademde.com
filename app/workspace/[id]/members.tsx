@@ -267,7 +267,7 @@ export default function WorkspaceDetailScreen() {
                 <Text variant="caption" color="textSecondary">
                   {workspace.type === 'business' ? 'İŞLETME' : 'KİŞİSEL'}
                 </Text>
-                <Text variant="caption" mono color={isActive ? 'textPrimary' : 'textSecondary'}>
+                <Text variant="caption" color={isActive ? 'textPrimary' : 'textSecondary'}>
                   {isActive ? 'AKTİF' : 'PASİF'}
                 </Text>
               </Row>
@@ -343,7 +343,6 @@ export default function WorkspaceDetailScreen() {
                       >
                         <Text
                           variant="label"
-                          mono
                           style={{
                             color: member.role === 'owner' ? theme.colors.backgroundPrimary : theme.colors.textPrimary,
                             textTransform: 'none',
@@ -370,7 +369,7 @@ export default function WorkspaceDetailScreen() {
                           paddingVertical: 2,
                         }}
                       >
-                        <Text variant="caption" mono color="textSecondary">
+                        <Text variant="caption" color="textSecondary">
                           {ROLE_LABEL[member.role]}
                         </Text>
                       </View>

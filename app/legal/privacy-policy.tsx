@@ -177,7 +177,7 @@ export default function PrivacyPolicyScreen() {
           gap: theme.spacing.lg,
         }}
       >
-        <Text variant="label" mono color="textSecondary">
+        <Text variant="label" color="textSecondary">
           SON GÜNCELLEME · 11 AĞUSTOS 2026
         </Text>
 
@@ -204,7 +204,7 @@ export default function PrivacyPolicyScreen() {
           <Ionicons name="mail-outline" size={22} color={theme.colors.textPrimary} />
           <Text variant="body" style={{ flex: 1 }}>
             Başvurular ve sorular için:{' '}
-            <Text variant="body" mono>
+            <Text variant="body">
               info@vademde.com
             </Text>
           </Text>
