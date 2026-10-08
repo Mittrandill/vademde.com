@@ -396,7 +396,7 @@ export default function ReceiptResultScreen() {
           ) : null}
 
           {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
-            <Text variant="label" mono color="textSecondary">
+            <Text variant="label" color="textSecondary">
               GENEL GÜVEN · %{Math.round((document.overall_confidence ?? 0) * 100)}
             </Text>
           ) : null}
