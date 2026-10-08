@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import {
-  Divider,
+  Button,
+  Card,
   Pressable,
   Skeleton,
   Stack,
+  Tag,
   Text,
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
 import { FinanceListHero } from '@/components/finance/FinanceListHero';
@@ -30,7 +30,6 @@ import { computeStatementPeriod, periodKeyForDueDate } from '@/utils/creditCardP
 import { formatMinorAmount } from '@/utils/money';
 
 const PAGE_SIZE = 10;
-const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
 
 // obligations/index.tsx'teki durum filtresinin (Aktif/Gecikmiş/Kapalı) kredi kartı
 // karşılığı: kart bir obligation olmadığı için "durumu" yok, ama bu ekranda zaten
@@ -217,6 +216,7 @@ export default function CreditCardsScreen() {
           />
 
           <FinanceListSurface
+            plain
             searchPlaceholder="Kredi kartlarımda ara..."
             searchValue={searchInput}
             onSearchChange={setSearchInput}
@@ -251,16 +251,14 @@ export default function CreditCardsScreen() {
                 onActionPress={isFiltered ? undefined : openNewCard}
               />
             ) : (
-              pagedCards.map((item, index) => (
-                <View key={item.id}>
-                  {index > 0 ? <Divider /> : null}
-                  <CreditCardRowCard
-                    account={item}
-                    balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
-                    statements={statementsByAccount.get(item.id) ?? []}
-                    hasCurrentStatement={cardInfoById.get(item.id)?.hasCurrentStatement ?? false}
-                  />
-                </View>
+              pagedCards.map((item) => (
+                <CreditCardRowCard
+                  key={item.id}
+                  account={item}
+                  balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
+                  statements={statementsByAccount.get(item.id) ?? []}
+                  nextDueDate={cardInfoById.get(item.id)?.nextDueDate ?? null}
+                />
               ))
             )}
           </FinanceListSurface>
@@ -274,56 +272,103 @@ interface CreditCardRowCardProps {
   account: Account;
   balanceMinor: number;
   statements: ObligationWithRelations[];
-  hasCurrentStatement: boolean;
+  nextDueDate: Date | null;
 }
 
-// Kredilerim'deki ObligationRowCard ile aynı yoğunluk: kimlik + büyük tutar + alt bilgi
-// satırı — ama kaynak bir obligation değil, hesap + o hesaba bağlı ekstreler.
-function CreditCardRowCard({ account, balanceMinor, statements, hasCurrentStatement }: CreditCardRowCardProps) {
+const dueDayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+
+// Tuval KrediKartlari: kart başına .card — banka logosu + ad/•••• son4 + kalan gün etiketi,
+// dönem borcu / son ödeme, limit kullanım çubuğu ve Ödeme yap / Ekstreyi tara butonları.
+// Asgari ödeme tutarı veri modelinde tutulmadığı için bilerek gösterilmiyor.
+function CreditCardRowCard({ account, balanceMinor, statements, nextDueDate }: CreditCardRowCardProps) {
   const theme = useTheme();
   const latestStatement = statements[0] ?? null;
-  const detail = [
-    account.card_last_four ? `•••• ${account.card_last_four}` : 'Kredi Kartı',
-    hasCurrentStatement ? 'Ekstre yüklendi' : 'Ekstre bekliyor',
-    latestStatement?.due_date ? monthFormatter.format(new Date(latestStatement.due_date)) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const periodDebtMinor = latestStatement?.remaining_amount_minor ?? balanceMinor;
+  const limitMinor = account.credit_limit_minor ?? 0;
+  const utilization = limitMinor > 0 ? Math.min(1, Math.max(0, balanceMinor / limitMinor)) : 0;
+  const daysLeft = nextDueDate ? Math.ceil((nextDueDate.getTime() - Date.now()) / 86400000) : null;
+  const open = () => router.push(`/accounts/${account.id}`);
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${account.name} kart detayını aç`}
-      onPress={() => router.push(`/accounts/${account.id}`)}
-      style={{
-        minHeight: 60,
-        paddingHorizontal: theme.spacing.md,
-        paddingVertical: 10,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-      }}
-    >
-      <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={34} />
-      <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
-        <Text variant="cardTitle" numberOfLines={1}>
-          {account.name}
-        </Text>
-        <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {detail}
-        </Text>
-      </Stack>
-      <Amount
-        amountMinor={balanceMinor}
-        currencyCode={account.currency_code}
-        direction="expense"
-        variant="cardTitle"
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.68}
-        style={{ maxWidth: '34%' }}
-      />
-      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
-    </Pressable>
+    <Card style={{ padding: 18, gap: 16 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${account.name} kart detayını aç`}
+        onPress={open}
+        style={{ gap: 16 }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={44} />
+          <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="cardTitle" numberOfLines={1}>
+              {account.name}
+            </Text>
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {account.card_last_four ? `•••• ${account.card_last_four}` : 'Kredi Kartı'}
+            </Text>
+          </Stack>
+          {daysLeft !== null ? (
+            <Tag label={daysLeft < 0 ? 'Gecikti' : `${daysLeft} gün`} tone={daysLeft < 0 ? 'danger' : daysLeft <= 10 ? 'brand' : 'neutral'} />
+          ) : null}
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="caption" color="textSecondary">Dönem borcu</Text>
+            <Text style={{ fontSize: 22, fontWeight: '700' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
+              {formatMinorAmount(Math.abs(periodDebtMinor), account.currency_code)}
+            </Text>
+          </Stack>
+          <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
+            <Text variant="caption" color="textSecondary">Son ödeme</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600' }}>{nextDueDate ? dueDayFormatter.format(nextDueDate) : '—'}</Text>
+          </Stack>
+        </View>
+
+        {limitMinor > 0 ? (
+          <Stack gap="xs">
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.fill, overflow: 'hidden' }}>
+              <View style={{ width: `${utilization * 100}%`, height: 6, borderRadius: 3, backgroundColor: theme.colors.brandPrimary }} />
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text variant="caption" color="textSecondary">
+                {formatMinorAmount(balanceMinor, account.currency_code)} kullanıldı
+              </Text>
+              <Text variant="caption" color="textSecondary">
+                Limit {formatMinorAmount(limitMinor, account.currency_code)}
+              </Text>
+            </View>
+          </Stack>
+        ) : null}
+      </Pressable>
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Button
+            label="Ödeme yap"
+            size="compact"
+            onPress={() =>
+              router.push({
+                pathname: '/payments/new',
+                params: latestStatement ? { obligationId: latestStatement.id, direction: latestStatement.direction } : {},
+              })
+            }
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button
+            label="Ekstreyi tara"
+            variant="secondary"
+            size="compact"
+            onPress={() =>
+              router.push({
+                pathname: '/(tabs)/tara',
+                params: { accountId: account.id, documentType: 'kredi_karti_ekstresi' },
+              })
+            }
+          />
+        </View>
+      </View>
+    </Card>
   );
 }
