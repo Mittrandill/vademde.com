@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useExitGuard } from '@/utils/useExitGuard';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -64,6 +65,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
 
   const [type, setType] = useState<CounterpartyType>(getCounterpartyType(initial?.type));
   const [name, setName] = useState(initial?.name ?? '');
+  const { allowExit } = useExitGuard(!isEditing && name.trim() !== '');
   const [phone, setPhone] = useState(initial?.phone ?? '');
   const [email, setEmail] = useState(initial?.email ?? '');
   const [taxNumber, setTaxNumber] = useState(initial?.tax_number ?? '');
@@ -91,6 +93,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
       return createCounterparty({ workspace_id: activeWorkspaceId, ...payload });
     },
     onSuccess: () => {
+      allowExit();
       showSaveSuccess(
         isEditing ? `${typeLabel} başarıyla güncellendi.` : `${typeLabel} başarıyla oluşturuldu.`,
         () => router.back(),

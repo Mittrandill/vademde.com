@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useExitGuard } from '@/utils/useExitGuard';
 import { useReflowKey } from '@/services/reflow';
 import { AmountField, FieldGroup, Pressable, ScrollableTabs, Text, TextField } from '@/components/primitives';
 import { monoFamily } from '@/theme/typography';
@@ -44,6 +45,7 @@ export default function NewAccountScreen() {
   const isEditing = !!id;
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [name, setName] = useState('');
+  const { allowExit } = useExitGuard(!isEditing && name.trim() !== '');
   const [type, setType] = useState<Account['type']>(
     TYPES.some((t) => t.value === typeParam) ? (typeParam as Account['type']) : 'cash'
   );
@@ -128,6 +130,7 @@ export default function NewAccountScreen() {
         : createAccount({ workspace_id: activeWorkspaceId as string, ...payload });
     },
     onSuccess: (account) => {
+      allowExit();
       showSaveSuccess(
         isEditing ? 'Hesap başarıyla güncellendi.' : 'Hesap başarıyla oluşturuldu.',
         () => router.back(),

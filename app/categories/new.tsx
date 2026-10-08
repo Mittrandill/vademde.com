@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useExitGuard } from '@/utils/useExitGuard';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { withAlpha } from '@/theme/colors';
@@ -68,6 +69,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
   const isEditing = !!id;
 
   const [name, setName] = useState(initial?.name ?? '');
+  const { allowExit } = useExitGuard(!isEditing && name.trim() !== '');
   const [kind, setKind] = useState<Kind>((initial?.kind as Kind) ?? 'expense');
   const [icon, setIcon] = useState<string>(initial?.icon ?? CATEGORY_ICON_CHOICES[0].icon);
   const [color, setColor] = useState<string>(initial?.color ?? getSuggestedColorForIcon(initial?.icon ?? CATEGORY_ICON_CHOICES[0].icon));
@@ -101,6 +103,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
       return createCategory({ workspace_id: activeWorkspaceId, name: name.trim(), kind, icon, color });
     },
     onSuccess: () => {
+      allowExit();
       showSaveSuccess(
         isEditing ? 'Kategori başarıyla güncellendi.' : 'Kategori başarıyla oluşturuldu.',
         () => router.back(),

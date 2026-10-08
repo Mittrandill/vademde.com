@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useExitGuard } from '@/utils/useExitGuard';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { AmountField, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
@@ -191,6 +192,7 @@ function ObligationForm({
   );
   const [trialEndsOn, setTrialEndsOn] = useState(initial?.trial_ends_on ?? '');
   const [title, setTitle] = useState(initial?.title ?? initialTitle ?? '');
+  const { allowExit } = useExitGuard(!isEditing && title.trim() !== '');
   // docs/01-finansal-kayit-modeli.md §3.5 — birim, kayıt oluşturulduktan sonra
   // değiştirilemez; edit modda initial.currency_code sabit kalır (aşağıda salt-okunur
   // gösterilir). Yeni kayıtta workspace'in varsayılan birimi hazır olana kadar 'TRY' ile
@@ -689,6 +691,7 @@ function ObligationForm({
       return obligation;
     },
     onSuccess: () => {
+      allowExit();
       // Navigasyon, başarı Alert'inin "Tamam" butonuna ertelenir — bu hem kullanıcıya
       // net bir onay verir hem de Alert'in kapanış animasyonuyla ekran geçişinin aynı
       // anda tetiklenip Fabric'i çökertmesini önler (aynı çakışma sınıfı için bkz.
