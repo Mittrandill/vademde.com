@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { EmptyState, Pressable, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
+import { EmptyState, Group, GroupedRow, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { HeroAmount } from '@/components/finance/HeroAmount';
 import { ServiceLogo } from '@/components/finance/ServiceLogo';
@@ -170,7 +170,14 @@ export default function SubscriptionsScreen() {
           />
         ) : (
           <>
-            <Stack gap="xs">
+            <View
+              style={{
+                gap: theme.spacing.xs,
+                padding: theme.spacing.lg,
+                borderRadius: theme.radius.widget,
+                backgroundColor: theme.colors.surfacePrimary,
+              }}
+            >
               <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
                 Aylık toplam
               </Text>
@@ -179,21 +186,21 @@ export default function SubscriptionsScreen() {
                 {rows.length} abonelik · yılda yaklaşık {formatMinorAmount(monthlyTotalMinor * 12).replace(/,\d{2}(?=\D*$)/, '')}
                 {hasForeign ? ' · döviz olanlar bugünkü kurla' : ''}
               </Text>
-            </Stack>
+            </View>
 
             <ScrollableTabs tabs={SORTS} activeKey={sort} onChange={(k) => setSort(k as SortKey)} />
 
             {groups.map((group) => (
-              <Fragment key={group.title}>
-                <Stack gap="xxs">
-                  <Text variant="label" color="textSecondary">
-                    {group.title}
-                  </Text>
-                  {group.rows.map((r, index) => (
-                    <SubscriptionRowView key={r.item.id} row={r} last={index === group.rows.length - 1} />
+              <Stack key={group.title} gap="xs">
+                <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
+                  {group.title}
+                </Text>
+                <Group inset={72}>
+                  {group.rows.map((r) => (
+                    <SubscriptionRowView key={r.item.id} row={r} />
                   ))}
-                </Stack>
-              </Fragment>
+                </Group>
+              </Stack>
             ))}
           </>
         )}
@@ -202,7 +209,7 @@ export default function SubscriptionsScreen() {
   );
 }
 
-function SubscriptionRowView({ row, last }: { row: SubscriptionRow; last: boolean }) {
+function SubscriptionRowView({ row }: { row: SubscriptionRow }) {
   const theme = useTheme();
   const { item, daysLeft, dueDate, referenceMinor, yearly, trialDaysLeft } = row;
   const foreign = item.currency_code !== 'TRY';
@@ -224,41 +231,28 @@ function SubscriptionRowView({ row, last }: { row: SubscriptionRow; last: boolea
       : formatMinorAmount(item.total_amount_minor, item.currency_code);
 
   return (
-    <Pressable
-      accessibilityRole="button"
+    <GroupedRow
+      leading={<ServiceLogo serviceCode={item.service_code} fallbackName={name} size={44} />}
+      title={name}
+      subtitle={subtitle}
       onPress={() => router.push(`/obligations/${item.id}`)}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        paddingVertical: 12,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: theme.colors.border,
-      }}
-    >
-      <ServiceLogo serviceCode={item.service_code} fallbackName={name} size={44} />
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <Text variant="cardTitle" numberOfLines={1}>
-          {name}
-        </Text>
-        <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {subtitle}
-        </Text>
-      </View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-        <Text variant="cardTitle" tabular>
-          {amountText}
-          {yearly ? ' /yıl' : ''}
-        </Text>
-        {foreign && referenceMinor !== null ? (
-          <Text variant="caption" color="textSecondary" tabular>
-            ≈ {formatMinorAmount(referenceMinor)}
+      chevron={false}
+      trailing={
+        <View style={{ alignItems: 'flex-end', gap: 3 }}>
+          <Text style={{ fontWeight: '600' }} tabular>
+            {amountText}
+            {yearly ? ' /yıl' : ''}
           </Text>
-        ) : null}
-        <Text variant="label" style={{ textTransform: 'none', color: theme.colors.payable }}>
-          {tag}
-        </Text>
-      </View>
-    </Pressable>
+          {foreign && referenceMinor !== null ? (
+            <Text variant="caption" color="textSecondary" tabular>
+              ≈ {formatMinorAmount(referenceMinor)}
+            </Text>
+          ) : null}
+          <Text variant="caption" style={{ color: theme.colors.payable, fontWeight: '500' }}>
+            {tag}
+          </Text>
+        </View>
+      }
+    />
   );
 }
