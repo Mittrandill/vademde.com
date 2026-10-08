@@ -3,11 +3,10 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Line, Path, Rect } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { EmptyState, Pressable, Skeleton, Stack, Text } from '@/components/primitives';
+import { EmptyState, Group, GroupedRow, GroupedRowIcon, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { HeroAmount } from '@/components/finance/HeroAmount';
 import { FORECAST_DAYS, useCashForecasts } from '@/features/cashflow/useCashForecasts';
@@ -81,13 +80,20 @@ export default function CashAlertScreen() {
               </Text>
             </Stack>
 
+            <View
+              style={{
+                gap: theme.spacing.md,
+                padding: theme.spacing.lg,
+                borderRadius: theme.radius.widget,
+                backgroundColor: theme.colors.surfacePrimary,
+              }}
+            >
             <Stack gap="xs">
               <Text variant="label" color="textSecondary">
                 Tahmini en düşük bakiye
               </Text>
               <HeroAmount amountMinor={item.forecast.lowestMinor} baseSize={48} color={item.forecast.lowestMinor < 0 ? 'danger' : 'textPrimary'} />
             </Stack>
-
             <View accessible accessibilityLabel={`Önümüzdeki ${FORECAST_DAYS} günlük tahmini bakiye grafiği`}>
               <Svg width="100%" height={CHART_HEIGHT + 4} viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT + 4}`} preserveAspectRatio="none">
                 {chart.negativeFrom ? (
@@ -110,106 +116,62 @@ export default function CashAlertScreen() {
                 </Text>
               </View>
             </View>
+            </View>
 
-            <Stack gap="xxs">
-              <Text variant="label" color="textSecondary">
+            <Stack gap="xs">
+              <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
                 Bu hesaptan çıkacaklar
               </Text>
               {item.forecast.outgoing.length === 0 ? (
-                <Text variant="body" color="textSecondary">
+                <Text variant="body" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
                   Bu hesaba bağlı ödenecek kayıt yok.
                 </Text>
               ) : (
-                item.forecast.outgoing.map((o, index) => (
-                  <Pressable
-                    key={`${o.obligationId}-${o.dueDate}`}
-                    accessibilityRole="button"
-                    onPress={() => router.push(`/obligations/${o.obligationId}`)}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: theme.spacing.sm,
-                      paddingVertical: 12,
-                      borderBottomWidth: index === item.forecast.outgoing.length - 1 ? 0 : 1,
-                      borderBottomColor: theme.colors.border,
-                    }}
-                  >
-                    <Text variant="label" color="textSecondary" tabular style={{ width: 56, textTransform: 'none' }}>
-                      {dayMonthShort.format(new Date(o.dueDate))}
-                    </Text>
-                    <Text variant="cardTitle" numberOfLines={1} style={{ flex: 1 }}>
-                      {o.title}
-                    </Text>
-                    <Text variant="cardTitle" tabular>
-                      −{formatMinorAmount(o.amountMinor)}
-                    </Text>
-                  </Pressable>
-                ))
+                <Group inset={16}>
+                  {item.forecast.outgoing.map((o) => (
+                    <GroupedRow
+                      key={`${o.obligationId}-${o.dueDate}`}
+                      onPress={() => router.push(`/obligations/${o.obligationId}`)}
+                      chevron={false}
+                      title={o.title}
+                      subtitle={dayMonthShort.format(new Date(o.dueDate))}
+                      trailing={
+                        <Text tabular style={{ fontWeight: '600' }}>
+                          −{formatMinorAmount(o.amountMinor)}
+                        </Text>
+                      }
+                    />
+                  ))}
+                </Group>
               )}
             </Stack>
 
             {first ? (
               <Stack gap="xs">
-                <Text variant="label" color="textSecondary">
+                <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
                   Ne yapabilirsin?
                 </Text>
-                <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
+                <Group>
                   {bestSource && transferMinor > 0 ? (
-                    <ActionRow
-                      icon="swap-horizontal-outline"
-                      label={`${bestSource.name}'dan ${formatMinorAmount(transferMinor).replace(/,00$/, '')} aktar`}
+                    <GroupedRow
+                      leading={<GroupedRowIcon name="swap-horizontal-outline" />}
+                      title={`${bestSource.name}'dan ${formatMinorAmount(transferMinor).replace(/,00$/, '')} aktar`}
                       onPress={() => router.push(`/transactions/new?direction=transfer&accountId=${bestSource.accountId}`)}
                     />
                   ) : null}
                   {item.forecast.outgoing[0] ? (
-                    <ActionRow
-                      icon="create-outline"
-                      label="Bir kaydın ödeme hesabını değiştir"
-                      border={!!bestSource && transferMinor > 0}
+                    <GroupedRow
+                      leading={<GroupedRowIcon name="create-outline" />}
+                      title="Ödeme hesabını değiştir"
                       onPress={() => router.push(`/obligations/${item.forecast.outgoing[0].obligationId}`)}
                     />
                   ) : null}
-                </View>
+                </Group>
               </Stack>
             ) : null}
           </>
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function ActionRow({
-  icon,
-  label,
-  onPress,
-  border = false,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  border?: boolean;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={{
-        minHeight: 56,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: theme.spacing.sm,
-        paddingHorizontal: theme.spacing.md,
-        borderTopWidth: border ? 1 : 0,
-        borderTopColor: theme.colors.border,
-      }}
-    >
-      <Ionicons name={icon} size={22} color={theme.colors.textPrimary} />
-      <Text variant="cardTitle" style={{ flex: 1 }}>
-        {label}
-      </Text>
-      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
-    </Pressable>
   );
 }

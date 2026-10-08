@@ -137,21 +137,18 @@ export default function MoreScreen() {
         <MenuGroup title="Kayıt türleri">
           <MenuRow
             icon={DOCUMENT_TYPE_ICON.cek ?? 'document-text'}
-            tone="brandSoft"
             label="Çek ve senetler"
             detail={countText((totalsByType?.cek?.count ?? 0) + (totalsByType?.senet?.count ?? 0))}
             href="/instruments"
           />
           <MenuRow
             icon="flash"
-            tone="aqua"
             label="Faturalarım"
             detail={countText(totalsByType?.fatura?.count)}
             href={{ pathname: '/obligations', params: { type: 'fatura' } }}
           />
           <MenuRow
             icon="cash"
-            tone="success"
             label="Kredilerim"
             detail={countText(totalsByType?.kredi?.count)}
             href={{ pathname: '/obligations', params: { type: 'kredi' } }}
@@ -159,7 +156,6 @@ export default function MoreScreen() {
           <MenuRow icon="card" label="Kredi kartlarım" detail={countText(creditCardAccounts.length)} href="/accounts/credit-cards" />
           <MenuRow
             icon="repeat"
-            tone="violet"
             label="Aboneliklerim"
             detail={countText(totalsByType?.abonelik?.count)}
             href="/aboneliklerim"
