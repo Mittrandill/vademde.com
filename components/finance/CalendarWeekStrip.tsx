@@ -105,7 +105,7 @@ export function CalendarWeekStrip({
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: isSelected ? theme.colors.brandPrimary : 'transparent',
-                      borderWidth: hasStrong ? 2 : 0,
+                      borderWidth: hasStrong && !isToday ? 2 : 0,
                       borderColor: theme.colors.accentViolet,
                     }}
                   >
