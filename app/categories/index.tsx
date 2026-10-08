@@ -117,7 +117,6 @@ export default function CategoriesScreen() {
                     key={item.id}
                     leading={<CategoryIcon icon={item.icon} color={item.color} size={34} />}
                     title={item.name}
-                    subtitle={used === 0 ? 'Bu ay yok' : undefined}
                     value={used > 0 ? formatMinorAmount(used).replace(/,00$/, '') : '—'}
                     onPress={() => router.push({ pathname: '/categories/new', params: { id: item.id } })}
                   />
