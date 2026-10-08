@@ -26,7 +26,11 @@ export function AiInsightsCard() {
 
   const insights = query.data ?? [];
   if (!enabled || insights.length === 0) return null;
-  const savingMinor = insights.reduce((s, i) => s + (i.impact_minor && i.impact_minor < 0 ? -i.impact_minor : 0), 0);
+  // Nakit önerilerindeki negatif etki bir açık uyarısıdır, tasarruf değil; toplama girmez.
+  const savingMinor = insights.reduce(
+    (s, i) => s + (i.kind !== 'nakit' && i.impact_minor && i.impact_minor < 0 ? -i.impact_minor : 0),
+    0
+  );
 
   const top = insights[0];
 

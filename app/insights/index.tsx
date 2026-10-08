@@ -78,7 +78,11 @@ function InsightsContent() {
   });
 
   const insights = useMemo(() => insightsQuery.data ?? [], [insightsQuery.data]);
-  const savingMinor = insights.reduce((s, i) => s + (i.impact_minor && i.impact_minor < 0 ? -i.impact_minor : 0), 0);
+  // Nakit önerilerindeki negatif etki bir açık uyarısıdır, tasarruf değil; toplama girmez.
+  const savingMinor = insights.reduce(
+    (s, i) => s + (i.kind !== 'nakit' && i.impact_minor && i.impact_minor < 0 ? -i.impact_minor : 0),
+    0
+  );
 
   const tabs = useMemo(() => {
     const kinds = Array.from(new Set(insights.map((i) => i.kind)));
@@ -92,8 +96,15 @@ function InsightsContent() {
   return (
     <Stack gap="lg">
       {savingMinor > 0 ? (
-        <Stack gap="xs">
-          <Text variant="label" color="textSecondary">
+        <View
+          style={{
+            gap: theme.spacing.xs,
+            padding: theme.spacing.lg,
+            borderRadius: theme.radius.widget,
+            backgroundColor: theme.colors.surfacePrimary,
+          }}
+        >
+          <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
             Tasarruf potansiyeli
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: theme.spacing.xs }}>
@@ -105,7 +116,7 @@ function InsightsContent() {
           <Text variant="caption" color="textSecondary">
             Kayıtlarından çıkarıldı. Hiçbir şey sen onaylamadan değişmez.
           </Text>
-        </Stack>
+        </View>
       ) : null}
 
       {insights.length > 0 ? (
@@ -156,7 +167,7 @@ function InsightCard({ insight, onDismiss }: { insight: AiInsight; onDismiss: ()
       }}
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.xs }}>
-        <Text variant="label" color="textSecondary">
+        <Text variant="label" style={{ color: theme.colors.payable }}>
           {INSIGHT_KIND_LABEL[insight.kind]}
         </Text>
         {impact ? (
@@ -182,7 +193,7 @@ function InsightCard({ insight, onDismiss }: { insight: AiInsight; onDismiss: ()
               paddingHorizontal: theme.spacing.md,
               borderRadius: 12,
               justifyContent: 'center',
-              backgroundColor: theme.colors.backgroundPrimary,
+              backgroundColor: theme.colors.fill,
             }}
           >
             <Text variant="cardTitle" style={{ fontSize: 14 }}>
