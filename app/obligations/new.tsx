@@ -10,7 +10,7 @@ import { useExitGuard } from '@/utils/useExitGuard';
 import { InstallmentPlanTable } from '@/components/finance/InstallmentPlanTable';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
-import { AmountField, Button, Card, DateField, FieldGroup, FormRow, Group, Pagination, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
+import { AmountField, BottomSheet, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
 import { AccountPicker } from '@/components/finance/AccountPicker';
 import { CounterpartyPicker } from '@/components/finance/CounterpartyPicker';
@@ -238,8 +238,7 @@ function ObligationForm({
   const [depositAccountId, setDepositAccountId] = useState<string | null>(null);
   // 2. adım (taksit planı) yalnızca yeni kayıtta ve taksit sayısı 1'den fazlaysa açılır.
   const [step, setStep] = useState<1 | 2>(1);
-  const [planPage, setPlanPage] = useState(0);
-  const [editingPlan, setEditingPlan] = useState(false);
+  const [editingPlanItemNumber, setEditingPlanItemNumber] = useState<number | null>(null);
 
   const categoryKind = direction === 'payable' ? 'expense' : 'income';
 
@@ -805,10 +804,15 @@ function ObligationForm({
   const accountRowLabel = isLendingType ? 'Kaynak hesap' : isCashAdvanceType || isCardStatementType ? 'Kredi kartı' : 'Hesap';
 
   if (inPlanStep) {
-    const totalPages = Math.max(1, Math.ceil(installmentPreview.length / PLAN_PAGE_SIZE));
-    const page = Math.min(planPage, totalPages - 1);
-    const pageItems = installmentPreview.slice(page * PLAN_PAGE_SIZE, (page + 1) * PLAN_PAGE_SIZE);
     const planTotal = installmentPreview.reduce((sum, i) => sum + i.amountMinor, 0);
+    const editingPlanItem = installmentPreview.find((item) => item.installmentNumber === editingPlanItemNumber) ?? null;
+    const editingPlanAmount = editingPlanItem
+      ? planEdits[editingPlanItem.installmentNumber]?.amountStr ??
+        formatAmountInput(
+          (editingPlanItem.amountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+          valueUnit.precision
+        )
+      : '';
 
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -827,25 +831,9 @@ function ObligationForm({
                       {formatMinorAmount(planTotal, valueUnitCode)}
                     </Text>
                   </Stack>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setEditingPlan((value) => !value)}
-                    style={{
-                      height: 34,
-                      paddingHorizontal: 16,
-                      borderRadius: 17,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: editingPlan ? theme.colors.action : theme.colors.fill,
-                    }}
-                  >
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: editingPlan ? theme.colors.onAction : theme.colors.textPrimary }}>
-                      {editingPlan ? 'Bitti' : 'Düzenle'}
-                    </Text>
-                  </Pressable>
                 </Row>
                 <Text variant="caption" color="textSecondary">
-                  Tarih ve tutarları değiştirmek için Düzenle’ye basın; anahtarı açtığınız vadeler ödendi kaydedilir.
+                  Tarih, tutar ve ödeme durumunu değiştirmek için taksite dokunun.
                 </Text>
               </Stack>
 
@@ -868,50 +856,19 @@ function ObligationForm({
                 </Stack>
               ) : null}
 
-              {!editingPlan ? (
-                // Görüntüleme: tüm taksitli listelerle aynı ödeme planı tablosu; satıra dokununca düzenleme açılır.
-                <InstallmentPlanTable
-                  currencyCode={valueUnitCode}
-                  unitLabel={periodLabels.unit.toLocaleLowerCase('tr-TR')}
-                  rows={installmentPreview.map((item) => ({
-                    key: String(item.installmentNumber),
-                    number: item.installmentNumber,
-                    dueDate: item.dueDate,
-                    amountMinor: item.amountMinor,
-                    principalMinor: showInterestField ? item.principalMinor : null,
-                    status: isPreviewPaid(item) ? 'paid' : 'upcoming',
-                  }))}
-                  onRowPress={() => setEditingPlan(true)}
-                />
-              ) : (
-              <>
-              <Group inset={16}>
-                {pageItems.map((item) => (
-                  <PlanEditRow
-                    key={item.installmentNumber}
-                    item={item}
-                    precision={valueUnit.precision}
-                    currencyCode={valueUnitCode}
-                    paid={isPreviewPaid(item)}
-                    editing={editingPlan}
-                    dateStr={planEdits[item.installmentNumber]?.dueDate ?? item.dueDate}
-                    amountStr={
-                      planEdits[item.installmentNumber]?.amountStr ??
-                      formatAmountInput(
-                        (item.amountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
-                        valueUnit.precision
-                      )
-                    }
-                    onDateChange={(value) => editPlanItem(item.installmentNumber, { dueDate: value })}
-                    onAmountChange={(value) => editPlanItem(item.installmentNumber, { amountStr: value })}
-                    onTogglePaid={(value) => togglePreviewPaid(item.installmentNumber, value)}
-                  />
-                ))}
-              </Group>
-
-              <Pagination page={page} totalPages={totalPages} onChange={setPlanPage} />
-              </>
-              )}
+              <InstallmentPlanTable
+                currencyCode={valueUnitCode}
+                unitLabel={periodLabels.unit.toLocaleLowerCase('tr-TR')}
+                rows={installmentPreview.map((item) => ({
+                  key: String(item.installmentNumber),
+                  number: item.installmentNumber,
+                  dueDate: item.dueDate,
+                  amountMinor: item.amountMinor,
+                  principalMinor: showInterestField ? item.principalMinor : null,
+                  status: isPreviewPaid(item) ? 'paid' : item.dueDate < todayIso ? 'overdue' : 'upcoming',
+                }))}
+                onRowPress={(row) => setEditingPlanItemNumber(row.number)}
+              />
 
               {paidPreviewCount > 0 ? (
                 <Text variant="caption" style={{ color: theme.colors.success }}>
@@ -930,6 +887,38 @@ function ObligationForm({
             </Stack>
           </ScrollView>
         </KeyboardAvoidingView>
+        <BottomSheet
+          visible={!!editingPlanItem}
+          onClose={() => setEditingPlanItemNumber(null)}
+          title={editingPlanItem ? `${editingPlanItem.installmentNumber}. ${periodLabels.unit.toLocaleLowerCase('tr-TR')}` : undefined}
+        >
+          {editingPlanItem ? (
+            <Stack gap="md">
+              <FieldGroup>
+                <DateField
+                  label="Vade"
+                  value={planEdits[editingPlanItem.installmentNumber]?.dueDate ?? editingPlanItem.dueDate}
+                  onChangeText={(value) => editPlanItem(editingPlanItem.installmentNumber, { dueDate: value })}
+                />
+                <AmountField
+                  label="Tutar"
+                  precision={valueUnit.precision}
+                  value={editingPlanAmount}
+                  onChangeText={(value) => editPlanItem(editingPlanItem.installmentNumber, { amountStr: value })}
+                />
+              </FieldGroup>
+              <Row align="center" style={{ justifyContent: 'space-between', paddingHorizontal: 4 }}>
+                <Text style={{ fontWeight: '500' }}>Ödendi</Text>
+                <Switch
+                  value={isPreviewPaid(editingPlanItem)}
+                  onValueChange={(value) => togglePreviewPaid(editingPlanItem.installmentNumber, value)}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
+                />
+              </Row>
+              <Button label="Tamam" onPress={() => setEditingPlanItemNumber(null)} />
+            </Stack>
+          ) : null}
+        </BottomSheet>
       </SafeAreaView>
     );
   }
@@ -1521,76 +1510,5 @@ function InstallmentPlanEditor({
         </Stack>
       </Card>
     </Stack>
-  );
-}
-
-const PLAN_PAGE_SIZE = 10;
-const planDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
-
-// 2. adım satırı: özet (başlık, tarih · tutar) + küçük ödendi anahtarı. Sayfadaki "Düzenle"
-// açıkken satır 1. adımdaki alan stiliyle (etiket üstte) tarih ve tutar alanlarına dönüşür.
-function PlanEditRow({
-  item,
-  dateStr,
-  amountStr,
-  precision,
-  currencyCode,
-  paid,
-  editing,
-  onDateChange,
-  onAmountChange,
-  onTogglePaid,
-}: {
-  item: InstallmentPlanItem;
-  dateStr: string;
-  amountStr: string;
-  precision: 0 | 2;
-  currencyCode: string;
-  paid: boolean;
-  editing: boolean;
-  onDateChange: (value: string) => void;
-  onAmountChange: (value: string) => void;
-  onTogglePaid: (value: boolean) => void;
-}) {
-  const due = new Date(`${item.dueDate}T00:00:00`);
-  const summary = `${Number.isNaN(due.getTime()) ? item.dueDate : planDateFormatter.format(due)} · ${formatValueUnitAmount(item.amountMinor, currencyCode)}`;
-
-  return (
-    <View style={{ paddingVertical: 10, paddingHorizontal: 16, gap: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 40 }}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ fontWeight: '500' }}>{item.installmentNumber}. taksit</Text>
-          {editing ? null : (
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {summary}
-              {item.interestMinor > 0 ? ` · faiz ${formatMinorAmount(item.interestMinor)}` : ''}
-            </Text>
-          )}
-        </View>
-        {/* Küçültülmüş anahtar: ölçek yerleşimi etkilemesin diye sabit boyutlu kapta. */}
-        <View style={{ width: 40, height: 26, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-          <Switch
-            accessibilityLabel={`${item.installmentNumber}. taksit ödendi`}
-            value={paid}
-            onValueChange={onTogglePaid}
-            style={{ transform: [{ scale: 0.72 }] }}
-          />
-        </View>
-      </View>
-      {editing ? (
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <FieldGroup>
-              <DateField label="Vade" value={dateStr} onChangeText={onDateChange} />
-            </FieldGroup>
-          </View>
-          <View style={{ flex: 1 }}>
-            <FieldGroup>
-              <AmountField label="Tutar" placeholder={precision === 0 ? '1' : '0,00'} precision={precision} value={amountStr} onChangeText={onAmountChange} />
-            </FieldGroup>
-          </View>
-        </View>
-      ) : null}
-    </View>
   );
 }

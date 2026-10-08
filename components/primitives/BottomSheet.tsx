@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/theme';
@@ -23,7 +23,10 @@ export function BottomSheet({ visible, onClose, title, children }: BottomSheetPr
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
         <Pressable
           accessibilityLabel="Kapat"
           onPress={onClose}
@@ -36,7 +39,6 @@ export function BottomSheet({ visible, onClose, title, children }: BottomSheetPr
             borderTopRightRadius: theme.radius.heroWidget,
             paddingHorizontal: theme.screenEdge.standard,
             paddingTop: theme.spacing.xs,
-            paddingBottom: insets.bottom + theme.spacing.lg,
             maxHeight: '90%',
           }}
         >
@@ -57,9 +59,15 @@ export function BottomSheet({ visible, onClose, title, children }: BottomSheetPr
               {title}
             </Text>
           ) : null}
-          {children}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + theme.spacing.lg }}
+          >
+            {children}
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
