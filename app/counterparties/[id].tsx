@@ -5,11 +5,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import {
   ActionSheet,
   Card,
   EmptyState,
+  Group,
+  GroupedRow,
+  GroupedRowIcon,
   Pagination,
   Pressable,
   Row,
@@ -20,11 +22,9 @@ import {
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import { ReminderSheet } from '@/components/finance/ReminderSheet';
 import {
-  FinanceDetailHero,
   FinanceDetailInfoCard,
   FinanceDetailTabs,
 } from '@/components/finance/FinanceDetailBlocks';
-import { Amount } from '@/components/finance/Amount';
 import { ReceiptRow } from '@/components/finance/ReceiptRow';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
@@ -74,7 +74,7 @@ export default function CounterpartyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const enabled = !!activeWorkspaceId && !!id;
-  const [tab, setTab] = useState<DetailTab>('genel');
+  const [tab, setTab] = useState<DetailTab>('kayitlar');
   const [menuOpen, setMenuOpen] = useState(false);
   const [obligationsPage, setObligationsPage] = useState(0);
   const [transactionsPage, setTransactionsPage] = useState(0);
@@ -215,9 +215,9 @@ export default function CounterpartyDetailScreen() {
   const receivableShare = directionalTotal > 0 ? (ledger?.receivableMinor ?? 0) / directionalTotal : 0;
 
   const tabOptions: { key: DetailTab; label: string }[] = [
-    { key: 'genel', label: 'Genel' },
-    { key: 'kayitlar', label: `Açık Kayıtlar (${allOpenObligations.length})` },
-    { key: 'hareketler', label: 'Hareketler' },
+    { key: 'kayitlar', label: `Açık kayıtlar (${allOpenObligations.length})` },
+    { key: 'hareketler', label: 'İşlemler' },
+    { key: 'genel', label: 'Bilgiler' },
   ];
   // Faturayı kapatmış çek/senetler cari bakiyesine girmez; vadede hareket edecek tutar olarak not düşülür.
   const instrumentParts = [
@@ -277,25 +277,105 @@ export default function CounterpartyDetailScreen() {
       }}
       isLoading={false}
     >
-      <FinanceDetailHero
-        icon={<PersonAvatar name={counterparty.name} size={44} />}
-        eyebrow="CARİ DURUM"
-        title={`${counterparty.name} · ${getCounterpartyTypeLabel(counterparty.type)}`}
-        amountLabel="CARİ BAKİYE"
-        amount={formatMinorAmount(Math.abs(netMinor))}
-        amountColor={netColor}
-        progress={directionalTotal > 0 ? receivableShare : undefined}
-        progressLabel="Alacak payı"
-        progressColor={theme.colors.success}
-        stats={[
-          { label: 'AÇIK KAYIT', value: String(ledger?.openCount ?? 0) },
-          { label: 'GECİKEN', value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
-          {
-            label: 'EN YAKIN VADE',
-            value: ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok',
-          },
-        ]}
-      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <PersonAvatar name={counterparty.name} size={56} />
+        <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+          <Text variant="sectionTitle" numberOfLines={2}>
+            {counterparty.name}
+          </Text>
+          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+            {[getCounterpartyTypeLabel(counterparty.type), counterparty.tax_number ? `VKN ${counterparty.tax_number}` : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
+        </Stack>
+      </View>
+
+      <Card style={{ gap: 12 }}>
+        <View style={{ flexDirection: 'row' }}>
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="caption" color="textSecondary">
+              Net bakiye
+            </Text>
+            <Text
+              tabular
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+              style={{ fontSize: 26, lineHeight: 32, fontWeight: '700', color: netColor }}
+            >
+              {netMinor < 0 ? '−' : ''}
+              {formatMinorAmount(Math.abs(netMinor))}
+            </Text>
+            <Text variant="caption" color="textSecondary">
+              {settled ? 'Hesap denk' : owesUs ? 'Size borçlu' : 'Siz borçlusunuz'}
+            </Text>
+          </Stack>
+          <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
+            <Text variant="caption" color="textSecondary">
+              En yakın vade
+            </Text>
+            <Text style={{ fontSize: 15, fontWeight: '600' }}>
+              {ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok'}
+            </Text>
+          </Stack>
+        </View>
+        <View style={{ height: 1, backgroundColor: theme.colors.separator }} />
+        <View style={{ flexDirection: 'row' }}>
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="caption" color="textSecondary">
+              Borç
+            </Text>
+            <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
+              {formatMinorAmount(ledger?.payableMinor ?? 0)}
+            </Text>
+          </Stack>
+          <Stack gap="xxs" style={{ flex: 1 }}>
+            <Text variant="caption" color="textSecondary">
+              Alacak
+            </Text>
+            <Text tabular style={{ fontSize: 15, fontWeight: '600', color: theme.colors.success }}>
+              {formatMinorAmount(ledger?.receivableMinor ?? 0)}
+            </Text>
+          </Stack>
+          <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
+            <Text variant="caption" color="textSecondary">
+              Geciken
+            </Text>
+            <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
+              {formatMinorAmount(ledger?.overdueMinor ?? 0)}
+            </Text>
+          </Stack>
+        </View>
+      </Card>
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <QuickAction
+          icon="arrow-up"
+          label="Ödeme yap"
+          primary
+          onPress={() => router.push({ pathname: '/payments/new', params: { direction: 'payable', counterpartyId: counterparty.id } })}
+        />
+        <QuickAction
+          icon="arrow-down"
+          label="Tahsilat al"
+          onPress={() => router.push({ pathname: '/payments/new', params: { direction: 'receivable', counterpartyId: counterparty.id } })}
+        />
+        <QuickAction
+          icon="document-text"
+          label="Alış faturası"
+          onPress={() =>
+            router.push({ pathname: '/obligations/new', params: { type: 'fatura', direction: 'payable', counterpartyId: counterparty.id } })
+          }
+        />
+        <QuickAction
+          icon="receipt"
+          label="Satış faturası"
+          onPress={() =>
+            router.push({ pathname: '/obligations/new', params: { type: 'fatura', direction: 'receivable', counterpartyId: counterparty.id } })
+          }
+        />
+      </View>
 
       {breakdown && breakdown.payable.remainingTotalMinor > 0 ? (
         <Stack gap="sm">
@@ -370,11 +450,11 @@ export default function CounterpartyDetailScreen() {
           {openObligations.length === 0 ? (
             <EmptyState icon="checkmark-circle-outline" message="Açık borç veya alacak yok." />
           ) : (
-            <Stack gap="xs">
+            <Group>
               {openObligations.map((o) => (
                 <OpenObligationRow key={o.id} obligation={o} />
               ))}
-            </Stack>
+            </Group>
           )}
           {obligationsTotalPages > 1 ? (
             <Pagination page={effectiveObligationsPage} totalPages={obligationsTotalPages} onChange={setObligationsPage} />
@@ -389,11 +469,11 @@ export default function CounterpartyDetailScreen() {
               {transactionSections.map((section) => (
                 <Stack gap="xs" key={section.title}>
                   <SectionHeader title={section.title} />
-                  <Stack gap="xs">
+                  <Group>
                     {section.data.map((item) => (
                       <StatementRow key={item.key} entry={item} />
                     ))}
-                  </Stack>
+                  </Group>
                 </Stack>
               ))}
             </Stack>
@@ -481,40 +561,66 @@ export default function CounterpartyDetailScreen() {
   );
 }
 
-function OpenObligationRow({ obligation }: { obligation: ObligationWithRelations }) {
+function QuickAction({
+  icon,
+  label,
+  onPress,
+  primary,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  primary?: boolean;
+}) {
+  const theme = useTheme();
   return (
-    <Pressable onPress={() => router.push(`/obligations/${obligation.id}`)}>
-      <Card>
-        <Row gap="sm">
-          <ObligationIcon
-            documentType={obligation.document_type}
-            bankCode={obligation.bank_code}
-            serviceCode={obligation.service_code}
-            fallbackName={obligation.title}
-            size={36}
-          />
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="cardTitle" numberOfLines={1}>
-              {obligation.title}
-            </Text>
-            <Row gap="xs">
-              <Text variant="caption" color="textSecondary">
-                {obligation.due_date ? shortDateFormatter.format(new Date(obligation.due_date)) : 'Vade yok'}
-              </Text>
-              <StatusBadge status={obligation.status} />
-            </Row>
-          </Stack>
-          <Amount
-            amountMinor={obligation.remaining_amount_minor}
-            currencyCode={obligation.currency_code}
-            valueUnitType={obligation.value_unit_type as ValueUnitType}
-            direction={obligation.direction as 'payable' | 'receivable'}
-            overdue={obligation.status === 'gecikti'}
-            variant="body"
-          />
-        </Row>
-      </Card>
+    <Pressable accessibilityRole="button" onPress={onPress} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+      <View
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: primary ? theme.colors.brandPrimary : theme.colors.surfacePrimary,
+        }}
+      >
+        <Ionicons name={icon} size={20} color={primary ? theme.colors.onAction : theme.colors.textPrimary} />
+      </View>
+      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', textAlign: 'center' }}>
+        {label}
+      </Text>
     </Pressable>
+  );
+}
+
+function OpenObligationRow({ obligation }: { obligation: ObligationWithRelations }) {
+  const theme = useTheme();
+  const overdue = obligation.status === 'gecikti';
+  return (
+    <GroupedRow
+      leading={
+        <ObligationIcon
+          documentType={obligation.document_type}
+          bankCode={obligation.bank_code}
+          serviceCode={obligation.service_code}
+          fallbackName={obligation.title}
+          size={34}
+        />
+      }
+      title={obligation.title}
+      subtitle={obligation.due_date ? shortDateFormatter.format(new Date(obligation.due_date)) : 'Vade yok'}
+      chevron={false}
+      trailing={
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          <Text tabular style={{ fontSize: 15, fontWeight: '600', color: overdue ? theme.colors.danger : theme.colors.textPrimary }}>
+            {formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)}
+          </Text>
+          <StatusBadge status={obligation.status} />
+        </View>
+      }
+      onPress={() => router.push(`/obligations/${obligation.id}`)}
+    />
   );
 }
 
@@ -535,63 +641,39 @@ function StatementRow({ entry }: { entry: StatementEntry }) {
   }
 
   return (
-    <Pressable onPress={open}>
-      <Card>
-        <Row gap="sm" align="center">
-          {entry.kind === 'document' && entry.documentType ? (
-            <ObligationIcon documentType={entry.documentType} fallbackName={entry.title} size={32} />
-          ) : (
-            <View
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: withAlpha(entry.kind === 'payment' ? theme.colors.success : theme.colors.textSecondary, 0.14),
-              }}
-            >
-              <Ionicons
-                name={
-                  entry.kind === 'payment'
-                    ? entry.direction === 'receivable'
-                      ? 'arrow-down'
-                      : 'arrow-up'
-                    : 'swap-vertical'
-                }
-                size={16}
-                color={entry.kind === 'payment' ? theme.colors.success : theme.colors.textSecondary}
-              />
-            </View>
-          )}
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="body" numberOfLines={1}>
-              {entry.title}
+    <GroupedRow
+      leading={
+        entry.kind === 'document' && entry.documentType ? (
+          <ObligationIcon documentType={entry.documentType} fallbackName={entry.title} size={34} />
+        ) : (
+          <GroupedRowIcon
+            name={entry.kind === 'payment' ? (entry.direction === 'receivable' ? 'arrow-down' : 'arrow-up') : 'swap-vertical'}
+            tone={entry.kind === 'payment' ? 'success' : 'default'}
+          />
+        )
+      }
+      title={entry.title}
+      subtitle={entry.subtitle || undefined}
+      chevron={false}
+      trailing={
+        <View style={{ alignItems: 'flex-end', gap: 2 }}>
+          <Text tabular style={{ fontSize: 15, fontWeight: '600', color: amountColor }}>
+            {sign}
+            {formatMinorAmount(entry.amountMinor, entry.currencyCode)}
+          </Text>
+          {running !== null ? (
+            <Text variant="caption" color="textSecondary" tabular>
+              Bakiye {running < 0 ? '−' : ''}
+              {formatMinorAmount(Math.abs(running), entry.currencyCode)}
             </Text>
-            {entry.subtitle ? (
-              <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                {entry.subtitle}
-              </Text>
-            ) : null}
-          </Stack>
-          <Stack gap="xxs" align="flex-end">
-            <Text variant="body" tabular style={{ color: amountColor, fontWeight: '600' }}>
-              {sign}
-              {formatMinorAmount(entry.amountMinor, entry.currencyCode)}
+          ) : entry.balanceEffectMinor === 0 ? (
+            <Text variant="caption" color="textSecondary">
+              bakiyeyi etkilemez
             </Text>
-            {running !== null ? (
-              <Text variant="caption" color="textSecondary" tabular>
-                Bakiye {running < 0 ? '−' : ''}
-                {formatMinorAmount(Math.abs(running), entry.currencyCode)}
-              </Text>
-            ) : entry.balanceEffectMinor === 0 ? (
-              <Text variant="caption" color="textSecondary">
-                bakiyeyi etkilemez
-              </Text>
-            ) : null}
-          </Stack>
-        </Row>
-      </Card>
-    </Pressable>
+          ) : null}
+        </View>
+      }
+      onPress={open}
+    />
   );
 }
