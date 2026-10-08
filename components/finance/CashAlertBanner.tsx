@@ -25,22 +25,24 @@ export function CashAlertBanner() {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        padding: 14,
+        gap: 14,
+        padding: 16,
         borderRadius: theme.radius.widget,
-        backgroundColor: 'rgba(255,176,0,0.14)',
+        backgroundColor: theme.colors.surfacePrimary,
       }}
     >
-      <Ionicons name="trending-down" size={22} color={theme.colors.attentionMarker} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontWeight: '600', fontSize: 15 }}>
+      <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,176,0,0.16)' }}>
+        <Ionicons name="trending-down" size={23} color={theme.colors.attentionMarker} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="caption" color="textSecondary">
+          Nakit uyarısı
+        </Text>
+        <Text style={{ fontWeight: '600', fontSize: 15, lineHeight: 20 }}>
           {risky.name} {dayMonth.format(new Date(risky.forecast.firstNegative.date))} tarihinde eksiye düşebilir
         </Text>
-        <Text variant="caption" color="textSecondary">
-          Ayrıntıyı ve çözüm önerilerini gör
-        </Text>
       </View>
-      <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
+      <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedControl} />
     </Pressable>
   );
 }

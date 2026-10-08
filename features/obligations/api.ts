@@ -57,6 +57,9 @@ export interface ListObligationsFilter {
   search?: string;
   page?: number;
   pageSize?: number;
+  /** Bu tarihten (YYYY-MM-DD) önce vadeli kayıtlar — gecikmiş filtresi için.
+   * Durum alanı vade geçince otomatik 'gecikti' olmadığından gecikme tarihten türetilir. */
+  dueBefore?: string;
   /** Vade tarihine göre sıralama yönü; varsayılan artan (en yakın vade önce). */
   ascending?: boolean;
 }
@@ -71,6 +74,7 @@ export async function listObligations({
   statuses,
   dueFrom,
   dueTo,
+  dueBefore,
   search,
   page = 0,
   pageSize = OBLIGATIONS_PAGE_SIZE,
@@ -88,6 +92,7 @@ export async function listObligations({
   if (statuses?.length) query = query.in('status', statuses);
   if (dueFrom) query = query.gte('due_date', dueFrom);
   if (dueTo) query = query.lte('due_date', dueTo);
+  if (dueBefore) query = query.lt('due_date', dueBefore);
   const trimmedSearch = search?.trim();
   if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
 
@@ -282,15 +287,18 @@ export async function getObligationSummary({
   direction,
   documentType,
   statuses,
+  dueBefore,
   search,
 }: Omit<ListObligationsFilter, 'page' | 'pageSize' | 'dueFrom' | 'dueTo'>): Promise<ObligationSummary> {
+  const todayIso = new Date().toISOString().slice(0, 10);
   let query = supabase
     .from('obligations')
-    .select('direction, remaining_amount_minor, total_amount_minor, currency_code, status')
+    .select('direction, remaining_amount_minor, total_amount_minor, currency_code, status, due_date')
     .eq('workspace_id', workspaceId);
   if (direction) query = query.eq('direction', direction);
   if (documentType) query = query.eq('document_type', documentType);
   if (statuses?.length) query = query.in('status', statuses);
+  if (dueBefore) query = query.lt('due_date', dueBefore);
   const trimmedSearch = search?.trim();
   if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
 
@@ -318,7 +326,11 @@ export async function getObligationSummary({
       receivableRows.map((r) => ({ amountMinor: r.total_amount_minor, unitCode: r.currency_code })),
       rates
     ),
-    overdueCount: rows.filter((r) => r.status === 'gecikti').length,
+    overdueCount: rows.filter(
+      (r) =>
+        r.status === 'gecikti' ||
+        (r.remaining_amount_minor > 0 && !!r.due_date && r.due_date < todayIso && ACTIVE_OBLIGATION_STATUSES.includes(r.status))
+    ).length,
   };
 }
 

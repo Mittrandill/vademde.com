@@ -30,7 +30,8 @@ function startOfDay(date: Date): Date {
 }
 
 // Tuval AnaSayfa "Yaklaşan vadeler": Bugün / 7 gün / 30 gün segmenti ve tarih bloklu gruplu liste.
-// Gecikmişler her aralıkta başta görünür; tam liste "Tüm vadeli kayıtlar" satırında.
+// Her aralık yalnızca kendi penceresindeki vadeleri gösterir (Bugün = bugün, 7/30 gün = bugünden itibaren);
+// gecikmişler üstteki gecikmiş kartında ve Tüm Kayıtlar > Gecikmiş sekmesinde.
 export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
   const theme = useTheme();
   const [range, setRange] = useState<Range>('7');
@@ -42,7 +43,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
       .filter((o) => o.remaining_amount_minor > 0 && !!o.due_date)
       .filter((o) => {
         const diff = Math.round((startOfDay(new Date(o.due_date as string)).getTime() - today.getTime()) / DAY_MS);
-        return diff <= days;
+        return diff >= 0 && diff <= days;
       })
       .sort((a, b) => new Date(a.due_date as string).getTime() - new Date(b.due_date as string).getTime());
     return { items: open.slice(0, VISIBLE_COUNT), total: open.length };
@@ -71,7 +72,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
                 onPress={() => router.push('/obligations')}
                 style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: '500' }}>{total} vadenin tümü</Text>
+                <Text style={{ fontSize: 15, fontWeight: '500' }}>Tüm vadeli kayıtlar</Text>
                 <Ionicons name="chevron-forward" size={12} color={theme.colors.textPrimary} />
               </Pressable>
             ) : null}

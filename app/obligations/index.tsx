@@ -67,7 +67,7 @@ const STATUS_OPTIONS: { key: StatusKey; label: string }[] = [
 
 const STATUSES_BY_KEY: Record<StatusKey, Obligation['status'][] | undefined> = {
   active: ACTIVE_OBLIGATION_STATUSES,
-  overdue: ['gecikti'],
+  overdue: ACTIVE_OBLIGATION_STATUSES,
   closed: CLOSED_OBLIGATION_STATUSES,
   all: undefined,
 };
@@ -83,7 +83,7 @@ export default function ObligationsByTypeScreen() {
   const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const { type } = useLocalSearchParams<{ type?: string }>();
+  const { type, status } = useLocalSearchParams<{ type?: string; status?: string }>();
   const documentType = typeof type === 'string' ? type : undefined;
   const title = documentType
     ? (DOCUMENT_TYPE_LABEL_PLURAL[documentType] ?? DOCUMENT_TYPE_LABEL[documentType] ?? 'Kayıtlar')
@@ -91,7 +91,9 @@ export default function ObligationsByTypeScreen() {
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [statusKey, setStatusKey] = useState<StatusKey>('active');
+  const [statusKey, setStatusKey] = useState<StatusKey>(
+    status === 'overdue' || status === 'closed' || status === 'all' ? status : 'active'
+  );
   const [sortAscending, setSortAscending] = useState(true);
   const [page, setPage] = useState(0);
 
@@ -102,7 +104,10 @@ export default function ObligationsByTypeScreen() {
   }, [searchInput]);
 
   const statuses = STATUSES_BY_KEY[statusKey];
-  const enabled = !!activeWorkspaceId && !!documentType;
+  // Gecikme tarihten türetilir (bkz. DueBreakdown ile aynı kural: vadesi bugünden önce ve açık).
+  const dueBefore = statusKey === 'overdue' ? new Date().toISOString().slice(0, 10) : undefined;
+  // Belge türü verilmemişse (Ana Sayfa'dan "Tüm kayıtlar") tüm türler listelenir.
+  const enabled = !!activeWorkspaceId;
 
   // Özet sorgusu sıralama veya sayfadan etkilenmez; ikisi de yalnızca sayfalı liste
   // anahtarına eklenir ki "Tarih" düğmesine dokunmak veya sayfa değiştirmek özeti
@@ -128,6 +133,7 @@ export default function ObligationsByTypeScreen() {
         workspaceId: activeWorkspaceId as string,
         documentType,
         statuses,
+        dueBefore,
         search: search || undefined,
       }),
     enabled,
@@ -185,6 +191,7 @@ export default function ObligationsByTypeScreen() {
         workspaceId: activeWorkspaceId as string,
         documentType,
         statuses,
+        dueBefore,
         search: search || undefined,
         page: effectivePage,
         pageSize: LIST_PAGE_SIZE,
@@ -396,6 +403,16 @@ export default function ObligationsByTypeScreen() {
   );
 }
 
+function daysBetweenToday(iso: string): number {
+  const now = new Date();
+  const due = new Date(iso);
+  return Math.round(
+    (new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime() -
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) /
+      86400000
+  );
+}
+
 interface ObligationRowCardProps {
   item: ObligationWithRelations;
   installmentSummary: ObligationInstallmentSummary | undefined;
@@ -422,11 +439,11 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
     .filter(Boolean)
     .join(' · ');
   const isClosed = item.status === 'odendi' || item.status === 'tahsil_edildi';
-  const daysLeft = dueDate ? Math.ceil((new Date(dueDate).getTime() - new Date().getTime()) / 86400000) : null;
+  const daysLeft = dueDate ? daysBetweenToday(dueDate) : null;
   const tag: { label: string; tone: 'danger' | 'brand' | 'success' | 'neutral' } | null = isClosed
     ? { label: statusLabel, tone: 'success' }
-    : item.status === 'gecikti'
-      ? { label: 'Gecikti', tone: 'danger' }
+    : item.status === 'gecikti' || (daysLeft !== null && daysLeft < 0)
+      ? { label: daysLeft !== null && daysLeft < 0 ? `${-daysLeft} gün gecikti` : 'Gecikti', tone: 'danger' }
       : daysLeft === null
         ? null
         : daysLeft <= 1

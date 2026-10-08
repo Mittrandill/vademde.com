@@ -117,21 +117,28 @@ export function HomeHero({
       {overdueCount > 0 ? (
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/obligations')}
+          onPress={() => router.push({ pathname: '/obligations', params: { status: 'overdue' } })}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 12,
-            padding: 14,
+            gap: 14,
+            padding: 16,
             borderRadius: theme.radius.widget,
-            backgroundColor: 'rgba(255,98,92,0.12)',
+            backgroundColor: theme.colors.surfacePrimary,
           }}
         >
-          <Ionicons name="alert-circle" size={22} color={colors.danger} />
-          <Text style={{ flex: 1, fontSize: 15 }}>
-            <Text style={{ fontWeight: '600' }}>{hidden ? MASK : formatMinorAmount(overdueMinor)}</Text> gecikmiş · {overdueCount} kayıt
-          </Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.mutedControl} />
+          <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,98,92,0.14)' }}>
+            <Ionicons name="alarm-outline" size={23} color={colors.danger} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text variant="caption" color="textSecondary">
+              Gecikmiş · {overdueCount} kayıt
+            </Text>
+            <Text variant="displayAmount" tabular style={{ fontSize: 22, lineHeight: 27, color: colors.danger }}>
+              {hidden ? MASK : formatMinorAmount(overdueMinor)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.mutedControl} />
         </Pressable>
       ) : null}
     </View>
