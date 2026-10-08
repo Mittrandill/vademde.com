@@ -115,8 +115,22 @@ type CategoryTransactionRow = {
   amount_minor: number;
   financing_minor: number;
   currency_code: string;
+  description: string | null;
   category: { id: string; name: string; icon: string | null; color: string | null } | null;
+  account: { type: string } | null;
 };
+
+// Kart ekstresinin tek satırlık toplam borç hareketi ("Kredi Kartı Ekstresi — Banka") bir
+// harcama kategorisi değildir; harcamalar kendi kategorileriyle ayrı satırlar olarak zaten
+// kayıtlıdır. Kategorisiz bu toplam satırı "Kategorisiz" kovasını şişirmesin diye atlanır.
+function isCardStatementLump(row: CategoryTransactionRow): boolean {
+  return (
+    !row.category &&
+    row.account?.type === 'credit_card' &&
+    !!row.description &&
+    row.description.startsWith('Kredi Kartı Ekstresi')
+  );
+}
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Kategori bazlı harcamalar/gelirler.
 export async function getCategoryBreakdown(
@@ -126,7 +140,7 @@ export async function getCategoryBreakdown(
 ): Promise<CategoryBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, financing_minor, currency_code, category:categories(id, name, icon, color)')
+    .select('amount_minor, financing_minor, currency_code, description, category:categories(id, name, icon, color), account:accounts!transactions_account_id_fkey(type)')
     .eq('workspace_id', workspaceId)
     .eq('direction', direction);
   if (range.from) query = query.gte('occurred_at', range.from);
@@ -138,7 +152,7 @@ export async function getCategoryBreakdown(
   const totals = new Map<string, { name: string; icon: string | null; color: string | null; amountMinor: number }>();
   let grandTotal = 0;
   for (const row of data as unknown as CategoryTransactionRow[]) {
-    if (profitAndLossMinor(row) <= 0) continue;
+    if (profitAndLossMinor(row) <= 0 || isCardStatementLump(row)) continue;
     const key = row.category?.id ?? 'uncategorized';
     const name = row.category?.name ?? 'Kategorisiz';
     const existing =

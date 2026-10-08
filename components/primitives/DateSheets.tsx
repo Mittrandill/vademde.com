@@ -162,17 +162,26 @@ export interface DateRangeSheetProps {
   title?: string;
 }
 
-// İki dokunuşla aralık: ilk dokunuş başlangıç, ikinci bitiş (ikinci tarih öndeyse yer değiştirir).
+function formatIso(iso: string | null): string {
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso) : null;
+  return m ? `${Number(m[3])} ${MONTH_NAMES[Number(m[2]) - 1]} ${m[1]}` : 'Seçin';
+}
+
+// Başlangıç ve Bitiş kutuları: aktif kutu doldurulur, ardından otomatik diğerine geçilir.
+// Başlangıçtan önce bir bitiş seçilirse iki tarih yer değiştirir. İki tarih de seçilmeden uygulanamaz.
 export function DateRangeSheet({ visible, onClose, start, end, onApply, title = 'Tarih aralığı' }: DateRangeSheetProps) {
+  const theme = useTheme();
   const [cursor, setCursor] = useCursor(start);
   const [draftStart, setDraftStart] = useState<string | null>(start);
   const [draftEnd, setDraftEnd] = useState<string | null>(end);
+  const [active, setActive] = useState<'start' | 'end'>('start');
 
   const pick = (iso: string) => {
-    if (!draftStart || draftEnd) {
+    if (active === 'start') {
       setDraftStart(iso);
-      setDraftEnd(null);
-    } else if (iso < draftStart) {
+      if (draftEnd && iso > draftEnd) setDraftEnd(null);
+      setActive('end');
+    } else if (draftStart && iso < draftStart) {
       setDraftEnd(draftStart);
       setDraftStart(iso);
     } else {
@@ -180,8 +189,43 @@ export function DateRangeSheet({ visible, onClose, start, end, onApply, title = 
     }
   };
 
+  const fields: { key: 'start' | 'end'; label: string; value: string | null }[] = [
+    { key: 'start', label: 'Başlangıç', value: draftStart },
+    { key: 'end', label: 'Bitiş', value: draftEnd },
+  ];
+
   return (
     <BottomSheet visible={visible} onClose={onClose} title={title}>
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+        {fields.map((f) => {
+          const selected = active === f.key;
+          return (
+            <Pressable
+              key={f.key}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => setActive(f.key)}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1.5,
+                borderColor: selected ? theme.colors.action : theme.colors.border,
+                backgroundColor: theme.colors.fill,
+                gap: 2,
+              }}
+            >
+              <Text variant="caption" color="textSecondary">
+                {f.label}
+              </Text>
+              <Text style={{ fontWeight: '600', color: f.value ? theme.colors.textPrimary : theme.colors.textSecondary }}>
+                {formatIso(f.value)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
       <MonthStepper year={cursor.year} month={cursor.month} onChange={setCursor} />
       <View style={{ height: 8 }} />
       <MonthGrid
@@ -194,10 +238,10 @@ export function DateRangeSheet({ visible, onClose, start, end, onApply, title = 
       <View style={{ height: 12 }} />
       <Button
         label="Uygula"
-        disabled={!draftStart}
+        disabled={!draftStart || !draftEnd}
         onPress={() => {
-          if (!draftStart) return;
-          onApply(draftStart, draftEnd ?? draftStart);
+          if (!draftStart || !draftEnd) return;
+          onApply(draftStart, draftEnd);
           onClose();
         }}
       />

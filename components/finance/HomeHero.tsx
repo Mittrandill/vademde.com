@@ -51,8 +51,21 @@ export function HomeHero({
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#hero-sheen)" />
         </Svg>
-        <View pointerEvents="none" style={{ position: 'absolute', right: -52, top: 46 }}>
-          <WalletArt width={168} />
+        {/* Cüzdan: sağ üstte tam görünür; aşağı doğru kart rengine eriyerek şeffaflaşır,
+            böylece alttaki Alacak/Borç rakamları okunur kalır (referans tasarım). */}
+        <View pointerEvents="none" style={{ position: 'absolute', right: -60, top: 44, width: 214 }}>
+          <WalletArt width={214} />
+          <Svg style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="wallet-fade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={colors.surfacePrimary} stopOpacity={0} />
+                <Stop offset="0.4" stopColor={colors.surfacePrimary} stopOpacity={0} />
+                <Stop offset="0.8" stopColor={colors.surfacePrimary} stopOpacity={0.85} />
+                <Stop offset="1" stopColor={colors.surfacePrimary} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#wallet-fade)" />
+          </Svg>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>

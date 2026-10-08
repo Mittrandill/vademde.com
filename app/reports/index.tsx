@@ -422,30 +422,16 @@ export default function ReportsScreen() {
           right={{ icon: 'share-outline', accessibilityLabel: 'Dışa aktar', onPress: () => setExportOpen(true) }}
         />
         <ScrollableTabs
-          tabs={period === 'custom' ? [...PERIODS, { key: 'custom', label: 'Özel' }] : PERIODS}
+          tabs={[...PERIODS, { key: 'custom', label: 'Özel aralık' }]}
           activeKey={period}
-          onChange={(k) => setPeriod(k as Period)}
+          onChange={(k) => (k === 'custom' ? setRangeOpen(true) : setPeriod(k as Period))}
         />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Dönem: ${periodText}. Aralık seç`}
-          onPress={() => setRangeOpen(true)}
-          style={{
-            minHeight: theme.touchTarget.minimum,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.xs,
-          }}
-        >
-          <Ionicons name="calendar-outline" size={theme.iconSize.lg} color={theme.colors.textPrimary} />
-          <Text variant="label" tabular style={{ textTransform: 'none', flexShrink: 1 }} numberOfLines={1}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+          <Ionicons name="calendar-outline" size={theme.iconSize.md} color={theme.colors.textSecondary} />
+          <Text variant="caption" color="textSecondary" tabular numberOfLines={1} style={{ flexShrink: 1 }}>
             {periodText}
           </Text>
-          <Text variant="cardTitle" style={{ fontSize: 13, marginLeft: 'auto' }}>
-            Aralık seç
-          </Text>
-          <Ionicons name="chevron-down" size={theme.iconSize.md} color={theme.colors.textPrimary} />
-        </Pressable>
+        </View>
         <ScrollableTabs tabs={SECTIONS} activeKey={section} onChange={(k) => jumpTo(k as SectionKey)} />
       </View>
 
