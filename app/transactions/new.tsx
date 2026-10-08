@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
+import { useExitGuard } from '@/utils/useExitGuard';
 import { useReflowKey } from '@/services/reflow';
 import { BigAmountInput, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
 import { CategoryPicker } from '@/components/finance/CategoryPicker';
@@ -188,6 +189,7 @@ function TransactionForm({
   // dekont alanı gösterilmez (iki hesabı kapsayan tek kanıt anlamsız).
   const archive = useDocumentArchiveAccess();
   const [receipt, setReceipt] = useState<PendingReceipt | null>(null);
+  const { allowExit } = useExitGuard(!isEditing && (amount.trim() !== '' || description.trim() !== ''));
   const [removedExisting, setRemovedExisting] = useState(false);
   const existingReceiptQuery = useQuery({
     queryKey: ['transaction-receipt', id],
@@ -318,6 +320,7 @@ function TransactionForm({
       return created;
     },
     onSuccess: () => {
+      allowExit();
       const message = isEditing ? 'Hareket başarıyla güncellendi.' : 'Hareket başarıyla oluşturuldu.';
       showSaveSuccess(message, () => router.back(), () => {
         if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
