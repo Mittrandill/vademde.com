@@ -25,6 +25,8 @@ export interface FinanceListSurfaceProps {
   totalPages?: number;
   paginationLoading?: boolean;
   onPageChange?: (page: number) => void;
+  /** true: satırlar kendi kartlarını çizer; ortak yüzey/gruplu kap kullanılmaz (ör. kredi kartı kartları). */
+  plain?: boolean;
 }
 
 export interface FinanceListEmptyStateProps {
@@ -107,6 +109,7 @@ export function FinanceListSurface({
   totalPages = 1,
   paginationLoading,
   onPageChange,
+  plain,
 }: FinanceListSurfaceProps) {
   const theme = useTheme();
   const showsFooter = !!footerLabel || (!!actionLabel && !!onActionPress);
@@ -161,7 +164,13 @@ export function FinanceListSurface({
         ) : null}
       </Row>
 
-      <View style={{ marginTop: theme.spacing.xxs, backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, overflow: 'hidden' }}>
+      <View
+        style={
+          plain
+            ? { marginTop: theme.spacing.xxs, gap: theme.spacing.sm }
+            : { marginTop: theme.spacing.xxs, backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, overflow: 'hidden' }
+        }
+      >
         {children}
       </View>
 
