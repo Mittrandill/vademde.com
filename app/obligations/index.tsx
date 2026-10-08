@@ -13,6 +13,7 @@ import {
   Pressable,
   Skeleton,
   Stack,
+  Tag,
   Text,
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
@@ -44,6 +45,8 @@ import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert } from '@/utils/alerts';
 import { formatMinorAmount } from '@/utils/money';
 
+const monthName = new Intl.DateTimeFormat('tr-TR', { month: 'long' });
+const monthYearName = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 
 // Bu ekranda tek filtre boyutu var: durum. Borç/alacak yön filtresi kaldırıldı — iki ayrı
@@ -193,6 +196,30 @@ export default function ObligationsByTypeScreen() {
 
   const rows = useMemo(() => obligationsQuery.data ?? [], [obligationsQuery.data]);
   const isFiltered = search.length > 0 || statusKey !== 'active';
+  // Sayfadaki kayıtlar vade ayına göre gruplanır (tuval: "Bu ay", "Kasım"…); vadesi olmayanlar sona.
+  const monthGroups = useMemo(() => {
+    const now = new Date();
+    const thisMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+    const groups: { key: string; title: string; rows: ObligationWithRelations[] }[] = [];
+    for (const row of rows) {
+      const due = row.due_date ? new Date(row.due_date) : null;
+      const key = due ? `${due.getFullYear()}-${due.getMonth()}` : 'none';
+      let group = groups.find((g) => g.key === key);
+      if (!group) {
+        const title = !due
+          ? 'Vadesiz'
+          : key === thisMonthKey
+            ? 'Bu ay'
+            : due.getFullYear() === now.getFullYear()
+              ? monthName.format(due)
+              : monthYearName.format(due);
+        group = { key, title: title.charAt(0).toLocaleUpperCase('tr-TR') + title.slice(1), rows: [] };
+        groups.push(group);
+      }
+      group.rows.push(row);
+    }
+    return groups;
+  }, [rows]);
 
   const idsKey = rows.map((r) => r.id).join(',');
   const installmentSummariesQuery = useQuery({
@@ -298,6 +325,7 @@ export default function ObligationsByTypeScreen() {
           />
 
           <FinanceListSurface
+            plain
             searchPlaceholder={`${title} ara...`}
             searchValue={searchInput}
             onSearchChange={setSearchInput}
@@ -334,15 +362,30 @@ export default function ObligationsByTypeScreen() {
                 onActionPress={isFiltered ? undefined : openNewRecord}
               />
             ) : (
-              rows.map((item, index) => (
-                <View key={item.id}>
-                  {index > 0 ? <Divider /> : null}
-                  <ObligationRowCard
-                    item={item}
-                    installmentSummary={installmentSummaries[item.id]}
-                    onDelete={confirmDelete}
-                    deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
-                  />
+              monthGroups.map((group) => (
+                <View key={group.key} style={{ gap: 10 }}>
+                  <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
+                    {group.title}
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: theme.colors.surfacePrimary,
+                      borderRadius: theme.radius.group,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {group.rows.map((item, index) => (
+                      <View key={item.id}>
+                        {index > 0 ? <Divider style={{ marginLeft: 62 }} /> : null}
+                        <ObligationRowCard
+                          item={item}
+                          installmentSummary={installmentSummaries[item.id]}
+                          onDelete={confirmDelete}
+                          deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
+                        />
+                      </View>
+                    ))}
+                  </View>
                 </View>
               ))
             )}
@@ -374,11 +417,23 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
   const dueDate = installmentSummary?.nextDueDate ?? item.due_date;
   const subtitle = [
     DOCUMENT_TYPE_LABEL[item.document_type] ?? item.document_type,
-    statusLabel,
     dueDate ? dateFormatter.format(new Date(dueDate)) : null,
   ]
     .filter(Boolean)
     .join(' · ');
+  const isClosed = item.status === 'odendi' || item.status === 'tahsil_edildi';
+  const daysLeft = dueDate ? Math.ceil((new Date(dueDate).getTime() - new Date().getTime()) / 86400000) : null;
+  const tag: { label: string; tone: 'danger' | 'brand' | 'success' | 'neutral' } | null = isClosed
+    ? { label: statusLabel, tone: 'success' }
+    : item.status === 'gecikti'
+      ? { label: 'Gecikti', tone: 'danger' }
+      : daysLeft === null
+        ? null
+        : daysLeft <= 1
+          ? { label: daysLeft <= 0 ? 'Bugün' : 'Yarın', tone: 'brand' }
+          : daysLeft <= 10
+            ? { label: `${daysLeft} gün`, tone: 'brand' }
+            : { label: `${daysLeft} gün`, tone: 'neutral' };
 
   return (
     <>
@@ -391,10 +446,11 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
         style={{
           minHeight: 60,
           opacity: deleting ? 0.5 : 1,
-          paddingVertical: theme.spacing.sm,
+          paddingVertical: 10,
+          paddingHorizontal: theme.spacing.md,
           flexDirection: 'row',
           alignItems: 'center',
-          gap: theme.spacing.md,
+          gap: 12,
         }}
       >
         <ObligationIcon
@@ -412,18 +468,20 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
             {subtitle}
           </Text>
         </Stack>
-        <Amount
-          amountMinor={item.remaining_amount_minor}
-          currencyCode={item.currency_code}
-          valueUnitType={item.value_unit_type as ValueUnitType}
-          direction={isPayable ? 'expense' : 'income'}
-          variant="cardTitle"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.68}
-          overdue={item.status === 'gecikti'}
-          style={{ maxWidth: '34%' }}
-        />
+        <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: '38%' }}>
+          <Amount
+            amountMinor={item.remaining_amount_minor}
+            currencyCode={item.currency_code}
+            valueUnitType={item.value_unit_type as ValueUnitType}
+            direction={isPayable ? 'expense' : 'income'}
+            variant="cardTitle"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.68}
+            overdue={item.status === 'gecikti'}
+          />
+          {tag ? <Tag label={tag.label} tone={tag.tone} /> : null}
+        </View>
         {deleting ? (
           <ActivityIndicator color={theme.colors.textSecondary} />
         ) : (
