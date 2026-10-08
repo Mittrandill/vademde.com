@@ -752,6 +752,9 @@ function ObligationForm({
     (!isCardStatementType || !!accountId) &&
     (!isLendingType || !!accountId);
 
+  const detailAccounts = isLendingType ? lendingSourceAccounts : isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts;
+  const accountRowLabel = isLendingType ? 'Kaynak hesap' : isCashAdvanceType || isCardStatementType ? 'Kredi kartı' : 'Hesap';
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -780,26 +783,23 @@ function ObligationForm({
               stretch
             />
 
-            <Stack gap="sm">
-              <Text variant="label" color="textSecondary">
-                DEĞER BİRİMİ
-              </Text>
+            <FieldGroup>
               {isEditing || isLendingType ? (
                 // docs/01-finansal-kayit-modeli.md §3.5 — birim kayıt oluşturulduktan sonra
                 // değiştirilemez (isEditing); ödünç vermede ise aşağıdaki KAYNAK HESAP'ın
                 // biriminden türetilir — o hesapta ne varsa onunla ödünç verilir, ayrıca
                 // seçilmez. İkisinde de burada yalnızca bilgi amaçlı gösterilir.
-                <Text variant="body" color="textSecondary">
-                  {isLendingType && !accountId
-                    ? 'Aşağıdan kaynak hesap seçin'
-                    : (VALUE_UNIT_LABEL[valueUnitCode] ?? valueUnitCode)}
-                </Text>
+                <FormRow
+                  label="Değer birimi"
+                  value={
+                    isLendingType && !accountId
+                      ? 'Aşağıdan kaynak hesap seçin'
+                      : (VALUE_UNIT_LABEL[valueUnitCode] ?? valueUnitCode)
+                  }
+                />
               ) : (
-                <ValueUnitPicker selectedId={valueUnitCode} onSelect={setValueUnitCode} />
+                <ValueUnitPicker label="Değer birimi" selectedId={valueUnitCode} onSelect={setValueUnitCode} />
               )}
-            </Stack>
-
-            <FieldGroup>
               <TextField label="Başlık" placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
               {isPlanEditing ? (
                 <FormRow
@@ -873,34 +873,25 @@ function ObligationForm({
               </Text>
             ) : null}
 
-            {isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  {isSalaryType ? 'PERSONEL' : 'KİŞİ / FİRMA'}
-                </Text>
-                {activeWorkspaceId ? (
-                  <CounterpartyPicker
-                    workspaceId={activeWorkspaceId}
-                    counterparties={counterpartiesQuery.data ?? []}
-                    selectedId={counterpartyId}
-                    onSelect={setCounterpartyId}
-                    // Maaş kaydında listede olmayan bir isim yazılıp oluşturulursa doğrudan
-                    // personel olarak kaydedilir; müşteri/tedarikçi listesine karışmaz.
-                    defaultType={isSalaryType ? 'personel' : 'individual'}
-                    placeholder={isSalaryType ? 'Personel seçin' : 'Kişi / firma seçin'}
-                    onCreated={() => {
-                      queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
-                    }}
-                  />
-                ) : null}
-              </Stack>
-            )}
-
-            <Stack gap="sm">
-              <Text variant="label" color="textSecondary">
-                BELGE TÜRÜ
-              </Text>
+            <FieldGroup>
+              {isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : activeWorkspaceId ? (
+                <CounterpartyPicker
+                  label={isSalaryType ? 'Personel' : 'Kişi / firma'}
+                  workspaceId={activeWorkspaceId}
+                  counterparties={counterpartiesQuery.data ?? []}
+                  selectedId={counterpartyId}
+                  onSelect={setCounterpartyId}
+                  // Maaş kaydında listede olmayan bir isim yazılıp oluşturulursa doğrudan
+                  // personel olarak kaydedilir; müşteri/tedarikçi listesine karışmaz.
+                  defaultType={isSalaryType ? 'personel' : 'individual'}
+                  placeholder={isSalaryType ? 'Personel seçin' : 'Kişi / firma seçin'}
+                  onCreated={() => {
+                    queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
+                  }}
+                />
+              ) : null}
               <DocumentTypePicker
+                label="Belge türü"
                 selectedId={documentType}
                 onSelect={(value) => {
                   setDocumentType(value);
@@ -925,7 +916,61 @@ function ObligationForm({
                   }
                 }}
               />
-            </Stack>
+              {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
+                <BankPicker
+                  label="Banka"
+                  placeholder={isLoanType ? 'Banka seçin' : 'Banka seçin (isteğe bağlı)'}
+                  selectedId={bankCode}
+                  onSelect={setBankCode}
+                />
+              ) : null}
+              {isSubscriptionType ? (
+                <ServicePicker label="Servis" placeholder="Servis seçin (isteğe bağlı)" selectedId={serviceCode} onSelect={setServiceCode} />
+              ) : null}
+              {(categoriesQuery.data ?? []).length === 0 ? (
+                <FormRow label="Kategori" value="Bu türde kategori bulunamadı." />
+              ) : (
+                <CategoryPicker
+                  label="Kategori"
+                  placeholder="Kategori seçin (isteğe bağlı)"
+                  categories={categoriesQuery.data ?? []}
+                  selectedId={categoryId}
+                  onSelect={setCategoryId}
+                />
+              )}
+              {detailAccounts.length === 0 ? (
+                <FormRow
+                  label={accountRowLabel}
+                  value={
+                    isLendingType
+                      ? "Önce Hesaplar'dan bir kasa/banka hesabı ekleyin."
+                      : isCashAdvanceType || isCardStatementType
+                        ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
+                        : "Önce Hesaplar'dan bir hesap ekleyin."
+                  }
+                />
+              ) : (
+                <AccountPicker
+                  label={accountRowLabel}
+                  placeholder={isLendingType ? 'Kaynak hesap seçin' : isCashAdvanceType || isCardStatementType ? 'Kredi kartı seçin' : 'Hesap seçin (isteğe bağlı)'}
+                  accounts={detailAccounts}
+                  selectedId={accountId}
+                  onSelect={(value) => {
+                    setAccountId(value);
+                    if (isLendingType) {
+                      const selected = lendingSourceAccounts.find((a) => a.id === value);
+                      if (selected) setValueUnitCode(selected.currency_code);
+                    }
+                  }}
+                />
+              )}
+            </FieldGroup>
+
+            {isLendingType ? (
+              <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.md }}>
+                Ödünç verilen tutar kaynak hesaptan düşülür.
+              </Text>
+            ) : null}
 
             {/* Çek/senet çoğunlukla bir faturanın karşılığıdır. Burada açılan çek/senet bağımsız bir
                 kayıttır ve faturayı kapatmaz — fatura açık kalırsa aynı borç iki kez görünür
@@ -962,24 +1007,6 @@ function ObligationForm({
               </Pressable>
             ) : null}
 
-            {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  {isLoanType ? 'BANKA' : 'BANKA (İSTEĞE BAĞLI)'}
-                </Text>
-                <BankPicker selectedId={bankCode} onSelect={setBankCode} />
-              </Stack>
-            ) : null}
-
-            {isSubscriptionType ? (
-              <Stack gap="sm">
-                <Text variant="label" color="textSecondary">
-                  SERVİS (İSTEĞE BAĞLI)
-                </Text>
-                <ServicePicker selectedId={serviceCode} onSelect={setServiceCode} />
-              </Stack>
-            ) : null}
-
             {isSubscriptionType ? (
               <Stack gap="sm">
                 <Text variant="label" color="textSecondary">
@@ -997,64 +1024,6 @@ function ObligationForm({
                 <DateField label="DENEME BİTİŞ TARİHİ (İSTEĞE BAĞLI)" value={trialEndsOn} onChangeText={setTrialEndsOn} />
               </Stack>
             ) : null}
-
-            <Stack gap="sm">
-              <Text variant="label" color="textSecondary">
-                KATEGORİ (İSTEĞE BAĞLI)
-              </Text>
-              {(categoriesQuery.data ?? []).length === 0 ? (
-                <Text variant="body" color="textSecondary">
-                  Bu türde kategori bulunamadı.
-                </Text>
-              ) : (
-                <CategoryPicker
-                  categories={categoriesQuery.data ?? []}
-                  selectedId={categoryId}
-                  onSelect={setCategoryId}
-                />
-              )}
-            </Stack>
-
-            <Stack gap="sm">
-              <Text variant="label" color="textSecondary">
-                {isLendingType
-                  ? 'KAYNAK HESAP'
-                  : isCashAdvanceType || isCardStatementType
-                    ? 'KREDİ KARTI'
-                    : 'HESAP (İSTEĞE BAĞLI)'}
-              </Text>
-              {isLendingType ? (
-                <Text variant="caption" color="textSecondary">
-                  Ödünç verilen tutar bu hesaptan düşülür.
-                </Text>
-              ) : null}
-              {(isLendingType
-                ? lendingSourceAccounts
-                : isCashAdvanceType || isCardStatementType
-                  ? creditCardAccounts
-                  : generalAccounts
-              ).length === 0 ? (
-                <Text variant="body" color="textSecondary">
-                  {isLendingType
-                    ? "Önce Hesaplar'dan bir kasa/banka hesabı ekleyin."
-                    : isCashAdvanceType || isCardStatementType
-                      ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
-                      : "Önce Hesaplar'dan bir hesap ekleyin."}
-                </Text>
-              ) : (
-                <AccountPicker
-                  accounts={isLendingType ? lendingSourceAccounts : isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts}
-                  selectedId={accountId}
-                  onSelect={(value) => {
-                    setAccountId(value);
-                    if (isLendingType) {
-                      const selected = lendingSourceAccounts.find((a) => a.id === value);
-                      if (selected) setValueUnitCode(selected.currency_code);
-                    }
-                  }}
-                />
-              )}
-            </Stack>
 
             {isCashAdvanceType && !isEditing ? (
               <Stack gap="sm">
