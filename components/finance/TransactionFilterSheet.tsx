@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -64,17 +64,15 @@ export interface TransactionFilterSheetProps {
 
 // Tuval Filtre: Sıfırla / Filtrele / Bitti çubuğu, Tarih segmenti, Tür pill'leri, Daralt grubu, Tutar aralığı ve
 // sonuç sayısını gösteren alt düğme. Taslak üzerinde çalışır; "Bitti" ya da alt düğmeyle uygulanır.
-export function TransactionFilterSheet({ visible, onClose, value, onApply, options, countFor }: TransactionFilterSheetProps) {
+export function TransactionFilterSheet(props: TransactionFilterSheetProps) {
+  // Yalnızca açıkken mount edilir: taslak her açılışta güncel filtreden başlar (efekt gerekmez).
+  return props.visible ? <FilterSheetBody {...props} /> : null;
+}
+
+function FilterSheetBody({ visible, onClose, value, onApply, options, countFor }: TransactionFilterSheetProps) {
   const theme = useTheme();
   const [draft, setDraft] = useState(value);
   const [open, setOpen] = useState<Section | null>(null);
-
-  useEffect(() => {
-    if (visible) {
-      setDraft(value);
-      setOpen(null);
-    }
-  }, [visible, value]);
 
   const toggle = (section: Section, name: string) =>
     setDraft((d) => ({
