@@ -15,6 +15,7 @@ import {
   EmptyState,
   Group,
   GroupedRow,
+  GroupedRowIcon,
   Pagination,
   Pressable,
   Row,
@@ -36,6 +37,7 @@ import {
   deleteObligation,
   getObligation,
   getObligationWithInstallments,
+  getLinkedDocument,
   type Installment,
   type Obligation,
 } from '@/features/obligations/api';
@@ -124,6 +126,12 @@ export default function ObligationDetailScreen() {
     queryKey: ['obligation', id, 'settled-by'],
     queryFn: () => listObligationsSettledBy(id as string),
     enabled: !!id && isInstrumentRecord,
+  });
+
+  const documentQuery = useQuery({
+    queryKey: ['obligation', id, 'linked-document'],
+    queryFn: () => getLinkedDocument(id as string),
+    enabled: !!id,
   });
 
   const autoPaying: Installment | 'obligation' | null =
@@ -344,6 +352,29 @@ export default function ObligationDetailScreen() {
     { label: 'Durum', value: statusLabel },
   ];
 
+  const linkedDocument = documentQuery.data ?? null;
+  // Tuval çek detayındaki "Geçmiş": en yeni olay üstte — oluşturulma, ödeme/tahsilat ve bekleyen vade.
+  const shortDay = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+  const historyEvents: { key: string; title: string; date: string; color: string }[] = [
+    ...(isClosed
+      ? []
+      : dueDateValue
+        ? [{ key: 'due', title: 'Vade bekleniyor', date: shortDay.format(dueDateValue), color: theme.colors.brandPrimary }]
+        : []),
+    ...payments.map((payment) => ({
+      key: payment.id,
+      title: isPayable ? 'Ödendi' : 'Tahsil edildi',
+      date: shortDay.format(new Date(payment.paid_at)),
+      color: theme.colors.success,
+    })),
+    {
+      key: 'created',
+      title: linkedDocument ? 'Belgeden oluşturuldu' : 'Kayıt oluşturuldu',
+      date: obligation.created_at ? shortDay.format(new Date(obligation.created_at)) : '—',
+      color: theme.colors.textSecondary,
+    },
+  ];
+
   return (
     <>
       <DetailScaffold
@@ -510,6 +541,39 @@ export default function ObligationDetailScreen() {
                 />
               ))}
             </Group>
+            {linkedDocument ? (
+              <Stack gap="xs">
+                <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
+                  BELGE
+                </Text>
+                <Group inset={16}>
+                  <GroupedRow
+                    leading={<GroupedRowIcon name="document-text" tone="brandSoft" />}
+                    title={linkedDocument.fileName}
+                    subtitle={linkedDocument.fieldCount > 0 ? `Belgeden ${linkedDocument.fieldCount} alan okundu` : 'Belgeden oluşturuldu'}
+                    chevron={false}
+                  />
+                </Group>
+              </Stack>
+            ) : null}
+            {isInstrumentRecord ? (
+              <Stack gap="xs">
+                <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
+                  GEÇMİŞ
+                </Text>
+                <Group inset={16}>
+                  {historyEvents.map((event) => (
+                    <GroupedRow
+                      key={event.key}
+                      leading={<View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: event.color }} />}
+                      title={event.title}
+                      value={event.date}
+                      chevron={false}
+                    />
+                  ))}
+                </Group>
+              </Stack>
+            ) : null}
             {!showsPlanTab ? (
               <Stack gap="xs">
                 <Text variant="sectionTitle">Ödeme geçmişi</Text>

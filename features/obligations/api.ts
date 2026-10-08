@@ -663,3 +663,30 @@ export async function updateInstallmentPlan({
 
   return inserted;
 }
+
+export interface LinkedDocument {
+  id: string;
+  fileName: string;
+  fieldCount: number;
+  createdAt: string;
+}
+
+// Kayda OCR ile bağlanmış orijinal belge (belge ve finans kaydı birbirine bağlı saklanır —
+// CLAUDE.md kural 6). Elle girilen kayıtta belge yoktur.
+export async function getLinkedDocument(obligationId: string): Promise<LinkedDocument | null> {
+  const { data, error } = await supabase
+    .from('financial_documents')
+    .select('id, file_name, created_at')
+    .eq('obligation_id', obligationId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const { count, error: countError } = await supabase
+    .from('document_fields')
+    .select('id', { count: 'exact', head: true })
+    .eq('document_id', data.id);
+  if (countError) throw countError;
+  return { id: data.id, fileName: data.file_name, fieldCount: count ?? 0, createdAt: data.created_at };
+}

@@ -18,6 +18,7 @@ import { formatMinorAmount } from '@/utils/money';
 
 type Side = 'receivable' | 'payable';
 type StatusTab = 'all' | 'portfoy' | 'ciro_edildi' | 'tahsile_verildi' | 'karsiliksiz';
+type GivenTab = 'all' | 'open' | 'overdue' | 'paid';
 
 const STATUS_TABS: { key: StatusTab; label: string }[] = [
   { key: 'all', label: 'Tümü' },
@@ -27,16 +28,36 @@ const STATUS_TABS: { key: StatusTab; label: string }[] = [
   { key: 'karsiliksiz', label: 'Karşılıksız' },
 ];
 
+const GIVEN_TABS: { key: GivenTab; label: string }[] = [
+  { key: 'all', label: 'Tümü' },
+  { key: 'open', label: 'Bekleyen' },
+  { key: 'overdue', label: 'Gecikmiş' },
+  { key: 'paid', label: 'Ödenen' },
+];
+
+// Verilen çek/senetlerin yaşam döngüsü yok; durum doğrudan ödeme durumundan gelir.
+function givenGroupOf(o: ObligationWithRelations): Exclude<GivenTab, 'all'> {
+  if (o.status === 'gecikti') return 'overdue';
+  if (o.remaining_amount_minor <= 0 || o.status === 'odendi') return 'paid';
+  return 'open';
+}
+const GIVEN_GROUP_TITLE: Record<Exclude<GivenTab, 'all'>, string> = {
+  open: 'Bekleyen',
+  overdue: 'Gecikmiş',
+  paid: 'Ödenen',
+};
+
 const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
 
 // design CekPortfoyu.html: alınan / verilen çek ve senetler; alınanlar yaşam döngüsü durumuna göre gruplanır.
-// Verilen çek/senetlerin yaşam döngüsü yoktur (ödenene kadar vadeli kayıt), bu yüzden durum sekmeleri yalnızca "Alınan"da.
+// Verilen çek/senetlerin yaşam döngüsü yoktur; onlarda filtre ödeme durumuna göredir (Bekleyen/Gecikmiş/Ödenen).
 export default function InstrumentsScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [side, setSide] = useState<Side>('receivable');
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
+  const [givenTab, setGivenTab] = useState<GivenTab>('all');
 
   const query = useQuery({
     queryKey: activeWorkspaceId ? [activeWorkspaceId, 'obligations', 'instruments'] : ['instruments', 'disabled'],
@@ -54,11 +75,35 @@ export default function InstrumentsScreen() {
     .filter((o) => o.due_date)
     .sort((a, b) => (a.due_date as string).localeCompare(b.due_date as string))[0];
 
-  const list = side === 'receivable' ? received : given.filter((o) => o.remaining_amount_minor > 0);
-  const filtered = side === 'receivable' && statusTab !== 'all' ? list.filter((o) => instrumentStatusOf(o) === statusTab) : list;
+  // Verdiğim sekmesinin "portföy" karşılığı: henüz ödenmemiş (bekleyen + gecikmiş) verilen kayıtlar.
+  const givenOpen = given.filter((o) => givenGroupOf(o) !== 'paid');
+  const givenOpenTotal = givenOpen.reduce((s, o) => s + o.remaining_amount_minor, 0);
+  const givenNearest = givenOpen
+    .filter((o) => o.due_date)
+    .sort((a, b) => (a.due_date as string).localeCompare(b.due_date as string))[0];
+
+  const summaryLabel = side === 'receivable' ? 'Portföydeki toplam' : 'Ödenecek toplam';
+  const summaryCount = side === 'receivable' ? inPortfolio.length : givenOpen.length;
+  const summaryTotal = side === 'receivable' ? portfolioTotal : givenOpenTotal;
+  const summaryNearest = side === 'receivable' ? nearest : givenNearest;
+
+  const list = side === 'receivable' ? received : given;
+  const filtered =
+    side === 'receivable'
+      ? statusTab !== 'all'
+        ? list.filter((o) => instrumentStatusOf(o) === statusTab)
+        : list
+      : givenTab !== 'all'
+        ? list.filter((o) => givenGroupOf(o) === givenTab)
+        : list;
 
   const groups = useMemo(() => {
-    if (side === 'payable') return [{ title: 'Verilen', rows: filtered }];
+    if (side === 'payable') {
+      const groupOrder: Exclude<GivenTab, 'all'>[] = ['overdue', 'open', 'paid'];
+      return groupOrder
+        .map((g) => ({ title: GIVEN_GROUP_TITLE[g], rows: filtered.filter((o) => givenGroupOf(o) === g) }))
+        .filter((g) => g.rows.length > 0);
+    }
     const order: InstrumentStatus[] = ['portfoy', 'tahsile_verildi', 'ciro_edildi', 'karsiliksiz', 'tahsil_edildi'];
     return order
       .map((status) => ({
@@ -93,23 +138,23 @@ export default function InstrumentsScreen() {
           stretch
         />
 
-        {side === 'receivable' ? (
-          <Card style={{ gap: 2 }}>
+        <Card style={{ gap: 2 }}>
+          <Text variant="caption" color="textSecondary">
+            {summaryLabel} · {summaryCount} kayıt
+          </Text>
+          <HeroAmount amountMinor={summaryTotal} baseSize={32} />
+          {summaryNearest?.due_date ? (
             <Text variant="caption" color="textSecondary">
-              Portföydeki toplam · {inPortfolio.length} kayıt
+              En yakın vade {dayMonth.format(new Date(summaryNearest.due_date))}
             </Text>
-            <HeroAmount amountMinor={portfolioTotal} baseSize={32} />
-            {nearest?.due_date ? (
-              <Text variant="caption" color="textSecondary">
-                En yakın vade {dayMonth.format(new Date(nearest.due_date))}
-              </Text>
-            ) : null}
-          </Card>
-        ) : null}
+          ) : null}
+        </Card>
 
         {side === 'receivable' ? (
           <ScrollableTabs tabs={STATUS_TABS} activeKey={statusTab} onChange={(k) => setStatusTab(k as StatusTab)} />
-        ) : null}
+        ) : (
+          <ScrollableTabs tabs={GIVEN_TABS} activeKey={givenTab} onChange={(k) => setGivenTab(k as GivenTab)} />
+        )}
 
         {query.isLoading ? (
           <Stack gap="sm">
