@@ -593,6 +593,14 @@ export default function AccountDetailScreen() {
           <Text style={{ fontSize: 38, lineHeight: 44, fontWeight: '700', letterSpacing: -1 }} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
             {formatMinorAmount(balanceMinor, account.currency_code)}
           </Text>
+          {type === 'cash' && account.currency_code !== 'TRY' ? (
+            <ReferenceValueRow
+              amountMinor={balanceMinor}
+              unitCode={account.currency_code}
+              rates={ratesQuery.data}
+              isLoading={ratesQuery.isLoading}
+            />
+          ) : null}
         </Stack>
 
         {account.iban ? (
@@ -663,15 +671,6 @@ export default function AccountDetailScreen() {
           description="Hesap türü, kimlik ve limit ayrıntıları"
           rows={accountInfoRows}
         />
-
-        {type === 'cash' && account.currency_code !== 'TRY' ? (
-          <ReferenceValueRow
-            amountMinor={balanceMinor}
-            unitCode={account.currency_code}
-            rates={ratesQuery.data}
-            isLoading={ratesQuery.isLoading}
-          />
-        ) : null}
 
         {hasOverdraft ? (
           <OverdraftCard

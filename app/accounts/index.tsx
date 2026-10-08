@@ -21,7 +21,6 @@ import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
 import { FinanceListHero } from '@/components/finance/FinanceListHero';
 import { FinanceListEmptyState, FinanceListSurface } from '@/components/finance/FinanceListSurface';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
-import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
@@ -210,8 +209,6 @@ export default function AccountsScreen() {
                   <AccountRow
                     account={item}
                     balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
-                    rates={valueUnitRatesQuery.data}
-                    ratesLoading={valueUnitRatesQuery.isLoading}
                   />
                 </View>
               ))
@@ -226,13 +223,9 @@ export default function AccountsScreen() {
 function AccountRow({
   account,
   balanceMinor,
-  rates,
-  ratesLoading,
 }: {
   account: Account;
   balanceMinor: number;
-  rates: Parameters<typeof ReferenceValueRow>[0]['rates'];
-  ratesLoading: boolean;
 }) {
   const theme = useTheme();
   const type = account.type as Account['type'];
@@ -260,9 +253,6 @@ function AccountRow({
       <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
         <Text variant="cardTitle" numberOfLines={1}>{account.name}</Text>
         <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>{detail}</Text>
-        {type === 'cash' && account.currency_code !== 'TRY' ? (
-          <ReferenceValueRow amountMinor={balanceMinor} unitCode={account.currency_code} rates={rates} isLoading={ratesLoading} />
-        ) : null}
       </Stack>
       <Amount
         amountMinor={balanceMinor}
