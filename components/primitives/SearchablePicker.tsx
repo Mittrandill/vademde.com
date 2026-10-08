@@ -26,6 +26,19 @@ export interface SearchablePickerProps<T extends { id: string; name: string }> {
   onCreateNew?: (name: string) => Promise<void> | void;
 }
 
+function highlight(name: string, query: string): ReactNode {
+  if (!query) return name;
+  const at = name.toLocaleLowerCase('tr-TR').indexOf(query.toLocaleLowerCase('tr-TR'));
+  if (at < 0) return name;
+  return (
+    <>
+      {name.slice(0, at)}
+      <Text style={{ fontWeight: '700' }}>{name.slice(at, at + query.length)}</Text>
+      {name.slice(at + query.length)}
+    </>
+  );
+}
+
 const FALLBACK_ICON: keyof typeof Ionicons.glyphMap = 'pricetag-outline';
 
 export function SearchablePicker<T extends { id: string; name: string }>({
@@ -135,6 +148,8 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                   height: 36,
                   borderRadius: 10,
                   backgroundColor: theme.colors.fill,
+                  borderWidth: 1.5,
+                  borderColor: theme.colors.brandPrimary,
                   paddingHorizontal: 8,
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -165,7 +180,13 @@ export function SearchablePicker<T extends { id: string; name: string }>({
               }}
               keyboardShouldPersistTaps="handled"
               ListHeaderComponent={
-                showCreateRow ? (
+                <>
+                {trimmedSearch ? (
+                  <Text variant="caption" color="textSecondary" style={{ textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: theme.spacing.xs, marginLeft: 4 }}>
+                    {filtered.length} sonuç
+                  </Text>
+                ) : null}
+                {showCreateRow ? (
                   <Pressable
                     onPress={handleCreateNew}
                     disabled={creating}
@@ -184,7 +205,8 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                     <Ionicons name="add-circle" size={22} color={theme.colors.textPrimary} />
                     <Text style={{ fontWeight: '500' }}>{creating ? 'Ekleniyor...' : `"${trimmedSearch}" ekle`}</Text>
                   </Pressable>
-                ) : null
+                ) : null}
+                </>
               }
               ListEmptyComponent={
                 <Text color="textSecondary" style={{ paddingTop: theme.spacing.lg }}>
@@ -223,7 +245,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
                         <Ionicons name={iconFor(item)} size={22} color={theme.colors.textPrimary} />
                       )}
                       <Text numberOfLines={1} style={{ flex: 1, fontWeight: active ? '600' : '400' }}>
-                        {item.name}
+                        {highlight(item.name, trimmedSearch)}
                       </Text>
                       {active ? <Ionicons name="checkmark" size={20} color={theme.colors.attentionMarker} /> : null}
                     </Pressable>
