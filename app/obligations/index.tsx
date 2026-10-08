@@ -45,8 +45,6 @@ import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert } from '@/utils/alerts';
 import { formatMinorAmount } from '@/utils/money';
 
-const monthName = new Intl.DateTimeFormat('tr-TR', { month: 'long' });
-const monthYearName = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 
 // Bu ekranda tek filtre boyutu var: durum. Borç/alacak yön filtresi kaldırıldı — iki ayrı
@@ -203,30 +201,6 @@ export default function ObligationsByTypeScreen() {
 
   const rows = useMemo(() => obligationsQuery.data ?? [], [obligationsQuery.data]);
   const isFiltered = search.length > 0 || statusKey !== 'active';
-  // Sayfadaki kayıtlar vade ayına göre gruplanır (tuval: "Bu ay", "Kasım"…); vadesi olmayanlar sona.
-  const monthGroups = useMemo(() => {
-    const now = new Date();
-    const thisMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
-    const groups: { key: string; title: string; rows: ObligationWithRelations[] }[] = [];
-    for (const row of rows) {
-      const due = row.due_date ? new Date(row.due_date) : null;
-      const key = due ? `${due.getFullYear()}-${due.getMonth()}` : 'none';
-      let group = groups.find((g) => g.key === key);
-      if (!group) {
-        const title = !due
-          ? 'Vadesiz'
-          : key === thisMonthKey
-            ? 'Bu ay'
-            : due.getFullYear() === now.getFullYear()
-              ? monthName.format(due)
-              : monthYearName.format(due);
-        group = { key, title: title.charAt(0).toLocaleUpperCase('tr-TR') + title.slice(1), rows: [] };
-        groups.push(group);
-      }
-      group.rows.push(row);
-    }
-    return groups;
-  }, [rows]);
 
   const idsKey = rows.map((r) => r.id).join(',');
   const installmentSummariesQuery = useQuery({
@@ -332,7 +306,6 @@ export default function ObligationsByTypeScreen() {
           />
 
           <FinanceListSurface
-            plain
             searchPlaceholder={`${title} ara...`}
             searchValue={searchInput}
             onSearchChange={setSearchInput}
@@ -369,30 +342,15 @@ export default function ObligationsByTypeScreen() {
                 onActionPress={isFiltered ? undefined : openNewRecord}
               />
             ) : (
-              monthGroups.map((group) => (
-                <View key={group.key} style={{ gap: 10 }}>
-                  <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                    {group.title}
-                  </Text>
-                  <View
-                    style={{
-                      backgroundColor: theme.colors.surfacePrimary,
-                      borderRadius: theme.radius.group,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {group.rows.map((item, index) => (
-                      <View key={item.id}>
-                        {index > 0 ? <Divider style={{ marginLeft: 62 }} /> : null}
-                        <ObligationRowCard
-                          item={item}
-                          installmentSummary={installmentSummaries[item.id]}
-                          onDelete={confirmDelete}
-                          deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
-                        />
-                      </View>
-                    ))}
-                  </View>
+              rows.map((item, index) => (
+                <View key={item.id}>
+                  {index > 0 ? <Divider style={{ marginLeft: 62 }} /> : null}
+                  <ObligationRowCard
+                    item={item}
+                    installmentSummary={installmentSummaries[item.id]}
+                    onDelete={confirmDelete}
+                    deleting={deleteMutation.isPending && deleteMutation.variables === item.id}
+                  />
                 </View>
               ))
             )}
