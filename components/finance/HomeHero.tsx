@@ -51,8 +51,8 @@ export function HomeHero({
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#hero-sheen)" />
         </Svg>
-        <View pointerEvents="none" style={{ position: 'absolute', right: -46, top: 40 }}>
-          <WalletArt scale={0.82} accent={colors.attentionMarker} tone={colors.textPrimary} />
+        <View pointerEvents="none" style={{ position: 'absolute', right: 4, top: 58 }}>
+          <WalletArt width={112} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>

@@ -70,7 +70,7 @@ function AlertCard({ id, width, tone, eyebrow, headline, headlineIsAmount, body,
         <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id}-glow)`} />
         <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id}-sheen)`} />
       </Svg>
-      <View pointerEvents="none" style={{ position: 'absolute', right: -30, bottom: -14 }}>
+      <View pointerEvents="none" style={{ position: 'absolute', right: 6, bottom: 6 }}>
         {art}
       </View>
       <View style={{ padding: 20, gap: 4, flex: 1, maxWidth: '60%' }}>
@@ -158,7 +158,7 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         headlineIsAmount
         body={`${overdueCount} kaydın ödeme tarihi geçti.`}
         cta="Hemen incele"
-        art={<OverdueArt color={theme.colors.danger} />}
+        art={<OverdueArt width={128} />}
         onPress={() => router.push({ pathname: '/obligations', params: { status: 'overdue' } })}
       />
     );
@@ -177,7 +177,7 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         headline={`${risky.name} ${date} tarihinde eksiye düşebilir`}
         body="Vadelere göre tahmini bakiye eksiye inebilir."
         cta="Detayları gör"
-        art={<CashArt color={theme.colors.attentionMarker} />}
+        art={<CashArt width={150} />}
         onPress={() => router.push(`/cash-alert/${risky.accountId}`)}
       />
     );
@@ -200,7 +200,7 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         headline={savingMinor > 0 ? `Ayda ${formatMinorAmount(savingMinor).replace(/,00$/, '')} tasarruf` : (top?.title ?? 'Öneriler hazır')}
         body={savingMinor > 0 && top ? top.title : 'Harcamalarına göre hazırlandı.'}
         cta="Önerileri gör"
-        art={<SparkleArt color={theme.colors.payable} />}
+        art={<SparkleArt width={116} />}
         onPress={() => router.push('/insights')}
       />
     );
