@@ -171,9 +171,17 @@ function InsightCard({ insight, onDismiss }: { insight: AiInsight; onDismiss: ()
           {INSIGHT_KIND_LABEL[insight.kind]}
         </Text>
         {impact ? (
-          <Text variant="label" tabular style={{ textTransform: 'none', color: impact < 0 ? theme.colors.receivable : theme.colors.textPrimary }}>
+          <Text
+            variant="label"
+            tabular
+            style={{
+              textTransform: 'none',
+              color: insight.kind === 'nakit' ? theme.colors.danger : impact < 0 ? theme.colors.receivable : theme.colors.textPrimary,
+            }}
+          >
             {impact < 0 ? '−' : '+'}
-            {formatMinorAmount(Math.abs(impact)).replace(/,00$/, '')}/ay
+            {formatMinorAmount(Math.abs(impact)).replace(/,00$/, '')}
+            {insight.kind === 'nakit' ? ' açık' : '/ay'}
           </Text>
         ) : null}
       </View>

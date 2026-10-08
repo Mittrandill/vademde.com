@@ -7,7 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { MAX_FONT_SCALE } from '@/theme/typography';
 import { useReflowKey } from '@/services/reflow';
-import { Pressable, Stack, Text } from '@/components/primitives';
+import { Group, GroupedRow, Pressable, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { AiGate } from '@/components/finance/AiGate';
 import { askAi, type AiAnswer } from '@/features/insights/api';
@@ -86,26 +86,11 @@ function Chat() {
             <Text variant="body" color="textSecondary">
               Kayıtlarına dayanarak sorularını yanıtlarım.
             </Text>
-            {SUGGESTIONS.map((s) => (
-              <Pressable
-                key={s}
-                accessibilityRole="button"
-                onPress={() => send(s)}
-                style={{
-                  minHeight: theme.touchTarget.minimum,
-                  paddingHorizontal: theme.spacing.md,
-                  borderRadius: theme.radius.input,
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.surfacePrimary,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                }}
-              >
-                <Text variant="cardTitle" style={{ fontWeight: '500' }}>
-                  {s}
-                </Text>
-              </Pressable>
-            ))}
+            <Group inset={16}>
+              {SUGGESTIONS.map((s) => (
+                <GroupedRow key={s} title={s} onPress={() => send(s)} />
+              ))}
+            </Group>
           </Stack>
         ) : null}
 
@@ -159,8 +144,6 @@ function Chat() {
           gap: theme.spacing.xs,
           paddingLeft: theme.spacing.md,
           borderRadius: 16,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
           backgroundColor: theme.colors.surfacePrimary,
         }}
       >

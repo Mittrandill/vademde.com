@@ -45,5 +45,6 @@ export function AiGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <View>{children}</View>;
+  // flex: 1 — sohbet gibi ekranı dolduran çocuklar (insights/ask) yüksekliğini buradan alır.
+  return <View style={{ flex: 1 }}>{children}</View>;
 }
