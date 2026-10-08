@@ -18,6 +18,8 @@ export interface CalendarMonthGridProps {
 const WEEKDAY_LABELS = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'];
 const monthLabelFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
 const STRONG_DOCUMENT_TYPES = new Set(['cek', 'senet']);
+// Seçili gün sarı dolu; sarı (kredi) noktası da kaybolmasın diye noktalar ince koyu halkayla çizilir.
+const selectedDotRing = { borderWidth: 1, borderColor: 'rgba(0,0,0,0.55)' } as const;
 const LOAN_DOCUMENT_TYPES = new Set(['kredi']);
 
 export function CalendarMonthGrid({
@@ -133,7 +135,8 @@ export function CalendarMonthGrid({
                                 width: 5,
                                 height: 5,
                                 borderRadius: 3,
-                                backgroundColor: isSelected ? theme.colors.brandPrimaryText : theme.colors.danger,
+                                backgroundColor: theme.colors.danger,
+                                ...(isSelected ? selectedDotRing : null),
                               }}
                             />
                           ) : null}
@@ -143,7 +146,8 @@ export function CalendarMonthGrid({
                                 width: 5,
                                 height: 5,
                                 borderRadius: 3,
-                                backgroundColor: isSelected ? theme.colors.brandPrimaryText : theme.colors.success,
+                                backgroundColor: theme.colors.success,
+                                ...(isSelected ? selectedDotRing : null),
                               }}
                             />
                           ) : null}
@@ -153,7 +157,8 @@ export function CalendarMonthGrid({
                                 width: 5,
                                 height: 5,
                                 borderRadius: 3,
-                                backgroundColor: isSelected ? theme.colors.brandPrimaryText : theme.colors.accentViolet,
+                                backgroundColor: theme.colors.accentViolet,
+                                ...(isSelected ? selectedDotRing : null),
                               }}
                             />
                           ) : null}
@@ -163,7 +168,8 @@ export function CalendarMonthGrid({
                                 width: 5,
                                 height: 5,
                                 borderRadius: 3,
-                                backgroundColor: isSelected ? theme.colors.brandPrimaryText : theme.colors.attentionMarker,
+                                backgroundColor: theme.colors.attentionMarker,
+                                ...(isSelected ? selectedDotRing : null),
                               }}
                             />
                           ) : null}
@@ -179,31 +185,22 @@ export function CalendarMonthGrid({
           ))}
         </Stack>
 
-        <Row gap="md" align="center" style={{ flexWrap: 'wrap', rowGap: 6 }}>
-          <Row gap="xxs" align="center">
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.danger }} />
-            <Text variant="caption" color="textSecondary">
-              Ödenecek
-            </Text>
-          </Row>
-          <Row gap="xxs" align="center">
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.success }} />
-            <Text variant="caption" color="textSecondary">
-              Tahsil Edilecek
-            </Text>
-          </Row>
-          <Row gap="xxs" align="center">
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.accentViolet }} />
-            <Text variant="caption" color="textSecondary">
-              Çek / Senet
-            </Text>
-          </Row>
-          <Row gap="xxs" align="center">
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.attentionMarker }} />
-            <Text variant="caption" color="textSecondary">
-              Kredi
-            </Text>
-          </Row>
+        <Divider />
+
+        <Row align="center" style={{ justifyContent: 'space-between' }}>
+          {[
+            { label: 'Ödenecek', color: theme.colors.danger },
+            { label: 'Tahsil Edilecek', color: theme.colors.success },
+            { label: 'Çek / Senet', color: theme.colors.accentViolet },
+            { label: 'Kredi', color: theme.colors.attentionMarker },
+          ].map((item) => (
+            <Row key={item.label} gap="xxs" align="center">
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: item.color }} />
+              <Text color="textSecondary" numberOfLines={1} style={{ fontSize: 11 }}>
+                {item.label}
+              </Text>
+            </Row>
+          ))}
         </Row>
       </Stack>
     </Card>
