@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { EmptyState, Pressable, Skeleton, Stack, Text } from '@/components/primitives';
+import { EmptyState, Group, GroupedRow, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { HeroAmount } from '@/components/finance/HeroAmount';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
@@ -122,7 +122,14 @@ export default function ValueUnitsScreen() {
           </Stack>
         ) : (
           <>
-            <Stack gap="xs">
+            <View
+              style={{
+                gap: theme.spacing.xs,
+                padding: theme.spacing.lg,
+                borderRadius: theme.radius.widget,
+                backgroundColor: theme.colors.surfacePrimary,
+              }}
+            >
               <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
                 Kasalardaki TL karşılığı
               </Text>
@@ -130,7 +137,7 @@ export default function ValueUnitsScreen() {
               <Text variant="caption" color="textSecondary">
                 Kalıcı saklanmaz; her açılışta güncel kurdan hesaplanır.
               </Text>
-            </Stack>
+            </View>
 
             {newestCache ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
@@ -146,8 +153,8 @@ export default function ValueUnitsScreen() {
               </View>
             ) : null}
 
-            <Stack gap="xxs">
-              <Text variant="label" color="textSecondary">
+            <Stack gap="xs">
+              <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
                 Kasalar · {vaults.length} nakit hesap
               </Text>
               {vaults.length === 0 ? (
@@ -157,7 +164,8 @@ export default function ValueUnitsScreen() {
                   message="Nakit hesap eklerken Amerikan Doları, Euro veya altın gibi bir birim seçebilirsin."
                 />
               ) : (
-                vaults.map((v, index) => (
+                <Group inset={72}>
+                {vaults.map((v) => (
                   <Row
                     key={v.account.id}
                     onPress={() => router.push(`/accounts/${v.account.id}`)}
@@ -167,18 +175,19 @@ export default function ValueUnitsScreen() {
                     amount={formatMinorAmount(v.amountMinor, v.account.currency_code)}
                     reference={v.reference?.amountMinor ?? null}
                     stale={v.reference?.isStale ? formatCacheAge(v.reference.cachedAt) : null}
-                    last={index === vaults.length - 1}
                   />
-                ))
+                ))}
+                </Group>
               )}
             </Stack>
 
             {foreignObligations.length > 0 ? (
-              <Stack gap="xxs">
-                <Text variant="label" color="textSecondary">
+              <Stack gap="xs">
+                <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
                   Altın ve döviz borç / alacak · {foreignObligations.length}
                 </Text>
-                {foreignObligations.map(({ obligation: o, reference }, index) => (
+                <Group inset={72}>
+                {foreignObligations.map(({ obligation: o, reference }) => (
                   <Row
                     key={o.id}
                     onPress={() => router.push(`/obligations/${o.id}`)}
@@ -189,44 +198,37 @@ export default function ValueUnitsScreen() {
                     reference={reference?.amountMinor ?? null}
                     stale={reference?.isStale ? formatCacheAge(reference.cachedAt) : null}
                     trailing={o.due_date ? dayMonth.format(new Date(o.due_date)) : undefined}
-                    last={index === foreignObligations.length - 1}
                   />
                 ))}
+                </Group>
               </Stack>
             ) : null}
 
-            <Stack gap="xxs">
-              <Text variant="label" color="textSecondary">
+            <Stack gap="xs">
+              <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
                 Güncel kurlar TL karşılığı
               </Text>
-              {sortedRates.map(({ unit, rate }, index) => (
-                <View
-                  key={unit.code}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: theme.spacing.sm,
-                    paddingVertical: 10,
-                    borderBottomWidth: index === sortedRates.length - 1 ? 0 : 1,
-                    borderBottomColor: theme.colors.border,
-                  }}
-                >
-                  <ValueUnitBadge unitCode={unit.code} size={36} />
-                  <Text variant="cardTitle" style={{ flex: 1 }} numberOfLines={1}>
-                    {unit.name}
-                  </Text>
-                  {rate ? (
-                    <Text variant="cardTitle" tabular>
-                      {formatMinorAmount(rate.try_equivalent_minor)}
-                    </Text>
-                  ) : (
-                    <Text variant="caption" color="textSecondary">
-                      kur yok
-                    </Text>
-                  )}
-                </View>
-              ))}
-              <Text variant="caption" color="textSecondary" style={{ paddingTop: theme.spacing.xs }}>
+              <Group inset={64}>
+                {sortedRates.map(({ unit, rate }) => (
+                  <GroupedRow
+                    key={unit.code}
+                    leading={<ValueUnitBadge unitCode={unit.code} size={34} />}
+                    title={unit.name}
+                    trailing={
+                      rate ? (
+                        <Text tabular style={{ fontWeight: '600' }}>
+                          {formatMinorAmount(rate.try_equivalent_minor)}
+                        </Text>
+                      ) : (
+                        <Text variant="caption" color="textSecondary">
+                          kur yok
+                        </Text>
+                      )
+                    }
+                  />
+                ))}
+              </Group>
+              <Text variant="caption" color="textSecondary" style={{ paddingTop: theme.spacing.xxs, paddingLeft: theme.spacing.xxs }}>
                 Kuru olmayan birimlerde TL karşılığı gösterilmez; kayıt kendi biriminde tutulur.
               </Text>
             </Stack>
@@ -246,57 +248,43 @@ interface RowProps {
   reference: number | null;
   stale: string | null;
   trailing?: string;
-  last: boolean;
 }
 
-function Row({ onPress, unitCode, title, subtitle, amount, reference, stale, trailing, last }: RowProps) {
+function Row({ onPress, unitCode, title, subtitle, amount, reference, stale, trailing }: RowProps) {
   const theme = useTheme();
 
   return (
-    <Pressable
-      accessibilityRole="button"
+    <GroupedRow
       onPress={onPress}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: theme.spacing.sm,
-        paddingVertical: 12,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: theme.colors.border,
-      }}
-    >
-      <ValueUnitBadge unitCode={unitCode} size={40} />
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <Text variant="cardTitle" numberOfLines={1}>
-          {title}
-        </Text>
-        <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {subtitle}
-        </Text>
-      </View>
-      <View style={{ alignItems: 'flex-end', gap: 3 }}>
-        <Text variant="cardTitle" tabular>
-          {amount}
-        </Text>
-        {reference !== null ? (
-          <Text variant="caption" color="textSecondary" tabular>
-            ≈ {formatMinorAmount(reference)}
+      chevron={false}
+      leading={<ValueUnitBadge unitCode={unitCode} size={40} />}
+      title={title}
+      subtitle={subtitle}
+      trailing={
+        <View style={{ alignItems: 'flex-end', gap: 3 }}>
+          <Text style={{ fontWeight: '600' }} tabular>
+            {amount}
           </Text>
-        ) : (
-          <Text variant="caption" color="textSecondary">
-            kur yok
-          </Text>
-        )}
-        {stale ? (
-          <Text variant="label" style={{ textTransform: 'none', color: theme.colors.attentionMarker }}>
-            {stale}
-          </Text>
-        ) : trailing ? (
-          <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none' }}>
-            {trailing}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
+          {reference !== null ? (
+            <Text variant="caption" color="textSecondary" tabular>
+              ≈ {formatMinorAmount(reference)}
+            </Text>
+          ) : (
+            <Text variant="caption" color="textSecondary">
+              kur yok
+            </Text>
+          )}
+          {stale ? (
+            <Text variant="caption" style={{ color: theme.colors.attentionMarker }}>
+              {stale}
+            </Text>
+          ) : trailing ? (
+            <Text variant="caption" color="textSecondary" tabular>
+              {trailing}
+            </Text>
+          ) : null}
+        </View>
+      }
+    />
   );
 }
