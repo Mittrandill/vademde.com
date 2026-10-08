@@ -6,11 +6,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { AmountField, FieldGroup, Pressable, SegmentedControl, Text, TextField } from '@/components/primitives';
+import { AmountField, FieldGroup, Pressable, ScrollableTabs, Text, TextField } from '@/components/primitives';
 import { monoFamily } from '@/theme/typography';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { BankPicker } from '@/components/finance/BankPicker';
-import { CreditCardVisual } from '@/components/finance/CreditCardVisual';
 import { ValueUnitPicker } from '@/components/finance/ValueUnitPicker';
 import { createAccount, getAccount, updateAccount, type Account } from '@/features/accounts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -189,19 +188,6 @@ export default function NewAccountScreen() {
     });
   }
 
-  // Kredi kartı türü seçiliyken formun üstünde canlı güncellenen bir kart önizlemesi
-  // gösterilir (Revolut/N26 tarzı "kartını oluştururken gör" hissi) — CreditCardVisual
-  // zaten hesap detayında kullanılan gerçek bileşen, burada yalnızca taslak veriyle
-  // besleniyor. Önizleme amaçlı olduğundan Account tipinin kullanılmayan alanları
-  // (id, workspace_id vb.) kasıtlı olarak atlanır.
-  const previewAccount = {
-    name: name.trim() || 'Kart Sahibi',
-    bank_code: bankCode,
-    card_last_four: cardLastFour || null,
-    statement_day: statementDay ? Number(statementDay) : null,
-    payment_due_day: paymentDueDay ? Number(paymentDueDay) : null,
-  } as Account;
-
   const foot = (text: string, color: 'textSecondary' | 'danger' = 'textSecondary') => (
     <Text variant="caption" color={color} style={{ paddingHorizontal: 16, paddingTop: 8 }}>
       {text}
@@ -223,14 +209,11 @@ export default function NewAccountScreen() {
           />
 
           <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
-            <SegmentedControl
-              options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
-              value={type}
-              onChange={setType}
-              stretch
+            <ScrollableTabs
+              tabs={TYPES.map((t) => ({ key: t.value, label: t.label }))}
+              activeKey={type}
+              onChange={(key) => setType(key as Account['type'])}
             />
-
-            {isCreditCard ? <CreditCardVisual account={previewAccount} /> : null}
 
             {isCreditCard ? (
               <>
