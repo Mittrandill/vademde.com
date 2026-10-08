@@ -286,7 +286,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, nextDueDate }: C
   const periodDebtMinor = latestStatement?.remaining_amount_minor ?? balanceMinor;
   const limitMinor = account.credit_limit_minor ?? 0;
   const utilization = limitMinor > 0 ? Math.min(1, Math.max(0, balanceMinor / limitMinor)) : 0;
-  const daysLeft = nextDueDate ? Math.ceil((nextDueDate.getTime() - Date.now()) / 86400000) : null;
+  const daysLeft = nextDueDate ? Math.ceil((nextDueDate.getTime() - new Date().getTime()) / 86400000) : null;
   const open = () => router.push(`/accounts/${account.id}`);
 
   return (

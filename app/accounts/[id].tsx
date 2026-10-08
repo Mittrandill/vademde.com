@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, InteractionManager, Modal, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -8,14 +9,19 @@ import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import {
   ActionSheet,
+  Button,
   Card,
   Divider,
   EmptyState,
+  Group,
+  GroupedRow,
+  GroupedRowIcon,
   Pagination,
   Pressable,
   Row,
   SectionHeader,
   Stack,
+  Tag,
   Text,
 } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
@@ -63,6 +69,7 @@ const TYPE_LABEL: Record<Account['type'], string> = {
 const PAGE_SIZE = 10;
 
 const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+const dueDayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
 
 function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -87,7 +94,7 @@ export default function AccountDetailScreen() {
   const [page, setPage] = useState(0);
   // Yalnızca kredi kartı hesabında kullanılır (bkz. aşağıdaki kredi kartı dalı) —
   // hook sırası bozulmasın diye diğer hesap türlerinde de koşulsuz çağrılır.
-  const [tab, setTab] = useState<CreditCardTab>('genel');
+  const [tab, setTab] = useState<CreditCardTab>('ekstreler');
   const [menuOpen, setMenuOpen] = useState(false);
   const [statementSheetMonth, setStatementSheetMonth] = useState<StatementMonth | null>(null);
   const [payingCard, setPayingCard] = useState(false);
@@ -249,10 +256,12 @@ export default function AccountDetailScreen() {
     }
 
     const tabOptions: { key: CreditCardTab; label: string }[] = [
-      { key: 'genel', label: 'Genel' },
       { key: 'ekstreler', label: `Ekstreler (${loadedStatementCount})` },
       { key: 'hareketler', label: 'Hareketler' },
+      { key: 'genel', label: 'Kart bilgileri' },
     ];
+    const nextDue = computeStatementPeriod(account, new Date())?.dueDate ?? null;
+    const daysLeft = nextDue ? Math.ceil((nextDue.getTime() - new Date().getTime()) / 86400000) : null;
 
     return (
       <>
@@ -268,32 +277,96 @@ export default function AccountDetailScreen() {
         }}
         isLoading={false}
       >
-        <FinanceDetailHero
-          icon={<BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={44} />}
-          title={account.name}
-          amountLabel="GÜNCEL BORÇ"
-          amount={formatMinorAmount(balanceMinor, account.currency_code)}
-          amountColor={heroAmountColor}
-          progress={hasLimit ? clampedUtilization : undefined}
-          progressLabel="Limit kullanımı"
-          progressColor={stateAccent}
-          stats={[
-            {
-              label: 'SON ÖDEME',
-              value: account.payment_due_day ? `Ayın ${account.payment_due_day}.` : 'Yok',
-            },
-            {
-              label: 'KULLANILABİLİR',
-              value: hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok',
-            },
-            {
-              label: 'KART LİMİTİ',
-              value: hasLimit
-                ? formatMinorAmount(account.credit_limit_minor as number, account.currency_code)
-                : 'Yok',
-            },
-          ]}
-        />
+        <View
+          style={{
+            height: 196,
+            borderRadius: 22,
+            backgroundColor: '#2B2D31',
+            padding: 20,
+            paddingTop: 18,
+            overflow: 'hidden',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={38} />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#B1B2AA' }}>{account.name}</Text>
+          </View>
+          <View style={{ gap: 14 }}>
+            <Text style={{ fontSize: 18, letterSpacing: 2.5, color: '#F6F5F1', fontVariant: ['tabular-nums'] }}>
+              {`•••• •••• •••• ${account.card_last_four ?? '····'}`}
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 12, color: '#B1B2AA' }}>{TYPE_LABEL[type]}</Text>
+              {hasLimit ? (
+                <Text style={{ fontSize: 12, color: '#B1B2AA' }}>
+                  Limit {formatMinorAmount(account.credit_limit_minor as number, account.currency_code)}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+
+        <Card style={{ gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="caption" color="textSecondary">
+                Güncel borç
+              </Text>
+              <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5 }} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {formatMinorAmount(balanceMinor, account.currency_code)}
+              </Text>
+            </Stack>
+            {nextDue ? (
+              <Tag
+                label={daysLeft! < 0 ? 'Gecikti' : `${daysLeft} gün`}
+                tone={daysLeft! < 0 ? 'danger' : daysLeft! <= 10 ? 'brand' : 'neutral'}
+              />
+            ) : null}
+          </View>
+          <View style={{ flexDirection: 'row' }}>
+            <Stack gap="xxs" style={{ flex: 1 }}>
+              <Text variant="caption" color="textSecondary">
+                Son ödeme
+              </Text>
+              <Text style={{ fontSize: 15, fontWeight: '600' }}>
+                {nextDue ? dueDayFormatter.format(nextDue) : account.payment_due_day ? `Ayın ${account.payment_due_day}.` : 'Yok'}
+              </Text>
+            </Stack>
+            <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
+              <Text variant="caption" color="textSecondary">
+                Kullanılabilir
+              </Text>
+              <Text style={{ fontSize: 15, fontWeight: '600' }} tabular>
+                {hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok'}
+              </Text>
+            </Stack>
+          </View>
+          {hasLimit ? (
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.fill, overflow: 'hidden' }}>
+              <View style={{ width: `${clampedUtilization * 100}%`, height: 6, borderRadius: 3, backgroundColor: stateAccent }} />
+            </View>
+          ) : null}
+        </Card>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Button label="Kart borcunu öde" size="compact" onPress={() => setPayingCard(true)} disabled={balanceMinor <= 0} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="Ekstre tara"
+              variant="secondary"
+              size="compact"
+              onPress={() =>
+                router.push({
+                  pathname: '/(tabs)/tara',
+                  params: { accountId: account.id, documentType: 'kredi_karti_ekstresi' },
+                })
+              }
+            />
+          </View>
+        </View>
 
         <FinanceDetailTabs options={tabOptions} value={tab} onChange={setTab} />
 
@@ -303,91 +376,41 @@ export default function AccountDetailScreen() {
             description="Kart, dönem ve limit ayrıntıları"
             rows={[
               { label: 'Kart No', value: `•••• ${account.card_last_four ?? '····'}` },
-              {
-                label: 'Kesim Günü',
-                value: account.statement_day ? `Her ayın ${account.statement_day}.` : 'Yok',
-              },
-              {
-                label: 'Son Ödeme Günü',
-                value: account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok',
-              },
+              { label: 'Kesim Günü', value: account.statement_day ? `Her ayın ${account.statement_day}.` : 'Yok' },
+              { label: 'Son Ödeme Günü', value: account.payment_due_day ? `Her ayın ${account.payment_due_day}.` : 'Yok' },
               ...(hasLimit
-                ? [
-                    {
-                      label: 'Kredi Limiti',
-                      value: formatMinorAmount(account.credit_limit_minor as number, account.currency_code),
-                    },
-                  ]
-                : []),
-              { label: 'Güncel Borç', value: formatMinorAmount(balanceMinor, account.currency_code) },
-              ...(hasLimit
-                ? [
-                    {
-                      label: 'Kullanılabilir Limit',
-                      value: formatMinorAmount(availableMinor, account.currency_code),
-                    },
-                  ]
+                ? [{ label: 'Kredi Limiti', value: formatMinorAmount(account.credit_limit_minor as number, account.currency_code) }]
                 : []),
             ]}
           />
         ) : tab === 'ekstreler' ? (
-          <Stack gap="sm">
-            <Card>
-              <Stack gap="sm">
-                {statementMonths.map((m, index) => {
-                  const row = (
-                    <Row align="center">
-                      <Text variant="body" style={{ flex: 1, textTransform: 'capitalize' }}>
-                        {monthFormatter.format(m.monthDate)}
-                      </Text>
-                      {m.obligation ? (
-                        <Row gap="sm" align="center">
-                          <Amount
-                            amountMinor={m.obligation.remaining_amount_minor}
-                            currencyCode={m.obligation.currency_code}
-                            valueUnitType={m.obligation.value_unit_type as ValueUnitType}
-                            variant="body"
-                          />
-                          <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
-                        </Row>
-                      ) : (
-                        <Row
-                          gap="xxs"
-                          align="center"
-                          style={{
-                            paddingHorizontal: theme.spacing.xs,
-                            paddingVertical: 2,
-                            borderRadius: 999,
-                            backgroundColor: withAlpha(theme.colors.textSecondary, 0.14),
-                          }}
-                        >
-                          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.textSecondary} />
-                          <Text variant="caption" color="textSecondary">
-                            Yüklenmedi
-                          </Text>
-                        </Row>
-                      )}
-                    </Row>
-                  );
-
-                  return (
-                    <View key={m.periodKey}>
-                      {m.obligation ? (
-                        <Pressable onPress={() => router.push(`/obligations/${m.obligation!.id}`)}>{row}</Pressable>
-                      ) : (
-                        // Herhangi bir geçmiş "Yüklenmedi" ayına dokunarak o ayın ekstresini
-                        // eklemeye başlanabilir — artık yalnızca en son boşluk için değil.
-                        <Pressable onPress={() => setStatementSheetMonth(m)}>{row}</Pressable>
-                      )}
-                      {index < statementMonths.length - 1 ? (
-                        <Divider style={{ marginTop: theme.spacing.sm }} />
+          <Group>
+            {statementMonths.map((m) => {
+              const monthLabel = monthFormatter.format(m.monthDate);
+              const o = m.obligation;
+              const paid = o ? o.remaining_amount_minor <= 0 : false;
+              return (
+                <GroupedRow
+                  key={m.periodKey}
+                  leading={<GroupedRowIcon name={paid ? 'checkmark' : 'document-text'} tone={paid ? 'success' : o ? 'brandSoft' : 'default'} />}
+                  title={monthLabel.charAt(0).toLocaleUpperCase('tr-TR') + monthLabel.slice(1)}
+                  subtitle={o?.due_date ? `Son ödeme ${dueDayFormatter.format(new Date(o.due_date))}` : undefined}
+                  chevron={false}
+                  trailing={
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      {o ? (
+                        <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
+                          {formatMinorAmount(o.total_amount_minor, o.currency_code)}
+                        </Text>
                       ) : null}
+                      <Tag label={paid ? 'Ödendi' : o ? 'Bekliyor' : 'Yüklenmedi'} tone={paid ? 'success' : o ? 'brand' : 'neutral'} />
                     </View>
-                  );
-                })}
-              </Stack>
-            </Card>
-          </Stack>
+                  }
+                  onPress={() => (o ? router.push(`/obligations/${o.id}`) : setStatementSheetMonth(m))}
+                />
+              );
+            })}
+          </Group>
         ) : (
           <Stack gap="md">
             {sections.length === 0 ? (
@@ -397,11 +420,11 @@ export default function AccountDetailScreen() {
                 {sections.map((section) => (
                   <Stack gap="xs" key={section.title}>
                     <SectionHeader title={section.title} />
-                    <Stack gap="xs">
+                    <Group>
                       {section.data.map((item) => (
                         <TransactionRow key={item.id} item={item} accountId={account.id} />
                       ))}
-                    </Stack>
+                    </Group>
                   </Stack>
                 ))}
               </Stack>
@@ -532,8 +555,6 @@ export default function AccountDetailScreen() {
     );
   }
 
-  const overdraftUsedMinor = hasOverdraft ? Math.min(Math.max(-balanceMinor, 0), overdraftLimitMinor) : 0;
-  const overdraftProgress = hasOverdraft ? overdraftUsedMinor / overdraftLimitMinor : undefined;
   const accountInfoRows = [
     { label: 'Hesap Türü', value: TYPE_LABEL[type] },
     { label: 'Para Birimi', value: getValueUnit(account.currency_code).name },
@@ -546,11 +567,6 @@ export default function AccountDetailScreen() {
       ? [{ label: 'POS Komisyonu', value: account.pos_commission_rate != null ? `%${account.pos_commission_rate}` : 'Girilmedi' }]
       : []),
   ];
-  const accountTabOptions: { key: CreditCardTab; label: string }[] = [
-    { key: 'genel', label: 'Genel' },
-    { key: 'hareketler', label: 'Hareketler' },
-  ];
-
   return (
     <>
       <DetailScaffold
@@ -565,82 +581,108 @@ export default function AccountDetailScreen() {
         }}
         isLoading={false}
       >
-        <FinanceDetailHero
-          icon={
-            type === 'cash' ? (
-              <ValueUnitBadge unitCode={account.currency_code} size={44} />
-            ) : (
-              <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={44} />
-            )
-          }
-          eyebrow="HESAP DURUMU"
-          title={account.name}
-          amountLabel="GÜNCEL BAKİYE"
-          amount={formatMinorAmount(balanceMinor, account.currency_code)}
-          amountColor={theme.colors.textPrimary}
-          progress={overdraftProgress}
-          progressLabel="Ek hesap kullanımı"
-          progressColor={overdraftProgress !== undefined && overdraftProgress >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary}
-          stats={[
-            { label: 'HESAP TÜRÜ', value: TYPE_LABEL[type] },
-            { label: 'PARA BİRİMİ', value: getValueUnit(account.currency_code).name },
-            { label: 'HAREKET', value: String(allTransactions.length) },
-          ]}
+        <Stack gap="xs" style={{ alignItems: 'center' }}>
+          {type === 'cash' ? (
+            <ValueUnitBadge unitCode={account.currency_code} size={56} />
+          ) : (
+            <BankLogo bankCode={account.bank_code} fallbackIcon={TYPE_ICON[type]} size={56} />
+          )}
+          <Text variant="sectionTitle" style={{ marginTop: theme.spacing.xs }}>
+            {account.name}
+          </Text>
+          <Text style={{ fontSize: 38, lineHeight: 44, fontWeight: '700', letterSpacing: -1 }} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {formatMinorAmount(balanceMinor, account.currency_code)}
+          </Text>
+        </Stack>
+
+        {account.iban ? (
+          <Group inset={16}>
+            <GroupedRow
+              title="IBAN"
+              subtitle={maskIban(account.iban)}
+              chevron={false}
+              trailing={
+                <Button
+                  label="Kopyala"
+                  variant="secondary"
+                  size="sm"
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(account.iban as string);
+                    showSuccessAlert('IBAN kopyalandı.', () => {});
+                  }}
+                />
+              }
+            />
+          </Group>
+        ) : null}
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="Hareket"
+              variant="secondary"
+              size="compact"
+              icon="add"
+              onPress={() => router.push({ pathname: '/transactions/new', params: { accountId: account.id } })}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="Transfer"
+              variant="secondary"
+              size="compact"
+              icon="swap-horizontal"
+              onPress={() => router.push({ pathname: '/transactions/new', params: { accountId: account.id, direction: 'transfer' } })}
+            />
+          </View>
+        </View>
+
+        <Stack gap="md">
+          <Text variant="sectionTitle">Bu hesaptaki hareketler</Text>
+          {sections.length === 0 ? (
+            <EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />
+          ) : (
+            <Stack gap="md">
+              {sections.map((section) => (
+                <Stack gap="xs" key={section.title}>
+                  <SectionHeader title={section.title} />
+                  <Group>
+                    {section.data.map((item) => (
+                      <TransactionRow key={item.id} item={item} accountId={account.id} />
+                    ))}
+                  </Group>
+                </Stack>
+              ))}
+            </Stack>
+          )}
+          {totalPages > 1 ? <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} /> : null}
+        </Stack>
+
+        <FinanceDetailInfoCard
+          title="Hesap Bilgileri"
+          description="Hesap türü, kimlik ve limit ayrıntıları"
+          rows={accountInfoRows}
         />
 
-        <FinanceDetailTabs options={accountTabOptions} value={tab} onChange={setTab} />
+        {type === 'cash' && account.currency_code !== 'TRY' ? (
+          <ReferenceValueRow
+            amountMinor={balanceMinor}
+            unitCode={account.currency_code}
+            rates={ratesQuery.data}
+            isLoading={ratesQuery.isLoading}
+          />
+        ) : null}
 
-        {tab === 'genel' ? (
-          <Stack gap="lg">
-            <FinanceDetailInfoCard
-              title="Hesap Bilgileri"
-              description="Hesap türü, kimlik ve limit ayrıntıları"
-              rows={accountInfoRows}
-            />
+        {hasOverdraft ? (
+          <OverdraftCard
+            accountId={account.id}
+            balanceMinor={balanceMinor}
+            limitMinor={overdraftLimitMinor}
+            currencyCode={account.currency_code}
+          />
+        ) : null}
 
-            {type === 'cash' && account.currency_code !== 'TRY' ? (
-              <ReferenceValueRow
-                amountMinor={balanceMinor}
-                unitCode={account.currency_code}
-                rates={ratesQuery.data}
-                isLoading={ratesQuery.isLoading}
-              />
-            ) : null}
-
-            {hasOverdraft ? (
-              <OverdraftCard
-                accountId={account.id}
-                balanceMinor={balanceMinor}
-                limitMinor={overdraftLimitMinor}
-                currencyCode={account.currency_code}
-              />
-            ) : null}
-
-            {type === 'pos' ? <PosCommissionCard account={account} /> : null}
-          </Stack>
-        ) : (
-          <Stack gap="lg">
-            {sections.length === 0 ? (
-              <EmptyState icon="receipt-outline" message="Bu hesapta henüz hareket yok." />
-            ) : (
-              <Stack gap="md">
-                {sections.map((section) => (
-                  <Stack gap="xs" key={section.title}>
-                    <SectionHeader title={section.title} />
-                    <Stack gap="xs">
-                      {section.data.map((item) => (
-                        <TransactionRow key={item.id} item={item} accountId={account.id} />
-                      ))}
-                    </Stack>
-                  </Stack>
-                ))}
-              </Stack>
-            )}
-            {totalPages > 1 ? (
-              <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} />
-            ) : null}
-          </Stack>
-        )}
+        {type === 'pos' ? <PosCommissionCard account={account} /> : null}
       </DetailScaffold>
 
       <ActionSheet
@@ -763,40 +805,29 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function TransactionRow({ item, accountId }: { item: TransactionWithRelations; accountId: string }) {
+  const theme = useTheme();
   const isIncomingTransfer = item.direction === 'transfer' && item.transfer_to_account_id === accountId;
   const isOutgoingTransfer = item.direction === 'transfer' && item.account_id === accountId;
   const displayDirection = isIncomingTransfer ? 'income' : isOutgoingTransfer ? 'expense' : item.direction;
   const sign = displayDirection === 'expense' ? -1 : displayDirection === 'income' ? 1 : 0;
+  const isTransfer = item.direction === 'transfer';
+  const amountText = `${sign > 0 ? '+' : sign < 0 ? '−' : ''}${formatMinorAmount(item.amount_minor, item.currency_code)}`;
 
   return (
-    <Pressable onPress={() => router.push(`/transactions/${item.id}`)}>
-      <Card>
-        <Row align="center">
-          <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="body" numberOfLines={1}>
-              {item.description || item.category?.name || item.counterparty?.name || 'Hareket'}
-            </Text>
-            <Text variant="caption" color="textSecondary">
-              {item.category?.name ??
-                (isIncomingTransfer
-                  ? 'Gelen transfer'
-                  : isOutgoingTransfer
-                    ? 'Giden transfer'
-                    : sign > 0
-                      ? 'Gelir'
-                      : sign < 0
-                        ? 'Gider'
-                        : 'Transfer')}
-            </Text>
-          </Stack>
-          <Amount
-            amountMinor={item.amount_minor}
-            currencyCode={item.currency_code}
-            direction={displayDirection as 'income' | 'expense' | 'transfer'}
-            variant="body"
-          />
-        </Row>
-      </Card>
-    </Pressable>
+    <GroupedRow
+      leading={<GroupedRowIcon name={isTransfer ? 'swap-horizontal' : sign > 0 ? 'arrow-down' : 'arrow-up'} tone={isTransfer ? 'default' : sign > 0 ? 'success' : 'default'} />}
+      title={item.description || item.category?.name || item.counterparty?.name || 'Hareket'}
+      subtitle={
+        item.category?.name ??
+        (isIncomingTransfer ? 'Gelen transfer' : isOutgoingTransfer ? 'Giden transfer' : sign > 0 ? 'Gelir' : sign < 0 ? 'Gider' : 'Transfer')
+      }
+      trailing={
+        <Text tabular numberOfLines={1} style={{ fontSize: 15, fontWeight: '600', color: sign > 0 ? theme.colors.success : theme.colors.textPrimary }}>
+          {amountText}
+        </Text>
+      }
+      onPress={() => router.push(`/transactions/${item.id}`)}
+      chevron={false}
+    />
   );
 }
