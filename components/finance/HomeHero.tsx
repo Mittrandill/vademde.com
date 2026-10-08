@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { Card, Pressable, Text } from '@/components/primitives';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { WalletArt } from './HomeArt';
 import { formatMinorAmount } from '@/utils/money';
 
@@ -41,8 +42,17 @@ export function HomeHero({
   return (
     <View style={{ gap: theme.spacing.sm }}>
       <Card style={{ padding: 20, overflow: 'hidden' }}>
-        <View pointerEvents="none" style={{ position: 'absolute', right: -22, top: 56 }}>
-          <WalletArt accent={colors.attentionMarker} tone={colors.textPrimary} />
+        <Svg style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%" pointerEvents="none">
+          <Defs>
+            <LinearGradient id="hero-sheen" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.07} />
+              <Stop offset="0.6" stopColor="#FFFFFF" stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill="url(#hero-sheen)" />
+        </Svg>
+        <View pointerEvents="none" style={{ position: 'absolute', right: -46, top: 40 }}>
+          <WalletArt scale={0.82} accent={colors.attentionMarker} tone={colors.textPrimary} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>

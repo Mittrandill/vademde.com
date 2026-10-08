@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
@@ -43,7 +43,7 @@ function AlertCard({ id, width, tone, eyebrow, headline, headlineIsAmount, body,
       onPress={onPress}
       style={{
         width,
-        minHeight: 168,
+        minHeight: 176,
         borderRadius: 24,
         overflow: 'hidden',
         backgroundColor: theme.colors.surfacePrimary,
@@ -53,17 +53,27 @@ function AlertCard({ id, width, tone, eyebrow, headline, headlineIsAmount, body,
     >
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>
-          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={tone} stopOpacity={0.3} />
-            <Stop offset="1" stopColor={tone} stopOpacity={0.05} />
+          <LinearGradient id={`${id}-base`} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={tone} stopOpacity={0.16} />
+            <Stop offset="1" stopColor={tone} stopOpacity={0.04} />
+          </LinearGradient>
+          <RadialGradient id={`${id}-glow`} cx="0.88" cy="0.55" r="0.75">
+            <Stop offset="0" stopColor={tone} stopOpacity={0.4} />
+            <Stop offset="1" stopColor={tone} stopOpacity={0} />
+          </RadialGradient>
+          <LinearGradient id={`${id}-sheen`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.09} />
+            <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity={0} />
           </LinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id}-base)`} />
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id}-glow)`} />
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id}-sheen)`} />
       </Svg>
-      <View pointerEvents="none" style={{ position: 'absolute', right: -14, bottom: -10, opacity: 0.95 }}>
+      <View pointerEvents="none" style={{ position: 'absolute', right: -30, bottom: -14 }}>
         {art}
       </View>
-      <View style={{ padding: 18, paddingRight: 120, gap: 4, flex: 1 }}>
+      <View style={{ padding: 20, gap: 4, flex: 1, maxWidth: '60%' }}>
         <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>
           {eyebrow}
         </Text>
@@ -88,14 +98,16 @@ function AlertCard({ id, width, tone, eyebrow, headline, headlineIsAmount, body,
       <View
         style={{
           position: 'absolute',
-          top: 14,
-          right: 14,
-          width: 32,
-          height: 32,
-          borderRadius: 16,
+          top: 16,
+          right: 16,
+          width: 36,
+          height: 36,
+          borderRadius: 18,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: withAlpha('#000000', 0.35),
+          backgroundColor: withAlpha('#000000', 0.4),
+          borderWidth: 1,
+          borderColor: withAlpha('#FFFFFF', 0.1),
         }}
       >
         <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
@@ -144,7 +156,7 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         eyebrow={`Gecikmiş · ${overdueCount} kayıt`}
         headline={hidden ? MASK : formatMinorAmount(overdueMinor)}
         headlineIsAmount
-        body={`Ödeme tarihi geçen ${overdueCount} kaydın var.`}
+        body={`${overdueCount} kaydın ödeme tarihi geçti.`}
         cta="Hemen incele"
         art={<OverdueArt color={theme.colors.danger} />}
         onPress={() => router.push({ pathname: '/obligations', params: { status: 'overdue' } })}
