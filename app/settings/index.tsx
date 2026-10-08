@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -162,6 +162,13 @@ export default function SettingsScreen() {
             subtitle={THEME_LABELS[themePreference]}
             onPress={() => router.push('/settings/appearance')}
           />
+          {Platform.OS === 'ios' ? (
+            <GroupedRow
+              leading={<GroupedRowIcon name="grid-outline" />}
+              title="Widget’lar"
+              onPress={() => router.push('/settings/widgets')}
+            />
+          ) : null}
           <GroupedRow
             leading={<GroupedRowIcon name="pricetags-outline" />}
             title="Kategoriler"

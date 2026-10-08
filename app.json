@@ -11,6 +11,11 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.akintkaya.vademde",
       "usesAppleSignIn": true,
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.akintkaya.vademde.widget"
+        ]
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": ["whatsapp"],
@@ -149,7 +154,8 @@
           "userTrackingPermission": "Size daha uygun reklamlar gösterebilmemiz ve reklam performansını ölçebilmemiz için bu izne ihtiyacımız var."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@bacons/apple-targets"
     ],
     "extra": {
       "router": {},

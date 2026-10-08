@@ -37,6 +37,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 import { useReflowKey } from '@/services/reflow';
+import { useWidgetSnapshot } from '@/features/dashboard/useWidgetSnapshot';
 
 // Ücretsiz plandaki kullanıcıya ilk açılışta ve sonrasında en fazla 5 günde bir kez
 // gösterilen yumuşak paywall hatırlatması (kullanıcı kararı — Dashboard'da başka bir
@@ -258,6 +259,26 @@ export default function HomeScreen() {
       ),
     [receivableObligations, valueUnitRatesQuery.data]
   );
+
+  // iOS widget'ları için aktif çalışma alanı özeti (bkz. services/widgetSync.ts).
+  useWidgetSnapshot({
+    workspaceId: activeWorkspaceId,
+    workspaceName: activeWorkspace?.name ?? null,
+    enabled:
+      !!activeWorkspace &&
+      accountsQuery.isSuccess &&
+      balancesQuery.isSuccess &&
+      monthTotalsQuery.isSuccess &&
+      activeObligationsQuery.isSuccess &&
+      dueInstallmentsQuery.isSuccess &&
+      valueUnitRatesQuery.isSuccess,
+    obligations: activeObligations,
+    rates: valueUnitRatesQuery.data ?? [],
+    totalBalanceMinor,
+    payableTotalMinor,
+    receivableTotalMinor,
+    monthNetMinor,
+  });
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>

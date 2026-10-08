@@ -17,6 +17,7 @@ import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Splash } from '@/components/brand/Splash';
+import { clearWidgetSnapshot } from '@/services/widgetSync';
 import { AppLockGate } from '@/components/auth/AppLockGate';
 
 function AppStatusBar() {
@@ -48,6 +49,7 @@ function RootNavigator() {
       // çalışma alanı). Oturum kapanınca sıfırlanır; app/(tabs)/index.tsx'teki mevcut efekt
       // yeni hesabın kendi ilk çalışma alanını otomatik seçer.
       setActiveWorkspaceId(null);
+      clearWidgetSnapshot();
     }
   }, [session?.user?.id, setActiveWorkspaceId]);
 
