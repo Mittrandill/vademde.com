@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 
 import { ThemeProvider, useTheme } from '@/theme';
+import { OfflineBanner } from '@/components/navigation/OfflineBanner';
 import { useSession } from '@/features/auth/useSession';
 import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
@@ -57,7 +58,9 @@ function RootNavigator() {
   if (session) {
     return (
       <AppLockGate>
-        <AppNavigatorStack />
+        <OfflineBanner>
+          <AppNavigatorStack />
+        </OfflineBanner>
       </AppLockGate>
     );
   }

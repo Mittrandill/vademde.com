@@ -3,7 +3,8 @@ import { TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { Pagination, Pressable, Row, Text } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
+import { Button, Pagination, Pressable, Row, Text } from '@/components/primitives';
 
 export interface FinanceListSortAction {
   label: string;
@@ -35,6 +36,9 @@ export interface FinanceListEmptyStateProps {
   message: string;
   actionLabel?: string;
   onActionPress?: () => void;
+  /** Tuval: BosDurum — birincil buton altında metin butonu ("Elle ekle"). */
+  secondaryLabel?: string;
+  onSecondaryPress?: () => void;
 }
 
 export function FinanceListEmptyState({
@@ -43,6 +47,8 @@ export function FinanceListEmptyState({
   message,
   actionLabel,
   onActionPress,
+  secondaryLabel,
+  onSecondaryPress,
 }: FinanceListEmptyStateProps) {
   const theme = useTheme();
 
@@ -50,45 +56,30 @@ export function FinanceListEmptyState({
     <View style={{ alignItems: 'center', paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.xxl }}>
       <View
         style={{
-          width: 52,
-          height: 52,
-          borderRadius: 16,
+          width: 72,
+          height: 72,
+          borderRadius: 20,
           alignItems: 'center',
           justifyContent: 'center',
-          borderWidth: 1,
-          borderColor: theme.colors.border,
+          backgroundColor: withAlpha(theme.colors.brandPrimary, 0.14),
           marginBottom: theme.spacing.md,
         }}
       >
-        <Ionicons name={icon} size={26} color={theme.colors.textPrimary} />
+        <Ionicons name={icon} size={32} color={theme.colors.textPrimary} />
       </View>
-      <Text variant="cardTitle" style={{ textAlign: 'center' }}>
+      <Text variant="sectionTitle" style={{ textAlign: 'center' }}>
         {title}
       </Text>
-      <Text variant="body" color="textSecondary" style={{ textAlign: 'center', marginTop: theme.spacing.xs }}>
+      <Text variant="body" color="textSecondary" style={{ textAlign: 'center', marginTop: theme.spacing.xs, maxWidth: 280 }}>
         {message}
       </Text>
       {actionLabel && onActionPress ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-          onPress={onActionPress}
-          style={{
-            minHeight: theme.touchTarget.minimum,
-            marginTop: theme.spacing.md,
-            paddingHorizontal: theme.spacing.lg,
-            borderRadius: 14,
-            backgroundColor: theme.colors.action,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.xs,
-          }}
-        >
-          <Ionicons name="add" size={20} color={theme.colors.onAction} />
-          <Text variant="cardTitle" style={{ color: theme.colors.onAction }}>
-            {actionLabel}
-          </Text>
-        </Pressable>
+        <View style={{ width: 240, marginTop: theme.spacing.lg, gap: theme.spacing.xs }}>
+          <Button label={actionLabel} onPress={onActionPress} />
+          {secondaryLabel && onSecondaryPress ? (
+            <Button label={secondaryLabel} variant="text" onPress={onSecondaryPress} />
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
