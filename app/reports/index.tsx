@@ -7,9 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Card, DateRangeSheet, Pressable, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
+import { DateRangeSheet, ScrollableTabs, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { HeroAmount } from '@/components/finance/HeroAmount';
 import { OverdueObligationsList } from '@/components/finance/OverdueObligationsList';
 import { ReportExportSheet, type ExportFormat } from '@/components/finance/ReportExportSheet';
 import { formatCacheAge } from '@/components/finance/ReferenceValueRow';
@@ -18,11 +17,16 @@ import {
   CashFlowRows,
   CategoryRows,
   CounterpartyRows,
+  DebtMiniCard,
   DeltaText,
   KpiRow,
   MonthBars,
+  NetCard,
   RateRows,
+  RatesMiniCard,
+  ReportCard,
   SectionTitle,
+  SideKpis,
   SmartSummary,
 } from '@/components/finance/ReportSections';
 import {
@@ -446,66 +450,74 @@ export default function ReportsScreen() {
             <>
               {summaryText ? <SmartSummary text={summaryText} onPress={() => router.push('/insights')} /> : null}
 
-              <Card style={{ gap: 4 }}>
-                <Text variant="caption" color="textSecondary">
-                  Net
-                </Text>
-                <HeroAmount amountMinor={Math.abs(net)} baseSize={32} color={net >= 0 ? 'receivable' : 'textPrimary'} />
-                <Text variant="caption" color="textSecondary">
-                  {net >= 0 ? 'Gelir gideri aştı' : 'Gider geliri aştı'}
-                </Text>
-              </Card>
-
-              <KpiRow
-                items={[
-                  {
-                    label: 'Gelir',
-                    value: `+${formatMinorAmount(income)}`,
-                    valueColor: theme.colors.receivable,
-                    footer: <DeltaText current={income} previous={prev ? prev.incomeMinor : null} />,
-                  },
-                  {
-                    label: 'Gider',
-                    value: `−${formatMinorAmount(expense)}`,
-                    footer: <DeltaText current={expense} previous={prev ? prev.expenseMinor : null} goodWhenDown />,
-                  },
-                  {
-                    label: 'Tasarruf oranı',
-                    value: savingsRate === null ? '—' : `%${savingsRate}`,
-                    footer:
-                      savingsRate !== null && prevSavingsRate !== null ? (
-                        <DeltaText current={savingsRate} previous={prevSavingsRate} suffix="puan farkla geçen döneme göre" />
-                      ) : (
-                        <Text variant="caption" color="textSecondary">
-                          Gelir kaydı olan dönemlerde hesaplanır
-                        </Text>
-                      ),
-                  },
-                  {
-                    label: 'Gecikmiş',
-                    value: formatMinorAmount(overdueMinor),
-                    valueColor: overdueMinor > 0 ? theme.colors.danger : undefined,
-                    footer: (
-                      <Text variant="caption" color="textSecondary">
-                        {overdueItems.length} kayıt
-                      </Text>
-                    ),
-                  },
-                ]}
-              />
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <NetCard net={net} />
+                <SideKpis
+                  items={[
+                    {
+                      key: 'gelir',
+                      label: 'Gelir',
+                      value: `+${formatMinorAmount(income).replace(/,00(?=\D*$)/, '')}`,
+                      valueColor: theme.colors.receivable,
+                      icon: 'arrow-up',
+                      iconColor: theme.colors.receivable,
+                      footer: <DeltaText current={income} previous={prev ? prev.incomeMinor : null} suffix="geçen dön." />,
+                    },
+                    {
+                      key: 'gider',
+                      label: 'Gider',
+                      value: `−${formatMinorAmount(expense).replace(/,00(?=\D*$)/, '')}`,
+                      valueColor: theme.colors.danger,
+                      icon: 'arrow-down',
+                      iconColor: theme.colors.danger,
+                      footer: <DeltaText current={expense} previous={prev ? prev.expenseMinor : null} goodWhenDown suffix="geçen dön." />,
+                    },
+                    {
+                      key: 'tasarruf',
+                      label: 'Tasarruf oranı',
+                      value: savingsRate === null ? '—' : `%${savingsRate}`,
+                      icon: 'pie-chart-outline',
+                      iconColor: theme.colors.textSecondary,
+                      footer:
+                        savingsRate !== null && prevSavingsRate !== null ? (
+                          <DeltaText current={savingsRate} previous={prevSavingsRate} suffix="puan farkla" />
+                        ) : (
+                          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+                            Gelir kaydı gerekir
+                          </Text>
+                        ),
+                    },
+                  ]}
+                />
+              </View>
 
               {monthlyComparisonQuery.data ? (
-                <Stack gap="xs">
-                  <SectionTitle>Son 6 ay</SectionTitle>
+                <ReportCard title="Son 6 ay">
                   <MonthBars data={monthlyComparisonQuery.data} />
-                </Stack>
+                </ReportCard>
               ) : null}
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <DebtMiniCard
+                  payableMinor={payableTotalMinor}
+                  payableCount={payableObligations.length}
+                  receivableMinor={receivableTotalMinor}
+                  receivableCount={receivableObligations.length}
+                  onPress={() => jumpTo('borc')}
+                />
+                <RatesMiniCard
+                  rates={ratesWithData}
+                  ageText={newestRate ? `${formatCacheAge(newestRate)} güncellendi` : null}
+                  onPress={() => jumpTo('kurlar')}
+                />
+              </View>
             </>
           )}
         </Anchor>
 
         <Anchor id="kategoriler" onMeasure={measure}>
-          <SectionTitle
+          <ReportCard
+            title="Kategoriler"
             right={
               <ScrollableTabs
                 tabs={[
@@ -517,14 +529,14 @@ export default function ReportsScreen() {
               />
             }
           >
-            Kategoriler
-          </SectionTitle>
-          <CategoryRows
-            items={categoryQuery.data ?? []}
-            previous={prevCategoryMap}
-            emptyLabel="Bu dönemde kayıt yok."
-            goodWhenDown={categoryDirection === 'expense'}
-          />
+            <CategoryRows
+              bare
+              items={categoryQuery.data ?? []}
+              previous={prevCategoryMap}
+              emptyLabel="Bu dönemde kayıt yok."
+              goodWhenDown={categoryDirection === 'expense'}
+            />
+          </ReportCard>
         </Anchor>
 
         <Anchor id="kisiler" onMeasure={measure}>
@@ -552,6 +564,16 @@ export default function ReportsScreen() {
                 footer: (
                   <Text variant="caption" color="textSecondary">
                     {receivableObligations.length} kayıt
+                  </Text>
+                ),
+              },
+              {
+                label: 'Gecikmiş',
+                value: formatMinorAmount(overdueMinor),
+                valueColor: overdueMinor > 0 ? theme.colors.danger : undefined,
+                footer: (
+                  <Text variant="caption" color="textSecondary">
+                    {overdueItems.length} kayıt
                   </Text>
                 ),
               },

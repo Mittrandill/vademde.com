@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { Image, View, type ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
-import { GroupedRowIcon, Stack, Text } from '@/components/primitives';
+import { withAlpha } from '@/theme/colors';
+import { Pressable, Stack, Text } from '@/components/primitives';
+import { HeroAmount } from './HeroAmount';
 import { formatMinorAmount } from '@/utils/money';
 import { CategoryIcon } from './CategoryIcon';
 import { PersonAvatar } from './PersonAvatar';
@@ -118,31 +120,300 @@ export function KpiRow({ items }: { items: KpiProps[] }) {
   );
 }
 
-export function SmartSummary({ text, onPress }: { text: string; onPress?: () => void }) {
+function Art({ source, width, ratio = 1 }: { source: ImageSourcePropType; width: number; ratio?: number }) {
+  return <Image source={source} accessible={false} resizeMode="contain" style={{ width, height: width * ratio }} />;
+}
+
+// Yüzey kartı: başlık + sağda isteğe bağlı aksiyon; Raporlar'daki tüm bloklar bu kabı paylaşır.
+export function ReportCard({
+  title,
+  right,
+  children,
+  gap = 12,
+}: {
+  title?: string;
+  right?: ReactNode;
+  children: ReactNode;
+  gap?: number;
+}) {
   const theme = useTheme();
   return (
     <View
       style={{
-        flexDirection: 'row',
-        gap: theme.spacing.sm,
-        padding: theme.spacing.md,
-        borderRadius: theme.radius.widget,
         backgroundColor: theme.colors.surfacePrimary,
+        borderRadius: theme.radius.group,
+        padding: theme.spacing.md,
+        gap,
+        overflow: 'hidden',
       }}
     >
-      <GroupedRowIcon name="sparkles" tone="violet" />
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text variant="label" color="textSecondary">
-          Özet
-        </Text>
-        <Text variant="body">{text}</Text>
-        {onPress ? (
-          <Text variant="cardTitle" onPress={onPress} accessibilityRole="link" style={{ fontSize: 14 }}>
-            Önerileri gör →
+      {title ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Text variant="sectionTitle" style={{ flexShrink: 1 }}>
+            {title}
           </Text>
+          {right}
+        </View>
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+// Akıllı özet: yalnızca ekrandaki rakamlardan türeyen metin (yapay zekâ çağrısı yok); sağda illüstrasyon.
+export function SmartSummary({ text, onPress }: { text: string; onPress?: () => void }) {
+  const theme = useTheme();
+  const brand = theme.colors.brandPrimary;
+  return (
+    <View
+      style={{
+        borderRadius: theme.radius.widget,
+        backgroundColor: withAlpha(brand, 0.1),
+        borderWidth: 1,
+        borderColor: withAlpha(brand, 0.35),
+        padding: theme.spacing.md,
+        minHeight: 168,
+        overflow: 'hidden',
+      }}
+    >
+      <View pointerEvents="none" style={{ position: 'absolute', right: -24, bottom: -18 }}>
+        <Art source={require('@/assets/reports/summary.png')} width={170} />
+      </View>
+      <View style={{ gap: 8, paddingRight: 96 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name="sparkles" size={14} color={brand} />
+          <Text variant="label" style={{ color: brand }}>
+            Özet
+          </Text>
+        </View>
+        <Text style={{ fontSize: 17, lineHeight: 23, fontWeight: '600' }}>{text}</Text>
+        {onPress ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={onPress}
+            style={{
+              alignSelf: 'flex-start',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              height: 34,
+              paddingHorizontal: 14,
+              borderRadius: 17,
+              borderWidth: 1,
+              borderColor: withAlpha(brand, 0.6),
+              marginTop: 4,
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '600', color: brand }}>Önerileri gör</Text>
+            <Ionicons name="arrow-forward" size={14} color={brand} />
+          </Pressable>
         ) : null}
       </View>
     </View>
+  );
+}
+
+// Net: büyük rakam + altta yeşil trend illüstrasyonu (sol yarı).
+export function NetCard({ net }: { net: number }) {
+  const theme = useTheme();
+  const positive = net >= 0;
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: theme.colors.surfacePrimary,
+        borderRadius: theme.radius.group,
+        padding: theme.spacing.md,
+        overflow: 'hidden',
+        minHeight: 180,
+      }}
+    >
+      <View pointerEvents="none" style={{ position: 'absolute', right: -30, bottom: -10, opacity: 0.9 }}>
+        <Art source={require('@/assets/reports/net.png')} width={190} ratio={0.75} />
+      </View>
+      <Text variant="caption" color="textSecondary">
+        Net
+      </Text>
+      <HeroAmount amountMinor={Math.abs(net)} baseSize={28} color={positive ? 'receivable' : 'textPrimary'} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: withAlpha(positive ? theme.colors.receivable : theme.colors.danger, 0.18),
+          }}
+        >
+          <Ionicons
+            name={positive ? 'arrow-up' : 'arrow-down'}
+            size={14}
+            color={positive ? theme.colors.receivable : theme.colors.danger}
+          />
+        </View>
+        <Text variant="caption" style={{ color: positive ? theme.colors.receivable : theme.colors.textSecondary, flexShrink: 1 }}>
+          {positive ? 'Gelir gideri aştı' : 'Gider geliri aştı'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+export interface SideKpi {
+  key: string;
+  label: string;
+  value: string;
+  valueColor?: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  footer: ReactNode;
+}
+
+// Net'in yanındaki Gelir / Gider / Tasarruf oranı: ikon dairesi + etiket + tutar, altında değişim.
+export function SideKpis({ items }: { items: SideKpi[] }) {
+  const theme = useTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: theme.colors.surfacePrimary,
+        borderRadius: theme.radius.group,
+        paddingHorizontal: theme.spacing.sm,
+        justifyContent: 'center',
+      }}
+    >
+      {items.map((item, index) => (
+        <View
+          key={item.key}
+          style={{
+            flexDirection: 'row',
+            gap: 8,
+            paddingVertical: 10,
+            borderBottomWidth: index === items.length - 1 ? 0 : 1,
+            borderBottomColor: theme.colors.separator,
+          }}
+        >
+          <View
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: withAlpha(item.iconColor, 0.18),
+            }}
+          >
+            <Ionicons name={item.icon} size={16} color={item.iconColor} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 4 }}>
+              <Text style={{ fontSize: 13, fontWeight: '500' }} numberOfLines={1}>
+                {item.label}
+              </Text>
+              <Text tabular style={{ fontSize: 13, fontWeight: '600', color: item.valueColor }} numberOfLines={1}>
+                {item.value}
+              </Text>
+            </View>
+            {item.footer}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// Özet'in altında yan yana iki kart: Borç ve alacak | Güncel kurlar (kısa).
+export function DebtMiniCard({
+  payableMinor,
+  payableCount,
+  receivableMinor,
+  receivableCount,
+  onPress,
+}: {
+  payableMinor: number;
+  payableCount: number;
+  receivableMinor: number;
+  receivableCount: number;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const rows = [
+    { label: 'Ödenecek', count: payableCount, value: payableMinor, icon: 'arrow-up' as const, color: theme.colors.danger, valueColor: theme.colors.danger },
+    { label: 'Tahsil edilecek', count: receivableCount, value: receivableMinor, icon: 'arrow-down' as const, color: theme.colors.receivable, valueColor: theme.colors.receivable },
+  ];
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Borç ve alacak"
+      onPress={onPress}
+      style={{ flex: 1, backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, padding: theme.spacing.md, gap: 10, overflow: 'hidden' }}
+    >
+      <Text variant="sectionTitle" style={{ fontSize: 17 }}>
+        Borç ve alacak
+      </Text>
+      {rows.map((r) => (
+        <View key={r.label} style={{ gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: withAlpha(r.color, 0.18),
+              }}
+            >
+              <Ionicons name={r.icon} size={15} color={r.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '500' }} numberOfLines={1}>
+                {r.label}
+              </Text>
+              <Text variant="caption" color="textSecondary">
+                {r.count} kayıt
+              </Text>
+            </View>
+          </View>
+          <Text tabular style={{ fontSize: 15, fontWeight: '700', color: r.valueColor }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {wholeAmount(r.value)}
+          </Text>
+        </View>
+      ))}
+    </Pressable>
+  );
+}
+
+export function RatesMiniCard({ rates, ageText, onPress }: { rates: ValueUnitRate[]; ageText: string | null; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Güncel kurlar"
+      onPress={onPress}
+      style={{ flex: 1, backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, padding: theme.spacing.md, gap: 8, overflow: 'hidden' }}
+    >
+      <Text variant="sectionTitle" style={{ fontSize: 17 }}>
+        Güncel kurlar
+      </Text>
+      {rates.slice(0, 3).map((rate) => (
+        <View key={rate.unit_code} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ValueUnitBadge unitCode={rate.unit_code} size={26} />
+          <Text style={{ flex: 1, fontSize: 13 }} numberOfLines={1}>
+            {getValueUnit(rate.unit_code).name}
+          </Text>
+          <Text tabular style={{ fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
+            {wholeAmount(rate.try_equivalent_minor)}
+          </Text>
+        </View>
+      ))}
+      {ageText ? (
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          {ageText}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -210,7 +481,10 @@ export function CategoryRows({
   previous,
   emptyLabel,
   goodWhenDown,
+  bare = false,
 }: {
+  /** true: ReportCard içinde kullanılır, kendi yüzeyini çizmez. */
+  bare?: boolean;
   items: CategoryBreakdownItem[];
   /** Önceki dönemin kategori toplamları (ad → kuruş). */
   previous: Map<string, number> | null;
@@ -226,7 +500,7 @@ export function CategoryRows({
     );
   }
   return (
-    <View style={panelStyle(theme)}>
+    <View style={bare ? undefined : panelStyle(theme)}>
       {items.slice(0, 8).map((item, index) => {
         const before = previous?.get(item.name) ?? null;
         const pct = before && before > 0 ? Math.round(((item.amountMinor - before) / before) * 100) : null;

@@ -7,6 +7,13 @@ import {
 } from '@/features/obligations/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 
+// Kart ekstresinin tek satırlık toplam borç hareketi ("Kredi Kartı Ekstresi — Banka") bir
+// harcama değildir: harcamalar kendi kategorileri ve tarihleriyle ayrı satırlar olarak zaten
+// kayıtlıdır; bu toplam satırı kâr/zarar ve kategori raporlarında aynı harcamayı ikinci kez
+// saymasın ve "Kategorisiz" kovasını şişirmesin diye analizden hariç tutulur.
+export const EXCLUDE_CARD_STATEMENT_LUMP = 'description.is.null,description.not.ilike.Kredi Kartı Ekstresi*';
+
+
 export interface DateRange {
   from?: string;
   to?: string;
@@ -38,7 +45,8 @@ async function listRangeTransactions(workspaceId: string, range: DateRange): Pro
   let query = supabase
     .from('transactions')
     .select('amount_minor, financing_minor, direction, currency_code, account_id, transfer_to_account_id, occurred_at')
-    .eq('workspace_id', workspaceId);
+    .eq('workspace_id', workspaceId)
+    .or(EXCLUDE_CARD_STATEMENT_LUMP);
   if (range.from) query = query.gte('occurred_at', range.from);
   if (range.to) query = query.lt('occurred_at', range.to);
 
@@ -115,22 +123,8 @@ type CategoryTransactionRow = {
   amount_minor: number;
   financing_minor: number;
   currency_code: string;
-  description: string | null;
   category: { id: string; name: string; icon: string | null; color: string | null } | null;
-  account: { type: string } | null;
 };
-
-// Kart ekstresinin tek satırlık toplam borç hareketi ("Kredi Kartı Ekstresi — Banka") bir
-// harcama kategorisi değildir; harcamalar kendi kategorileriyle ayrı satırlar olarak zaten
-// kayıtlıdır. Kategorisiz bu toplam satırı "Kategorisiz" kovasını şişirmesin diye atlanır.
-function isCardStatementLump(row: CategoryTransactionRow): boolean {
-  return (
-    !row.category &&
-    row.account?.type === 'credit_card' &&
-    !!row.description &&
-    row.description.startsWith('Kredi Kartı Ekstresi')
-  );
-}
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Kategori bazlı harcamalar/gelirler.
 export async function getCategoryBreakdown(
@@ -140,9 +134,10 @@ export async function getCategoryBreakdown(
 ): Promise<CategoryBreakdownItem[]> {
   let query = supabase
     .from('transactions')
-    .select('amount_minor, financing_minor, currency_code, description, category:categories(id, name, icon, color), account:accounts!transactions_account_id_fkey(type)')
+    .select('amount_minor, financing_minor, currency_code, category:categories(id, name, icon, color)')
     .eq('workspace_id', workspaceId)
-    .eq('direction', direction);
+    .eq('direction', direction)
+    .or(EXCLUDE_CARD_STATEMENT_LUMP);
   if (range.from) query = query.gte('occurred_at', range.from);
   if (range.to) query = query.lt('occurred_at', range.to);
 
@@ -152,7 +147,7 @@ export async function getCategoryBreakdown(
   const totals = new Map<string, { name: string; icon: string | null; color: string | null; amountMinor: number }>();
   let grandTotal = 0;
   for (const row of data as unknown as CategoryTransactionRow[]) {
-    if (profitAndLossMinor(row) <= 0 || isCardStatementLump(row)) continue;
+    if (profitAndLossMinor(row) <= 0) continue;
     const key = row.category?.id ?? 'uncategorized';
     const name = row.category?.name ?? 'Kategorisiz';
     const existing =
@@ -199,7 +194,8 @@ export async function getCounterpartyBreakdown(
     .select('amount_minor, financing_minor, currency_code, counterparty:counterparties(id, name)')
     .eq('workspace_id', workspaceId)
     .in('direction', ['income', 'expense'])
-    .not('counterparty_id', 'is', null);
+    .not('counterparty_id', 'is', null)
+    .or(EXCLUDE_CARD_STATEMENT_LUMP);
   if (range.from) query = query.gte('occurred_at', range.from);
   if (range.to) query = query.lt('occurred_at', range.to);
 

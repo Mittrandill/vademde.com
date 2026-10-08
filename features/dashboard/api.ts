@@ -1,7 +1,7 @@
 import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
 import { listValueUnitRates, sumToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
-import { profitAndLossMinor } from '@/features/reports/api';
+import { EXCLUDE_CARD_STATEMENT_LUMP, profitAndLossMinor } from '@/features/reports/api';
 
 export interface IncomeExpenseTotals {
   incomeMinor: number;
@@ -23,6 +23,7 @@ export async function getMonthTransactionTotals(
       .select('amount_minor, financing_minor, direction, currency_code')
       .eq('workspace_id', workspaceId)
       .in('direction', ['income', 'expense'])
+      .or(EXCLUDE_CARD_STATEMENT_LUMP)
       .gte('occurred_at', start.toISOString())
       .lt('occurred_at', end.toISOString()),
     listValueUnitRates(),
