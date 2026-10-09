@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
 
-import { useTheme } from '@/theme';
+import { useTheme, withAlpha } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { Button, Pressable, Text } from '@/components/primitives';
 import {
@@ -19,36 +19,41 @@ import { signInWithApple, signInWithGoogle } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
 import { useOnboardingStore } from '@/store/onboardingStore';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Sahne yüksekliği: küçük ekranlarda (SE) metin ve düğmeye yer kalsın diye ekran yüksekliğine bağlı.
+const SCENE_HEIGHT = Math.round(Math.min(400, Math.max(300, SCREEN_HEIGHT * 0.44)));
 
 interface OnboardingPage {
   Scene: (props: IntroSceneProps) => React.JSX.Element;
-  title: string;
+  eyebrow: string;
+  /** Başlık; `accent` vurgulu yazılan kısımdır (App Store v3 setiyle aynı başlık dili). */
+  title: { before?: string; accent: string; after?: string };
   body: string;
 }
 
-// Tuval Tanisma1–3 + Hosgeldin: üç değer önerisi sayfası ve ardından hesap seçimi (Apple / e-posta / giriş).
+// Tanışma (3 değer önerisi) + Hoş geldin (hesap seçimi: Apple / Google / e-posta / giriş).
 // docs/03-bilgi-mimarisi-ekranlar.md §5.2 — yalnızca ilk açılışta ve oturum yokken gösterilir. Deneme/fiyat
 // teklifi kayıttan sonra açılan paywall'dadır (app/paywall/index.tsx).
 const PAGES: OnboardingPage[] = [
   {
     Scene: ScanIntroScene,
-    title: 'Belgeyi çekin,\ngerisini Vademde yapsın',
-    body: 'Çek, senet, fatura, ekstre ya da kredi ödeme planı. Tutar, tarih ve taraflar saniyeler içinde forma dökülür.',
+    eyebrow: 'Akıllı belge okuma',
+    title: { before: 'Fotoğrafını çekin,\n', accent: 'Vademde', after: ' okusun' },
+    body: 'Çek, senet, fatura, dekont ya da kredi ödeme planı. Tutar, vade ve taraflar saniyeler içinde forma dökülür.',
   },
   {
     Scene: ConfirmIntroScene,
-    title: 'Her kaydı\nsiz onaylarsınız',
-    body: 'Okunan bilgiler önce size gösterilir. Emin olmadığımız alanları işaretleriz; onayınız olmadan hiçbir kayıt oluşmaz.',
+    eyebrow: 'Siz onaylarsınız',
+    title: { before: 'Okunan her alan\nönce ', accent: 'size', after: ' gelir' },
+    body: 'Emin olmadığımız alanları işaretleriz. Onayınız olmadan hiçbir kayıt oluşmaz.',
   },
   {
     Scene: DueIntroScene,
-    title: 'Hiçbir vade\nsessizce geçmez',
+    eyebrow: 'Vade takvimi',
+    title: { before: 'Hiçbir vade\n', accent: 'sessizce', after: ' geçmez' },
     body: 'Çek, senet, taksit ve faturalar tek takvimde. Ne zaman hatırlatacağımızı siz seçersiniz.',
   },
 ];
-
-const PAGE_COUNT = PAGES.length + 1;
 
 export default function WelcomeScreen() {
   const theme = useTheme();
@@ -102,23 +107,42 @@ export default function WelcomeScreen() {
     }
   }
 
+  // Vurgu rengi: koyu temada Saffron; açık temada Saffron metin kontrastı yetersiz olduğu için koyu altın ton.
+  const accentColor = theme.scheme === 'dark' ? theme.colors.brandPrimary : theme.colors.attentionMarker;
+
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <View style={{ height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 }}>
-        {page > 0 ? (
-          <Pressable accessibilityLabel="Geri" onPress={() => goTo(page - 1)} hitSlop={8} style={{ width: 44, height: 44, justifyContent: 'center', paddingLeft: 8 }}>
-            <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
-          </Pressable>
-        ) : (
-          <View />
-        )}
-        {!isAccountPage ? (
-          <Pressable accessibilityRole="button" onPress={() => goTo(PAGES.length)} hitSlop={8} style={{ paddingHorizontal: 8, height: 44, justifyContent: 'center' }}>
-            <Text color="textSecondary" style={{ fontWeight: '500' }}>
-              Atla
-            </Text>
-          </Pressable>
-        ) : null}
+      <View style={{ height: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 8 }}>
+        <View style={{ width: 60 }}>
+          {page > 0 ? (
+            <Pressable accessibilityLabel="Geri" onPress={() => goTo(page - 1)} hitSlop={8} style={{ width: 44, height: 44, justifyContent: 'center', paddingLeft: 8 }}>
+              <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
+            </Pressable>
+          ) : null}
+        </View>
+        {/* Hikâye tarzı ilerleme: geçilen ve geçerli sayfa dolu */}
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={`Tanıtım, ${Math.min(page + 1, PAGES.length)} / ${PAGES.length}`}
+          style={{ flex: 1, flexDirection: 'row', gap: 6, opacity: isAccountPage ? 0 : 1 }}
+        >
+          {PAGES.map((p, index) => (
+            <View
+              key={p.eyebrow}
+              style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: index <= page ? theme.colors.brandPrimary : theme.colors.fill }}
+            />
+          ))}
+        </View>
+        <View style={{ width: 60, alignItems: 'flex-end' }}>
+          {!isAccountPage ? (
+            <Pressable accessibilityRole="button" onPress={() => goTo(PAGES.length)} hitSlop={8} style={{ paddingHorizontal: 8, height: 44, justifyContent: 'center' }}>
+              <Text color="textSecondary" style={{ fontWeight: '500' }}>
+                Atla
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView
@@ -129,31 +153,59 @@ export default function WelcomeScreen() {
         onMomentumScrollEnd={handleScroll}
         style={{ flex: 1 }}
       >
-        {PAGES.map(({ Scene, title, body }, index) => (
+        {PAGES.map(({ Scene, eyebrow, title, body }, index) => (
           <ScrollView
-            key={title}
+            key={eyebrow}
             style={{ width: SCREEN_WIDTH }}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 8 }}
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: 8 }}
           >
-            <Scene active={page === index} />
-            <View style={{ paddingHorizontal: 4, marginTop: 32 }}>
-              <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56 }}>{title}</Text>
-              <Text color="textSecondary" style={{ marginTop: 12 }}>
+            <View style={{ marginTop: 8 }}>
+              <Scene active={page === index} height={SCENE_HEIGHT} />
+            </View>
+            <View style={{ paddingHorizontal: theme.screenEdge.standard + 4, marginTop: 28 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accentColor }} />
+                <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: accentColor }}>
+                  {eyebrow}
+                </Text>
+              </View>
+              <Text accessibilityRole="header" style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, marginTop: 12 }}>
+                {title.before}
+                <Text style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, color: accentColor }}>{title.accent}</Text>
+                {title.after}
+              </Text>
+              <Text color="textSecondary" style={{ marginTop: 12, fontSize: 16, lineHeight: 22 }}>
                 {body}
               </Text>
             </View>
           </ScrollView>
         ))}
 
-        {/* Hosgeldin: hesapla devam et. */}
+        {/* Hoş geldin: hesapla devam et. */}
         <View style={{ width: SCREEN_WIDTH, paddingHorizontal: theme.screenEdge.standard }}>
-          <View style={{ alignItems: 'center', marginTop: 56 }}>
-            <VademdeMark size={88} />
-            <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, textAlign: 'center', marginTop: 24 }}>
-              {'Hesabınızla\ndevam edin'}
+          <View style={{ alignItems: 'center', marginTop: 88 }}>
+            <View>
+              <View
+                style={{
+                  width: 108,
+                  height: 108,
+                  borderRadius: 26,
+                  backgroundColor: theme.colors.surfacePrimary,
+                  borderWidth: 1,
+                  borderColor: withAlpha(theme.colors.brandPrimary, 0.35),
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <VademdeMark size={78} />
+              </View>
+            </View>
+            <Text accessibilityRole="header" style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, textAlign: 'center', marginTop: 28 }}>
+              {'Hesabınızla\n'}
+              <Text style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, color: accentColor }}>devam edin</Text>
             </Text>
-            <Text color="textSecondary" style={{ fontSize: 15, lineHeight: 20, textAlign: 'center', marginTop: 8, maxWidth: 280 }}>
+            <Text color="textSecondary" style={{ fontSize: 16, lineHeight: 22, textAlign: 'center', marginTop: 10, maxWidth: 300 }}>
               Kayıtlarınız ve belgeleriniz tüm cihazlarınızda güvenle eşitlenir.
             </Text>
           </View>
@@ -188,20 +240,7 @@ export default function WelcomeScreen() {
       </ScrollView>
 
       {!isAccountPage ? (
-        <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingBottom: 20, paddingTop: 8, gap: 20 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-            {Array.from({ length: PAGE_COUNT - 1 }, (_, index) => (
-              <View
-                key={index}
-                style={{
-                  width: index === page ? 20 : 7,
-                  height: 7,
-                  borderRadius: 4,
-                  backgroundColor: index === page ? theme.colors.textPrimary : theme.colors.border,
-                }}
-              />
-            ))}
-          </View>
+        <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingBottom: 16, paddingTop: 8 }}>
           <Button label={page === PAGES.length - 1 ? 'Başlayalım' : 'Devam'} onPress={() => goTo(page + 1)} />
         </View>
       ) : null}
