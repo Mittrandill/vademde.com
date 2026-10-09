@@ -45,6 +45,7 @@ import {
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
+import { BANK_NAME } from '@/features/banks/banks';
 import { formatMinorAmount } from '@/utils/money';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { queryKeys } from '@/services/queryKeys';
@@ -94,7 +95,7 @@ interface StatementMonth {
 export default function AccountDetailScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, pay } = useLocalSearchParams<{ id: string; pay?: string }>();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [page, setPage] = useState(0);
   // Yalnızca kredi kartı hesabında kullanılır (bkz. aşağıdaki kredi kartı dalı) —
@@ -104,7 +105,8 @@ export default function AccountDetailScreen() {
   const [accountTab, setAccountTab] = useState<AccountTab>('hareketler');
   const [menuOpen, setMenuOpen] = useState(false);
   const [statementSheetMonth, setStatementSheetMonth] = useState<StatementMonth | null>(null);
-  const [payingCard, setPayingCard] = useState(false);
+  // ?pay=1 ile gelinirse (kart listesi, hatırlatma) kart borcu ödeme formu doğrudan açılır.
+  const [payingCard, setPayingCard] = useState(pay === '1');
 
   const accountQuery = useQuery({
     queryKey: ['account', id],
@@ -254,7 +256,6 @@ export default function AccountDetailScreen() {
     const availableMinor = hasLimit ? Math.max(0, (account.credit_limit_minor as number) - balanceMinor) : 0;
     const stateAccent =
       balanceMinor <= 0 ? theme.colors.success : clampedUtilization >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary;
-    const heroAmountColor = theme.colors.textPrimary;
     const loadedStatementCount = statementMonths.filter((m) => m.obligation).length;
     const sourceAccounts = (accountsQuery.data ?? []).filter(
       (a) => a.type !== 'credit_card' && a.type !== 'pos' && a.currency_code === account.currency_code
@@ -297,34 +298,23 @@ export default function AccountDetailScreen() {
         }}
         isLoading={false}
       >
-        <View
-          style={{
-            height: 196,
-            borderRadius: 22,
-            backgroundColor: '#2B2D31',
-            padding: 20,
-            paddingTop: 18,
-            overflow: 'hidden',
-            justifyContent: 'space-between',
-          }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={38} />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#B1B2AA' }}>{account.name}</Text>
-          </View>
-          <View style={{ gap: 14 }}>
-            <Text style={{ fontSize: 18, letterSpacing: 2.5, color: '#F6F5F1', fontVariant: ['tabular-nums'] }}>
-              {`•••• •••• •••• ${account.card_last_four ?? '····'}`}
+        {/* Kredi detayıyla aynı üst yapı: simge + ad satırı, ardından tek kart (ana tutar, ilerleme çubuğu, üç özet sütunu). */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <BankLogo bankCode={account.bank_code} fallbackIcon="card-outline" size={56} />
+          <Stack gap="xxs" style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="sectionTitle" numberOfLines={2}>
+              {account.name}
             </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 12, color: '#B1B2AA' }}>{TYPE_LABEL[type]}</Text>
-              {hasLimit ? (
-                <Text style={{ fontSize: 12, color: '#B1B2AA' }}>
-                  Limit {formatMinorAmount(account.credit_limit_minor as number, account.currency_code)}
-                </Text>
-              ) : null}
-            </View>
-          </View>
+            <Text variant="caption" color="textSecondary" numberOfLines={1}>
+              {[
+                account.bank_code ? (BANK_NAME[account.bank_code] ?? null) : null,
+                'Kredi Kartı',
+                account.card_last_four ? `•••• ${account.card_last_four}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+          </Stack>
         </View>
 
         <Card style={{ gap: 12 }}>
@@ -333,48 +323,59 @@ export default function AccountDetailScreen() {
               <Text variant="caption" color="textSecondary">
                 Güncel borç
               </Text>
-              <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5 }} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              <Text
+                tabular
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+                style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', color: daysLeft !== null && daysLeft < 0 && balanceMinor > 0 ? theme.colors.danger : theme.colors.textPrimary }}
+              >
                 {formatMinorAmount(balanceMinor, account.currency_code)}
               </Text>
             </Stack>
-            {nextDue ? (
-              <Tag
-                label={daysLeft! < 0 ? 'Gecikti' : `${daysLeft} gün`}
-                tone={daysLeft! < 0 ? 'danger' : daysLeft! <= 10 ? 'brand' : 'neutral'}
-              />
+            {hasLimit ? (
+              <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
+                <Text variant="caption" color="textSecondary">
+                  Limit
+                </Text>
+                <Text style={{ fontSize: 15, fontWeight: '600' }} tabular>
+                  {formatMinorAmount(account.credit_limit_minor as number, account.currency_code)}
+                </Text>
+              </Stack>
             ) : null}
           </View>
+          {hasLimit ? (
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.fill, overflow: 'hidden' }}>
+              <View style={{ width: `${clampedUtilization * 100}%`, height: 8, borderRadius: 4, backgroundColor: stateAccent }} />
+            </View>
+          ) : null}
           <View style={{ flexDirection: 'row' }}>
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="caption" color="textSecondary">
-                Son ödeme
+                Kullanılabilir
               </Text>
-              <Text style={{ fontSize: 15, fontWeight: '600' }}>
-                {nextDue ? dueDayFormatter.format(nextDue) : account.payment_due_day ? `Ayın ${account.payment_due_day}.` : 'Yok'}
+              <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
+                {hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok'}
               </Text>
             </Stack>
-            <Stack gap="xxs" style={{ flex: 1, alignItems: 'center' }}>
+            <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="caption" color="textSecondary">
                 Taksitte kalan
               </Text>
-              <Text style={{ fontSize: 15, fontWeight: '600' }} tabular>
+              <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
                 {formatMinorAmount(installmentRemainingMinor, account.currency_code)}
               </Text>
             </Stack>
             <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
               <Text variant="caption" color="textSecondary">
-                Kullanılabilir
+                Son ödeme
               </Text>
-              <Text style={{ fontSize: 15, fontWeight: '600' }} tabular>
-                {hasLimit ? formatMinorAmount(availableMinor, account.currency_code) : 'Yok'}
+              <Text style={{ fontSize: 15, fontWeight: '600' }}>
+                {nextDue ? dueDayFormatter.format(nextDue) : account.payment_due_day ? `Ayın ${account.payment_due_day}.` : 'Yok'}
+                {nextDue && daysLeft !== null && balanceMinor > 0 ? ` · ${daysLeft < 0 ? 'gecikti' : `${daysLeft} gün`}` : ''}
               </Text>
             </Stack>
           </View>
-          {hasLimit ? (
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.fill, overflow: 'hidden' }}>
-              <View style={{ width: `${clampedUtilization * 100}%`, height: 6, borderRadius: 3, backgroundColor: stateAccent }} />
-            </View>
-          ) : null}
         </Card>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>

@@ -295,6 +295,11 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
                 accessibilityRole="button"
                 onPress={() => {
                   if (isUnread) onMarkRead(item.id);
+                  // Kart ekstresi kişi/firma ödeme ekranından değil, kartın "Kart borcunu öde" akışından ödenir.
+                  if (item.obligation!.document_type === 'kredi_karti_ekstresi' && item.obligation!.account_id) {
+                    router.push({ pathname: '/accounts/[id]', params: { id: item.obligation!.account_id, pay: '1' } });
+                    return;
+                  }
                   router.push({
                     pathname: '/payments/new',
                     params: { obligationId: item.obligation!.id, direction: item.obligation!.direction },

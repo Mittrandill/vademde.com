@@ -49,6 +49,7 @@ export interface DeliveredReminder extends Reminder {
     title: string;
     direction: string;
     document_type: string;
+    account_id: string | null;
     bank_code: string | null;
     service_code: string | null;
     remaining_amount_minor: number;
@@ -66,7 +67,7 @@ export interface DeliveredReminder extends Reminder {
 export const REMINDERS_PAGE_SIZE = 10;
 
 const RECENT_REMINDERS_SELECT =
-  '*, obligation:obligations(id, title, direction, document_type, bank_code, service_code, remaining_amount_minor, currency_code, due_date, counterparty:counterparties(name)), account:accounts(id, name, bank_code)';
+  '*, obligation:obligations(id, title, direction, document_type, account_id, bank_code, service_code, remaining_amount_minor, currency_code, due_date, counterparty:counterparties(name)), account:accounts(id, name, bank_code)';
 
 export interface ListRecentRemindersFilter {
   workspaceId: string;

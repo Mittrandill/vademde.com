@@ -347,12 +347,9 @@ function CreditCardRowCard({ account, balanceMinor, statements, nextDueDate }: C
           <Button
             label="Ödeme yap"
             size="compact"
-            onPress={() =>
-              router.push({
-                pathname: '/payments/new',
-                params: latestStatement ? { obligationId: latestStatement.id, direction: latestStatement.direction } : {},
-              })
-            }
+            // Kart borcu kişi/firmaya ödeme ekranından değil, kartın kendi "Kart borcunu öde" akışından
+            // (kaynak hesaptan karta transfer) ödenir; kart sayfası formu açık açar.
+            onPress={() => router.push({ pathname: '/accounts/[id]', params: { id: account.id, pay: '1' } })}
           />
         </View>
         <View style={{ flex: 1 }}>
