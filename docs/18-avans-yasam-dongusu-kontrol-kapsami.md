@@ -1,5 +1,7 @@
 # Ön ödeme / alınan avans kontrol kapsamı
 
+> Aşağıdaki tablo ilk inceleme anındaki kapsamdır. Kaynak bazlı ciro/karşılıksız çek düzeltmesi ve tam canlı şemanın yerel kopyasındaki doğrulamalar sonradan tamamlandı; migration canlıya uygulandı. Güncel sınırlar: [canlı geçiş kaydı](19-canli-gecis-2026-10-09.md).
+
 Bu belge tamamlanmış ürün güvencesi değil; 2026-10-09 tarihli doğrulama ve kalan iş sınırlarıdır.
 
 ## Teyit edilen kur kuralı

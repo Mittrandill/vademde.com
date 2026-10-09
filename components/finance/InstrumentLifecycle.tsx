@@ -9,9 +9,13 @@ import {
   INSTRUMENT_STATUS_LABEL,
   instrumentStatusOf,
   markBounced,
+  previewInstrumentBounce,
   setInstrumentStatus,
+  type InstrumentBouncePreview,
 } from '@/features/instruments/api';
 import type { Obligation } from '@/features/obligations/api';
+import { formatMinorAmount } from '@/utils/money';
+import { showErrorAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -21,11 +25,11 @@ const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 
 export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) {
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const status = instrumentStatusOf(obligation);
+  const received = obligation.direction === 'receivable';
+  const status = instrumentStatusOf(obligation) ?? (!received && obligation.status !== 'iptal_edildi' ? 'portfoy' : null);
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: [obligation.workspace_id, 'obligations'] });
-    queryClient.invalidateQueries({ queryKey: ['obligation', obligation.id] });
+    void queryClient.invalidateQueries();
   };
 
   const statusMutation = useMutation({
@@ -34,30 +38,36 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
     onError: () => Alert.alert('Güncellenemedi', 'Durum değiştirilemedi. Lütfen tekrar deneyin.'),
   });
   const bouncedMutation = useMutation({
-    mutationFn: () => markBounced(obligation.id),
+    mutationFn: (expected: InstrumentBouncePreview) => markBounced(obligation.id, expected),
     onSuccess: refresh,
-    onError: () => Alert.alert('İşlem yapılamadı', 'Karşılıksız olarak işaretlenemedi. Lütfen tekrar deneyin.'),
+    onError: (error) => { refresh(); showErrorAlert(error); },
+    networkMode: 'always',
+  });
+  const previewMutation = useMutation({
+    mutationFn: () => previewInstrumentBounce(obligation.id),
+    onSuccess: (preview) => {
+      if (preview.state === 'bounced') { refresh(); return; }
+      const affected = preview.impacts.filter((o) => o.reopened_minor > 0)
+        .map((o) => `${o.title}: ${formatMinorAmount(o.reopened_minor, o.currency_code)}`).join('\n');
+      const preserved = preview.replacement_claim_minor > 0
+        ? `\n\nFatura/avans bağlantısı olmayan ${formatMinorAmount(preview.replacement_claim_minor, preview.currency_code)} bakiye ayrı bir cari borç/alacak kaydında korunacak; borç silinmeyecek.` : '';
+      Alert.alert('Karşılıksız olarak işaretle',
+        `Çek/senet geçmişte saklanır, aktif bakiyeden çıkarılır. Yalnızca bu kaynağın kapanışları geri alınır ve kendi avansları geçersizleşir. Gerçek para iadesi yapılmaz.${affected ? `\n\nYeniden açılacak kayıtlar:\n${affected}` : ''}${preserved}\n\nOnaylıyor musunuz?`, [
+          { text: 'Vazgeç', style: 'cancel' },
+          { text: 'Onayla', style: 'destructive', onPress: () => bouncedMutation.mutate(preview) },
+        ]);
+    },
+    onError: (error) => showErrorAlert(error), networkMode: 'always',
   });
 
-  if (obligation.direction !== 'receivable' || !status) return null;
+  if (!status) return null;
 
   const open = status === 'portfoy' || status === 'tahsile_verildi';
   const label = obligation.document_type === 'senet' ? 'senet' : 'çek';
 
-  function confirmBounced() {
-    const reopens =
-      status === 'ciro_edildi'
-        ? ` Ciro ile kapanan borç ve bu ${label} yeniden açılır.`
-        : ` Bu ${label} açık kalır.`;
-    Alert.alert('Karşılıksız olarak işaretle', `Bu işlem geri alınamaz.${reopens} Emin misiniz?`, [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'İşaretle', style: 'destructive', onPress: () => bouncedMutation.mutate() },
-    ]);
-  }
-
   const actions: { key: string; icon: keyof typeof Ionicons.glyphMap; title: string; text: string; onPress: () => void }[] =
     [];
-  if (open) {
+  if (open && received) {
     actions.push({
       key: 'endorse',
       icon: 'swap-horizontal-outline',
@@ -94,9 +104,9 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
   // Yolculuk: geçilen adım dolu, şu an vurgulu, sıradaki soluk.
   const stepIndex = status === 'portfoy' ? 1 : status === 'tahsile_verildi' || status === 'ciro_edildi' ? 2 : 3;
   const steps = [
-    { title: 'Alındı', text: obligation.created_at ? dateFormatter.format(new Date(obligation.created_at)) : '' },
+    { title: received ? 'Alındı' : 'Verildi', text: obligation.created_at ? dateFormatter.format(new Date(obligation.created_at)) : '' },
     {
-      title: INSTRUMENT_STATUS_LABEL.portfoy,
+      title: received ? INSTRUMENT_STATUS_LABEL.portfoy : 'Ödeme bekliyor',
       text: obligation.due_date ? `Vade ${dateFormatter.format(new Date(obligation.due_date))}` : '',
     },
     {
@@ -147,11 +157,11 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
         </Stack>
       ) : null}
 
-      {status !== 'karsiliksiz' && status !== 'tahsil_edildi' ? (
+      {status !== 'karsiliksiz' && status !== 'tahsil_edildi' && status !== 'odendi' ? (
         <Pressable
           accessibilityRole="button"
-          onPress={confirmBounced}
-          disabled={bouncedMutation.isPending}
+          onPress={() => previewMutation.mutate()}
+          disabled={bouncedMutation.isPending || previewMutation.isPending}
           style={{ minHeight: theme.touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}
         >
           <Ionicons name="close-circle-outline" size={20} color={theme.colors.danger} />

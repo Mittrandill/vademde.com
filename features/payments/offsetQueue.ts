@@ -25,19 +25,27 @@ async function assertOwner(userId: string) {
   if (!userId || data.session?.user.id !== userId) throw new Error('Mahsup kuyruğunun sahibiyle giriş yapın');
 }
 function validate(input: SettleObligationsInput) {
-  if (!input || input.method !== 'mahsup' || !['payable', 'receivable'].includes(input.direction)
+  if (!input || !['mahsup', 'ciro'].includes(input.method) || !['payable', 'receivable'].includes(input.direction)
+    || (input.method === 'ciro' && input.direction !== 'payable')
     || [input.workspaceId, input.counterpartyId, input.currencyCode].some((x) => typeof x !== 'string' || !x)
     || !Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0
     || typeof input.paidAt !== 'string' || !Number.isFinite(Date.parse(input.paidAt))
-    || !Array.isArray(input.targets) || !input.targets.length || !Array.isArray(input.sources) || !input.sources.length
+    || !Array.isArray(input.targets) || (input.method === 'mahsup' && !input.targets.length) || !Array.isArray(input.sources) || !input.sources.length
     || [...input.targets, ...input.sources].some((x) => !x || typeof x.id !== 'string' || !x.id
       || !Number.isSafeInteger(x.remaining_amount_minor) || x.remaining_amount_minor <= 0)
     || new Set([...input.targets, ...input.sources].map((x) => x.id)).size !== input.targets.length + input.sources.length) {
     throw new Error('Mahsup bilgileri geçersiz; kayıtları kontrol edin');
   }
+  if (input.method === 'ciro' && (!Number.isSafeInteger(input.sources.reduce((sum, o) => sum + o.remaining_amount_minor, 0))
+    || input.sources.some((o) => o.direction !== 'receivable' || !['cek', 'senet'].includes(o.document_type ?? '')
+      || o.currency_code !== input.currencyCode)
+    || input.targets.some((o) => o.direction !== 'payable' || o.counterparty_id !== input.counterpartyId
+      || o.currency_code !== input.currencyCode || ['cek', 'senet', 'kredi_karti_ekstresi'].includes(o.document_type ?? '')))) {
+    throw new Error('Ciro kaynak veya hedef kapsamı geçersiz');
+  }
 }
 function fingerprint(input: SettleObligationsInput) {
-  return JSON.stringify([input.workspaceId, input.counterpartyId, input.direction, input.currencyCode,
+  return JSON.stringify([input.method, input.workspaceId, input.counterpartyId, input.direction, input.currencyCode,
     input.amountMinor, input.paidAt, input.fxRateTryMinor ?? null,
     input.targets.map((x) => [x.id, x.remaining_amount_minor]),
     input.sources?.map((x) => [x.id, x.remaining_amount_minor])]);
@@ -53,6 +61,7 @@ async function read(userId: string, workspaceId: string): Promise<StoredOffset |
       || typeof record.input.requestId !== 'string'
       || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(record.input.requestId)
       || (['confirmed', 'reversing'].includes(record.state) && !Array.isArray(record.result?.allocations))) throw new Error();
+    if (record.input.method === 'ciro' && ['reversing', 'reversed'].includes(record.state)) throw new Error();
     return record;
   } catch { throw new Error('Saklanan mahsup okunamadı. Yeni işlem yapmadan kayıt geçmişini kontrol edin.'); }
 }
@@ -99,7 +108,7 @@ export function cancelStoredOffset(userId: string, workspaceId: string): Promise
     const record = await read(userId, workspaceId);
     if (!record) throw new Error('Saklanan mahsup yok');
     if (record.state !== 'pending') return record;
-    const { data, error } = await supabase.rpc('cancel_offset_request' as never, {
+    const { data, error } = await supabase.rpc((record.input.method === 'ciro' ? 'cancel_endorsement_request' : 'cancel_offset_request') as never, {
       p_expected_actor: userId, p_workspace_id: workspaceId, p_request_id: record.input.requestId,
     } as never);
     if (error) throw error;
@@ -123,6 +132,7 @@ export function reverseStoredOffset(userId: string, workspaceId: string): Promis
     await assertOwner(userId);
     const record = await read(userId, workspaceId);
     if (!record || record.state === 'pending' || record.state === 'cancelled') throw new Error('Önce mahsup sonucunu doğrulayın');
+    if (record.input.method !== 'mahsup') throw new Error('Ciro iadesi tek mahsup geri alma değildir; kaynak çek/senet akışından yönetilmelidir');
     if (record.state === 'reversed') return record;
     if (record.state === 'confirmed') {
       // Persist reversal intent before the network call; lost responses cannot unlock a new operation.

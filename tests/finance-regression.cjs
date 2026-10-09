@@ -8,6 +8,8 @@ const root = path.resolve(__dirname, '..');
 const ts = require('typescript');
 let tables = {}, rpcCalls = [], insertCalls = [], rpcError = null, storageRemovals = 0, authUserId = 'alice', storageFailOnWrite = 0, storageWrites = 0, uuidSequence = 0, cancelState='cancelled', reverseState='reversed', malformedCash=false;
 const cashReceipts=new Map();
+const endorsementReceipts=new Map();
+let malformedEndorsement=false;
 const storage = new Map();
 const asyncStorage = {getItem:async k=>storage.get(k)??null,setItem:async(k,v)=>{
  storageWrites++;if(storageFailOnWrite===storageWrites)throw Error('Injected storage failure');storage.set(k,v);
@@ -45,6 +47,22 @@ const supabase={auth:{getSession:async()=>({data:{session:authUserId?{user:{id:a
   return Promise.resolve({data:malformedCash?{}:cashReceipts.get(key),error:rpcError});
  }
  if(name==='cancel_cash_settlement_request')return Promise.resolve({data:{state:cancelState},error:rpcError});
+ if(name==='settle_endorsement_atomic'){
+  const key=args.p_workspace_id+args.p_request_id;
+  if(!endorsementReceipts.has(key)){
+   const allocations=[],advances=[];let ti=0,targetLeft=args.p_targets.map(o=>o.remaining_amount_minor);
+   for(const source of args.p_sources){let left=source.remaining_amount_minor;
+    while(left>0&&ti<args.p_targets.length){const take=Math.min(left,targetLeft[ti]);const target=args.p_targets[ti];
+     const previous=allocations.find(o=>o.obligation_id===target.id);if(previous)previous.amount_minor+=take;else allocations.push({obligation_id:target.id,amount_minor:take});
+     left-=take;targetLeft[ti]-=take;if(targetLeft[ti]===0)ti++;
+    }
+    if(left>0)advances.push({id:`${key}:advance:${source.id}`,workspace_id:args.p_workspace_id,counterparty_id:args.p_counterparty_id,currency_code:args.p_currency_code,direction:'receivable',document_type:'avans',parent_obligation_id:source.id,total_amount_minor:left,remaining_amount_minor:left});
+   }
+   endorsementReceipts.set(key,{allocations,advances,leftover_minor:advances.reduce((s,o)=>s+o.total_amount_minor,0)});
+  }
+  return Promise.resolve({data:malformedEndorsement?{}:endorsementReceipts.get(key),error:rpcError});
+ }
+ if(name==='cancel_endorsement_request')return Promise.resolve({data:{state:cancelState},error:rpcError});
  const grouped=new Map();
  if(name==='settle_offset_atomic')for(const x of args.p_pairs)grouped.set(x.target_id,(grouped.get(x.target_id)??0)+x.amount_minor);
  const result={data:name==='record_payments_v2'?args.p_items.map(x=>x.payment):name==='settle_offset_atomic'?{allocations:[...grouped].map(([id,amount])=>({amount_minor:amount,obligation_id:id}))}:name==='cancel_offset_request'?{state:cancelState}:name==='reverse_offset_atomic'?{state:reverseState}:{},error:rpcError};
@@ -77,6 +95,7 @@ async function check(name,run){await run();passed++;console.log(`PASS ${name}`);
  const payments=load('features/payments/api.ts'),values=load('features/valueUnits/api.ts');
  const cards=load('features/cardInstallments/api.ts'),obligations=load('features/obligations/api.ts');
  const exporting=load('features/export/api.ts'),cache=load('services/queryClient.ts');
+ const instruments=load('features/instruments/api.ts');
  const base={id:'o',workspace_id:'w',title:'Fatura',document_type:'fatura',direction:'receivable',currency_code:'TRY',remaining_amount_minor:3000000,status:'bekliyor',due_date:'2026-10-01'};
  await check('30k invoice, 10k receipt, 20k remaining allocation',()=>{
   const r=payments.allocateAcrossObligations(1000000,[base]);assert.equal(base.remaining_amount_minor-r.allocations[0].amountMinor,2000000);
@@ -426,6 +445,76 @@ async function check(name,run){await run();passed++;console.log(`PASS ${name}`);
   await assert.rejects(offsets.reverseStoredOffset('alice',draft.workspaceId));reverseState='reversed';
   assert.equal((await offsets.loadStoredOffset('alice',draft.workspaceId)).state,'reversing');
   await assert.rejects(offsets.acknowledgeOffset('alice',draft.workspaceId));
+ });
+ const endorsementDraft={workspaceId:'ciro-base',counterpartyId:'supplier',counterpartyName:'Supplier',direction:'payable',currencyCode:'TRY',amountMinor:8000000,paidAt:'2026-10-09T12:00:00Z',method:'ciro',
+  sources:[{...base,id:'cheque-one',document_type:'cek',direction:'receivable',remaining_amount_minor:5000000},{...base,id:'cheque-two',document_type:'senet',direction:'receivable',remaining_amount_minor:3000000}],
+  targets:[{...base,id:'supplier-invoice',counterparty_id:'supplier',direction:'payable',remaining_amount_minor:1000000}]};
+ await check('ciro: one atomic RPC, each cheque owns its excess advance, no money writes',async()=>{
+  rpcCalls=[];insertCalls=[];const result=await offsets.submitDurableOffset('alice',endorsementDraft);
+  assert.equal(rpcCalls.length,1);assert.equal(rpcCalls[0].name,'settle_endorsement_atomic');assert.equal(insertCalls.length,0);
+  assert.equal(result.leftoverMinor,7000000);assert.deepEqual(result.advanceObligations.map(o=>[o.parent_obligation_id,o.total_amount_minor]),[['cheque-one',4000000],['cheque-two',3000000]]);
+ });
+ await check('ciro without invoice creates separate full-source advances',async()=>{
+  const draft={...endorsementDraft,workspaceId:'ciro-no-invoice',targets:[]};const result=await offsets.submitDurableOffset('alice',draft);
+  assert.equal(result.allocations.length,0);assert.equal(result.leftoverMinor,8000000);assert.equal(result.advanceObligations.length,2);
+ });
+ await check('ciro lost response survives restart with original source/target snapshots',async()=>{
+  const draft={...endorsementDraft,workspaceId:'ciro-lost'};rpcError={message:'Lost committed response'};
+  await assert.rejects(offsets.submitDurableOffset('alice',draft));const saved=await offsets.loadStoredOffset('alice',draft.workspaceId);rpcError=null;
+  modules.delete(path.join(root,'features/payments/offsetQueue.ts'));offsets=load('features/payments/offsetQueue.ts');
+  const result=await offsets.submitDurableOffset('alice',saved.input);assert.equal(result.advanceObligations.length,2);
+  assert.equal(rpcCalls.at(-1).args.p_request_id,saved.input.requestId);assert.deepEqual(rpcCalls.at(-1).args.p_sources,saved.input.sources.map(o=>({id:o.id,remaining_amount_minor:o.remaining_amount_minor})));
+ });
+ await check('ciro preparation storage failure prevents financial RPC',async()=>{
+  const draft={...endorsementDraft,workspaceId:'ciro-save-failure'};const before=rpcCalls.length;storageFailOnWrite=storageWrites+1;
+  await assert.rejects(offsets.submitDurableOffset('alice',draft));storageFailOnWrite=0;assert.equal(rpcCalls.length,before);
+ });
+ await check('ciro pending request blocks switching to mahsup or changing source order',async()=>{
+  const draft={...endorsementDraft,workspaceId:'ciro-pending'};rpcError={message:'Unknown result'};
+  await assert.rejects(offsets.submitDurableOffset('alice',draft));rpcError=null;const before=rpcCalls.length;
+  await assert.rejects(offsets.submitDurableOffset('alice',{...draft,sources:[...draft.sources].reverse()}));
+  await assert.rejects(offsets.submitDurableOffset('alice',{...offsetDraft,workspaceId:draft.workspaceId}));assert.equal(rpcCalls.length,before);
+ });
+ await check('ciro confirmed request cannot be reversed using the offset-only API',async()=>{
+  const before=rpcCalls.length;await assert.rejects(offsets.reverseStoredOffset('alice','ciro-base'));assert.equal(rpcCalls.length,before);
+ });
+ await check('ciro concurrent local sends share one RPC, explicit acknowledgement allows a new ID',async()=>{
+  const draft={...endorsementDraft,workspaceId:'ciro-concurrent'};const before=rpcCalls.length;
+  await Promise.all([offsets.submitDurableOffset('alice',draft),offsets.submitDurableOffset('alice',draft)]);assert.equal(rpcCalls.length,before+1);
+  const original=(await offsets.loadStoredOffset('alice',draft.workspaceId)).input.requestId;await offsets.acknowledgeOffset('alice',draft.workspaceId);
+  await offsets.submitDurableOffset('alice',draft);assert.notEqual((await offsets.loadStoredOffset('alice',draft.workspaceId)).input.requestId,original);
+ });
+ await check('ciro cancellation uses its own tombstone RPC; confirmed cancellation never refunds',async()=>{
+  const draft={...endorsementDraft,workspaceId:'ciro-cancel'};rpcError={message:'Unknown'};await assert.rejects(offsets.submitDurableOffset('alice',draft));rpcError=null;
+  cancelState='cancelled';await offsets.cancelStoredOffset('alice',draft.workspaceId);assert.equal(rpcCalls.at(-1).name,'cancel_endorsement_request');
+  await assert.rejects(offsets.submitDurableOffset('alice',draft));await offsets.acknowledgeOffset('alice',draft.workspaceId);
+  const confirmed={...draft,workspaceId:'ciro-cancel-confirmed'};rpcError={message:'Lost'};await assert.rejects(offsets.submitDurableOffset('alice',confirmed));rpcError=null;cancelState='confirmed';
+  assert.equal((await offsets.cancelStoredOffset('alice',confirmed.workspaceId)).state,'confirmed');assert.equal(rpcCalls.at(-1).name,'settle_endorsement_atomic');cancelState='cancelled';
+ });
+ await check('ciro malformed receipt keeps pending; invalid draft and another session never send',async()=>{
+  const draft={...endorsementDraft,workspaceId:'ciro-malformed'};malformedEndorsement=true;await assert.rejects(offsets.submitDurableOffset('alice',draft));malformedEndorsement=false;
+  assert.equal((await offsets.loadStoredOffset('alice',draft.workspaceId)).state,'pending');const before=rpcCalls.length;
+  authUserId='bob';await assert.rejects(offsets.loadStoredOffset('alice',draft.workspaceId));authUserId='alice';
+  await assert.rejects(offsets.submitDurableOffset('alice',{...endorsementDraft,workspaceId:'ciro-invalid',direction:'receivable'}));
+  await assert.rejects(payments.settleObligations(endorsementDraft));assert.equal(rpcCalls.length,before);
+ });
+ await check('instrument list includes all 1001 rows and retains bounced history, not ordinary cancellation',async()=>{
+  tables={obligations:Array.from({length:1001},(_,i)=>({...base,id:`instrument-${i}`,document_type:i%2?'cek':'senet',instrument_status:'portfoy'}))};
+  tables.obligations.push({...base,id:'bounced',document_type:'cek',status:'iptal_edildi',instrument_status:'karsiliksiz'},
+    {...base,id:'cancelled',document_type:'senet',status:'iptal_edildi',instrument_status:'portfoy'});
+  assert.equal((await instruments.listInstruments('w')).length,1002);
+ });
+ await check('instrument portfolio converts TRY/USD separately and excludes bounced/closed/given records',()=>{
+  const rows=[{...base,id:'tl',remaining_amount_minor:100000,instrument_status:'portfoy'},
+    {...base,id:'usd',remaining_amount_minor:10000,currency_code:'USD',instrument_status:'portfoy'},
+    {...base,id:'bounced',remaining_amount_minor:9999999,instrument_status:'karsiliksiz'},
+    {...base,id:'cancelled',remaining_amount_minor:9999999,instrument_status:'portfoy',status:'iptal_edildi'},
+    {...base,id:'paid',remaining_amount_minor:0,instrument_status:'tahsil_edildi'},
+    {...base,id:'given',direction:'payable',remaining_amount_minor:10000,instrument_status:null}];
+  const rates=[{unit_code:'USD',try_equivalent_minor:4500,cached_at:'2026-10-09T12:00:00Z'}];
+  assert.equal(instruments.instrumentPortfolioTotal(rows,'receivable',rates),550000);
+  assert.equal(instruments.instrumentPortfolioTotal(rows,'payable',rates),10000);
+  assert.throws(()=>instruments.instrumentPortfolioTotal(rows,'receivable',[]));
  });
  await check('cache switch does not touch financial rows; same user retains cache',async()=>{
   const pendingBefore=JSON.stringify([...storage].filter(([key])=>key.startsWith('vademde-card-payment-v1:')||key.startsWith('vademde-offset-v1:')||key.startsWith('vademde-cash-settlement-v1:')));

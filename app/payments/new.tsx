@@ -39,6 +39,7 @@ import {
   localIsoDate,
 } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
+import { listInstruments } from '@/features/instruments/api';
 import {
   allocateAcrossObligations,
   isCashlessMethod,
@@ -259,13 +260,7 @@ function SettlementForm({
   // Ciro: portföydeki (tahsil edilmemiş) alınmış çek/senetler — hangi müşteriden alındığı fark etmez.
   const portfolioQuery = useQuery({
     queryKey: activeWorkspaceId ? [activeWorkspaceId, 'obligations', 'cheque-portfolio'] : ['cheque-portfolio', 'disabled'],
-    queryFn: () =>
-      listObligations({
-        workspaceId: activeWorkspaceId as string,
-        direction: 'receivable',
-        statuses: ACTIVE_OBLIGATION_STATUSES,
-        pageSize: 200,
-      }),
+    queryFn: () => listInstruments(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId && isPayable,
   });
   const offsetSources = (oppositeQuery.data ?? []).filter(
@@ -274,8 +269,9 @@ function SettlementForm({
   const portfolio = (portfolioQuery.data ?? []).filter(
     (o) =>
       (o.document_type === 'cek' || o.document_type === 'senet') &&
+      o.direction === 'receivable' && o.status !== 'iptal_edildi' && o.instrument_status === 'portfoy' &&
       o.currency_code === currencyCode &&
-      o.remaining_amount_minor > 0
+      o.remaining_amount_minor > 0 && o.remaining_amount_minor === o.total_amount_minor
   );
   const availableMethods = METHODS.filter((m) =>
     m.key === 'mahsup' ? offsetSources.length > 0 : m.key === 'ciro' ? isPayable && portfolio.length > 0 : true
@@ -465,7 +461,7 @@ function SettlementForm({
             }
           : null,
       };
-      const result = method === 'mahsup'
+      const result = method === 'mahsup' || method === 'ciro'
         ? await submitDurableOffset(userId!, input)
         : !cashless ? await submitDurableCashSettlement(userId!, input) : await settleObligations(input);
 
@@ -554,15 +550,19 @@ function SettlementForm({
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
-          <ScreenHeader inline title="Mahsup kontrolü" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
+          <ScreenHeader inline title={saved?.input.method === 'ciro' ? 'Ciro kontrolü' : 'Mahsup kontrolü'} leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
           {saved ? <>
             <Text variant="cardTitle">{saved.input.counterpartyName ?? 'Önceki cari'} · {formatMinorAmount(saved.input.amountMinor, saved.input.currencyCode)}</Text>
-            <Text>{saved.state === 'confirmed' ? 'Önceki mahsup kaydedildi. Yeni işlem için aşağıdan devam edin.'
+            <Text>{saved.input.method === 'ciro'
+              ? saved.state === 'confirmed' ? 'Önceki ciro kaydedildi. Fazla tutar her çekin kendi avansı olarak izlendi. Yeni işlem için aşağıdan devam edin.'
+                : saved.state === 'cancelled' ? 'Önceki ciro isteği iptal edildi; borç veya avans oluşturulmadı.'
+                  : 'Önceki ciro sonucu belirsiz. Aynı kimlikle yeniden kontrol edin; yeni çek/fatura dağılımı oluşturulmaz.'
+              : saved.state === 'confirmed' ? 'Önceki mahsup kaydedildi. Yeni işlem için aşağıdan devam edin.'
               : saved.state === 'cancelled' ? 'Önceki mahsup isteği iptal edildi. Borç/alacak kapanışı oluşturulmadı.'
               : saved.state === 'reversed' ? 'Önceki mahsup geri alındı. İki tarafın kalan tutarı yeniden hesaplandı; sonraki ödemeler korunuyor.'
               : saved.state === 'reversing' ? 'Önceki mahsubun geri alma sonucu belirsiz. Aynı geri almayı yeniden deneyin; yeni işlem başlatmayın.'
               : 'Önceki mahsup sonucu belirsiz. Aynı kimlikle yeniden deneme, kayıt varsa ikinci kapanış oluşturmaz; yoksa özgün mahsubu tamamlar.'}</Text>
-            <Button label={saved.state === 'reversing' ? 'Aynı geri almayı yeniden dene' : saved.state !== 'pending' ? 'Yeni işlem başlat' : 'Aynı mahsubu yeniden dene'}
+            <Button label={saved.state === 'reversing' ? 'Aynı geri almayı yeniden dene' : saved.state !== 'pending' ? 'Yeni işlem başlat' : 'Aynı işlemi yeniden dene'}
               disabled={offsetRecovery.isFetching || cancelOffset.isPending} loading={resumeOffset.isPending || acknowledge.isPending || reverseOffset.isPending}
               onPress={() => saved.state === 'reversing' ? reverseOffset.mutate() : saved.state !== 'pending' ? acknowledge.mutate() : resumeOffset.mutate()} />
             {saved.state === 'pending' ? <>
@@ -570,7 +570,7 @@ function SettlementForm({
               <Button label="Kaydedilmediyse iptal et" variant="secondary" loading={cancelOffset.isPending}
                 disabled={offsetRecovery.isFetching || resumeOffset.isPending} onPress={() => cancelOffset.mutate()} />
             </> : null}
-            {saved.state === 'confirmed' ? <Button label="Bu mahsubu geri al" variant="dangerText"
+            {saved.state === 'confirmed' && saved.input.method === 'mahsup' ? <Button label="Bu mahsubu geri al" variant="dangerText"
               loading={reverseOffset.isPending} disabled={offsetRecovery.isFetching || acknowledge.isPending}
               onPress={() => Alert.alert('Mahsubu geri al', 'Bu işleme ait iki tarafın kapanışları kaldırılacak. Sonradan yapılan ödemeler silinmeyecek.', [
                 { text: 'Vazgeç', style: 'cancel' },

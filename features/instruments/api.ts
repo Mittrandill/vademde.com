@@ -1,5 +1,7 @@
 import { supabase } from '@/services/supabase';
-import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
+import type { ObligationWithRelations } from '@/features/obligations/api';
+import { fetchAll } from '@/services/fetchAll';
+import { sumToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
 
 // Çek/senet portföyü yaşam döngüsü (migration 20261005130000_instrument_status.sql).
 export type InstrumentStatus =
@@ -26,11 +28,19 @@ export function instrumentStatusOf(o: { instrument_status: string | null }): Ins
 }
 
 export async function listInstruments(workspaceId: string): Promise<ObligationWithRelations[]> {
-  const [cheques, notes] = await Promise.all([
-    listObligations({ workspaceId, documentType: 'cek', pageSize: 200 }),
-    listObligations({ workspaceId, documentType: 'senet', pageSize: 200 }),
-  ]);
-  return [...cheques, ...notes].filter((o) => o.status !== 'iptal_edildi');
+  const rows = await fetchAll<ObligationWithRelations>((from, to) => supabase.from('obligations')
+    .select('*, category:categories(name), counterparty:counterparties(name), account:accounts(name), payments(paid_at)')
+    .eq('workspace_id', workspaceId).in('document_type', ['cek', 'senet']).order('id').range(from, to));
+  return rows.filter((o) => o.status !== 'iptal_edildi' || o.instrument_status === 'karsiliksiz');
+}
+
+export function instrumentPortfolioRows(rows: ObligationWithRelations[], direction: 'payable' | 'receivable') {
+  return rows.filter((o) => o.direction === direction && o.status !== 'iptal_edildi'
+    && o.instrument_status !== 'karsiliksiz' && o.remaining_amount_minor > 0
+    && (direction === 'payable' || o.instrument_status === 'portfoy'));
+}
+export function instrumentPortfolioTotal(rows: ObligationWithRelations[], direction: 'payable' | 'receivable', rates: ValueUnitRate[]) {
+  return sumToReferenceMinor(instrumentPortfolioRows(rows, direction).map((o) => ({ amountMinor: o.remaining_amount_minor, unitCode: o.currency_code })), rates);
 }
 
 // Portföy ↔ Tahsilde: yalnızca durum etiketidir, finansal kayıt değişmez (tahsil edildi işlemi
@@ -53,8 +63,41 @@ export async function markEndorsed(obligationIds: string[]): Promise<void> {
   if (error) throw error;
 }
 
-// Karşılıksız: ciro edilmişse ciroyla kapanan fatura ve çek yeniden açılır (atomik, SQL fonksiyonu).
-export async function markBounced(obligationId: string): Promise<void> {
-  const { error } = await supabase.rpc('mark_instrument_bounced', { p_obligation_id: obligationId });
+export interface InstrumentBouncePreview {
+  state: 'preview' | 'bounced';
+  source_id: string;
+  workspace_id: string;
+  currency_code: string;
+  replacement_claim_minor: number;
+  invalidated_ids: string[];
+  impacts: { id: string; title: string; direction: string; currency_code: string; reopened_minor: number }[];
+  snapshot: unknown;
+}
+function checkedPreview(data: unknown, obligationId: string): InstrumentBouncePreview {
+  const result = data as InstrumentBouncePreview | null;
+  if (!result || !['preview', 'bounced'].includes(result.state) || result.source_id !== obligationId
+    || !result.workspace_id || !result.currency_code || !Number.isSafeInteger(result.replacement_claim_minor) || result.replacement_claim_minor < 0
+    || !Array.isArray(result.invalidated_ids) || !result.invalidated_ids.includes(obligationId)
+    || !Array.isArray(result.impacts) || !result.snapshot || result.impacts.some((o) => !o.id || !o.currency_code
+      || !Number.isSafeInteger(o.reopened_minor) || o.reopened_minor < 0)) throw new Error('Karşılıksız işlem sonucu doğrulanamadı; aynı kaydı tekrar kontrol edin');
+  return result;
+}
+export async function previewInstrumentBounce(obligationId: string): Promise<InstrumentBouncePreview> {
+  const { data, error } = await supabase.rpc('preview_instrument_bounce' as never, { p_obligation_id: obligationId } as never);
   if (error) throw error;
+  return checkedPreview(data, obligationId);
+}
+// The instrument ID is a permanent one-way idempotency key, including after response loss.
+export async function markBounced(obligationId: string, expected: InstrumentBouncePreview): Promise<InstrumentBouncePreview> {
+  checkedPreview(expected, obligationId);
+  const { data: session, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session.session?.user.id) throw new Error('Karşılıksız işlem için giriş yapın');
+  const { data, error } = await supabase.rpc('bounce_instrument_atomic' as never, {
+    p_expected_actor: session.session.user.id, p_obligation_id: obligationId, p_expected: expected,
+  } as never);
+  if (error) throw error;
+  const result = checkedPreview(data, obligationId);
+  if (result.state !== 'bounced') throw new Error('Karşılıksız işlem tamamlanmadı; aynı kaydı kontrol edin');
+  return result;
 }

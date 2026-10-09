@@ -10,7 +10,9 @@ import { Card, EmptyState, Group, Pressable, ScrollableTabs, SegmentedControl, S
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { HeroAmount } from '@/components/finance/HeroAmount';
 import { BankLogo } from '@/components/finance/BankLogo';
-import { INSTRUMENT_STATUS_LABEL, instrumentStatusOf, listInstruments, type InstrumentStatus } from '@/features/instruments/api';
+import { INSTRUMENT_STATUS_LABEL, instrumentPortfolioRows, instrumentPortfolioTotal, instrumentStatusOf, listInstruments, type InstrumentStatus } from '@/features/instruments/api';
+import { listValueUnitRates } from '@/features/valueUnits/api';
+import { queryKeys } from '@/services/queryKeys';
 import type { ObligationWithRelations } from '@/features/obligations/api';
 import { BANK_NAME } from '@/features/banks/banks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -18,7 +20,7 @@ import { formatMinorAmount } from '@/utils/money';
 
 type Side = 'receivable' | 'payable';
 type StatusTab = 'all' | 'portfoy' | 'ciro_edildi' | 'tahsile_verildi' | 'karsiliksiz';
-type GivenTab = 'all' | 'open' | 'overdue' | 'paid';
+type GivenTab = 'all' | 'open' | 'overdue' | 'paid' | 'bounced';
 
 const STATUS_TABS: { key: StatusTab; label: string }[] = [
   { key: 'all', label: 'Tümü' },
@@ -33,10 +35,12 @@ const GIVEN_TABS: { key: GivenTab; label: string }[] = [
   { key: 'open', label: 'Bekleyen' },
   { key: 'overdue', label: 'Gecikmiş' },
   { key: 'paid', label: 'Ödenen' },
+  { key: 'bounced', label: 'Karşılıksız' },
 ];
 
 // Verilen çek/senetlerin yaşam döngüsü yok; durum doğrudan ödeme durumundan gelir.
 function givenGroupOf(o: ObligationWithRelations): Exclude<GivenTab, 'all'> {
+  if (o.instrument_status === 'karsiliksiz') return 'bounced';
   if (o.status === 'gecikti') return 'overdue';
   if (o.remaining_amount_minor <= 0 || o.status === 'odendi') return 'paid';
   return 'open';
@@ -45,6 +49,7 @@ const GIVEN_GROUP_TITLE: Record<Exclude<GivenTab, 'all'>, string> = {
   open: 'Bekleyen',
   overdue: 'Gecikmiş',
   paid: 'Ödenen',
+  bounced: 'Karşılıksız',
 };
 
 const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
@@ -64,27 +69,31 @@ export default function InstrumentsScreen() {
     queryFn: () => listInstruments(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
+  const ratesQuery = useQuery({ queryKey: queryKeys.valueUnitRates(), queryFn: listValueUnitRates });
 
   const all = useMemo(() => query.data ?? [], [query.data]);
   const received = all.filter((o) => o.direction === 'receivable');
   const given = all.filter((o) => o.direction === 'payable');
 
-  const inPortfolio = received.filter((o) => instrumentStatusOf(o) === 'portfoy');
-  const portfolioTotal = inPortfolio.reduce((s, o) => s + o.remaining_amount_minor, 0);
+  const inPortfolio = instrumentPortfolioRows(all, 'receivable');
   const nearest = inPortfolio
     .filter((o) => o.due_date)
     .sort((a, b) => (a.due_date as string).localeCompare(b.due_date as string))[0];
 
   // Verdiğim sekmesinin "portföy" karşılığı: henüz ödenmemiş (bekleyen + gecikmiş) verilen kayıtlar.
-  const givenOpen = given.filter((o) => givenGroupOf(o) !== 'paid');
-  const givenOpenTotal = givenOpen.reduce((s, o) => s + o.remaining_amount_minor, 0);
+  const givenOpen = instrumentPortfolioRows(all, 'payable');
   const givenNearest = givenOpen
     .filter((o) => o.due_date)
     .sort((a, b) => (a.due_date as string).localeCompare(b.due_date as string))[0];
 
   const summaryLabel = side === 'receivable' ? 'Portföydeki toplam' : 'Ödenecek toplam';
   const summaryCount = side === 'receivable' ? inPortfolio.length : givenOpen.length;
-  const summaryTotal = side === 'receivable' ? portfolioTotal : givenOpenTotal;
+  let summaryTotal: number | null = null;
+  let totalError: string | null = ratesQuery.isError || query.isError ? 'Toplam güncellenemedi.' : null;
+  if (ratesQuery.data && query.data) {
+    try { summaryTotal = instrumentPortfolioTotal(all, side, ratesQuery.data); }
+    catch (error) { totalError = error instanceof Error ? error.message : 'Eksik toplam hesaplanmadı.'; }
+  }
   const summaryNearest = side === 'receivable' ? nearest : givenNearest;
 
   const list = side === 'receivable' ? received : given;
@@ -99,7 +108,7 @@ export default function InstrumentsScreen() {
 
   const groups = useMemo(() => {
     if (side === 'payable') {
-      const groupOrder: Exclude<GivenTab, 'all'>[] = ['overdue', 'open', 'paid'];
+      const groupOrder: Exclude<GivenTab, 'all'>[] = ['overdue', 'open', 'paid', 'bounced'];
       return groupOrder
         .map((g) => ({ title: GIVEN_GROUP_TITLE[g], rows: filtered.filter((o) => givenGroupOf(o) === g) }))
         .filter((g) => g.rows.length > 0);
@@ -142,7 +151,9 @@ export default function InstrumentsScreen() {
           <Text variant="caption" color="textSecondary">
             {summaryLabel} · {summaryCount} kayıt
           </Text>
-          <HeroAmount amountMinor={summaryTotal} baseSize={32} />
+          {summaryTotal !== null ? <HeroAmount amountMinor={summaryTotal} baseSize={32} />
+            : <Text>{totalError ?? 'TL karşılığı hesaplanıyor…'}</Text>}
+          <Text variant="caption" color="textSecondary">Güncel kurla TL karşılığı; karşılıksız kayıtlar dahil değildir.</Text>
           {summaryNearest?.due_date ? (
             <Text variant="caption" color="textSecondary">
               En yakın vade {dayMonth.format(new Date(summaryNearest.due_date))}

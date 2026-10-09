@@ -1,4 +1,3 @@
-import { markEndorsed } from '@/features/instruments/api';
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
 import { createInstallmentPlan, createObligation, type Obligation } from '@/features/obligations/api';
@@ -479,6 +478,8 @@ export interface SettleObligationsResult {
   instrumentObligation: Obligation | null;
   /** Artan tutardan doğan avans kaydı (varsa). */
   advanceObligation: Obligation | null;
+  /** Ciro fazlası birden çok çekten geldiyse her kaynağın ayrı avansı. */
+  advanceObligations?: Obligation[];
   /** Oluşan hareketler (dekont ilkine bağlanır). Çek/senet, mahsup ve ciroda boştur. */
   transactionIds: string[];
 }
@@ -715,40 +716,6 @@ function pairAllocations(
   return pairs;
 }
 
-// Bir çiftin iki kaydını karşılıklı kapatır: her iki tarafa hesapsız/transaction'sız birer ödeme
-// satırı, settled_by_obligation_id ile birbirine bağlı. Kayıtlardan biri silinirse karşı taraftaki
-// satır da silinir ve o kayıt yeniden açılır (obligations_delete_settlement_payments). Aynı kayda
-// düşen çiftlerin taksit dağılımı güncel kalana göre hesaplansın diye çift çift yazılır.
-async function writeOffsetPair(
-  workspaceId: string,
-  pair: OffsetPair,
-  paidAt: string,
-  notes: { onSource: string; onTarget: string }
-): Promise<void> {
-  const rows: TablesInsert<'payments'>[] = [];
-  for (const [obligation, counter, note] of [
-    [pair.target, pair.source, notes.onTarget],
-    [pair.source, pair.target, notes.onSource],
-  ] as const) {
-    const slices = await planInstallmentSlices(obligation.id, pair.amountMinor);
-    for (const slice of slices) {
-      rows.push({
-        workspace_id: workspaceId,
-        obligation_id: obligation.id,
-        installment_id: slice.installmentId,
-        amount_minor: slice.amountMinor,
-        paid_at: paidAt,
-        account_id: null,
-        transaction_id: null,
-        settled_by_obligation_id: counter.id,
-        notes: note,
-      });
-    }
-  }
-  const { error } = await supabase.from('payments').insert(rows);
-  if (error) throw error;
-}
-
 // Mahsup: aynı carinin ters yöndeki açık kayıtları (ör. ön ödeme/avans ↔ yeni fatura, ya da hem
 // müşteri hem tedarikçi olan bir firmanın alacağı ↔ borcu) tutar kadar karşılıklı kapanır.
 async function settleByOffset(input: SettleObligationsInput): Promise<SettleObligationsResult> {
@@ -791,66 +758,39 @@ async function settleByOffset(input: SettleObligationsInput): Promise<SettleObli
 // hiçbir hesaptan para hareket etmez. Çek toplamı faturaları aşarsa fark B'den alacak (avans) olur.
 async function settleByEndorsement(input: SettleObligationsInput): Promise<SettleObligationsResult> {
   if (input.direction !== 'payable') throw new Error('Çek ciro yalnızca ödemede kullanılır');
+  if (!input.actorId || !input.requestId) throw new Error('Kalıcı ciro işlem kimliği ve sahibi eksik');
   const sources = input.sources ?? [];
   const chequeTotal = sources.reduce((sum, s) => sum + s.remaining_amount_minor, 0);
   if (chequeTotal <= 0) throw new Error('Ciro edilecek çek/senet seçin');
 
   const { allocations, leftoverMinor } = allocateAcrossObligations(chequeTotal, input.targets);
-  const sourceAllocations: SettlementAllocation[] = sources.map((s) => ({
-    obligation: s,
-    amountMinor: s.remaining_amount_minor,
-  }));
-
-  const targetName = input.counterpartyName ?? 'cari';
-  const pairs = pairAllocations(sourceAllocations, allocations);
-  for (const pair of pairs) {
-    await writeOffsetPair(input.workspaceId, pair, input.paidAt, {
-      onSource: `Ciro edildi → ${targetName} (${pair.target.title})`,
-      onTarget: `Ciro ile ödendi: ${pair.source.title}${pair.source.counterparty?.name ? ` (${pair.source.counterparty.name})` : ''}`,
-    });
+  if (!Number.isSafeInteger(chequeTotal) || sources.some((o) => o.direction !== 'receivable'
+    || !['cek', 'senet'].includes(o.document_type ?? '') || o.currency_code !== input.currencyCode)
+    || input.targets.some((o) => o.direction !== 'payable' || o.currency_code !== input.currencyCode
+      || o.counterparty_id !== input.counterpartyId || ['cek', 'senet', 'kredi_karti_ekstresi'].includes(o.document_type ?? ''))) {
+    throw new Error('Ciro kaynağı veya hedef kapsamı geçersiz');
   }
-
-  let advanceObligation: Obligation | null = null;
-  if (leftoverMinor > 0) {
-    // Faturaları aşan çek tutarı: B'den alacak. Çeklerin kalan kısmı bu avansla kapanır ki çekler
-    // portföyde yarım kalmasın; avans silinirse o kısım portföye geri döner.
-    advanceObligation = await createAdvanceObligation({
-      workspaceId: input.workspaceId,
-      settlementDirection: 'payable',
-      counterpartyId: input.counterpartyId,
-      counterpartyName: input.counterpartyName,
-      currencyCode: input.currencyCode,
-      amountMinor: leftoverMinor,
-      parentObligationId: null,
-      note: 'Ciro edilen çek/senet fazlası',
-    });
-    const usedBySource = new Map<string, number>();
-    for (const pair of pairs) usedBySource.set(pair.source.id, (usedBySource.get(pair.source.id) ?? 0) + pair.amountMinor);
-    for (const source of sources) {
-      const rest = source.remaining_amount_minor - (usedBySource.get(source.id) ?? 0);
-      if (rest <= 0) continue;
-      const slices = await planInstallmentSlices(source.id, rest);
-      const { error } = await supabase.from('payments').insert(
-        slices.map((slice) => ({
-          workspace_id: input.workspaceId,
-          obligation_id: source.id,
-          installment_id: slice.installmentId,
-          amount_minor: slice.amountMinor,
-          paid_at: input.paidAt,
-          account_id: null,
-          transaction_id: null,
-          settled_by_obligation_id: advanceObligation!.id,
-          notes: `Ciro edildi → ${targetName} (fazlası alacak)`,
-        }))
-      );
-      if (error) throw error;
-    }
+  const { data, error } = await supabase.rpc('settle_endorsement_atomic' as never, {
+    p_expected_actor: input.actorId, p_request_id: input.requestId, p_workspace_id: input.workspaceId,
+    p_counterparty_id: input.counterpartyId, p_currency_code: input.currencyCode, p_paid_at: input.paidAt,
+    p_fx_rate_try_minor: input.fxRateTryMinor ?? null,
+    p_sources: sources.map((o) => ({ id: o.id, remaining_amount_minor: o.remaining_amount_minor })),
+    p_targets: input.targets.map((o) => ({ id: o.id, remaining_amount_minor: o.remaining_amount_minor })),
+  } as never);
+  if (error) throw error;
+  const receipt = data as unknown as { allocations?: { obligation_id: string; amount_minor: number }[]; leftover_minor?: number; advances?: Obligation[] } | null;
+  if (!Array.isArray(receipt?.allocations) || receipt.allocations.length !== allocations.length
+    || receipt.allocations.some((o, i) => o.obligation_id !== allocations[i].obligation.id || o.amount_minor !== allocations[i].amountMinor)
+    || receipt.leftover_minor !== leftoverMinor || !Array.isArray(receipt.advances)
+    || receipt.advances.some((o) => !o.id || o.workspace_id !== input.workspaceId || o.counterparty_id !== input.counterpartyId
+      || o.currency_code !== input.currencyCode || o.direction !== 'receivable' || o.document_type !== 'avans'
+      || !sources.some((s) => s.id === o.parent_obligation_id) || !Number.isSafeInteger(o.total_amount_minor) || o.total_amount_minor <= 0)
+    || new Set(receipt.advances.map((o) => o.parent_obligation_id)).size !== receipt.advances.length
+    || receipt.advances.reduce((sum, o) => sum + o.total_amount_minor, 0) !== leftoverMinor) {
+    throw new Error('Ciro sonucu doğrulanamadı; aynı işlem kimliğiyle tekrar kontrol edin');
   }
-
-  // Çek/senetler portföyden çıktı: yaşam döngüsü durumu ciro edildi (tetikleyici kapanış durumunu ezmez).
-  await markEndorsed(sources.map((s) => s.id));
-
-  return { allocations, leftoverMinor, instrumentObligation: null, advanceObligation, transactionIds: [] };
+  return { allocations, leftoverMinor, instrumentObligation: null, advanceObligation: receipt.advances[0] ?? null,
+    advanceObligations: receipt.advances, transactionIds: [] };
 }
 
 interface CreateInstrumentObligationInput {

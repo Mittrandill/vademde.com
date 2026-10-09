@@ -1,5 +1,7 @@
 # Denetim sonrası düzeltmeler — ilk paket
 
+> Bu dosya ilk paketlerin tarihsel durumunu anlatır. İlk sekiz finans migration'ı ve çek/ciro migration'ı daha sonra canlıya uygulandı. Güncel geçiş, test ve kalan iş durumu: [canlı geçiş kaydı](19-canli-gecis-2026-10-09.md).
+
 Bu dosya, [denetim raporundaki](16-kapsamli-denetim-2026-10-09.md) bulguların **uygulama durumudur**. Denetim raporu tarihsel bulguları tutar; aşağıdaki değişikliklerin canlıya geçtiği anlamına gelmez.
 
 ## Güvenli sınır
