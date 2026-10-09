@@ -14,6 +14,7 @@ import { useAppUpdatePrompt } from '@/services/appUpdate';
 import { registerPushToken, unregisterCurrentPushToken } from '@/services/pushToken';
 import { useWorkspaceRealtime } from '@/services/realtime';
 import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
+import { attachNotificationTapHandler } from '@/services/notificationRouting';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Splash } from '@/components/brand/Splash';
@@ -52,6 +53,14 @@ function RootNavigator() {
       clearWidgetSnapshot();
     }
   }, [session?.user?.id, setActiveWorkspaceId]);
+
+  // Push bildirimine dokunulunca ilgili ekrana git (nakit uyarısı, borç/kart hatırlatması). Yalnızca
+  // oturum açıkken: korumalı ekranlar ancak o zaman var.
+  const isSignedIn = !!session;
+  useEffect(() => {
+    if (!isSignedIn) return;
+    return attachNotificationTapHandler();
+  }, [isSignedIn]);
 
   if (isLoading) return <Splash />;
 
