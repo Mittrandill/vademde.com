@@ -12,6 +12,7 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
+| iOS | build 49 | `eas build --no-wait --auto-submit` ile alındı (build ID `810e16e2-a2ba-4f25-99e3-2e3ef582e89a`, commit `c3313c7`); submission `884cad18-7621-4aca-9a48-daac2a2751c2` planlandı — onboarding yeniden tasarımı ve finans düzeltmelerini içerir. TestFlight'ta doğrulanacak | 2026-10-09 |
 | iOS | build 41 | `eas build --no-wait --auto-submit` ile alındı (build ID `c5f5739d-df3e-4edf-92bd-4615524ebe92`, commit `04d41c5`); submission `c5d57b02-ab76-459c-b6bb-822cbf17b8b6` planlandı — TestFlight'ta doğrulanacak | 2026-10-05 |
 
 Yeniden tasarım + yeni özellikler. Native değişiklik içerir (`expo-font` eklentisi, `LSApplicationQueriesSchemes`),
