@@ -25,6 +25,7 @@ import {
   restorePurchases,
 } from '@/services/purchases';
 import { queryKeys } from '@/services/queryKeys';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 type BillingPeriod = 'monthly' | 'yearly';
 
@@ -170,7 +171,7 @@ export default function PaywallScreen() {
       await queryClient.invalidateQueries({ queryKey: ['document-archive-access'] });
       router.back();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Satın alma tamamlanamadı';
+      const message = friendlyErrorMessage(err, 'Satın alma tamamlanamadı');
       if (!message.toLowerCase().includes('cancel')) {
         Alert.alert('Satın alma başarısız', message);
       }
@@ -190,7 +191,7 @@ export default function PaywallScreen() {
       Alert.alert('Satın alımlar geri yüklendi');
       router.back();
     } catch (err) {
-      Alert.alert('Geri yükleme başarısız', err instanceof Error ? err.message : 'Bir hata oluştu');
+      Alert.alert('Geri yükleme başarısız', friendlyErrorMessage(err, 'Bir hata oluştu'));
     } finally {
       setIsRestoring(false);
     }

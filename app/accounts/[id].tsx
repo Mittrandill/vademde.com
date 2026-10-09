@@ -40,6 +40,7 @@ import { getAccountBalances } from '@/features/reports/api';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
 import {
   listCardInstallmentPurchases,
+  pendingInstallmentMinor,
   progressOf,
 } from '@/features/cardInstallments/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
@@ -75,6 +76,7 @@ const PAGE_SIZE = 10;
 
 const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
 const dueDayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+const shortDayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
 
 function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -212,8 +214,10 @@ export default function AccountDetailScreen() {
 
   const account = accountQuery.data;
   const type = account.type as Account['type'];
-  const balanceMinor =
-    balancesQuery.data?.find((b) => b.accountId === account.id)?.balanceMinor ?? account.opening_balance_minor;
+  const balanceItem = balancesQuery.data?.find((b) => b.accountId === account.id);
+  const balanceMinor = balanceItem?.balanceMinor ?? account.opening_balance_minor;
+  // Kredi kartında güncel borcun dayandığı en son ekstre (bkz. utils/cardDebt.ts).
+  const cardStatement = balanceItem?.cardStatement ?? null;
   const overdraftLimitMinor = account.overdraft_limit_minor ?? 0;
   const hasOverdraft = type === 'bank' && overdraftLimitMinor > 0;
 
@@ -251,9 +255,14 @@ export default function AccountDetailScreen() {
   if (isCreditCardAccount) {
     // Kredi/çek/senet detaylarıyla aynı ortak hero + sekme + bilgi kartı deseni.
     const hasLimit = (account.credit_limit_minor ?? 0) > 0;
-    const utilization = hasLimit ? balanceMinor / (account.credit_limit_minor as number) : 0;
+    // Banka, henüz ekstreye girmemiş taksitleri de limitten düşer.
+    const pendingInstallmentsMinor = pendingInstallmentMinor(purchasesQuery.data ?? [], cardStatement?.cutoffDate ?? null);
+    const usedMinor = balanceMinor + pendingInstallmentsMinor;
+    const utilization = hasLimit ? usedMinor / (account.credit_limit_minor as number) : 0;
     const clampedUtilization = Math.max(0, Math.min(1, utilization));
-    const availableMinor = hasLimit ? Math.max(0, (account.credit_limit_minor as number) - balanceMinor) : 0;
+    const availableMinor = hasLimit ? Math.max(0, (account.credit_limit_minor as number) - usedMinor) : 0;
+    // Ekstre borcu: en son ekstreden ödenmesi gereken kalan. Ekstre yoksa gösterilmez.
+    const statementDebtMinor = cardStatement ? cardStatement.statementRemainingMinor : null;
     const stateAccent =
       balanceMinor <= 0 ? theme.colors.success : clampedUtilization >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary;
     const loadedStatementCount = statementMonths.filter((m) => m.obligation).length;
@@ -273,7 +282,6 @@ export default function AccountDetailScreen() {
 
     const purchaseProgress = (purchasesQuery.data ?? []).map((p) => progressOf(p));
     const activePurchases = purchaseProgress.filter((p) => p.elapsedStatementCount < p.purchase.installment_count);
-    const installmentRemainingMinor = purchaseProgress.reduce((sum, p) => sum + p.futureStatementMinor, 0);
 
     const tabOptions: { key: CreditCardTab; label: string }[] = [
       { key: 'ekstreler', label: `Ekstreler (${loadedStatementCount})` },
@@ -281,7 +289,11 @@ export default function AccountDetailScreen() {
       { key: 'hareketler', label: 'Hareketler' },
       { key: 'genel', label: 'Kart bilgileri' },
     ];
-    const nextDue = computeStatementPeriod(account, new Date())?.dueDate ?? null;
+    // Son ödeme: ödenmemiş bir ekstre varsa onun son ödeme tarihi, yoksa kartın bir sonraki dönemi.
+    const nextDue =
+      cardStatement && cardStatement.statementRemainingMinor > 0
+        ? new Date(`${cardStatement.dueDate}T12:00:00`)
+        : (computeStatementPeriod(account, new Date())?.dueDate ?? null);
     const daysLeft = nextDue ? Math.ceil((nextDue.getTime() - new Date().getTime()) / 86400000) : null;
 
     return (
@@ -360,10 +372,10 @@ export default function AccountDetailScreen() {
             </Stack>
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="caption" color="textSecondary">
-                Gelecek taksit yükü
+                Ekstre borcu
               </Text>
               <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
-                {formatMinorAmount(installmentRemainingMinor, account.currency_code)}
+                {statementDebtMinor !== null ? formatMinorAmount(statementDebtMinor, account.currency_code) : 'Ekstre yok'}
               </Text>
             </Stack>
             <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
@@ -376,6 +388,21 @@ export default function AccountDetailScreen() {
               </Text>
             </Stack>
           </View>
+          {pendingInstallmentsMinor > 0 || cardStatement ? (
+            <Text variant="caption" color="textSecondary">
+              {[
+                cardStatement
+                  ? `Güncel borç ${cardStatement.cutoffEstimated ? 'yaklaşık ' : ''}${shortDayFormatter.format(new Date(`${cardStatement.cutoffDate}T12:00:00`))} kesimli ekstreden hesaplandı: sonraki harcamalar eklendi, ödemeler düşüldü.`
+                  : null,
+                cardStatement?.cutoffEstimated ? 'Kesin tarih için Kart bilgilerinden kesim gününü girin.' : null,
+                pendingInstallmentsMinor > 0
+                  ? `Ekstreye henüz girmemiş ${formatMinorAmount(pendingInstallmentsMinor, account.currency_code)} taksit limitten düşüldü.`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            </Text>
+          ) : null}
         </Card>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -566,6 +593,7 @@ export default function AccountDetailScreen() {
             cardAccount={account}
             currencyCode={account.currency_code}
             currentDebtMinor={balanceMinor}
+            statementDebtMinor={cardStatement?.statementRemainingMinor ?? null}
             sourceAccounts={sourceAccounts}
             onClose={() => setPayingCard(false)}
             onSuccess={() => {

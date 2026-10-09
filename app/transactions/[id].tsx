@@ -13,7 +13,7 @@ import { Amount } from '@/components/finance/Amount';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
 import { PersonAvatar } from '@/components/finance/PersonAvatar';
-import { deleteTransaction, getTransactionWithRelations } from '@/features/transactions/api';
+import { deleteTransaction, getTransactionWithRelations, LOCKED_SOURCE_TYPES } from '@/features/transactions/api';
 import { getTransactionReceipt, openReceipt } from '@/features/receipts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
@@ -21,7 +21,6 @@ import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
 
-const LOCKED_SOURCE_TYPES = new Set(['avans', 'nakit_avans', 'borc_verme']);
 
 const DIRECTION_LABEL: Record<string, string> = {
   income: 'Gelir',

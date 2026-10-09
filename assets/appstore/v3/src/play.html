@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Vademde Google Play v3</title>
+<!--
+  Google Play mağaza görselleri — App Store v3 setinin (shots.html) Play uyarlaması.
+  Aynı gerçek uygulama ekranları ve metinler; farklar:
+    · Tuval 9:16 (1440×2560). Play telefon görüntüsünde uzun kenar kısa kenarın en fazla 2 katı olabilir;
+      App Store'un 1320×2868 tuvali (2,17:1) Play'e yüklenemez.
+    · iPhone gövdesi ve iOS bildirim bandı yerine nötr Android gövdesi (delikli kamera) ve Android bildirimi.
+    · Kapak görseli (feature graphic) 1024×500: ?c=feature.
+  Render: ../render-play.sh  →  play/ (tr), play-en/ (en).
+  ?s=N tek slaytı, ?c=feature kapak görselini tam boy gösterir; parametresiz açılınca tümü küçük önizlenir.
+  Kırpma kutuları (data-box) ham ekran görüntüsünün 1206×2622 piksel koordinatlarıdır.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=block" rel="stylesheet">
+<style>
+:root{
+  --bg:#17181C; --text:#F6F5F1; --text2:#B1B2AA;
+  --saffron:#FFB000; --violet:#6B4DFF; --green:#52CE96;
+  --font:Inter,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+html,body{background:#0E0F12}
+body{font-family:var(--font);-webkit-font-smoothing:antialiased;color:var(--text)}
+.deck{display:flex;flex-wrap:wrap;gap:60px;padding:60px;width:max-content;max-width:calc(1440px*5 + 60px*6)}
+body.single .deck{padding:0;gap:0}
+body:not(.single) .slide{zoom:.25}
+body:not(.single) .feature{zoom:.6}
+
+.slide{width:1440px;height:2560px;position:relative;overflow:hidden;background:var(--bg);isolation:isolate}
+.slide::before,.feature::before{content:"";position:absolute;inset:0;z-index:-2;
+  background:
+    radial-gradient(900px 900px at var(--gx,85%) var(--gy,8%), rgba(255,176,0,.20), transparent 70%),
+    radial-gradient(1100px 1000px at var(--hx,5%) var(--hy,92%), var(--g2,rgba(107,77,255,.22)), transparent 70%),
+    linear-gradient(180deg,#1C1D22 0%,#151619 100%);}
+.slide::after,.feature::after{content:"";position:absolute;inset:0;z-index:-1;opacity:.35;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");}
+
+.copy{position:absolute;left:120px;right:120px;top:170px;z-index:3}
+.eyebrow{display:flex;align-items:center;gap:18px;font-size:34px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--saffron)}
+.eyebrow i{width:14px;height:14px;border-radius:50%;background:var(--saffron);box-shadow:0 0 24px rgba(255,176,0,.8)}
+.eyebrow span{color:var(--text2);font-weight:600;letter-spacing:.12em}
+h1{margin-top:36px;font-size:118px;line-height:1.02;font-weight:800;letter-spacing:-.04em;text-wrap:balance}
+h1 em{font-style:normal;color:var(--saffron)}
+.sub{margin-top:36px;font-size:42px;line-height:1.38;font-weight:500;color:var(--text2);max-width:1120px;letter-spacing:-.01em}
+.sub b{color:var(--text);font-weight:600}
+
+/* Nötr Android gövdesi: ince eşit çerçeve, delikli ön kamera, tuşlar sağda */
+.phone{position:absolute;z-index:2;width:var(--pw,900px);padding:18px;border-radius:100px;background:#0A0B0D;
+  box-shadow:0 0 0 4px #3A3C42,0 0 0 7px #17181C,0 90px 180px rgba(0,0,0,.6),0 30px 60px rgba(0,0,0,.4)}
+.phone .screen{position:relative;border-radius:84px;overflow:hidden;aspect-ratio:1206/2622;background:#1F2126;container-type:inline-size}
+/* Ham görüntüler iPhone simülatöründen: üstteki 180 px'lik iOS durum çubuğu (saat, Dynamic Island,
+   ikonlar) düz zeminle örtülüp Android durum çubuğu çizilir. Zemin rengi görüntünün kendi zeminidir. */
+.sb{position:absolute;left:0;right:0;top:0;height:6.9%;z-index:1;background:var(--sbg,#1F2126);display:flex;align-items:center;
+  justify-content:space-between;padding:0 7.5% 0 8%;font:600 3.9cqw/1 var(--font);color:#F6F5F1;letter-spacing:.01em}
+.sb .ic{display:flex;align-items:center;gap:1.6cqw}
+.sb svg{height:3.6cqw;width:auto;display:block}
+.phone .screen>img{display:block;width:100%;height:100%}
+.phone .screen::after{z-index:2;content:"";position:absolute;left:50%;top:1.55%;width:4.4%;aspect-ratio:1;transform:translateX(-50%);
+  border-radius:50%;background:#050506;box-shadow:inset 0 0 0 3px #15161A}
+.phone .btn{position:absolute;right:-11px;width:7px;border-radius:4px;background:#3E4046}
+.pop{position:absolute;z-index:4;border-radius:36px;background-repeat:no-repeat;
+  box-shadow:0 50px 110px rgba(0,0,0,.65),0 0 0 3px rgba(255,255,255,.08)}
+.pop.ring{box-shadow:0 50px 110px rgba(0,0,0,.65),0 0 0 5px var(--saffron)}
+.chip{position:absolute;z-index:5;display:flex;align-items:center;gap:20px;padding:26px 36px;border-radius:999px;
+  background:rgba(43,45,49,.92);backdrop-filter:blur(20px);font-size:38px;font-weight:600;
+  box-shadow:0 30px 70px rgba(0,0,0,.55),inset 0 0 0 2px rgba(255,255,255,.07);white-space:nowrap}
+.chip .dot{width:22px;height:22px;border-radius:50%}
+.chip small{font-size:34px;color:var(--text2);font-weight:500}
+.chip svg{width:44px;height:44px;flex:none}
+
+.cheque{position:absolute;background:linear-gradient(160deg,#F7F3E8,#ECE6D6);border-radius:10px;padding:5% 6%;color:#2A2B30;
+  transform:rotate(-4deg);box-shadow:0 30px 60px rgba(0,0,0,.6);font-family:"Courier New",ui-monospace,monospace}
+.cheque .row{display:flex;justify-content:space-between;align-items:baseline}
+.cheque .bank{font-family:var(--font);font-weight:800;letter-spacing:.02em}
+.cheque .line{height:4px;border-radius:2px;background:#CFC9B8}
+.cheque .hl{position:relative;outline:4px solid var(--saffron);outline-offset:6px;border-radius:4px;background:rgba(255,176,0,.16)}
+.cheque .tag{position:absolute;top:-58px;left:-10px;font-family:var(--font);font-size:24px;font-weight:700;background:var(--saffron);color:#1F2126;padding:6px 14px;border-radius:10px;white-space:nowrap}
+.scanline{position:absolute;height:6px;border-radius:3px;background:var(--saffron);box-shadow:0 0 40px 10px rgba(255,176,0,.55)}
+
+/* Android bildirimi: uygulama satırı + başlık + metin */
+.notif{position:absolute;z-index:5;padding:34px 40px 38px;border-radius:44px;background:rgba(46,48,54,.94);
+  backdrop-filter:blur(30px);box-shadow:0 40px 90px rgba(0,0,0,.6),inset 0 0 0 2px rgba(255,255,255,.07)}
+.notif .app{display:flex;align-items:center;gap:16px;font-size:30px;font-weight:600;color:var(--text2)}
+.notif .app img{width:48px;height:48px;border-radius:50%}
+.notif .t{margin-top:22px;font-size:38px;font-weight:700}
+.notif p{margin-top:8px;font-size:35px;line-height:1.32;color:#E6E5E0}
+
+/* Kapak görseli 1024×500 — Play kenarları kırpabilir, önemli içerik iç bölgede */
+.feature{width:1024px;height:500px;position:relative;overflow:hidden;isolation:isolate;
+  --gx:62%;--gy:40%;--hx:4%;--hy:100%}
+.feature .wm{position:absolute;left:72px;top:72px;display:flex;align-items:center;gap:12px;font-size:30px;font-weight:700;letter-spacing:-.03em}
+.feature .wm img{height:44px}
+.feature .phrase{position:absolute;left:72px;top:158px;width:470px;font-size:50px;font-weight:800;letter-spacing:-.04em;line-height:1.04}
+.feature .phrase em{font-style:normal;color:var(--saffron)}
+.feature .phrase p{margin-top:18px;font-size:19px;line-height:1.4;font-weight:500;letter-spacing:-.005em;color:var(--text2)}
+.feature .phone{--pw:228px;padding:8px;border-radius:34px;box-shadow:0 0 0 2px #3A3C42,0 0 0 3.5px #17181C,0 40px 80px rgba(0,0,0,.6)}
+.feature .phone .screen{border-radius:27px}
+.feature .phone .btn{right:-5px;width:3px}
+.doc{position:absolute;z-index:1;border-radius:8px;background:linear-gradient(160deg,#F8F4EA,#EAE4D3);color:#2A2B30;
+  box-shadow:0 24px 50px rgba(0,0,0,.55);font-family:"Courier New",ui-monospace,monospace;padding:16px 18px}
+.doc .h{font-family:var(--font);font-weight:800;font-size:12px;letter-spacing:.02em;display:flex;justify-content:space-between;align-items:baseline}
+.doc .h small{font-family:"Courier New",monospace;font-weight:400;font-size:9px}
+.doc .l{height:4px;border-radius:2px;background:#D2CCBC;margin-top:8px}
+.doc .amt{margin-top:12px;display:inline-block;font-weight:700;font-size:15px;padding:3px 8px;border-radius:4px;outline:2px solid var(--saffron);outline-offset:3px;background:rgba(255,176,0,.16)}
+.card{position:absolute;z-index:4;display:flex;gap:12px;align-items:center;padding:13px 16px;border-radius:20px;
+  background:rgba(54,56,62,.9);backdrop-filter:blur(20px);box-shadow:0 24px 56px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.08)}
+.card img{width:36px;height:36px;border-radius:50%}
+.card .t{font-size:14px;font-weight:700;display:flex;justify-content:space-between;gap:14px}
+.card .t small{font-weight:500;color:var(--text2);font-size:12px}
+.card p{font-size:12.5px;color:#E3E2DD;margin-top:2px;line-height:1.3}
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- 01 · OCR: tara -->
+<section class="slide" style="--gx:80%;--gy:30%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Akıllı belge okuma</div>
+    <h1>Fotoğrafını çek.<br><em>Vademde</em> okusun.</h1>
+    <p class="sub">Çek, senet, fatura, dekont ya da kredi ödeme planı. Tutar, vade ve taraflar saniyeler içinde forma dökülür.</p>
+  </div>
+  <div class="phone" style="--pw:940px;left:250px;top:840px">
+    <div class="screen">
+      <img src="shots/tara.png" alt="">
+      <div class="cheque" style="left:15%;top:24.5%;width:70%;height:17%">
+        <div class="row"><span class="bank" style="font-size:30px">KUZEY BANK A.Ş.</span><span style="font-size:22px">No 0047219</span></div>
+        <div class="line" style="width:62%;margin-top:7%"></div>
+        <div class="line" style="width:44%;margin-top:4%"></div>
+        <div class="row" style="margin-top:9%">
+          <div class="hl" style="font-size:26px;padding:4px 10px"><span class="tag">Vade ✓</span>27.10.2026</div>
+          <div class="hl" style="font-size:34px;font-weight:700;padding:4px 10px"><span class="tag">Tutar ✓</span>₺120.000,00</div>
+        </div>
+      </div>
+      <div class="scanline" style="left:16%;right:16%;top:44.5%"></div>
+    </div>
+  </div>
+  <div class="chip" style="right:70px;top:1740px"><span class="dot" style="background:var(--green)"></span>3 alan okundu <small>· %99 güven</small></div>
+</section>
+
+<!-- 02 · OCR: kontrol et -->
+<section class="slide" style="--gx:15%;--gy:40%;--hx:95%;--hy:85%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Siz onaylarsınız</div>
+    <h1>Okunan her alan<br>önce <em>size</em> gelir.</h1>
+    <p class="sub">Emin olunmayan alanlar işaretlenir. <b>Onayınız olmadan hiçbir kayıt oluşmaz.</b></p>
+  </div>
+  <div class="phone" style="--pw:860px;left:400px;top:800px">
+    <div class="screen"><img src="shots/rev_kredi.png" alt=""></div>
+  </div>
+  <div class="chip" style="left:180px;top:1010px;border-radius:28px;box-shadow:0 30px 70px rgba(0,0,0,.55),0 0 0 5px var(--saffron);font-size:50px;padding:30px 44px"><svg viewBox="0 0 24 24" fill="none" stroke="#F6F5F1" stroke-width="2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></svg>Güven %99</div>
+  <div class="pop" data-src="shots/rev_kredi.png" data-box="40,1925,1126,210" data-k="1.06"></div>
+</section>
+
+<!-- 03 · Ana sayfa -->
+<section class="slide" style="--gx:90%;--gy:45%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Ana sayfa</div>
+    <h1>Bakiye, borç, alacak.<br><em>Tek bakışta.</em></h1>
+    <p class="sub">Hesaplarınız, kartlarınız ve yaklaşan vadeleriniz tek ekranda toplanır.</p>
+  </div>
+  <div class="phone" style="--pw:900px;left:270px;top:860px">
+    <div class="screen"><img src="shots/home.png" alt=""></div>
+  </div>
+  <div class="pop" data-src="shots/home.png" data-box="40,460,1126,730" data-k="1.06"></div>
+</section>
+
+<!-- 04 · Takvim -->
+<section class="slide" style="--gx:20%;--gy:20%;--hx:90%;--hy:90%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Vade takvimi</div>
+    <h1>Hiçbir vade<br><em>sessizce</em> geçmez.</h1>
+    <p class="sub">Çek, senet, taksit ve faturalar tek takvimde. Ne zaman hatırlatılacağını siz seçersiniz.</p>
+  </div>
+  <div class="phone" style="--pw:900px;left:270px;top:980px">
+    <div class="screen"><img src="shots/takvim.png" alt=""></div>
+  </div>
+  <div class="notif" style="left:80px;right:80px;top:830px">
+    <div class="app"><img src="icon.png" alt="">Vademde <small>· şimdi</small></div>
+    <div class="t">Ödeme hatırlatması</div>
+    <p>Enerjisa Elektrik faturasının son ödeme günü 12 Ekim · ₺1.842,60</p>
+  </div>
+</section>
+
+<!-- 05 · Çek ve senetler -->
+<section class="slide" style="--gx:85%;--gy:15%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Çek ve senet</div>
+    <h1>Portföyünüz<br><em>cebinizde.</em></h1>
+    <p class="sub">Aldığınız, verdiğiniz ve ciro ettiğiniz her çeki ve senedi yolculuğuyla takip edin.</p>
+  </div>
+  <div class="phone" style="--pw:880px;left:390px;top:830px">
+    <div class="screen"><img src="shots/instruments.png" alt=""></div>
+  </div>
+  <div class="pop ring" data-src="shots/instruments.png" data-box="50,1535,1110,200" data-k="1.06"></div>
+</section>
+
+<!-- 06 · Kredi -->
+<section class="slide" style="--gx:10%;--gy:45%;--hx:95%;--hy:95%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Krediler</div>
+    <h1>Krediniz<br><em>taksit taksit.</em></h1>
+    <p class="sub">Ödeme planını tarayın; kalan borç, sıradaki taksit ve bitiş tarihi hep elinizin altında.</p>
+  </div>
+  <div class="phone" style="--pw:820px;left:310px;top:840px">
+    <div class="screen"><img src="shots/kredi.png" alt=""></div>
+  </div>
+  <div class="pop" data-src="shots/kredi.png" data-box="50,650,1106,500" data-k="1.06"></div>
+  <div class="pop ring" data-src="shots/kredi.png" data-box="50,2225,1106,200" data-k="1.06"></div>
+</section>
+
+<!-- 07 · Kredi kartı -->
+<section class="slide" style="--gx:85%;--gy:40%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Kredi kartları</div>
+    <h1>Limit, ekstre,<br><em>son ödeme.</em></h1>
+    <p class="sub">Ekstreyi tarayın; harcamalar, taksitler ve kalan limit tek kartta.</p>
+  </div>
+  <div class="phone" style="--pw:900px;left:270px;top:860px">
+    <div class="screen"><img src="shots/card.png" alt=""></div>
+  </div>
+  <div class="pop ring" data-src="shots/card.png" data-box="50,650,1106,510" data-k="1.06"></div>
+</section>
+
+<!-- 08 · Cari -->
+<section class="slide" style="--gx:20%;--gy:30%;--hx:90%;--hy:90%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Cari hesaplar</div>
+    <h1>Kim size borçlu,<br><em>kime</em> borçlusunuz?</h1>
+    <p class="sub">Firma ve kişi bazında bakiye, açık kayıtlar, çekler ve faturalar bir arada.</p>
+  </div>
+  <div class="phone" style="--pw:900px;left:390px;top:860px">
+    <div class="screen"><img src="shots/cari.png" alt=""></div>
+  </div>
+  <div class="pop" data-src="shots/cari.png" data-box="50,650,1106,520" data-k="1.06"></div>
+</section>
+
+<!-- 09 · Raporlar -->
+<section class="slide" style="--gx:80%;--gy:20%;--g2:rgba(82,206,150,.14)">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Raporlar</div>
+    <h1>Paranız<br><em>nereye</em> gidiyor?</h1>
+    <p class="sub">Gelir, gider, kategori ve kur raporları. <b>Plus</b> ile akıllı özet ve öneriler.</p>
+  </div>
+  <div class="phone" style="--pw:900px;left:270px;top:860px">
+    <div class="screen"><img src="shots/reports.png" alt=""></div>
+  </div>
+  <div class="pop" data-src="shots/reports.png" data-box="60,1015,1086,380" data-k="1.07"></div>
+</section>
+
+<!-- 10 · Bankalar + kapanış -->
+<section class="slide" style="--gx:50%;--gy:10%">
+  <div class="copy">
+    <div class="eyebrow"><i></i>Bankalar <span>· Ekip paylaşımı</span></div>
+    <h1>Tüm bankalarınız<br><em>tek ekranda.</em></h1>
+    <p class="sub">Hesap, kart ve kredileri bankaya göre görün. Çalışma alanınızı ekibinizle paylaşın.</p>
+  </div>
+  <div class="phone" style="--pw:900px;left:270px;top:860px">
+    <div class="screen"><img src="shots/banks.png" alt=""></div>
+  </div>
+  <div class="pop" data-src="shots/banks.png" data-box="50,560,1106,510" data-k="1.06"></div>
+  <div class="pop ring" data-src="shots/banks.png" data-box="50,1470,1106,200" data-k="1.06"></div>
+</section>
+
+<!-- KAPAK 1024×500 — solda marka + ifade, sağda belge → uygulama → bildirim -->
+<section class="feature" id="feature">
+  <div class="wm"><img src="mark.svg" alt="">Vademde</div>
+  <div class="phrase">Çek, senet, fatura, kredi.<br><em>Fotoğrafla</em> takibe al.
+    <p>Belgeyi tarayın, onaylayın; vadeler ve bakiyeler kendiliğinden düzenlensin.</p>
+  </div>
+  <div class="doc" style="left:520px;top:146px;width:250px;transform:rotate(-8deg)">
+    <div class="h" style="white-space:nowrap;font-size:11px">KUZEY BANK A.Ş. <small>No 0047219</small></div>
+    <div class="l" style="width:70%;margin-top:14px"></div><div class="l" style="width:46%"></div>
+    <div style="display:flex;justify-content:space-between;align-items:end"><span style="font-size:9px">27.10.2026</span><span class="amt" style="margin-right:34px">₺120.000,00</span></div>
+  </div>
+  <div class="phone" style="left:700px;top:56px"><div class="screen"><img src="shots/home.png" alt=""></div></div>
+  <div class="card" style="left:600px;top:352px;width:330px">
+    <img src="icon.png" alt="">
+    <div style="flex:1"><div class="t">Çek vadesi yaklaşıyor <small>şimdi</small></div><p>Kuzey İnşaat · ₺120.000,00 · 27 Eki</p></div>
+  </div>
+</section>
+
+</div>
+<script>
+  // Büyütülmüş parçalar: ham ekran görüntüsünden data-box (x,y,w,h) kırpılıp data-k ile ölçeklenir,
+  // yatayda tuvale ortalanır, dikeyde telefondaki asıl yerinin üstüne oturur.
+  document.querySelectorAll('.pop').forEach(el => {
+    const [x, y, w, h] = el.dataset.box.split(',').map(Number);
+    const k = Number(el.dataset.k || 1);
+    const slide = el.closest('.slide');
+    Object.assign(el.style, {
+      width: `${w * k}px`, height: `${h * k}px`,
+      left: `${Math.round((slide.offsetWidth - w * k) / 2)}px`,
+      backgroundImage: `url(${el.dataset.src})`,
+      backgroundSize: `${1206 * k}px auto`,
+      backgroundPosition: `${-x * k}px ${-y * k}px`,
+    });
+    const phone = slide.querySelector('.phone');
+    const screen = phone.querySelector('.screen');
+    const scale = screen.offsetWidth / 1206;
+    const centerY = phone.offsetTop + screen.offsetTop + (y + h / 2) * scale;
+    el.style.top = `${Math.round(centerY - (h * k) / 2)}px`;
+  });
+  const SB = `<span>09:41</span><span class="ic">
+    <svg viewBox="0 0 24 24"><path fill="#F6F5F1" d="M12 20.5 1.2 9.7a15.3 15.3 0 0 1 21.6 0z"/></svg>
+    <svg viewBox="0 0 24 24"><path fill="#F6F5F1" d="M22 2v20H2z"/></svg>
+    <svg viewBox="0 0 14 24"><rect x="3.5" y="0" width="7" height="2.5" rx="1" fill="#F6F5F1"/><rect x="0.5" y="2" width="13" height="21.5" rx="2.5" fill="#F6F5F1"/></svg>
+  </span>`;
+  document.querySelectorAll('.phone .screen').forEach(sc => {
+    const bar = document.createElement('div'); bar.className = 'sb'; bar.innerHTML = SB;
+    if (sc.querySelector('img')?.getAttribute('src') === 'shots/tara.png') bar.style.setProperty('--sbg', '#000');
+    sc.insertBefore(bar, sc.firstChild.nextSibling);
+  });
+  // Android: güç ve ses tuşları sağ kenarda
+  document.querySelectorAll('.phone').forEach(p => {
+    [[17, 6], [26, 11]].forEach(([t, h]) => {
+      const b = document.createElement('i'); b.className = 'btn';
+      b.style.top = t + '%'; b.style.height = h + '%';
+      p.appendChild(b);
+    });
+  });
+  const params = new URLSearchParams(location.search);
+  const s = params.get('s');
+  const c = params.get('c');
+  if (s || c) {
+    document.body.classList.add('single');
+    document.querySelectorAll('.slide').forEach((el, i) => { if (i + 1 !== Number(s)) el.remove(); });
+    if (c !== 'feature') document.getElementById('feature').remove();
+  }
+</script>
+<script src="i18n.js"></script>
+</body>
+</html>

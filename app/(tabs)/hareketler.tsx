@@ -37,9 +37,9 @@ import { StatusBadge } from '@/components/finance/StatusBadge';
 import { ObligationIcon } from '@/components/finance/ObligationIcon';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { CategoryIcon } from '@/components/finance/CategoryIcon';
-import { deleteTransaction, listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
+import { deleteTransaction, isLockedTransaction, listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { invalidatePaymentRelatedQueries } from '@/services/queryKeys';
-import { showErrorAlert } from '@/utils/alerts';
+import { showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { listObligations, listInstallmentsDue } from '@/features/obligations/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { queryKeys } from '@/services/queryKeys';
@@ -62,6 +62,9 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 interface HareketRow {
   id: string;
   kind: 'transaction' | 'obligation';
+  // Avans / nakit avans / borç verme açılış hareketi: kayıttan yönetilir, listede kaydırarak
+  // silme/düzenleme sunulmaz (bkz. isLockedTransaction).
+  locked?: boolean;
   title: string;
   subtitle: string;
   date: string;
@@ -277,6 +280,7 @@ export default function HareketlerScreen() {
       .map((t) => ({
         id: t.id,
         kind: 'transaction',
+        locked: isLockedTransaction(t),
         title:
           t.counterparty?.name ||
           t.description?.trim() ||
@@ -625,7 +629,7 @@ export default function HareketlerScreen() {
       </Card>
 
       {error ? (
-        <Text color="danger">{error instanceof Error ? error.message : 'Hareketler yüklenemedi'}</Text>
+        <Text color="danger">{friendlyErrorMessage(error, 'Hareketler yüklenemedi')}</Text>
       ) : null}
     </View>
   );
@@ -807,7 +811,7 @@ function DayGroup({ date, rows, actions }: { date: string; rows: { key: string; 
           <SwipeableRow
             key={key}
             rightActions={
-              row.kind === 'transaction'
+              row.kind === 'transaction' && !row.locked
                 ? [
                     {
                       key: 'edit',
@@ -829,7 +833,7 @@ function DayGroup({ date, rows, actions }: { date: string; rows: { key: string; 
                 : []
             }
           >
-            <HareketRowView item={row} onLongPress={row.kind === 'transaction' ? () => actions.onLongPress(row) : undefined} />
+            <HareketRowView item={row} onLongPress={row.kind === 'transaction' && !row.locked ? () => actions.onLongPress(row) : undefined} />
           </SwipeableRow>
         ))}
       </Group>

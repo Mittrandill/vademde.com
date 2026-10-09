@@ -21,7 +21,7 @@ import {
 } from '@/features/reminders/api';
 import { addObligationToCalendar, createObligationReminder, type CalendarExportObligation } from '@/services/calendarReminders';
 import { buildObligationReminderMessage } from '@/utils/reminderMessage';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 
@@ -121,13 +121,13 @@ export default function NotificationsScreen() {
   const calendarMutation = useMutation({
     mutationFn: (obligation: CalendarExportObligation) => addObligationToCalendar(obligation),
     onSuccess: () => showSuccessAlert('Takvime eklendi.', () => {}),
-    onError: (error) => Alert.alert('Hata', error instanceof Error ? error.message : 'Takvime eklenemedi'),
+    onError: (error) => Alert.alert('Hata', friendlyErrorMessage(error, 'Takvime eklenemedi')),
   });
 
   const reminderMutation = useMutation({
     mutationFn: (obligation: CalendarExportObligation) => createObligationReminder(obligation),
     onSuccess: () => showSuccessAlert('Hatırlatıcı oluşturuldu.', () => {}),
-    onError: (error) => Alert.alert('Hata', error instanceof Error ? error.message : 'Hatırlatıcı oluşturulamadı'),
+    onError: (error) => Alert.alert('Hata', friendlyErrorMessage(error, 'Hatırlatıcı oluşturulamadı')),
   });
 
   function confirmDismissAll() {

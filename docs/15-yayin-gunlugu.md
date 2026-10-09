@@ -8,10 +8,38 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.7 — Test (2026-10-10)
+
+| Platform | Build | Durum | Gönderim |
+|---|---|---|---|
+| iOS | — | `eas build --platform all --profile production --auto-submit-with-profile alpha` → TestFlight | 2026-10-10 |
+| Android | — | aynı komut → Play **alpha** (kapalı test) kanalı; production'a test sonrası terfi | 2026-10-10 |
+
+Finans bütünlüğü ve kullanıcı mesajları paketi (ayrıntı: `docs/17-duzeltme-durumu-2026-10-09.md` "Ek tur"). Önce
+test kanallarında doğrulanır, sonra production'a gönderilir.
+
+### Kullanıcıya görünen değişiklikler
+
+- Ödeme / tahsilat / ciro / kart ödemesinde teknik "kontrol" ekranları kalktı; bağlantı koparsa yarım kalan işlem
+  otomatik tamamlanır, olmazsa sade "Tekrar dene / İptal et" çıkar. Ham hata metinleri (TLS, fetch…) gösterilmez.
+- Kredi kartı borcu en son ekstreye dayanır (ekstre çapası); kart ekranında Güncel borç / Ekstre borcu / Kullanılabilir
+  (bekleyen taksitler düşülmüş) ayrı görünür; kart ödeme formu ekstre borcuyla dolar.
+- Çek/senetle ödeme tek işlemde yazılır; OCR'dan girilen çekin fazlası avansa yazılır.
+- Ödemesi olan kaydın yönü kilitli; kısmen ödenmiş taksit silinemez; toplam ödenenin altına düşürülemez.
+
+### Açık takip maddeleri
+
+- [ ] TestFlight / Play alpha'da doğrula: ciro (bağlantı kesip tekrar), çek ile ödeme (fazla tutar → avans), kart ekstresi
+      ekle → kart borcu/ekstre borcu/kullanılabilir, kart borcunu öde, kayıt düzenleme (yön kilidi, taksit silme).
+- [ ] Doğrulama sonrası iki platformda production'a gönder; App Store Connect'te 1.0.7 sürümünü oluştur, "Yenilikler" gir.
+
+---
+
 ## 1.0.6 — Hazırlanıyor (2026-10-05)
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
+| Android | versionCode 14 | `eas build --platform android --profile production` (build ID `9861fa0a-cfa5-4351-95fb-6285a26a729d`, commit `3c4bccc`), `eas submit` ile doğrudan Play **production** (submission `bafbfda6-1ed5-482c-8c03-2d821812e644`, `releaseStatus: completed`). İlk denemede Play, Meta SDK'nın eklediği `AD_ID` izni Console'daki "reklam kimliği kullanılmıyor" beyanıyla çeliştiği için reddetti; beyan "Evet" (reklam + analiz) yapıldı, Veri güvenliği formu güncellendi. 1.0.2'den beri ilk Android build'i — gerçek cihazda doğrulanmadı. Yeni Play görselleri: `assets/appstore/v3/play/` | 2026-10-09 |
 | iOS | build 49 | `eas build --no-wait --auto-submit` ile alındı (build ID `810e16e2-a2ba-4f25-99e3-2e3ef582e89a`, commit `c3313c7`); submission `884cad18-7621-4aca-9a48-daac2a2751c2` planlandı — onboarding yeniden tasarımı ve finans düzeltmelerini içerir. TestFlight'ta doğrulanacak | 2026-10-09 |
 | iOS | build 41 | `eas build --no-wait --auto-submit` ile alındı (build ID `c5f5739d-df3e-4edf-92bd-4615524ebe92`, commit `04d41c5`); submission `c5d57b02-ab76-459c-b6bb-822cbf17b8b6` planlandı — TestFlight'ta doğrulanacak | 2026-10-05 |
 

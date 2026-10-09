@@ -18,6 +18,7 @@ import {
 } from '@/features/subscriptions/api';
 import { restorePurchases } from '@/services/purchases';
 import { queryKeys } from '@/services/queryKeys';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 // docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad (Ayarlar/paywall ile aynı eşleme).
 const PLAN_LABELS: Record<PlanCode, string> = {
@@ -107,7 +108,7 @@ export default function SubscriptionScreen() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
       Alert.alert('Satın alımlar geri yüklendi');
     } catch (err) {
-      Alert.alert('Geri yükleme başarısız', err instanceof Error ? err.message : 'Bir hata oluştu');
+      Alert.alert('Geri yükleme başarısız', friendlyErrorMessage(err, 'Bir hata oluştu'));
     } finally {
       setIsRestoring(false);
     }

@@ -30,6 +30,7 @@ import { queryKeys } from '@/services/queryKeys';
 import { hashArrayBuffer } from '@/utils/hash';
 import { parseGibInvoiceQr } from '@/utils/gibQr';
 import { OCR_CONSENT_KEY, OCR_CONSENT_TEXT, RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — belge görüntüsü buluta gönderilmeden önce
 // kullanıcıdan açık onay alınır (App Store gizlilik gereksinimi).
@@ -260,7 +261,7 @@ export default function TaraScreen() {
         showQuotaExceededAlert({ documentId: createdDocumentId });
         return;
       }
-      setError(err instanceof Error ? err.message : 'Belge işlenemedi');
+      setError(friendlyErrorMessage(err, 'Belge işlenemedi'));
     }
   }
 
@@ -339,7 +340,7 @@ export default function TaraScreen() {
       setDraftTarget(null);
       Alert.alert('Taslak olarak saklandı', 'Kotan yenilenince ana sayfadaki "İşlenmeyi bekliyor" listesinden işleyebilirsin.');
     } catch (err) {
-      Alert.alert('Saklanamadı', err instanceof Error ? err.message : 'Belge taslak olarak saklanamadı');
+      Alert.alert('Saklanamadı', friendlyErrorMessage(err, 'Belge taslak olarak saklanamadı'));
     } finally {
       setDraftSaving(false);
     }

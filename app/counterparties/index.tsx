@@ -28,6 +28,7 @@ import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { formatMinorAmount } from '@/utils/money';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 const PAGE_SIZE = 10;
 
@@ -187,7 +188,7 @@ export default function CounterpartiesScreen() {
             )}
             {counterpartiesQuery.error ? (
               <Text color="danger" style={{ padding: theme.spacing.lg }}>
-                {counterpartiesQuery.error instanceof Error ? counterpartiesQuery.error.message : 'Cariler yüklenemedi'}
+                {friendlyErrorMessage(counterpartiesQuery.error, 'Cariler yüklenemedi')}
               </Text>
             ) : null}
           </FinanceListSurface>

@@ -78,7 +78,7 @@ import { listValueUnitRates } from '@/features/valueUnits/api';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { InstrumentLifecycle } from '@/components/finance/InstrumentLifecycle';
-import { showSuccessAlert, showErrorAlert } from '@/utils/alerts';
+import { showSuccessAlert, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
@@ -217,8 +217,8 @@ export default function ObligationDetailScreen() {
     Alert.alert(
       'Kaydı Sil',
       settledCount > 0
-        ? `Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Bu ${DOCUMENT_TYPE_LABEL[detailQuery.data?.obligation.document_type ?? ''] ?? 'kayıt'} ile kapatılan ${settledCount} kayıt yeniden açılacak. Emin misiniz?`
-        : 'Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?',
+        ? `Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Bu ${DOCUMENT_TYPE_LABEL[detailQuery.data?.obligation.document_type ?? ''] ?? 'kayıt'} ile kapatılan ${settledCount} kayıt yeniden açılacak. Emin misiniz?`
+        : 'Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?',
       [
         { text: 'Vazgeç', style: 'cancel' },
         { text: 'Sil', style: 'destructive', onPress: () => deleteObligationMutation.mutate() },
@@ -1162,7 +1162,7 @@ function PaymentForm({
 
             {mutation.error ? (
               <Text variant="caption" color="danger">
-                {mutation.error instanceof Error ? mutation.error.message : 'Ödeme kaydedilemedi'}
+                {friendlyErrorMessage(mutation.error, 'Ödeme kaydedilemedi')}
               </Text>
             ) : null}
 

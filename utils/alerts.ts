@@ -73,6 +73,34 @@ function findPlanError(rawMessage: string) {
   return PLAN_ERROR_MESSAGES.find((entry) => rawMessage.includes(entry.code)) ?? null;
 }
 
+const NETWORK_ERROR = /network request failed|fetch failed|failed to fetch|load failed|\bTLS\b|\bSSL\b|timed out|timeout|offline|internet connection|NSURLError|ECONN|ENOTFOUND|EAI_AGAIN|AbortError|güvenli bağlantı|bağlantı kesildi/i;
+// Kullanıcıya anlamsız gelen teknik hata parçaları (Postgres/PostgREST/JS/native yığın izi).
+const TECHNICAL_ERROR = /violates|duplicate key|PGRST|JSON|syntax error|relation "|column "|does not exist|null value|Exception|TypeError|ReferenceError|undefined|is not a function|Cannot read|permission denied|invalid input|\.swift:\d+|\.kt:\d+|\.java:\d+/i;
+export const NETWORK_ERROR_MESSAGE = 'İnternet bağlantısı kurulamadı. Bağlantınızı kontrol edip tekrar deneyin.';
+
+export function isNetworkError(error: unknown): boolean {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && NETWORK_ERROR.test(message);
+}
+
+// Hata nesnesini kullanıcıya gösterilebilir tek bir Türkçe cümleye çevirir: bağlantı hataları
+// sabit bir metne, teknik/İngilizce ham mesajlar `fallback`'e düşer; sunucunun Türkçe iş kuralı
+// mesajları (ör. "Ödeme güncel kalan tutarı aşıyor") olduğu gibi kalır. Ekranlar hata metnini
+// doğrudan `error.message` ile değil bununla göstermelidir.
+export function friendlyErrorMessage(error: unknown, fallback = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.'): string {
+  const err = error as { message?: unknown; code?: unknown } | null;
+  const raw = typeof err?.message === 'string' ? err.message.replace(/^(\w*Error:\s*)+/, '').trim() : '';
+  if (!raw) return fallback;
+  if (NETWORK_ERROR.test(raw)) return NETWORK_ERROR_MESSAGE;
+  const planError = findPlanError(raw);
+  if (planError) return planError.message;
+  if (err?.code === '42501' || /row-level security/i.test(raw)) {
+    return 'Bu çalışma alanında yalnızca görüntüleme yetkiniz var.';
+  }
+  if (TECHNICAL_ERROR.test(raw)) return fallback;
+  return raw;
+}
+
 export function showErrorAlert(error: unknown, fallback = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.') {
   const err = error as { message?: string; code?: string } | null;
   const rawMessage = err?.message ?? '';
@@ -94,5 +122,9 @@ export function showErrorAlert(error: unknown, fallback = 'İşlem tamamlanamad�
     );
     return;
   }
-  Alert.alert('Hata', rawMessage || fallback);
+  if (isNetworkError(error)) {
+    Alert.alert('Bağlantı yok', NETWORK_ERROR_MESSAGE);
+    return;
+  }
+  Alert.alert('İşlem tamamlanamadı', friendlyErrorMessage(error, fallback));
 }

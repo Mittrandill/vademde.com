@@ -20,13 +20,14 @@ import {
   createTransaction,
   createTransfer,
   deleteTransaction,
-  getTransaction,
+  getTransactionWithRelations,
+  isLockedTransaction,
   updateTransaction,
   type Transaction,
 } from '@/features/transactions/api';
 import { ACTIVE_OBLIGATION_STATUSES, listObligations, type ObligationWithRelations, localIsoDate } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { formatAmountInput, formatMinorAmount, parseValueUnitAmountToMinor } from '@/utils/money';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { ReceiptAttachField } from '@/components/finance/ReceiptAttachField';
@@ -79,7 +80,7 @@ export default function NewTransactionScreen() {
 
   const existingQuery = useQuery({
     queryKey: ['transaction', id],
-    queryFn: () => getTransaction(id as string),
+    queryFn: () => getTransactionWithRelations(id as string),
     enabled: isEditing,
   });
 
@@ -89,9 +90,22 @@ export default function NewTransactionScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {existingQuery.error instanceof Error ? existingQuery.error.message : 'Kayıt yüklenemedi'}
+              {friendlyErrorMessage(existingQuery.error, 'Kayıt yüklenemedi')}
             </Text>
           ) : null}
+        </Stack>
+      </SafeAreaView>
+    );
+  }
+
+  // Ödemeye bağlı ya da avans/nakit avans/borç verme açılış hareketi burada tek başına
+  // düzenlenmez — tutarı değişirse kayıt ile hesap bakiyesi ayrışır.
+  if (existingQuery.data && isLockedTransaction(existingQuery.data)) {
+    return (
+      <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <Stack gap="lg" style={{ padding: theme.screenEdge.standard }}>
+          <ScreenHeader inline title="Hareketi düzenle" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
+          <Text>Bu hareket bir borç/alacak kaydına bağlı. Tutarını veya hesabını değiştirmek için ilgili kaydı ya da ödemeyi düzenleyin.</Text>
         </Stack>
       </SafeAreaView>
     );
@@ -272,7 +286,7 @@ function TransactionForm({
     } catch (error) {
       Alert.alert(
         'Dekont eklenemedi',
-        `Hareket kaydedildi ama dekont yüklenemedi: ${error instanceof Error ? error.message : 'bilinmeyen hata'}. Hareketi düzenleyerek dekontu yeniden ekleyebilirsiniz.`
+        `Hareket kaydedildi ama dekont yüklenemedi: ${friendlyErrorMessage(error, 'bilinmeyen hata')}. Hareketi düzenleyerek dekontu yeniden ekleyebilirsiniz.`
       );
     }
   }
@@ -605,7 +619,7 @@ function TransactionForm({
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
+                {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
               </Text>
             ) : null}
 

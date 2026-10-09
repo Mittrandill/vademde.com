@@ -25,6 +25,8 @@ import {
   getDocumentLineItems,
   getDocumentWarnings,
   getSignedUrl,
+  getUnconfirmedDocumentObligationId,
+  linkDocumentObligation,
   markDocumentConfirmed,
 } from '@/features/documents/api';
 import { createAccount, listAccounts } from '@/features/accounts/api';
@@ -34,6 +36,7 @@ import {
   ACTIVE_OBLIGATION_STATUSES,
   createObligation,
   createInstallmentPlan,
+  deleteObligation,
   listObligations,
   type Installment,
   localIsoDate,
@@ -41,6 +44,7 @@ import {
 import {
   allocateAcrossObligations,
   recordPastInstallmentPayments,
+  createAdvanceObligation,
   settleWithInstrument,
 } from '@/features/payments/api';
 import {
@@ -62,7 +66,7 @@ import { VALUE_UNITS, getValueUnit } from '@/features/valueUnits/units';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
-import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 import {
   cardLineLabel,
   isCardExpenseLine,
@@ -703,7 +707,13 @@ export default function DocumentReviewScreen() {
       const rawCounterpartyName = documentQuery.data?.counterparty_name?.trim();
       const counterpartyEligible = !(documentType && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(documentType));
       if (!resolvedCounterpartyId && counterpartyEligible && rawCounterpartyName) {
-        const created = await createCounterparty({
+        // Önceki bir onay denemesi yarıda kaldıysa cari zaten açılmış olabilir: aynı isimli
+        // kayıt varsa o kullanılır, ikinci (mükerrer) cari oluşturulmaz.
+        const normalizedName = rawCounterpartyName.toLocaleLowerCase('tr-TR');
+        const existing = (await listCounterparties(activeWorkspaceId)).find(
+          (c) => c.name.trim().toLocaleLowerCase('tr-TR') === normalizedName
+        );
+        const created = existing ?? await createCounterparty({
           workspace_id: activeWorkspaceId,
           name: rawCounterpartyName,
           type: 'individual',
@@ -766,6 +776,11 @@ export default function DocumentReviewScreen() {
         // Kredi kartı ekstresi her zaman TRY'dir (bkz. isCreditCardStatement); diğer
         // belge türlerinde kullanıcının PARA BİRİMİ alanından onayladığı/düzelttiği birim
         // kullanılır — önceden burası hiç gönderilmiyordu ve kayıt sessizce TRY oluyordu.
+        // Önceki bir onay denemesi yarıda kaldıysa (belge kayda bağlandı ama onaylanmadı) o
+        // yarım kayıt önce silinir; böylece tekrar denemede ikinci bir çek/fatura oluşmaz.
+        const staleObligationId = await getUnconfirmedDocumentObligationId(id as string);
+        if (staleObligationId) await deleteObligation(staleObligationId);
+
         const obligation = await createObligation({
           workspace_id: activeWorkspaceId,
           direction,
@@ -782,6 +797,7 @@ export default function DocumentReviewScreen() {
           bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
           notes: documentNumber.trim() ? `Belge no: ${documentNumber.trim()}` : null,
         });
+        await linkDocumentObligation(id as string, obligation.id);
 
         // docs/12-mvp-kabul-kriterleri.md — "Kredi ödeme planından taksitler ayrı satırlar olarak oluşturulur."
         let installmentPlanFailed = false;
@@ -864,6 +880,9 @@ export default function DocumentReviewScreen() {
           }
         }
 
+        // Çek/senet kapanışı ve belge onayı zorunlu adımlardır: biri başarısız olursa yarım
+        // kayıt geri alınır (silinemezse belgeye bağlı kaldığı için tekrar denemede silinir).
+        try {
         // Çek/senet karşılığı seçilen kayıtlar, çek/senet tutarı kadar (en eski vade önce) kapanır.
         if (
           (documentType === 'cek' || documentType === 'senet') &&
@@ -871,7 +890,7 @@ export default function DocumentReviewScreen() {
           settleTargetIds.length > 0
         ) {
           const targets = settlementTargets.filter((o) => settleTargetIds.includes(o.id));
-          const { allocations } = allocateAcrossObligations(obligation.total_amount_minor, targets);
+          const { allocations, leftoverMinor } = allocateAcrossObligations(obligation.total_amount_minor, targets);
           await settleWithInstrument({
             workspaceId: activeWorkspaceId,
             instrumentObligationId: obligation.id,
@@ -881,10 +900,33 @@ export default function DocumentReviewScreen() {
             paidAt: new Date().toISOString(),
             allocations,
           });
+          // Çek/senet seçilen kayıtlardan büyükse fark cariye avans olarak yazılır (Ödeme Yap
+          // ekranındaki settleObligations ile aynı kural). Aksi halde çek "ödeme aracı" sayılıp
+          // cari bakiyesinden çıktığı için fark hiçbir yerde görünmüyordu.
+          const advanceCounterpartyId = resolvedCounterpartyId ?? targets[0]?.counterparty_id ?? null;
+          if (leftoverMinor > 0 && advanceCounterpartyId) {
+            await createAdvanceObligation({
+              workspaceId: activeWorkspaceId,
+              settlementDirection: direction,
+              counterpartyId: advanceCounterpartyId,
+              counterpartyName: targets[0]?.counterparty?.name ?? rawCounterpartyName ?? null,
+              currencyCode: obligation.currency_code,
+              amountMinor: leftoverMinor,
+              parentObligationId: obligation.id,
+              note: `${documentType === 'cek' ? 'Çek' : 'Senet'} fazlası`,
+            });
+          }
         }
 
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
-        await syncObligationReminder(activeWorkspaceId, obligation);
+        } catch (error) {
+          // Onay sunucuda gerçekleşip yalnızca yanıt kaybolduysa kayıt silinmez; durum
+          // okunamıyorsa da silinmez (belgeye bağlı kaldığı için tekrar denemede temizlenir).
+          const unconfirmedId = await getUnconfirmedDocumentObligationId(id as string).catch(() => null);
+          if (unconfirmedId === obligation.id) await deleteObligation(obligation.id).catch(() => undefined);
+          throw error;
+        }
+        await syncObligationReminder(activeWorkspaceId, obligation).catch(() => undefined);
         return { installmentPlanFailed, cardTransactionsFailed, pastPaymentsFailed };
       }
 
@@ -1523,12 +1565,12 @@ export default function DocumentReviewScreen() {
 
             {confirmMutation.error ? (
               <Text variant="caption" color="danger">
-                {confirmMutation.error instanceof Error ? confirmMutation.error.message : 'Kayıt oluşturulamadı'}
+                {friendlyErrorMessage(confirmMutation.error, 'Kayıt oluşturulamadı')}
               </Text>
             ) : null}
             {discardMutation.error ? (
               <Text variant="caption" color="danger">
-                {discardMutation.error instanceof Error ? discardMutation.error.message : 'Belge iptal edilemedi'}
+                {friendlyErrorMessage(discardMutation.error, 'Belge iptal edilemedi')}
               </Text>
             ) : null}
           </Stack>

@@ -189,6 +189,24 @@ export async function markDocumentConfirmed(
   if (error) throw error;
 }
 
+// Onay sırasında kayıt oluşur oluşmaz belgeye bağlanır (durum değişmeden). Onay yarıda kalırsa
+// tekrar denemede bu bağlantıdan yarım kayıt bulunup silinir (bkz. documents/[id]/review.tsx).
+export async function linkDocumentObligation(documentId: string, obligationId: string): Promise<void> {
+  const { error } = await supabase.from('financial_documents').update({ obligation_id: obligationId }).eq('id', documentId);
+  if (error) throw error;
+}
+
+// Henüz onaylanmamış belgeye bağlı (önceki yarım onaydan kalan) kaydın kimliği.
+export async function getUnconfirmedDocumentObligationId(documentId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('financial_documents')
+    .select('status, obligation_id')
+    .eq('id', documentId)
+    .single();
+  if (error) throw error;
+  return data.status !== 'confirmed' ? (data.obligation_id ?? null) : null;
+}
+
 export async function discardDocument(documentId: string): Promise<void> {
   const { error } = await supabase.from('financial_documents').update({ status: 'discarded' }).eq('id', documentId);
   if (error) throw error;

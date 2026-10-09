@@ -30,6 +30,7 @@ import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { formatMinorAmount } from '@/utils/money';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
@@ -186,7 +187,7 @@ export default function AccountsScreen() {
           >
             {accountsQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Hesaplar yüklenemedi'}
+                {friendlyErrorMessage(accountsQuery.error, 'Hesaplar yüklenemedi')}
               </Text>
             ) : !accountsQuery.isSuccess ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>

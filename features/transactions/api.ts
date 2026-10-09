@@ -45,14 +45,24 @@ export type TransactionWithRelations = Transaction & {
   // Supabase normalde boş bir dizi döndürür ama tanımsız gelme ihtimaline karşı opsiyonel
   // işaretlenir.
   payments?: PaymentRef[];
-};
-
-// Hareket detay ekranı için ek alan yok — transferToAccount artık temel tipte.
-export type TransactionDetail = TransactionWithRelations & {
   // Hareket bir kaydın parçası olarak doğduysa (avans, nakit avans, borç verme, ekstre harcaması)
   // o kayıt — bkz. transactions.source_obligation_id.
+  sourceObligation?: { id: string; document_type: string } | null;
+};
+
+export type TransactionDetail = TransactionWithRelations & {
   sourceObligation: { id: string; document_type: string } | null;
 };
+
+// Bu türlerin açılış hareketi kaydın kendisidir: hareket tek başına silinir/düzenlenirse kayıt
+// ile hesap bakiyesi ayrışır. Değişiklik kayıt üzerinden yapılır.
+export const LOCKED_SOURCE_TYPES = new Set(['avans', 'nakit_avans', 'borc_verme']);
+
+// Hareket tek başına düzenlenemez/silinemez mi? Ödemeye bağlı hareketler ödeme ekranından,
+// kilitli kaynak hareketleri kaydın kendisinden yönetilir.
+export function isLockedTransaction(t: Pick<TransactionWithRelations, 'payments' | 'sourceObligation'>): boolean {
+  return (t.payments?.length ?? 0) > 0 || (!!t.sourceObligation && LOCKED_SOURCE_TYPES.has(t.sourceObligation.document_type));
+}
 
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
 export const TRANSACTIONS_PAGE_SIZE = 30;
@@ -79,7 +89,7 @@ export async function listTransactions({
   let query = supabase
     .from('transactions')
     .select(
-      '*, category:categories(name, icon, color), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four, currency_code), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code, type, card_last_four, currency_code), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
+      '*, sourceObligation:obligations!transactions_source_obligation_id_fkey(id, document_type), category:categories(name, icon, color), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name, bank_code, type, card_last_four, currency_code), transferToAccount:accounts!transactions_transfer_to_account_id_fkey(name, bank_code, type, card_last_four, currency_code), payments(id, obligation_id, installment_id, obligation:obligations(document_type, bank_code, service_code, title), installment:installments(obligation:obligations(document_type, bank_code, service_code, title)))'
     )
     .eq('workspace_id', workspaceId)
     .order('occurred_at', { ascending: false })

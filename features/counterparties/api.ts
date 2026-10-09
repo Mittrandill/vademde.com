@@ -38,9 +38,10 @@ function nearestHistoricalRate(history: RateHistoryRow[], unitCode: string, isoD
 }
 
 // amountMinor kendi biriminin hassasiyetindedir (units.ts precision); kur "1 tam birim = X kuruş TL".
-function toTryMinor(amountMinor: number, unitCode: string, rate: number | null): number {
-  if (unitCode === 'TRY') return amountMinor;
-  if (rate === null) return 0;
+// Kur yoksa null döner — 0 saymak bakiyeyi sessizce yanlış gösterirdi.
+function toTryMinor(amountMinor: number, unitCode: string, rate: number | null): number | null {
+  if (unitCode === 'TRY' || amountMinor === 0) return amountMinor;
+  if (rate === null) return null;
   return Math.round((amountMinor / 10 ** getValueUnit(unitCode).precision) * rate);
 }
 
@@ -487,7 +488,9 @@ export async function getCounterpartyStatement(
   // kullanılır ve satır "tahmini" işaretlenir. Satır tutarı kendi biriminde kalır.
   const [rates, history] = await Promise.all([listValueUnitRates(), listRateHistory()]);
   const paymentById = new Map(visiblePayments.map((p) => [p.id, p]));
-  let running = 0;
+  // Kuru hiç bulunamayan bir satırdan sonra TL bakiye bilinemez: o satırdan itibaren yürüyen
+  // bakiye boş ("—") gösterilir, satırda "kur bulunamadı" yazar (bkz. counterparties/[id].tsx).
+  let running: number | null = 0;
   for (const entry of entries) {
     let rate: number | null = null;
     if (entry.currencyCode !== 'TRY') {
@@ -502,7 +505,8 @@ export async function getCounterpartyStatement(
       }
       entry.fxRateTryMinor = rate;
     }
-    running += toTryMinor(entry.balanceEffectMinor, entry.currencyCode, rate);
+    const effectTry = toTryMinor(entry.balanceEffectMinor, entry.currencyCode, rate);
+    running = running === null || effectTry === null ? null : running + effectTry;
     entry.runningBalanceMinor = running;
   }
   return entries.reverse();

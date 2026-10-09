@@ -71,6 +71,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test:finance": "node tests/finance-regression.cjs",
+    "test:card-debt": "node tests/card-debt.cjs",
     "postinstall": "patch-package"
   },
   "private": true

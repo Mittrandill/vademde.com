@@ -21,7 +21,7 @@ import {
   type CounterpartyType,
 } from '@/features/counterparties/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 
 const TYPES: { value: CounterpartyType; label: string }[] = COUNTERPARTY_TYPES.map((value) => ({
   value,
@@ -46,7 +46,7 @@ export default function NewCounterpartyScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {existingQuery.error instanceof Error ? existingQuery.error.message : 'Kayıt yüklenemedi'}
+              {friendlyErrorMessage(existingQuery.error, 'Kayıt yüklenemedi')}
             </Text>
           ) : null}
         </Stack>
@@ -181,7 +181,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">
-              {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
+              {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
             </Text>
           ) : null}
 

@@ -36,6 +36,7 @@ import {
   createObligation,
   createInstallmentPlan,
   deleteObligation,
+  getObligation,
   getObligationWithInstallments,
   updateObligation,
   updateInstallmentPlan,
@@ -45,7 +46,7 @@ import {
   localIsoDate,
 } from '@/features/obligations/api';
 import { createTransaction } from '@/features/transactions/api';
-import { recordPastInstallmentPayments } from '@/features/payments/api';
+import { recordPastInstallmentPayments, type RecordPastInstallmentPaymentInput } from '@/features/payments/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount, parseAmountToMinor } from '@/utils/money';
 import {
@@ -57,7 +58,7 @@ import {
 } from '@/utils/installmentPlan';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { ScanPromptBanner } from '@/components/finance/ScanPromptBanner';
 
 type Direction = 'payable' | 'receivable';
@@ -113,7 +114,7 @@ export default function NewObligationScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {existingQuery.error instanceof Error ? existingQuery.error.message : 'Kayıt yüklenemedi'}
+              {friendlyErrorMessage(existingQuery.error, 'Kayıt yüklenemedi')}
             </Text>
           ) : null}
         </Stack>
@@ -180,6 +181,12 @@ function ObligationForm({
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const isEditing = !!id;
+  // Ödemesi olan ya da açılışta hesap hareketi oluşturan (avans, nakit avans, borç verme)
+  // kaydın yönü düzenlemede değiştirilemez — bkz. guard_obligation_edit.
+  const directionLocked =
+    !!initial &&
+    (initial.remaining_amount_minor < initial.total_amount_minor ||
+      ['avans', 'nakit_avans', 'borc_verme'].includes(initial.document_type));
 
   const [direction, setDirection] = useState<Direction>(
     (initial?.direction as Direction) ?? initialDirection ?? 'payable'
@@ -250,9 +257,14 @@ function ObligationForm({
     enabled: !!activeWorkspaceId,
   });
   // Nakit avans yalnızca bir kredi kartından çekilir; çekilen nakit ise kart dışında
-  // herhangi bir hesaba (kasa/banka/cüzdan/POS) yatırılabilir.
+  // bir kasa/banka/cüzdan hesabına yatırılabilir.
   const creditCardAccounts = (accountsQuery.data ?? []).filter((a) => a.type === 'credit_card');
-  const depositTargetAccounts = (accountsQuery.data ?? []).filter((a) => a.type !== 'credit_card');
+  // Hareketin birimi veritabanında hesabın birimine zorlanır (validate_workspace_references):
+  // farklı birimdeki hesaba yatırılırsa TRY tutarı ör. USD olarak işlenirdi. Bu yüzden yalnızca
+  // avansla aynı birimdeki hesaplar listelenir; POS'a nakit yatırılamaz.
+  const depositTargetAccounts = (accountsQuery.data ?? []).filter(
+    (a) => a.type !== 'credit_card' && a.type !== 'pos' && a.currency_code === valueUnitCode
+  );
   // POS yalnızca tahsilat alır, ondan ödeme yapılamaz — borç (payable) kaydında HESAP
   // seçeneklerinden çıkarılır; alacak (receivable) tahsilatı POS'tan olabileceği için
   // orada kalır.
@@ -349,12 +361,13 @@ function ObligationForm({
     }))
   );
   const isPlanEditing = isEditing && hasInstallments;
-  // Tamamen ödenmiş taksitler asla silinemez; kuyruk yalnızca en son ödenmiş taksitin
-  // numarasına kadar kısaltılabilir (taksitler numaralandırmada boşluksuz kalmalı).
+  // Ödemesi olan (tamamen ya da kısmen) taksitler asla silinemez — silme ödemeleri götürür ama
+  // hesap hareketleri kalırdı (bkz. guard_installment_edit). Kuyruk yalnızca ödemesi olan en son
+  // taksitin numarasına kadar kısaltılabilir (taksitler numaralandırmada boşluksuz kalmalı).
   const minPlanCount = Math.max(
     1,
     installments.reduce(
-      (max, inst) => (inst.remaining_amount_minor <= 0 ? Math.max(max, inst.installment_number) : max),
+      (max, inst) => (inst.remaining_amount_minor < inst.amount_minor ? Math.max(max, inst.installment_number) : max),
       0
     )
   );
@@ -549,6 +562,9 @@ function ObligationForm({
       if (isPlanEditing ? planTotalMinor <= 0 : !totalAmountMinor) {
         throw new Error('Eksik alan var');
       }
+      if (isCashAdvanceType && depositAccountId && !depositTargetAccounts.some((a) => a.id === depositAccountId)) {
+        throw new Error('Nakdin yatırıldığı hesap avansla aynı para biriminde olmalı');
+      }
 
       const bankCodeForType = BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null;
       const serviceCodeForType = isSubscriptionType ? serviceCode : null;
@@ -556,6 +572,17 @@ function ObligationForm({
         isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : counterpartyId;
 
       if (isEditing) {
+        // Toplam, şimdiye kadar ödenenin altına düşürülemez: fazla ödeme sessizce kaybolurdu
+        // (veritabanı da reddeder — guard_obligation_edit). Yazmadan önce kontrol edilir ki
+        // plan düzenlemesi yarıda kalmasın.
+        const paidSoFarMinor = initial ? initial.total_amount_minor - initial.remaining_amount_minor : 0;
+        const nextTotalMinor = isPlanEditing ? planTotalMinor : totalAmountMinor;
+        if (initial && initial.remaining_amount_minor > 0 && nextTotalMinor < paidSoFarMinor) {
+          throw new Error(
+            `Toplam tutar, şimdiye kadar ödenen ${formatValueUnitAmount(paidSoFarMinor, valueUnitCode)} tutarın altına düşürülemez.`
+          );
+        }
+        let paidRows: RecordPastInstallmentPaymentInput[] = [];
         if (isPlanEditing) {
           const validationError = getPlanValidationError(planRows);
           if (validationError) throw new Error(validationError);
@@ -610,7 +637,7 @@ function ObligationForm({
           // Toplu "ödendi" işaretleme: hem mevcut hem yeni eklenen (uzatılan) vadeler için
           // geçerlidir. Yeni satırların id'si insert öncesi bilinmediği için
           // updateInstallmentPlan eklenen satırları geri döndürür.
-          const paidRows = planRows
+          paidRows = planRows
             .filter((row) => row.markPaid && !row.locked)
             .map((row) => {
               const installmentId =
@@ -628,7 +655,6 @@ function ObligationForm({
                 : null;
             })
             .filter((row): row is NonNullable<typeof row> => !!row);
-          if (paidRows.length > 0) await recordPastInstallmentPayments(paidRows);
         }
 
         const obligation = await updateObligation(id, {
@@ -643,8 +669,16 @@ function ObligationForm({
           service_code: serviceCodeForType,
           billing_period: isSubscriptionType ? billingPeriod : null,
           trial_ends_on: isSubscriptionType && /^\d{4}-\d{2}-\d{2}$/.test(trialEndsOn.trim()) ? trialEndsOn.trim() : null,
-          total_amount_minor: isPlanEditing ? planTotalMinor : totalAmountMinor,
+          total_amount_minor: nextTotalMinor,
         });
+        // Toplam güncellendikten SONRA ödendi işaretlenir: uzatılan yeni vadelerin ödemeleri
+        // eski toplama göre kontrol edilip "kalan tutarı aşıyor" diye reddedilmesin.
+        if (paidRows.length > 0) {
+          await recordPastInstallmentPayments(paidRows);
+          const fresh = await getObligation(id as string);
+          await syncObligationReminder(activeWorkspaceId, fresh);
+          return fresh;
+        }
         await syncObligationReminder(activeWorkspaceId, obligation);
         return obligation;
       }
@@ -793,8 +827,8 @@ function ObligationForm({
     Alert.alert(
       'Kaydı Sil',
       hasInstallments
-        ? 'Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?'
-        : 'Bu kayıt ve varsa ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?',
+        ? 'Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?'
+        : 'Bu kayıt, varsa ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?',
       [
         { text: 'Vazgeç', style: 'cancel' },
         { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
@@ -890,7 +924,7 @@ function ObligationForm({
 
               {saveMutation.error ? (
                 <Text variant="caption" color="danger">
-                  {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
+                  {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
                 </Text>
               ) : null}
 
@@ -949,18 +983,26 @@ function ObligationForm({
               <ScanPromptBanner description="Çek, senet, fatura veya kredi belgesini tara; tür, tutar ve vade otomatik dolsun." />
             ) : null}
 
-            <SegmentedControl
-              options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
-              value={direction}
-              onChange={(value) => {
-                setDirection(value);
-                setCategoryId(null);
-                if (value === 'payable' && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
-                  setAccountId(null);
-                }
-              }}
-              stretch
-            />
+            {directionLocked ? (
+              // Ödemesi/bağlı hareketi olan kaydın yönü değiştirilemez: eski ödemeler eski yönde
+              // kalır ve cari bakiye ters döner (veritabanı da reddeder — guard_obligation_edit).
+              <FieldGroup>
+                <FormRow label="Yön" value={DIRECTIONS.find((d) => d.value === direction)?.label ?? ''} />
+              </FieldGroup>
+            ) : (
+              <SegmentedControl
+                options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
+                value={direction}
+                onChange={(value) => {
+                  setDirection(value);
+                  setCategoryId(null);
+                  if (value === 'payable' && accountsQuery.data?.find((a) => a.id === accountId)?.type === 'pos') {
+                    setAccountId(null);
+                  }
+                }}
+                stretch
+              />
+            )}
 
             <FieldGroup>
               {isEditing || isLendingType ? (
@@ -1262,7 +1304,7 @@ function ObligationForm({
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt kaydedilemedi'}
+                {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
               </Text>
             ) : null}
 

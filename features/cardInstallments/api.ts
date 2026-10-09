@@ -117,3 +117,26 @@ export function statementLoads(purchases: CardInstallmentPurchase[], months = 6,
   }
   return loads;
 }
+
+// Henüz hiçbir ekstreye girmemiş taksitlerin toplamı — banka bunları kullanılabilir limitten
+// düşer. Kartın güncel borcu bir ekstreye dayanıyorsa (bkz. utils/cardDebt.ts) o ekstrenin
+// kesim ayı ve öncesindeki taksitler ekstrenin içindedir; yoksa içinde bulunulan aydan itibaren
+// taksitler bekliyor sayılır (progressOf ile aynı takvim kuralı).
+export function pendingInstallmentMinor(
+  purchases: CardInstallmentPurchase[],
+  anchorCutoffDate: string | null,
+  now: Date = new Date()
+): number {
+  const firstPendingMonth = anchorCutoffDate
+    ? monthIndex(anchorCutoffDate) + 1
+    : now.getFullYear() * 12 + now.getMonth();
+  let total = 0;
+  for (const purchase of purchases) {
+    const amounts = installmentAmounts(purchase.total_minor, purchase.installment_count);
+    const first = monthIndex(purchase.first_statement_month);
+    amounts.forEach((amount, i) => {
+      if (first + i >= firstPendingMonth) total += amount;
+    });
+  }
+  return total;
+}

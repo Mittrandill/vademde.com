@@ -715,7 +715,11 @@ function StatementTableRow({ entry, last }: { entry: StatementEntry; last: boole
   const caption = [
     shortDateFormatter.format(new Date(entry.date)),
     isInstrument && entry.dueDate ? `vade ${shortDateFormatter.format(new Date(entry.dueDate))}` : entry.subtitle,
-    entry.fxRateTryMinor ? `kur ${entry.fxRateEstimated ? '≈ ' : ''}${formatMinorAmount(entry.fxRateTryMinor)}` : null,
+    entry.fxRateTryMinor
+      ? `kur ${entry.fxRateEstimated ? '≈ ' : ''}${formatMinorAmount(entry.fxRateTryMinor)}`
+      : entry.currencyCode !== 'TRY'
+        ? 'kur bulunamadı'
+        : null,
     isInstrument && entry.status ? (DONE_STATUSES.has(entry.status) ? OBLIGATION_STATUS_LABEL[entry.status as ObligationStatus] : 'Bekliyor') : null,
   ]
     .filter(Boolean)

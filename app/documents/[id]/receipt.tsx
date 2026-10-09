@@ -34,7 +34,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import { isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
-import { showErrorAlert, showSaveSuccess } from '@/utils/alerts';
+import { showErrorAlert, showSaveSuccess, friendlyErrorMessage } from '@/utils/alerts';
 
 // docs/04-ocr-belge-isleme.md §7.7 ve docs/09-kullanici-akislari.md "Dekont eşleştirme" —
 // taranan belge bir banka dekontu olduğunda kredi/fiş gibi bir "sonuç ekranı": okunan alanlar,
@@ -599,7 +599,7 @@ export default function ReceiptResultScreen() {
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">
-              {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kayıt oluşturulamadı'}
+              {friendlyErrorMessage(saveMutation.error, 'Kayıt oluşturulamadı')}
             </Text>
           ) : null}
 

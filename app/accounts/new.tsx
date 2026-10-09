@@ -17,7 +17,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatAmountInput, parseAmount, parseAmountToMinor, parseValueUnitAmountToMinor } from '@/utils/money';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban';
-import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
 
@@ -138,6 +138,9 @@ export default function NewAccountScreen() {
           if (activeWorkspaceId) {
             queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
             queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'account-balances'] });
+            // Kesim günü/açılış borcu değişince kart borcu da değişir (bkz. utils/cardDebt.ts); raporlar
+            // ayrı anahtarda tutulur.
+            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'reports'] });
             if (isCreditCard) {
               syncCreditCardStatementReminder(activeWorkspaceId, account).catch(() => {});
             }
@@ -377,7 +380,7 @@ export default function NewAccountScreen() {
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {saveMutation.error instanceof Error ? saveMutation.error.message : 'Hesap kaydedilemedi'}
+                {friendlyErrorMessage(saveMutation.error, 'Hesap kaydedilemedi')}
               </Text>
             ) : null}
           </View>

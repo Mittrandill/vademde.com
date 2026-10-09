@@ -22,12 +22,14 @@ import { FinanceListHero } from '@/components/finance/FinanceListHero';
 import { FinanceListEmptyState, FinanceListSurface } from '@/components/finance/FinanceListSurface';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
+import type { CardStatementAnchor } from '@/utils/cardDebt';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { computeStatementPeriod, periodKeyForDueDate } from '@/utils/creditCardPeriod';
 import { formatMinorAmount } from '@/utils/money';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 const PAGE_SIZE = 10;
 
@@ -80,6 +82,7 @@ export default function CreditCardsScreen() {
     enabled: !!activeWorkspaceId,
   });
   const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
+  const cardStatementByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.cardStatement ?? null]));
 
   const allCards = useMemo(
     () => (accountsQuery.data ?? []).filter((a) => a.type === 'credit_card'),
@@ -235,7 +238,7 @@ export default function CreditCardsScreen() {
           >
             {accountsQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'Kredi kartları yüklenemedi'}
+                {friendlyErrorMessage(accountsQuery.error, 'Kredi kartları yüklenemedi')}
               </Text>
             ) : !accountsQuery.isSuccess ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
@@ -257,6 +260,7 @@ export default function CreditCardsScreen() {
                   account={item}
                   balanceMinor={balanceByAccountId.get(item.id) ?? item.opening_balance_minor}
                   statements={statementsByAccount.get(item.id) ?? []}
+                  cardStatement={cardStatementByAccountId.get(item.id) ?? null}
                   nextDueDate={cardInfoById.get(item.id)?.nextDueDate ?? null}
                 />
               ))
@@ -272,6 +276,8 @@ interface CreditCardRowCardProps {
   account: Account;
   balanceMinor: number;
   statements: ObligationWithRelations[];
+  /** Güncel borcun dayandığı en son ekstre (bkz. utils/cardDebt.ts). */
+  cardStatement: CardStatementAnchor | null;
   nextDueDate: Date | null;
 }
 
@@ -280,10 +286,15 @@ const dueDayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month
 // Tuval KrediKartlari: kart başına .card — banka logosu + ad/•••• son4 + kalan gün etiketi,
 // dönem borcu / son ödeme, limit kullanım çubuğu ve Ödeme yap / Ekstreyi tara butonları.
 // Asgari ödeme tutarı veri modelinde tutulmadığı için bilerek gösterilmiyor.
-function CreditCardRowCard({ account, balanceMinor, statements, nextDueDate }: CreditCardRowCardProps) {
+function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, nextDueDate: periodDueDate }: CreditCardRowCardProps) {
   const theme = useTheme();
   const latestStatement = statements[0] ?? null;
-  const periodDebtMinor = latestStatement?.remaining_amount_minor ?? balanceMinor;
+  const periodDebtMinor = cardStatement?.statementRemainingMinor ?? latestStatement?.remaining_amount_minor ?? balanceMinor;
+  // Ödenmemiş ekstre varsa onun son ödeme tarihi; yoksa kartın dönem takvimi.
+  const nextDueDate =
+    cardStatement && cardStatement.statementRemainingMinor > 0
+      ? new Date(`${cardStatement.dueDate}T12:00:00`)
+      : periodDueDate;
   const limitMinor = account.credit_limit_minor ?? 0;
   const utilization = limitMinor > 0 ? Math.min(1, Math.max(0, balanceMinor / limitMinor)) : 0;
   const daysLeft = nextDueDate ? Math.ceil((nextDueDate.getTime() - new Date().getTime()) / 86400000) : null;
@@ -332,7 +343,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, nextDueDate }: C
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="caption" color="textSecondary">
-                {formatMinorAmount(balanceMinor, account.currency_code)} kullanıldı
+                Güncel borç {formatMinorAmount(balanceMinor, account.currency_code)}
               </Text>
               <Text variant="caption" color="textSecondary">
                 Limit {formatMinorAmount(limitMinor, account.currency_code)}

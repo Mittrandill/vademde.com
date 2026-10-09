@@ -21,7 +21,7 @@ import {
 } from '@/features/categories/api';
 import { CATEGORY_ICON_CHOICES, CATEGORY_COLOR_PALETTE, getSuggestedColorForIcon } from '@/features/categories/categoryIcons';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
@@ -51,7 +51,7 @@ export default function NewCategoryScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {existingQuery.error instanceof Error ? existingQuery.error.message : 'Kategori yüklenemedi'}
+              {friendlyErrorMessage(existingQuery.error, 'Kategori yüklenemedi')}
             </Text>
           ) : null}
         </Stack>
@@ -255,7 +255,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">
-              {saveMutation.error instanceof Error ? saveMutation.error.message : 'Kategori kaydedilemedi'}
+              {friendlyErrorMessage(saveMutation.error, 'Kategori kaydedilemedi')}
             </Text>
           ) : null}
 

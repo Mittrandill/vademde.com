@@ -13,6 +13,7 @@ import { AiGate } from '@/components/finance/AiGate';
 import { askAi, type AiAnswer } from '@/features/insights/api';
 import { AI_DISCLAIMER } from '@/features/insights/useAiAccess';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 const SUGGESTIONS = ['Bu ay nereye harcadım?', 'Geçen ayla karşılaştır', 'En çok hangi kategoride harcıyorum?'];
 
@@ -60,7 +61,7 @@ function Chat() {
     onError: (error) =>
       setMessages((m) => [
         ...m,
-        { id: ++idRef.current, role: 'assistant', text: error instanceof Error ? error.message : 'Yanıt alınamadı.' },
+        { id: ++idRef.current, role: 'assistant', text: friendlyErrorMessage(error, 'Yanıt alınamadı.') },
       ]),
   });
 

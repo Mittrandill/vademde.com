@@ -15,6 +15,7 @@ import {
 import { getCurrentOcrUsage, currentPeriodMonth } from '@/features/subscriptions/api';
 import { queryKeys } from '@/services/queryKeys';
 import { OCR_CONSENT_KEY, OCR_CONSENT_TEXT } from '@/utils/storageKeys';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
 
@@ -81,7 +82,7 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
       if (err instanceof QuotaExceededError) {
         Alert.alert('Aylık tarama kotan dolu', 'Kotan yenilenince bu belgeyi işleyebilirsin.');
       } else {
-        Alert.alert('İşlenemedi', err instanceof Error ? err.message : 'Belge işlenemedi');
+        Alert.alert('İşlenemedi', friendlyErrorMessage(err, 'Belge işlenemedi'));
       }
     } finally {
       setBusyId(null);

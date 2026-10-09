@@ -17,6 +17,7 @@ import type { ObligationWithRelations } from '@/features/obligations/api';
 import { BANK_NAME } from '@/features/banks/banks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 type Side = 'receivable' | 'payable';
 type StatusTab = 'all' | 'portfoy' | 'ciro_edildi' | 'tahsile_verildi' | 'karsiliksiz';
@@ -92,7 +93,7 @@ export default function InstrumentsScreen() {
   let totalError: string | null = ratesQuery.isError || query.isError ? 'Toplam güncellenemedi.' : null;
   if (ratesQuery.data && query.data) {
     try { summaryTotal = instrumentPortfolioTotal(all, side, ratesQuery.data); }
-    catch (error) { totalError = error instanceof Error ? error.message : 'Eksik toplam hesaplanmadı.'; }
+    catch (error) { totalError = friendlyErrorMessage(error, 'Eksik toplam hesaplanmadı.'); }
   }
   const summaryNearest = side === 'receivable' ? nearest : givenNearest;
 

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -51,13 +51,14 @@ import {
 import { acknowledgeOffset, cancelStoredOffset, loadStoredOffset, reverseStoredOffset, submitDurableOffset } from '@/features/payments/offsetQueue';
 import { acknowledgeCashSettlement, cancelStoredCashSettlement, loadStoredCashSettlement, submitDurableCashSettlement } from '@/features/payments/cashSettlementQueue';
 import { useSession } from '@/features/auth/useSession';
+import { randomUUID } from 'expo-crypto';
 import { attachReceiptFile, useDocumentArchiveAccess, type PendingReceipt } from '@/features/receipts/api';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { addMonthsToIsoDate } from '@/utils/installmentPlan';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor, parseValueUnitAmountToMinor } from '@/utils/money';
 import { listValueUnitRates } from '@/features/valueUnits/api';
-import { showErrorAlert, showSaveSuccess } from '@/utils/alerts';
+import { friendlyErrorMessage, isNetworkError, showErrorAlert, showSaveSuccess } from '@/utils/alerts';
 import { invalidatePaymentRelatedQueries, queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
 
@@ -74,6 +75,8 @@ const METHODS: { key: SettlementMethod; label: string }[] = [
   { key: 'ciro', label: 'Çek Ciro' },
   { key: 'mahsup', label: 'Mahsup' },
 ];
+
+const handledKey = (requestId: string | undefined, state: string) => `${requestId ?? ''}:${state}`;
 
 // Kısa tarih etiketi — kayıt satırlarında vade gösterimi için.
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -360,6 +363,11 @@ function SettlementForm({
   });
   const balanceByAccount = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b]));
 
+  // Ödeme/ciro/mahsup kalıcı kuyrukta (bkz. offsetQueue, cashSettlementQueue) saklanır: yanıt
+  // kaybolursa aynı kimlikle güvenle tekrarlanır. Kullanıcıya teknik bir "kontrol" ekranı
+  // gösterilmez: başarılı/iptal edilmiş kayıtlar sessizce kapatılır, yarım kalan işlem ekran
+  // açılınca bir kez otomatik tamamlanmaya çalışılır; yalnızca bu da başarısız olursa sade bir
+  // "Tekrar dene / İptal et" ekranı çıkar.
   const offsetRecovery = useQuery({
     queryKey: ['offset-recovery', userId, activeWorkspaceId],
     queryFn: () => loadStoredOffset(userId!, activeWorkspaceId!),
@@ -372,61 +380,146 @@ function SettlementForm({
     enabled: !!userId && !!activeWorkspaceId,
     networkMode: 'always', staleTime: 0, gcTime: 0,
   });
+  // Otomatik işlenen (istek kimliği + durum) çiftleri: aynı durum için ikinci kez otomatik
+  // deneme yapılmaz, başarısızsa kullanıcıya bırakılır.
+  const autoHandled = useRef(new Set<string>());
+  const [recoveryError, setRecoveryError] = useState<unknown>(null);
+  // Otomatik tamamlanamayan (kullanıcıya bırakılan) isteğin anahtarı.
+  const [stuckKey, setStuckKey] = useState<string | null>(null);
+  // Kaydet az önce başarısız olduysa, kuyruğa düşen aynı istek hemen otomatik tekrarlanmaz.
+  const justFailed = useRef(false);
+
+  function recoveredLabel(input: SettleObligationsInput) {
+    return input.method === 'ciro' ? 'çek/senet cirosu' : input.method === 'mahsup' ? 'mahsup'
+      : input.direction === 'payable' ? 'ödeme' : 'tahsilat';
+  }
+  function announceRecovered(input: SettleObligationsInput) {
+    Alert.alert('İşlem tamamlandı', `Bağlantı kesildiği için yarım kalan ${recoveredLabel(input)} (${[input.counterpartyName, formatMinorAmount(input.amountMinor, input.currencyCode)].filter(Boolean).join(' · ')}) kaydedildi.`);
+  }
+
   const resumeCash = useMutation({
     mutationFn: async () => {
-      if (!userId || !cashRecovery.data) throw new Error('Saklanan ödeme yok');
-      return submitDurableCashSettlement(userId, cashRecovery.data.input);
+      const saved = cashRecovery.data;
+      if (!userId || !activeWorkspaceId || !saved) throw new Error('Tamamlanacak işlem bulunamadı');
+      await submitDurableCashSettlement(userId, saved.input);
+      autoHandled.current.add(handledKey(saved.input.requestId, 'confirmed'));
+      await acknowledgeCashSettlement(userId, activeWorkspaceId).catch(() => undefined);
+      return saved.input;
     },
-    onSuccess: () => {
+    onSuccess: (input) => {
+      setRecoveryError(null);
       if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
-      void cashRecovery.refetch();
+      announceRecovered(input);
     },
-    onError: (error) => { void cashRecovery.refetch(); showErrorAlert(error); }, networkMode: 'always',
-  });
-  const acknowledgeCash = useMutation({
-    mutationFn: () => acknowledgeCashSettlement(userId!, activeWorkspaceId!),
-    onSuccess: () => { void cashRecovery.refetch(); },
-    onError: (error) => showErrorAlert(error), networkMode: 'always',
+    onError: (error) => { setRecoveryError(error); if (cashRecovery.data) setStuckKey(handledKey(cashRecovery.data.input.requestId, cashRecovery.data.state)); },
+    onSettled: () => { void cashRecovery.refetch(); },
+    networkMode: 'always',
   });
   const cancelCash = useMutation({
-    mutationFn: () => cancelStoredCashSettlement(userId!, activeWorkspaceId!),
-    onSuccess: () => {
-      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
-      void cashRecovery.refetch();
+    mutationFn: async () => {
+      const final = await cancelStoredCashSettlement(userId!, activeWorkspaceId!);
+      autoHandled.current.add(handledKey(final.input.requestId, final.state));
+      await acknowledgeCashSettlement(userId!, activeWorkspaceId!).catch(() => undefined);
+      return final;
     },
-    onError: (error) => { void cashRecovery.refetch(); showErrorAlert(error); }, networkMode: 'always',
+    onSuccess: (final) => {
+      setRecoveryError(null);
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      if (final.state === 'confirmed') announceRecovered(final.input);
+    },
+    onError: (error) => { setRecoveryError(error); if (cashRecovery.data) setStuckKey(handledKey(cashRecovery.data.input.requestId, cashRecovery.data.state)); },
+    onSettled: () => { void cashRecovery.refetch(); },
+    networkMode: 'always',
   });
   const resumeOffset = useMutation({
     mutationFn: async () => {
-      if (!userId || !offsetRecovery.data) throw new Error('Saklanan mahsup yok');
-      const result = await submitDurableOffset(userId, offsetRecovery.data.input);
-      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
-      await offsetRecovery.refetch();
-      return result;
+      const saved = offsetRecovery.data;
+      if (!userId || !activeWorkspaceId || !saved) throw new Error('Tamamlanacak işlem bulunamadı');
+      await submitDurableOffset(userId, saved.input);
+      autoHandled.current.add(handledKey(saved.input.requestId, 'confirmed'));
+      await acknowledgeOffset(userId, activeWorkspaceId).catch(() => undefined);
+      return saved.input;
     },
-    onError: (error) => showErrorAlert(error), networkMode: 'always',
-  });
-  const acknowledge = useMutation({
-    mutationFn: () => acknowledgeOffset(userId!, activeWorkspaceId!),
-    onSuccess: () => { void offsetRecovery.refetch(); },
-    onError: (error) => showErrorAlert(error), networkMode: 'always',
+    onSuccess: (input) => {
+      setRecoveryError(null);
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      announceRecovered(input);
+    },
+    onError: (error) => { setRecoveryError(error); if (offsetRecovery.data) setStuckKey(handledKey(offsetRecovery.data.input.requestId, offsetRecovery.data.state)); },
+    onSettled: () => { void offsetRecovery.refetch(); },
+    networkMode: 'always',
   });
   const cancelOffset = useMutation({
-    mutationFn: () => cancelStoredOffset(userId!, activeWorkspaceId!),
-    onSuccess: () => { void offsetRecovery.refetch(); },
-    onError: (error) => showErrorAlert(error), networkMode: 'always',
+    mutationFn: async () => {
+      const final = await cancelStoredOffset(userId!, activeWorkspaceId!);
+      autoHandled.current.add(handledKey(final.input.requestId, final.state));
+      await acknowledgeOffset(userId!, activeWorkspaceId!).catch(() => undefined);
+      return final;
+    },
+    onSuccess: (final) => {
+      setRecoveryError(null);
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      if (final.state === 'confirmed') announceRecovered(final.input);
+    },
+    onError: (error) => { setRecoveryError(error); if (offsetRecovery.data) setStuckKey(handledKey(offsetRecovery.data.input.requestId, offsetRecovery.data.state)); },
+    onSettled: () => { void offsetRecovery.refetch(); },
+    networkMode: 'always',
   });
   const reverseOffset = useMutation({
-    mutationFn: () => reverseStoredOffset(userId!, activeWorkspaceId!),
-    onSuccess: () => {
-      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
-      void offsetRecovery.refetch();
+    mutationFn: async () => {
+      const final = await reverseStoredOffset(userId!, activeWorkspaceId!);
+      autoHandled.current.add(handledKey(final.input.requestId, final.state));
+      await acknowledgeOffset(userId!, activeWorkspaceId!).catch(() => undefined);
     },
-    onError: (error) => { void offsetRecovery.refetch(); showErrorAlert(error); }, networkMode: 'always',
+    onSuccess: () => {
+      setRecoveryError(null);
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+    },
+    onError: (error) => { setRecoveryError(error); if (offsetRecovery.data) setStuckKey(handledKey(offsetRecovery.data.input.requestId, offsetRecovery.data.state)); },
+    onSettled: () => { void offsetRecovery.refetch(); },
+    networkMode: 'always',
   });
+  // Terminal durumdaki (kaydedildi/iptal/geri alındı) kayıtlar sessizce kapatılır; yarım kalanlar
+  // bir kez otomatik tamamlanmaya çalışılır.
+  const ackSilently = useMutation({
+    mutationFn: (kind: 'offset' | 'cash') => kind === 'offset'
+      ? acknowledgeOffset(userId!, activeWorkspaceId!)
+      : acknowledgeCashSettlement(userId!, activeWorkspaceId!),
+    onSettled: (_data, _error, kind) => { void (kind === 'offset' ? offsetRecovery : cashRecovery).refetch(); },
+    networkMode: 'always',
+  });
+  useEffect(() => {
+    if (!userId || !activeWorkspaceId || offsetRecovery.isFetching || cashRecovery.isFetching) return;
+    const offset = offsetRecovery.data;
+    if (offset) {
+      const key = handledKey(offset.input.requestId, offset.state);
+      if (autoHandled.current.has(key)) return;
+      autoHandled.current.add(key);
+      if (offset.state === 'pending' && justFailed.current) return;
+      if (offset.state === 'pending') resumeOffset.mutate();
+      else if (offset.state === 'reversing') reverseOffset.mutate();
+      else ackSilently.mutate('offset');
+      return;
+    }
+    const cash = cashRecovery.data;
+    if (cash) {
+      const key = handledKey(cash.input.requestId, cash.state);
+      if (autoHandled.current.has(key)) return;
+      autoHandled.current.add(key);
+      if (cash.state === 'pending' && justFailed.current) return;
+      if (cash.state === 'pending') resumeCash.mutate();
+      else ackSilently.mutate('cash');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, activeWorkspaceId, offsetRecovery.data, cashRecovery.data, offsetRecovery.isFetching, cashRecovery.isFetching]);
+
+  // Çek/senet ödemesinin işlem kimliği: içerik değişmedikçe tekrar denemede aynı kimlik kullanılır,
+  // böylece yanıtı kaybolan bir istek ikinci bir çek/senet açmaz (bkz. settle_instrument_atomic).
+  const instrumentRequest = useRef<{ fingerprint: string; id: string } | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      setRecoveryError(null);
       if (!offsetRecovery.isSuccess || offsetRecovery.isFetching || offsetRecovery.data) throw new Error('Önce saklanan mahsup kontrol edilmeli');
       if (!cashRecovery.isSuccess || cashRecovery.isFetching || cashRecovery.data) throw new Error('Önce saklanan ödeme kontrol edilmeli');
       if (!activeWorkspaceId || !counterpartyId) throw new Error('Kişi / firma seçin');
@@ -461,9 +554,22 @@ function SettlementForm({
             }
           : null,
       };
+      if (instrument) {
+        const fingerprint = JSON.stringify([input.direction, input.method, input.counterpartyId, input.currencyCode,
+          input.amountMinor, input.paidAt, input.targets.map((o) => [o.id, o.remaining_amount_minor]), input.instrument]);
+        if (instrumentRequest.current?.fingerprint !== fingerprint) {
+          instrumentRequest.current = { fingerprint, id: randomUUID() };
+        }
+        input.requestId = instrumentRequest.current.id;
+        input.actorId = userId!;
+      }
       const result = method === 'mahsup' || method === 'ciro'
         ? await submitDurableOffset(userId!, input)
         : !cashless ? await submitDurableCashSettlement(userId!, input) : await settleObligations(input);
+      // Başarılı işlemin yerel makbuzu hemen kapatılır; mahsupta "Geri al" seçeneği için başarı
+      // mesajı kapanana kadar tutulur.
+      if (method === 'ciro') await acknowledgeOffset(userId!, activeWorkspaceId).catch(() => undefined);
+      else if (!cashless && method !== 'mahsup') await acknowledgeCashSettlement(userId!, activeWorkspaceId).catch(() => undefined);
 
       if (result.instrumentObligation) {
         await syncObligationReminder(activeWorkspaceId, result.instrumentObligation).catch(() => undefined);
@@ -508,13 +614,44 @@ function SettlementForm({
               ? `${instrumentLabel} kaydedildi${closedCount > 0 ? ` ve ${closedCount} kayıt bu tutar kadar kapatıldı` : ''}. Para, ${instrumentLabel.toLocaleLowerCase('tr-TR')} vadesinde ${isPayable ? 'ödendiğinde hesaptan çıkar' : 'tahsil edildiğinde hesaba girer'}.${advanceText}`
               : `${isPayable ? 'Ödeme' : 'Tahsilat'} kaydedildi${closedCount > 0 ? `, ${closedCount} kayda uygulandı` : ''}.${advanceText}`;
       const message = result.receiptFailed ? `${base} Dekont yüklenemedi; hareketi düzenleyerek yeniden ekleyebilirsiniz.` : base;
-      showSaveSuccess(message, () => router.back(), () => {
-        InteractionManager.runAfterInteractions(() => {
-          if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
-        });
+      const refresh = () => InteractionManager.runAfterInteractions(() => {
+        if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
       });
+      if (method !== 'mahsup' || !userId || !activeWorkspaceId) {
+        showSaveSuccess(message, () => router.back(), refresh);
+        return;
+      }
+      const workspaceId = activeWorkspaceId;
+      const close = () => { void acknowledgeOffset(userId, workspaceId).catch(() => undefined); router.back(); refresh(); };
+      Alert.alert('Başarılı', message, [
+        {
+          text: 'Geri al',
+          style: 'destructive',
+          onPress: () => {
+            reverseStoredOffset(userId, workspaceId)
+              .then(() => acknowledgeOffset(userId, workspaceId).catch(() => undefined))
+              .then(() => Alert.alert('Mahsup geri alındı', 'İki tarafın kalan tutarı eski haline döndü.', [{ text: 'Tamam', onPress: close }]))
+              .catch((error) => { showErrorAlert(error); close(); });
+          },
+        },
+        { text: 'Tamam', onPress: close },
+      ]);
     },
-    onError: (error) => { void offsetRecovery.refetch(); void cashRecovery.refetch(); showErrorAlert(error); },
+    onError: async (error) => {
+      // Ağ kesintisinde istek kuyrukta "yarım kalmış" durur: ayrı bir hata uyarısı yerine sade
+      // "Tekrar dene / İptal et" ekranı gösterilir (aynı istek için otomatik tekrar yapılmaz).
+      justFailed.current = true;
+      const [offset, cash] = await Promise.all([offsetRecovery.refetch(), cashRecovery.refetch()]);
+      justFailed.current = false;
+      const pending = [offset.data, cash.data].find((record) => record?.state === 'pending');
+      if (pending) {
+        autoHandled.current.add(handledKey(pending.input.requestId, 'pending'));
+        setStuckKey(handledKey(pending.input.requestId, 'pending'));
+        setRecoveryError(error);
+        return;
+      }
+      showErrorAlert(error);
+    },
   });
 
   function toggleRecord(id: string) {
@@ -545,66 +682,62 @@ function SettlementForm({
           ? dueRows.length > 0
           : !!accountId);
 
-  if (!userId || !offsetRecovery.isSuccess || offsetRecovery.isFetching || offsetRecovery.data) {
-    const saved = offsetRecovery.data;
+  // Yarım kalan işlem ekranı yalnızca otomatik tamamlama denemesi başarısız olduğunda görünür;
+  // yükleme ve arka planda tamamlama sırasında sade bir bekleme göstergesi yeterlidir.
+  const offsetSaved = offsetRecovery.data;
+  const cashSaved = cashRecovery.data;
+  const recoveryBusy = resumeOffset.isPending || reverseOffset.isPending || cancelOffset.isPending
+    || resumeCash.isPending || cancelCash.isPending;
+  const stuck = offsetSaved && (offsetSaved.state === 'pending' || offsetSaved.state === 'reversing')
+    && stuckKey === handledKey(offsetSaved.input.requestId, offsetSaved.state)
+    ? { kind: 'offset' as const, saved: offsetSaved }
+    : cashSaved && cashSaved.state === 'pending' && stuckKey === handledKey(cashSaved.input.requestId, 'pending')
+      ? { kind: 'cash' as const, saved: cashSaved }
+      : null;
+  if (offsetRecovery.isError || cashRecovery.isError) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
-          <ScreenHeader inline title={saved?.input.method === 'ciro' ? 'Ciro kontrolü' : 'Mahsup kontrolü'} leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
-          {saved ? <>
-            <Text variant="cardTitle">{saved.input.counterpartyName ?? 'Önceki cari'} · {formatMinorAmount(saved.input.amountMinor, saved.input.currencyCode)}</Text>
-            <Text>{saved.input.method === 'ciro'
-              ? saved.state === 'confirmed' ? 'Önceki ciro kaydedildi. Fazla tutar her çekin kendi avansı olarak izlendi. Yeni işlem için aşağıdan devam edin.'
-                : saved.state === 'cancelled' ? 'Önceki ciro isteği iptal edildi; borç veya avans oluşturulmadı.'
-                  : 'Önceki ciro sonucu belirsiz. Aynı kimlikle yeniden kontrol edin; yeni çek/fatura dağılımı oluşturulmaz.'
-              : saved.state === 'confirmed' ? 'Önceki mahsup kaydedildi. Yeni işlem için aşağıdan devam edin.'
-              : saved.state === 'cancelled' ? 'Önceki mahsup isteği iptal edildi. Borç/alacak kapanışı oluşturulmadı.'
-              : saved.state === 'reversed' ? 'Önceki mahsup geri alındı. İki tarafın kalan tutarı yeniden hesaplandı; sonraki ödemeler korunuyor.'
-              : saved.state === 'reversing' ? 'Önceki mahsubun geri alma sonucu belirsiz. Aynı geri almayı yeniden deneyin; yeni işlem başlatmayın.'
-              : 'Önceki mahsup sonucu belirsiz. Aynı kimlikle yeniden deneme, kayıt varsa ikinci kapanış oluşturmaz; yoksa özgün mahsubu tamamlar.'}</Text>
-            <Button label={saved.state === 'reversing' ? 'Aynı geri almayı yeniden dene' : saved.state !== 'pending' ? 'Yeni işlem başlat' : 'Aynı işlemi yeniden dene'}
-              disabled={offsetRecovery.isFetching || cancelOffset.isPending} loading={resumeOffset.isPending || acknowledge.isPending || reverseOffset.isPending}
-              onPress={() => saved.state === 'reversing' ? reverseOffset.mutate() : saved.state !== 'pending' ? acknowledge.mutate() : resumeOffset.mutate()} />
-            {saved.state === 'pending' ? <>
-              <Text variant="caption" color="textSecondary">İptal yalnızca henüz kaydedilmemiş isteği durdurur; kaydedilmiş mahsubu geri almaz.</Text>
-              <Button label="Kaydedilmediyse iptal et" variant="secondary" loading={cancelOffset.isPending}
-                disabled={offsetRecovery.isFetching || resumeOffset.isPending} onPress={() => cancelOffset.mutate()} />
-            </> : null}
-            {saved.state === 'confirmed' && saved.input.method === 'mahsup' ? <Button label="Bu mahsubu geri al" variant="dangerText"
-              loading={reverseOffset.isPending} disabled={offsetRecovery.isFetching || acknowledge.isPending}
-              onPress={() => Alert.alert('Mahsubu geri al', 'Bu işleme ait iki tarafın kapanışları kaldırılacak. Sonradan yapılan ödemeler silinmeyecek.', [
-                { text: 'Vazgeç', style: 'cancel' },
-                { text: 'Geri al', style: 'destructive', onPress: () => reverseOffset.mutate() },
-              ])} /> : null}
-          </> : <Text>{offsetRecovery.isError ? 'Saklanan mahsup kontrol edilemedi. Yeni işlem başlatılamaz.' : 'Saklanan mahsup kontrol ediliyor…'}</Text>}
-          {offsetRecovery.isError ? <Button label="Tekrar kontrol et" onPress={() => { void offsetRecovery.refetch(); }} /> : null}
+          <ScreenHeader inline title={isPayable ? 'Ödeme yap' : 'Tahsilat al'} leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
+          <Text>{friendlyErrorMessage(offsetRecovery.error ?? cashRecovery.error, 'Ekran açılamadı. Lütfen tekrar deneyin.')}</Text>
+          <Button label="Tekrar dene" onPress={() => { void offsetRecovery.refetch(); void cashRecovery.refetch(); }} />
         </ScrollView>
       </SafeAreaView>
     );
   }
-  if (!cashRecovery.isSuccess || cashRecovery.isFetching || cashRecovery.data) {
-    const saved = cashRecovery.data;
-    const busy = resumeCash.isPending || acknowledgeCash.isPending || cancelCash.isPending || cashRecovery.isFetching;
+  if (stuck && !recoveryBusy) {
+    const input = stuck.saved.input;
+    const reversing = stuck.kind === 'offset' && stuck.saved.state === 'reversing';
+    const label = reversing ? 'Mahsup geri alma' : input.method === 'ciro' ? 'Çek/senet cirosu'
+      : input.method === 'mahsup' ? 'Mahsup' : input.direction === 'payable' ? 'Ödeme' : 'Tahsilat';
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
-          <ScreenHeader inline title="Ödeme kontrolü" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
-          {saved ? <>
-            <Text variant="cardTitle">{saved.input.counterpartyName ?? 'Önceki cari'} · {formatMinorAmount(saved.input.amountMinor, saved.input.currencyCode)}</Text>
-            <Text>{saved.state === 'confirmed' ? 'Önceki ödeme kaydedildi. Yeni işlem başlatmak için açık onay verin.'
-              : saved.state === 'cancelled' ? 'Önceki ödeme isteği iptal edildi. Bu istek finansal kayıt oluşturamaz.'
-              : 'Önceki ödeme sonucu belirsiz. Aynı kimlikle kontrol, kayıt varsa ikinci ödeme oluşturmaz; yoksa özgün isteği tamamlar.'}</Text>
-            <Button label={saved.state === 'pending' ? 'Aynı ödemeyi yeniden kontrol et' : 'Yeni işlem başlat'}
-              disabled={busy} loading={resumeCash.isPending || acknowledgeCash.isPending}
-              onPress={() => saved.state === 'pending' ? resumeCash.mutate() : acknowledgeCash.mutate()} />
-            {saved.state === 'pending' ? <>
-              <Text variant="caption" color="textSecondary">İptal yalnızca henüz kaydedilmemiş isteği durdurur; kaydedilmiş ödemeyi iade etmez.</Text>
-              <Button label="Kaydedilmediyse iptal et" variant="secondary" disabled={busy} loading={cancelCash.isPending}
-                onPress={() => cancelCash.mutate()} />
-            </> : null}
-          </> : <Text>{cashRecovery.isError ? 'Saklanan ödeme okunamadı. Yeni işlem başlatılamaz.' : 'Saklanan ödeme kontrol ediliyor…'}</Text>}
-          {cashRecovery.isError ? <Button label="Tekrar kontrol et" onPress={() => { void cashRecovery.refetch(); }} /> : null}
+          <ScreenHeader inline title="Yarım kalan işlem" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
+          <Stack gap="xxs">
+            <Text variant="cardTitle">{label} · {formatMinorAmount(input.amountMinor, input.currencyCode)}</Text>
+            {input.counterpartyName ? <Text variant="caption" color="textSecondary">{input.counterpartyName}</Text> : null}
+          </Stack>
+          <Text>
+            {!recoveryError || isNetworkError(recoveryError)
+              ? 'Bağlantı kesildiği için bu işlem tamamlanamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'
+              : `${friendlyErrorMessage(recoveryError, 'Bu işlem tamamlanamadı.')} Tekrar deneyebilir ya da işlemi iptal edebilirsiniz.`}
+          </Text>
+          <Button label="Tekrar dene"
+            onPress={() => stuck.kind === 'cash' ? resumeCash.mutate() : reversing ? reverseOffset.mutate() : resumeOffset.mutate()} />
+          {!reversing ? <>
+            <Button label="İşlemi iptal et" variant="secondary"
+              onPress={() => stuck.kind === 'cash' ? cancelCash.mutate() : cancelOffset.mutate()} />
+            <Text variant="caption" color="textSecondary">İşlem zaten kaydedildiyse iptal edilmez, olduğu gibi korunur.</Text>
+          </> : null}
         </ScrollView>
+      </SafeAreaView>
+    );
+  }
+  if (!userId || !offsetRecovery.isSuccess || !cashRecovery.isSuccess || offsetSaved || cashSaved) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.colors.textSecondary} />
       </SafeAreaView>
     );
   }

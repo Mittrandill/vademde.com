@@ -20,6 +20,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { formatMinorAmount } from '@/utils/money';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 const PAGE_SIZE = 10;
 
@@ -162,7 +163,7 @@ export default function BanksScreen() {
           >
             {banksQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {banksQuery.error instanceof Error ? banksQuery.error.message : 'Bankalar yüklenemedi'}
+                {friendlyErrorMessage(banksQuery.error, 'Bankalar yüklenemedi')}
               </Text>
             ) : !banksQuery.isSuccess ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>

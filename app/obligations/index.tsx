@@ -40,8 +40,8 @@ import type { ValueUnitType } from '@/features/valueUnits/units';
 import { BANK_NAME } from '@/features/banks/banks';
 import { SERVICE_NAME } from '@/features/services/services';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { queryKeys } from '@/services/queryKeys';
-import { showSuccessAlert } from '@/utils/alerts';
+import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
+import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { formatMinorAmount } from '@/utils/money';
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -218,7 +218,7 @@ export default function ObligationsByTypeScreen() {
       showSuccessAlert('Kayıt başarıyla silindi.', () => {
         InteractionManager.runAfterInteractions(() => {
           if (activeWorkspaceId) {
-            queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'obligations'] });
+            invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
           }
           queryClient.removeQueries({ queryKey: ['obligation', obligationId] });
         });
@@ -230,8 +230,8 @@ export default function ObligationsByTypeScreen() {
     Alert.alert(
       'Kaydı Sil',
       hasInstallments
-        ? 'Bu kayıt, taksitleri ve ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?'
-        : 'Bu kayıt ve varsa ödeme geçmişi kalıcı olarak silinecek. Emin misiniz?',
+        ? 'Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?'
+        : 'Bu kayıt, varsa ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?',
       [
         { text: 'Vazgeç', style: 'cancel' },
         { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate(item.id) },
@@ -313,7 +313,7 @@ export default function ObligationsByTypeScreen() {
           >
             {obligationsQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {obligationsQuery.error instanceof Error ? obligationsQuery.error.message : 'Kayıtlar yüklenemedi'}
+                {friendlyErrorMessage(obligationsQuery.error, 'Kayıtlar yüklenemedi')}
               </Text>
             ) : isInitialLoading ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>

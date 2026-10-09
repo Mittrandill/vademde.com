@@ -43,9 +43,13 @@ const EN = [
   ['Çek, senet, fatura, kredi.<br><em>Fotoğrafla</em> takibe al.', 'Cheques, notes, bills, loans.<br><em>Snap</em> to track.'],
   ['Kayıt oluşturuldu', 'Record created'],
   ['Onayınızla · Güven %99', 'With your approval · 99% confidence'],
+  // play.html (Android bildirimi ve kapak görseli)
+  ['Vademde <small>· şimdi</small>', 'Vademde <small>· now</small>'],
+  ['Ödeme hatırlatması', 'Payment reminder'],
+  ['Belgeyi tarayın, onaylayın; vadeler ve bakiyeler kendiliğinden düzenlensin.', 'Scan, confirm, done: due dates and balances organise themselves.'],
 ];
 
-const TRANSLATABLE = '.eyebrow, h1, .sub, .chip, .notif .t, .notif p, .card .t, .card p, .phrase';
+const TRANSLATABLE = '.eyebrow, h1, .sub, .chip, .notif .app, .notif .t, .notif p, .card .t, .card p, .phrase';
 
 if (new URLSearchParams(location.search).get('lang') === 'en') {
   document.documentElement.lang = 'en';

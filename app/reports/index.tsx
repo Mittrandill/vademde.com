@@ -61,6 +61,7 @@ import { toCsv } from '@/utils/csv';
 import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { formatMinorAmount, fromMinorUnits } from '@/utils/money';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 type Period = 'month' | '3m' | 'year' | 'all' | 'custom';
 type CategoryDirection = 'expense' | 'income';
@@ -397,7 +398,7 @@ export default function ReportsScreen() {
       else await handleExportPdf(sections);
       setExportOpen(false);
     } catch (error) {
-      Alert.alert('Hata', error instanceof Error ? error.message : 'Rapor oluşturulamadı');
+      Alert.alert('Hata', friendlyErrorMessage(error, 'Rapor oluşturulamadı'));
     } finally {
       setIsExporting(false);
     }

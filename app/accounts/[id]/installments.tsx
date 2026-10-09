@@ -33,6 +33,7 @@ import {
 } from '@/features/cardInstallments/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseAmountToMinor, formatMinorAmount } from '@/utils/money';
+import { friendlyErrorMessage } from '@/utils/alerts';
 
 function monthLabel(isoDate: string) {
   const [y, m] = isoDate.split('-').map(Number);
@@ -262,7 +263,7 @@ function AddPurchaseSheet({
       setError(null);
       onSaved();
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'Kaydedilemedi.'),
+    onError: (e) => setError(friendlyErrorMessage(e, 'Kaydedilemedi.')),
   });
 
   return (

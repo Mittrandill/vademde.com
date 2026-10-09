@@ -34,7 +34,7 @@ import { listMyWorkspaces } from '@/features/workspaces/api';
 import { getMySubscription } from '@/features/subscriptions/api';
 import { getMyProfile, updateMyProfile, uploadAvatar } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
-import { showSuccessAlert } from '@/utils/alerts';
+import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 
 function initialsFrom(name: string | null | undefined, email: string | null | undefined): string {
   const source = name?.trim() || email?.trim() || '';
@@ -134,7 +134,7 @@ export default function ProfileScreen() {
       return uploadAvatar(session.user.id, asset.uri, asset.mimeType ?? 'image/jpeg');
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profile() }),
-    onError: (error) => Alert.alert('Fotoğraf yüklenemedi', error instanceof Error ? error.message : 'Bir hata oluştu'),
+    onError: (error) => Alert.alert('Fotoğraf yüklenemedi', friendlyErrorMessage(error, 'Bir hata oluştu')),
   });
 
   async function handlePickAvatar() {
@@ -183,7 +183,7 @@ export default function ProfileScreen() {
       await deleteAccount();
       router.replace('/(auth)/sign-in');
     } catch (err) {
-      Alert.alert('Hesap silinemedi', err instanceof Error ? err.message : 'Bir hata oluştu');
+      Alert.alert('Hesap silinemedi', friendlyErrorMessage(err, 'Bir hata oluştu'));
       setIsDeleting(false);
     }
   }
@@ -289,7 +289,7 @@ export default function ProfileScreen() {
           </FieldGroup>
           {updateNameMutation.error ? (
             <Text variant="caption" color="danger">
-              {updateNameMutation.error instanceof Error ? updateNameMutation.error.message : 'Kaydedilemedi'}
+              {friendlyErrorMessage(updateNameMutation.error, 'Kaydedilemedi')}
             </Text>
           ) : null}
         </Stack>

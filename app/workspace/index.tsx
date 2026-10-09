@@ -16,7 +16,7 @@ import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement'
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
 import { queryKeys } from '@/services/queryKeys';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { showErrorAlert } from '@/utils/alerts';
+import { showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 
 function workspaceInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -65,7 +65,7 @@ export default function WorkspacesScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
       setEditingWorkspaceId(null);
     },
-    onError: (error) => Alert.alert('Kaydedilemedi', error instanceof Error ? error.message : 'Bir hata oluştu'),
+    onError: (error) => Alert.alert('Kaydedilemedi', friendlyErrorMessage(error, 'Bir hata oluştu')),
   });
 
   const deleteMutation = useMutation({
@@ -74,7 +74,7 @@ export default function WorkspacesScreen() {
       if (activeWorkspaceId === id) setActiveWorkspaceId(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
     },
-    onError: (error) => Alert.alert('Silinemedi', error instanceof Error ? error.message : 'Bir hata oluştu'),
+    onError: (error) => Alert.alert('Silinemedi', friendlyErrorMessage(error, 'Bir hata oluştu')),
   });
 
   function startEditing(workspace: Workspace) {

@@ -1,6 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
-import { createInstallmentPlan, createObligation, type Obligation } from '@/features/obligations/api';
+import { createObligation, type Obligation } from '@/features/obligations/api';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { formatValueUnitAmount } from '@/utils/money';
 
@@ -515,50 +515,55 @@ export async function settleObligations(input: SettleObligationsInput): Promise<
 
   const { allocations, leftoverMinor } = allocateAcrossObligations(input.amountMinor, input.targets);
 
+  // Çek/senet: çek/senet kaydı + vadeleri, seçilen kayıtların hesapsız kapanışı ve fazla tutarın
+  // avansı tek sunucu transaction'ında yazılır (settle_instrument_atomic). İstek kimliği aynı
+  // kaldıkça tekrar deneme ikinci bir çek açmaz, ilk sonucu döndürür. Para çek vadesinde hareket
+  // eder; çek/senet silinirse avans da silinir (parent_obligation_id).
   if (isInstrumentMethod(input.method)) {
-    const instrumentObligation = await createInstrumentObligation({
-      workspaceId: input.workspaceId,
-      direction: input.direction,
-      method: input.method,
-      counterpartyId: input.counterpartyId,
-      currencyCode: input.currencyCode,
-      amountMinor: input.amountMinor,
-      categoryId: input.categoryId ?? null,
-      instrument: input.instrument ?? null,
-    });
-    let advanceObligation: Obligation | null = null;
-    try {
-      await settleWithInstrument({
-        workspaceId: input.workspaceId,
-        instrumentObligationId: instrumentObligation.id,
-        method: input.method,
-        direction: input.direction,
-        documentNo: input.instrument?.documentNo ?? null,
-        paidAt: input.paidAt,
-        allocations,
-      });
-      // Çek/senet seçilen kayıtlardan büyükse karşı taraf aradaki fark kadar bize borçlanır
-      // (ödemede) ya da biz ona (tahsilatta). Para çek vadesinde hareket edeceği için avansın
-      // hareketi yoktur; çek/senet silinirse avans da silinir (parent_obligation_id).
-      if (leftoverMinor > 0) {
-        advanceObligation = await createAdvanceObligation({
-          workspaceId: input.workspaceId,
-          settlementDirection: input.direction,
-          counterpartyId: input.counterpartyId,
-          counterpartyName: input.counterpartyName,
-          currencyCode: input.currencyCode,
-          amountMinor: leftoverMinor,
-          parentObligationId: instrumentObligation.id,
-          note: `${INSTRUMENT_LABEL[input.method]} fazlası`,
-        });
-      }
-    } catch (error) {
-      // Fatura kapatılamadıysa yarım kalmış bir çek/senet bırakılmaz (aksi halde borç yine
-      // ikiye katlanırdı) — kayıt geri alınır ve hata kullanıcıya iletilir.
-      await supabase.from('obligations').delete().eq('id', instrumentObligation.id);
-      throw error;
+    if (!input.requestId || !input.actorId) throw new Error('Çek/senet ödemesi işlem kimliğiyle gönderilmeli');
+    const instrument = input.instrument;
+    if (!instrument || instrument.dueDates.length === 0) throw new Error('Vade tarihi girin');
+    if (instrument.dueDates.reduce((sum, row) => sum + row.amountMinor, 0) !== input.amountMinor) {
+      throw new Error('Vade tutarlarının toplamı, toplam tutara eşit olmalı');
     }
-    return { allocations, leftoverMinor, instrumentObligation, advanceObligation, transactionIds: [] };
+    const { data, error } = await supabase.rpc('settle_instrument_atomic' as never, {
+      p_expected_actor: input.actorId,
+      p_request_id: input.requestId,
+      p_workspace_id: input.workspaceId,
+      p_header: {
+        direction: input.direction,
+        method: input.method,
+        counterparty_id: input.counterpartyId,
+        currency_code: input.currencyCode,
+        value_unit_type: getValueUnit(input.currencyCode).unitType,
+        amount_minor: input.amountMinor,
+        paid_at: input.paidAt,
+        title: instrument.title.trim() || INSTRUMENT_LABEL[input.method],
+        bank_code: input.method === 'cek' ? instrument.bankCode : null,
+        document_no: instrument.documentNo?.trim() || null,
+        account_id: instrument.accountId,
+        category_id: input.categoryId ?? null,
+        due_dates: instrument.dueDates.map((row) => ({ due_date: row.dueDate, amount_minor: row.amountMinor })),
+      },
+      p_allocations: allocations.map((a) => ({
+        obligation_id: a.obligation.id,
+        amount_minor: a.amountMinor,
+        remaining_amount_minor: a.obligation.remaining_amount_minor,
+      })),
+    } as never);
+    if (error) throw error;
+    const outcome = data as unknown as {
+      instrument_obligation: Obligation;
+      advance_obligation: Obligation | null;
+      leftover_minor: number;
+    };
+    return {
+      allocations,
+      leftoverMinor: outcome.leftover_minor,
+      instrumentObligation: outcome.instrument_obligation,
+      advanceObligation: outcome.advance_obligation,
+      transactionIds: [],
+    };
   }
 
   if (!input.requestId || !input.actorId || !input.cashPayload) throw new Error('Ödeme kalıcı işlem kuyruğundan gönderilmeli');
@@ -661,7 +666,7 @@ interface CreateAdvanceObligationInput {
 // Ön ödeme / alınan avans kaydı (document_type 'avans'). Vadesi yoktur — gecikmiş/bu ay ödenecek
 // hesaplarına ve hatırlatmalara girmez (bkz. features/obligations/api.ts getDueBreakdown), yalnızca
 // cari bakiyesine girer ve sonraki faturadan Mahsup ile düşülür.
-async function createAdvanceObligation({
+export async function createAdvanceObligation({
   workspaceId,
   settlementDirection,
   counterpartyId,
@@ -791,70 +796,6 @@ async function settleByEndorsement(input: SettleObligationsInput): Promise<Settl
   }
   return { allocations, leftoverMinor, instrumentObligation: null, advanceObligation: receipt.advances[0] ?? null,
     advanceObligations: receipt.advances, transactionIds: [] };
-}
-
-interface CreateInstrumentObligationInput {
-  workspaceId: string;
-  direction: 'payable' | 'receivable';
-  method: InstrumentMethod;
-  counterpartyId: string | null;
-  currencyCode: string;
-  amountMinor: number;
-  categoryId: string | null;
-  instrument: InstrumentDetails | null;
-}
-
-async function createInstrumentObligation({
-  workspaceId,
-  direction,
-  method,
-  counterpartyId,
-  currencyCode,
-  amountMinor,
-  categoryId,
-  instrument,
-}: CreateInstrumentObligationInput): Promise<Obligation> {
-  if (!instrument || instrument.dueDates.length === 0) throw new Error('Vade tarihi girin');
-  const dueSum = instrument.dueDates.reduce((sum, row) => sum + row.amountMinor, 0);
-  if (dueSum !== amountMinor) throw new Error('Vade tutarlarının toplamı, toplam tutara eşit olmalı');
-
-  const label = INSTRUMENT_LABEL[method];
-  const sortedDueDates = [...instrument.dueDates].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const documentNo = instrument.documentNo?.trim() || null;
-  const obligation = await createObligation({
-    workspace_id: workspaceId,
-    direction,
-    document_type: method,
-    title: instrument.title.trim() || label,
-    total_amount_minor: amountMinor,
-    currency_code: currencyCode,
-    value_unit_type: getValueUnit(currencyCode).unitType,
-    due_date: sortedDueDates[0]!.dueDate,
-    counterparty_id: counterpartyId,
-    account_id: instrument.accountId,
-    category_id: categoryId,
-    bank_code: method === 'cek' ? instrument.bankCode : null,
-    notes: documentNo ? `${label} no: ${documentNo}` : null,
-  });
-
-  if (sortedDueDates.length > 1) {
-    try {
-      await createInstallmentPlan({
-        workspaceId,
-        obligationId: obligation.id,
-        totalAmountMinor: amountMinor,
-        installments: sortedDueDates.map((row, index) => ({
-          installmentNumber: index + 1,
-          dueDate: row.dueDate,
-          amountMinor: row.amountMinor,
-        })),
-      });
-    } catch (error) {
-      await supabase.from('obligations').delete().eq('id', obligation.id);
-      throw error;
-    }
-  }
-  return obligation;
 }
 
 export interface SettleWithInstrumentInput {

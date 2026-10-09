@@ -164,3 +164,34 @@ Doğrulanmış yedek ve geri dönüş planı olmadan canlıya geçilmemeli. Yeni
 ## Önbellek kullanıcı açıklaması
 
 Önbellek yalnızca cihazdaki indirilen kopyadır. Temizleme Supabase'teki faturayı, ödemeyi, hesabı veya bakiyeyi silmez; SQLite taslakları/senkronizasyon kuyruğuna da dokunmaz. Aynı kullanıcı uygulamayı yeniden açınca kendi cache'i korunur. Çıkış veya kullanıcı değişiminden sonra kendi asıl verisi giriş ve bağlantı ile yeniden yüklenir. Bekleyen bir işlem varsa önce işlem sonuçlanmalıdır; başka kullanıcı adına otomatik devam ettirilmez.
+
+## Ek tur — 2026-10-09 akşam (kayıt düzenleme korumaları ve kullanıcı mesajları)
+
+Canlıya uygulanan migration'lar (yerel dosyalar aynı version ile):
+- `20261009203120_guard_obligation_edits` — `guard_obligation_edit`: ödemesi/bağlı hareketi/alt kaydı olan kaydın yönü ve para birimi değiştirilemez; toplam, ödenen tutarın altına düşürülemez. `guard_installment_edit`: ödemesi olan (kısmen de olsa) taksit silinemez, tutarı ödenenin altına düşürülemez; kaydın kendisi silinirken (CASCADE) kontrol devre dışıdır. Sentetik veriyle geri alınan transaction içinde 10 senaryo doğrulandı.
+- `20261009204158_delete_payment_transactions_with_obligation` — kayıt silinince ödemelerin hesap hareketleri de silinir (tek ödeme silmeyle aynı kural); hareket başka kayıtlarla paylaşılıyorsa yalnızca bu kaydın payı düşülür.
+
+Uygulama (yeni build gerekir):
+- Ödeme/Tahsilat, Ciro/Mahsup ve Kart borcu ödeme ekranlarındaki teknik "kontrol" ekranları kaldırıldı: başarılı kuyruk kaydı sessizce kapanır, yarım kalan işlem ekran açılınca bir kez otomatik tamamlanır ("İşlem tamamlandı" bildirimi), yalnızca o da başarısızsa sade "Yarım kalan işlem — Tekrar dene / İşlemi iptal et" ekranı çıkar. Mahsup geri alma artık başarı mesajındaki "Geri al" düğmesinde.
+- `utils/alerts.ts` `friendlyErrorMessage` / `isNetworkError`: ham TLS/fetch/Postgres/native hata metinleri kullanıcıya gösterilmez; bağlantı hataları tek Türkçe mesaja, teknik mesajlar ekranın varsayılan metnine çevrilir. Ekranlardaki `error.message` gösterimleri buna bağlandı.
+- Kayıt düzenlemede yön, ödemesi olan veya avans/nakit avans/borç verme kaydında kilitli; kısmen ödenmiş taksit planda silinemez; toplam ödenenin altına düşürülemez (istemci ön kontrolü); plan düzenlemede toplam, "ödendi" işaretlemeden önce güncellenir.
+- OCR onayında çek/senet seçilen kayıtlardan büyükse fark avans kaydına yazılır; kayıt oluşur oluşmaz belgeye bağlanır, zorunlu adım başarısızsa geri alınır, tekrar denemede önceki yarım kayıt silinir; aynı isimli cari varsa yeniden oluşturulmaz.
+- Nakit avansta yatırılacak hesap yalnızca aynı para birimindeki kasa/banka hesaplarıdır (POS hariç).
+- Hareketler listesinde ödemeye bağlı ve avans/nakit avans/borç verme açılış hareketleri kaydırarak/uzun basarak silinemez/düzenlenemez; düzenleme ekranı da bunları reddeder.
+- Gecikmiş liste ve 30 günlük nakit akışı tüm sayfaları okur.
+
+Ek migration'lar (canlıda):
+- `20261009205810_update_payment_keeps_payment_method` — ödeme düzenlenirken yeni hareketin ödeme yöntemi hesap türünden türetilir (kart/POS → kredi_karti, kasa → nakit, cüzdan → online_odeme, banka → havale); mevcut yöntem yalnızca kart ↔ kart dışı geçişte değişir. 4 senaryo geri alınan transaction'da doğrulandı.
+- `20261009210325_settle_instrument_atomic` — çek/senetle ödeme/tahsilat (kayıt + vadeler + hesapsız kapanışlar + fazla tutar avansı) tek transaction; `finance_private.instrument_settlement_requests` ile istek kimliği idempotent, farklı içerikle aynı kimlik reddedilir; taksit dilimleri sunucuda kilit altında hesaplanır; `cancel_instrument_settlement_request` hazır. Geçici kullanıcı/çalışma alanıyla (tetikleyiciler açık) geri alınan transaction'da 10 senaryo doğrulandı. Uygulama `settleObligations` çek/senet dalı yalnızca bu RPC'yi çağırır; işlem kimliği ekranda içerik değişmedikçe korunur (uygulama yeniden başlatılırsa yeni kimlik üretilir).
+
+Uygulama: cari ekstresinde kuru bulunamayan döviz/altın satırından itibaren yürüyen TL bakiye 0 sayılmaz, "—" gösterilir ve satırda "kur bulunamadı" yazar.
+
+Kredi kartı borcu — ekstre çapası (`utils/cardDebt.ts`, `features/reports/api.ts getAccountBalances`):
+- Girilmiş en son ekstre (kesimi bugün veya öncesinde, iptal edilmemiş) çapadır: güncel borç = ekstre tutarı − karta transfer olmadan ödenen kısım (hesapsız/bankadan gider) + kesimden sonraki kart hareketleri + kesimden sonra çekilen nakit avansın kalanı. Kesimden önceki hareketler sayılmaz (kalem kalem ayrılmış ekstrelerde çift sayma da kapandı).
+- Kesim tarihi kartın kesim gününden; yoksa tahmini (son ödemeden 10 gün önce, ekstre daha önce girildiyse giriş günü) ve ekranda not gösterilir.
+- Ekstre yoksa ya da sıfırdan farklı açılış borcu en son kesimden sonra girildiyse eski model (açılış + tüm hareketler) geçerli; açık nakit avans kalanı artık bu modelde de borca eklenir.
+- Kart ekranı: Güncel borç, Kullanılabilir (limit − güncel borç − henüz ekstreye girmemiş taksitler), Ekstre borcu, Son ödeme (ödenmemiş ekstre varsa onun). Kart listesi: dönem borcu çapa ekstresinden, "Güncel borç" satırı. Kart ödeme formu ekstre varsa ekstre borcuyla dolar; "Güncel borç" ve "Kısmi tutar" seçenekleri.
+- Önbellek: kayıt listesinden silme ve hesap düzenleme bakiye/rapor anahtarlarını da yeniler.
+- Test: `npm run test:card-debt` (11 senaryo, ağ/veritabanı yok).
+
+Açık kalan: `periodKeyForDueDate` saat dilimi (yalnız UTC gerisi bölgeler); edge function'lar (send-cash-alerts, generate-insights) kartları zaten hariç tutar.
