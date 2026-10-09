@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import { ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
+import { ACTIVE_OBLIGATION_STATUSES, getDueInfoByObligation, localIsoDate } from '@/features/obligations/api';
 import { BANK_NAME } from '@/features/banks/banks';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 
@@ -92,7 +92,7 @@ export async function getBankLoanLedger(workspaceId: string, bankCode: string): 
   const [{ data, error }, rates] = await Promise.all([
     supabase
       .from('obligations')
-      .select('direction, remaining_amount_minor, total_amount_minor, currency_code, status, due_date')
+      .select('id, direction, remaining_amount_minor, total_amount_minor, currency_code, status, due_date')
       .eq('workspace_id', workspaceId)
       .eq('document_type', LOAN_DOCUMENT_TYPE)
       .eq('bank_code', bankCode)
@@ -115,23 +115,27 @@ export async function getBankLoanLedger(workspaceId: string, bankCode: string): 
     payableRows.map((r) => ({ amountMinor: r.total_amount_minor, unitCode: r.currency_code })),
     rates
   );
-  const overdue = rows.filter((r) => r.status === 'gecikti');
+  // Gecikme ve en yakın vade taksit bazında hesaplanır (bkz. getDueInfoByObligation).
+  const dueInfo = await getDueInfoByObligation(workspaceId, rows);
+  const overdueRows = rows.filter((r) => (dueInfo[r.id]?.overdueCount ?? 0) > 0);
   const dueDates = rows
-    .map((r) => r.due_date)
+    .map((r) => dueInfo[r.id]?.nextDueDate ?? null)
     .filter((d): d is string => !!d)
     .sort();
+  const todayIso = localIsoDate();
+  const nearestDueDate = dueDates.find((d) => d >= todayIso) ?? dueDates[0] ?? null;
 
   return {
     receivableMinor,
     payableMinor,
     netMinor: receivableMinor - payableMinor,
     overdueMinor: sumToReferenceMinor(
-      overdue.map((r) => ({ amountMinor: r.remaining_amount_minor, unitCode: r.currency_code })),
+      overdueRows.map((r) => ({ amountMinor: dueInfo[r.id].overdueMinor, unitCode: r.currency_code })),
       rates
     ),
-    overdueCount: overdue.length,
+    overdueCount: overdueRows.reduce((sum, r) => sum + dueInfo[r.id].overdueCount, 0),
     openCount: rows.length,
-    nearestDueDate: dueDates[0] ?? null,
+    nearestDueDate,
     totalPayableMinor,
   };
 }

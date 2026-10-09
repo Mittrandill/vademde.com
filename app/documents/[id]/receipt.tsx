@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { localIsoDate } from '@/features/obligations/api';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -108,7 +109,7 @@ export default function ReceiptResultScreen() {
   const [initialized, setInitialized] = useState(false);
   const [direction, setDirection] = useState<MoneyDirection>('expense');
   const [amount, setAmount] = useState('');
-  const [dateStr, setDateStr] = useState(new Date().toISOString().slice(0, 10));
+  const [dateStr, setDateStr] = useState(localIsoDate());
   const [accountId, setAccountId] = useState<string | null>(null);
   const [counterpartyId, setCounterpartyId] = useState<string | null>(null);
   const [counterpartyResolved, setCounterpartyResolved] = useState(false);
@@ -123,7 +124,7 @@ export default function ReceiptResultScreen() {
       formatAmountInput(((document.total_amount_minor ?? 0) / 100).toFixed(2).replace('.', ','))
     );
     setDateStr(
-      isoDatePart(summary?.transactionDateTime) ?? isoDatePart(document.issue_date) ?? new Date().toISOString().slice(0, 10)
+      isoDatePart(summary?.transactionDateTime) ?? isoDatePart(document.issue_date) ?? localIsoDate()
     );
     setInitialized(true);
   }, [document, summary, initialized]);

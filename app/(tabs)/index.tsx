@@ -20,8 +20,8 @@ import { RecentTransactionsList } from '@/components/finance/RecentTransactionsL
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { listAccounts } from '@/features/accounts/api';
 import {
-  listObligations,
-  listInstallmentsDue,
+  listAllObligations,
+  listAllInstallmentsDue,
   ACTIVE_OBLIGATION_STATUSES,
   getDueBreakdown,
   type ObligationDueItem,
@@ -170,7 +170,7 @@ export default function HomeScreen() {
   const activeObligationsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.dashboardActiveObligations(activeWorkspaceId) : ['obligations', 'disabled'],
     queryFn: () =>
-      listObligations({ workspaceId: activeWorkspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
+      listAllObligations({ workspaceId: activeWorkspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES }),
     enabled: !!activeWorkspaceId,
   });
 
@@ -182,7 +182,7 @@ export default function HomeScreen() {
       ? [activeWorkspaceId, 'obligations', 'dashboard-installments']
       : ['dashboard-installments', 'disabled'],
     queryFn: () =>
-      listInstallmentsDue({ workspaceId: activeWorkspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
+      listAllInstallmentsDue({ workspaceId: activeWorkspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, openOnly: true }),
     enabled: !!activeWorkspaceId,
   });
 

@@ -42,6 +42,7 @@ import {
   type Installment,
   type Obligation,
   type UpdateInstallmentPlanRow,
+  localIsoDate,
 } from '@/features/obligations/api';
 import { createTransaction } from '@/features/transactions/api';
 import { recordPastInstallmentPayments } from '@/features/payments/api';
@@ -212,7 +213,7 @@ function ObligationForm({
     );
   });
   const [dueDate, setDueDate] = useState(
-    initial?.due_date ?? initialDueDate ?? new Date().toISOString().slice(0, 10)
+    initial?.due_date ?? initialDueDate ?? localIsoDate()
   );
   const [counterpartyId, setCounterpartyId] = useState<string | null>(
     initial?.counterparty_id ?? initialCounterpartyId ?? null
@@ -382,7 +383,7 @@ function ObligationForm({
         {
           id: null,
           installmentNumber: (last?.installmentNumber ?? 0) + 1,
-          dueDate: last ? addMonthsToIsoDate(last.dueDate, stepMonths) : new Date().toISOString().slice(0, 10),
+          dueDate: last ? addMonthsToIsoDate(last.dueDate, stepMonths) : localIsoDate(),
           amountStr: last?.amountStr ?? '',
           locked: false,
           markPaid: false,
@@ -404,7 +405,7 @@ function ObligationForm({
         next.push({
           id: null,
           installmentNumber: (last?.installmentNumber ?? 0) + 1,
-          dueDate: last ? addMonthsToIsoDate(last.dueDate, stepMonths) : new Date().toISOString().slice(0, 10),
+          dueDate: last ? addMonthsToIsoDate(last.dueDate, stepMonths) : localIsoDate(),
           amountStr: amountStr?.trim() ? amountStr : (last?.amountStr ?? ''),
           locked: false,
           markPaid: false,
@@ -529,7 +530,7 @@ function ObligationForm({
   }
   const installmentPreview = buildEffectivePlan();
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localIsoDate();
   function isPreviewPaid(item: InstallmentPlanItem): boolean {
     return paidOverrides[item.installmentNumber] ?? item.dueDate < todayIso;
   }

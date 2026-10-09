@@ -67,3 +67,16 @@ export function sumToReferenceMinor(
     0
   );
 }
+
+// Hareketin TL karşılığı: işlem anında saklanan kur (transactions.fx_rate_try_minor) varsa onunla,
+// yoksa (eski kayıt) güncel kurla çevrilir. Böylece geçmiş döviz/altın hareketlerinin rapor tutarı
+// kur değiştikçe kaymaz.
+export function transactionToReferenceMinor(
+  row: { amountMinor: number; unitCode: string; fxRateTryMinor?: number | null },
+  rates: ValueUnitRate[]
+): number {
+  if (row.unitCode !== 'TRY' && row.fxRateTryMinor) {
+    return Math.round((row.amountMinor / 10 ** getValueUnit(row.unitCode).precision) * row.fxRateTryMinor);
+  }
+  return sumToReferenceMinor([{ amountMinor: row.amountMinor, unitCode: row.unitCode }], rates);
+}

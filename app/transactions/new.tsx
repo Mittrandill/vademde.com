@@ -24,7 +24,7 @@ import {
   updateTransaction,
   type Transaction,
 } from '@/features/transactions/api';
-import { ACTIVE_OBLIGATION_STATUSES, listObligations, type ObligationWithRelations } from '@/features/obligations/api';
+import { ACTIVE_OBLIGATION_STATUSES, listObligations, type ObligationWithRelations, localIsoDate } from '@/features/obligations/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
 import { formatAmountInput, formatMinorAmount, parseValueUnitAmountToMinor } from '@/utils/money';
@@ -159,7 +159,7 @@ function TransactionForm({
       : ''
   );
   const [dateStr, setDateStr] = useState(
-    initial ? initial.occurred_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+    initial ? initial.occurred_at.slice(0, 10) : localIsoDate()
   );
   const [description, setDescription] = useState(initial?.description ?? initialDescription ?? '');
   const [counterpartyId, setCounterpartyId] = useState<string | null>(
@@ -282,6 +282,7 @@ function TransactionForm({
       if (!activeWorkspaceId || !accountId || !amount) throw new Error('Eksik alan var');
       const amountMinor = parseValueUnitAmountToMinor(amount, unitCode);
       if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
+      if (amountMinor <= 0) throw new Error('Tutar sıfırdan büyük olmalı');
       // Geçersiz tarihte new Date(...).toISOString() RangeError fırlatıp kaydı düşürürdü.
       const parsedDate = new Date(dateStr);
       if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
@@ -433,11 +434,24 @@ function TransactionForm({
 
             {direction === 'transfer' ? (
               <TransferAccounts
-                sourceAccounts={transferSourceAccounts.filter((a) => a.id !== transferToAccountId)}
-                targetAccounts={accounts.filter((a) => a.id !== accountId)}
+                // Transfer yalnızca aynı değer birimindeki hesaplar arasında yapılır: tutar iki hesaba da
+                // aynen yazıldığı için TL ↔ USD/altın transferi bakiyeleri bozardı.
+                sourceAccounts={transferSourceAccounts.filter(
+                  (a) =>
+                    a.id !== transferToAccountId &&
+                    (!transferToAccountId || a.currency_code === accounts.find((t) => t.id === transferToAccountId)?.currency_code)
+                )}
+                targetAccounts={accounts.filter(
+                  (a) => a.id !== accountId && (!accountId || a.currency_code === unitCode)
+                )}
                 fromId={accountId}
                 toId={transferToAccountId}
-                onFromChange={setAccountId}
+                onFromChange={(value) => {
+                  setAccountId(value);
+                  const target = accounts.find((a) => a.id === transferToAccountId);
+                  const next = accounts.find((a) => a.id === value);
+                  if (target && next && target.currency_code !== next.currency_code) setTransferToAccountId(null);
+                }}
                 onToChange={setTransferToAccountId}
                 canSwap={
                   !!accountId &&

@@ -9,7 +9,7 @@ import { useReflowKey } from '@/services/reflow';
 import { EmptyState, Group, GroupedRow, GroupedRowIcon, Skeleton, Stack, Text } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { HeroAmount } from '@/components/finance/HeroAmount';
-import { FORECAST_DAYS, useCashForecasts } from '@/features/cashflow/useCashForecasts';
+import { FORECAST_DAYS, TOTAL_FORECAST_ID, useCashForecasts } from '@/features/cashflow/useCashForecasts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 
@@ -43,14 +43,15 @@ export default function CashAlertScreen() {
   const bestSource = useMemo(
     () =>
       forecasts
-        .filter((f) => f.accountId !== accountId && f.forecast.lowestMinor > 0)
+        .filter((f) => f.accountId !== accountId && f.accountId !== TOTAL_FORECAST_ID && f.forecast.lowestMinor > 0)
         .sort((a, b) => b.forecast.lowestMinor - a.forecast.lowestMinor)[0] ?? null,
     [forecasts, accountId]
   );
 
+  const isTotal = accountId === TOTAL_FORECAST_ID;
   const shortfallMinor = item ? Math.max(0, -item.forecast.lowestMinor) : 0;
   const neededMinor = Math.ceil(shortfallMinor / 100_000) * 100_000; // 1.000 TL'ye yuvarla
-  const transferMinor = bestSource ? Math.min(neededMinor, bestSource.forecast.lowestMinor) : 0;
+  const transferMinor = bestSource && !isTotal ? Math.min(neededMinor, bestSource.forecast.lowestMinor) : 0;
   const first = item?.forecast.firstNegative ?? null;
 
   return (
@@ -76,7 +77,9 @@ export default function CashAlertScreen() {
                   : `${item.name} önümüzdeki ${FORECAST_DAYS} gün eksiye düşmüyor`}
               </Text>
               <Text variant="body" color="textSecondary">
-                Tahmin, bu hesaptan ödenecek / bu hesaba tahsil edilecek kayıtlı vadelere dayanır.
+                {isTotal
+                  ? 'Tüm TL hesapların toplam bakiyesine, hesabı atanmamış kayıtlar dahil tüm kayıtlı vadeler uygulanır.'
+                  : 'Tahmin, bu hesaptan ödenecek / bu hesaba tahsil edilecek kayıtlı vadelere dayanır.'}
               </Text>
             </Stack>
 

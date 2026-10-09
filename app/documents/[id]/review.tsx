@@ -36,6 +36,7 @@ import {
   createInstallmentPlan,
   listObligations,
   type Installment,
+  localIsoDate,
 } from '@/features/obligations/api';
 import {
   allocateAcrossObligations,
@@ -583,7 +584,7 @@ export default function DocumentReviewScreen() {
     if (installmentsInitialized || documentType !== 'kredi' || !lineItemsQuery.data) return;
     const items = lineItemsQuery.data.filter((item) => item.kind === 'installment');
     if (items.length === 0) return;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = localIsoDate();
     setInstallmentDrafts(
       items.map((item, index) => ({
         id: item.id,
@@ -731,7 +732,7 @@ export default function DocumentReviewScreen() {
               const installmentAmountMinor =
                 (draft ? parseAmountToMinor(draft.amount) : null) ?? item.amount_minor;
               const installmentDueDate =
-                draft?.dueDate.trim() || item.occurred_at || dueDate || new Date().toISOString().slice(0, 10);
+                draft?.dueDate.trim() || item.occurred_at || dueDate || localIsoDate();
               return {
                 installmentNumber: item.sort_order || index + 1,
                 dueDate: installmentDueDate,
@@ -1045,7 +1046,7 @@ export default function DocumentReviewScreen() {
   const reviewTitle = typeLabel.length > 10 ? 'Kontrol et' : `${typeLabel} · Kontrol et`;
   const isPdf = document.mime_type === 'application/pdf';
   // Ödeme planı tablosu satırları (OCR taslakları) ve özet değerler.
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localIsoDate();
   const planRows: InstallmentPlanRow[] = installmentDrafts
     .filter((d) => !!d.dueDate)
     .map((d) => ({

@@ -5,13 +5,16 @@ import { listAccounts } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import {
   ACTIVE_OBLIGATION_STATUSES,
-  listInstallmentsDue,
-  listObligations,
+  listAllInstallmentsDue,
+  listAllObligations,
   type ObligationDueItem,
+  localIsoDate,
 } from '@/features/obligations/api';
 import { queryKeys } from '@/services/queryKeys';
 import { projectBalance, type CashForecast, type ForecastItem } from './forecast';
 
+/** Hesabı atanmamış kayıtları da içeren, tüm TL hesapların toplamı için sentetik tahmin kimliği. */
+export const TOTAL_FORECAST_ID = 'toplam';
 export const FORECAST_DAYS = 30;
 /** Bildirim ve uyarı bandı için bakılan pencere. */
 export const ALERT_WINDOW_DAYS = 14;
@@ -41,13 +44,13 @@ export function useCashForecasts(workspaceId: string | null) {
   const obligationsQuery = useQuery({
     queryKey: workspaceId ? queryKeys.dashboardActiveObligations(workspaceId) : ['obligations', 'disabled'],
     queryFn: () =>
-      listObligations({ workspaceId: workspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
+      listAllObligations({ workspaceId: workspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES }),
     enabled,
   });
   const installmentsQuery = useQuery({
     queryKey: workspaceId ? [workspaceId, 'obligations', 'dashboard-installments'] : ['dashboard-installments', 'disabled'],
     queryFn: () =>
-      listInstallmentsDue({ workspaceId: workspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
+      listAllInstallmentsDue({ workspaceId: workspaceId as string, statuses: ACTIVE_OBLIGATION_STATUSES, openOnly: true }),
     enabled,
   });
 
@@ -60,11 +63,21 @@ export function useCashForecasts(workspaceId: string | null) {
     const balanceById = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
     const horizon = new Date();
     horizon.setDate(horizon.getDate() + FORECAST_DAYS);
-    const horizonIso = horizon.toISOString().slice(0, 10);
+    const horizonIso = localIsoDate(horizon);
 
-    return (accountsQuery.data ?? [])
-      .filter((a) => a.type !== 'credit_card' && a.currency_code === 'TRY')
-      .map((account) => {
+    const tryAccounts = (accountsQuery.data ?? []).filter((a) => a.type !== 'credit_card' && a.currency_code === 'TRY');
+    const toItem = (o: ObligationDueItem): ForecastItem => ({
+      dueDate: o.due_date as string,
+      amountMinor: o.remaining_amount_minor,
+      direction: o.direction as 'payable' | 'receivable',
+      title: o.title,
+      obligationId: o.id,
+    });
+    const forecastable = all.filter(
+      (o) => o.currency_code === 'TRY' && o.remaining_amount_minor > 0 && !!o.due_date && (o.due_date as string) <= horizonIso
+    );
+
+    const perAccount = tryAccounts.map((account) => {
         const items: ForecastItem[] = all
           .filter(
             (o) =>
@@ -90,6 +103,26 @@ export function useCashForecasts(workspaceId: string | null) {
           forecast: projectBalance(currentBalanceMinor, items, FORECAST_DAYS),
         };
       });
+
+    // Hesabı atanmamış kayıtlar hiçbir hesabın tahminine girmez; bu yüzden onlar yüzünden eksiye
+    // düşecek bir durum kaçardı. Atanmamış TL kayıt varsa, tüm TL hesapların toplam bakiyesine tüm
+    // TL kayıtlar uygulanarak ayrı bir toplam tahmin eklenir.
+    const hasUnassigned = forecastable.some((o) => !o.account_id);
+    if (!hasUnassigned || tryAccounts.length === 0) return perAccount;
+    const totalBalanceMinor = tryAccounts.reduce(
+      (sum, a) => sum + (balanceById.get(a.id) ?? a.opening_balance_minor),
+      0
+    );
+    return [
+      ...perAccount,
+      {
+        accountId: TOTAL_FORECAST_ID,
+        name: 'Tüm TL hesaplar',
+        bankCode: null,
+        currentBalanceMinor: totalBalanceMinor,
+        forecast: projectBalance(totalBalanceMinor, forecastable.map(toItem), FORECAST_DAYS),
+      },
+    ];
   }, [accountsQuery.data, balancesQuery.data, obligationsQuery.data, installmentsQuery.data]);
 
   const isLoading = accountsQuery.isLoading || balancesQuery.isLoading;
@@ -100,7 +133,7 @@ export function useCashForecasts(workspaceId: string | null) {
 export function atRiskAccounts(forecasts: AccountForecast[]): AccountForecast[] {
   const limit = new Date();
   limit.setDate(limit.getDate() + ALERT_WINDOW_DAYS);
-  const limitIso = limit.toISOString().slice(0, 10);
+  const limitIso = localIsoDate(limit);
   return forecasts
     .filter((f) => f.forecast.firstNegative && f.forecast.firstNegative.date <= limitIso)
     .sort((a, b) => (a.forecast.firstNegative!.date).localeCompare(b.forecast.firstNegative!.date));

@@ -26,6 +26,7 @@ import { OBLIGATION_STATUS_LABEL, type ObligationStatus } from '@/components/fin
 import {
   listObligations,
   getObligationSummary,
+  getOverdueObligationIds,
   getObligationInstallmentSummaries,
   deleteObligation,
   ACTIVE_OBLIGATION_STATUSES,
@@ -100,15 +101,23 @@ export default function ObligationsByTypeScreen() {
   }, [searchInput]);
 
   const statuses = STATUSES_BY_KEY[statusKey];
-  // Gecikme tarihten türetilir (bkz. DueBreakdown ile aynı kural: vadesi bugünden önce ve açık).
-  const dueBefore = statusKey === 'overdue' ? new Date().toISOString().slice(0, 10) : undefined;
+  // Gecikme taksit bazında türetilir (bkz. getOverdueObligationIds): kaydın kendi vadesi taksitli
+  // kayıtlarda ilk taksit tarihidir, ona bakmak ilk taksidi ödenmiş her krediyi gecikmiş gösterirdi.
+  const overdueIdsQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? [activeWorkspaceId, 'obligations', 'overdue-ids', documentType ?? 'all']
+      : ['overdue-ids', 'disabled'],
+    queryFn: () => getOverdueObligationIds({ workspaceId: activeWorkspaceId as string, documentType }),
+    enabled: !!activeWorkspaceId && statusKey === 'overdue',
+  });
+  const overdueIds = statusKey === 'overdue' ? overdueIdsQuery.data : undefined;
   // Belge türü verilmemişse (Ana Sayfa'dan "Tüm kayıtlar") tüm türler listelenir.
-  const enabled = !!activeWorkspaceId;
+  const enabled = !!activeWorkspaceId && (statusKey !== 'overdue' || overdueIdsQuery.isSuccess);
 
   // Özet sorgusu sıralama veya sayfadan etkilenmez; ikisi de yalnızca sayfalı liste
   // anahtarına eklenir ki "Tarih" düğmesine dokunmak veya sayfa değiştirmek özeti
   // gereksiz yere yeniden çekmesin.
-  const filterKey = `${documentType ?? 'all'}|${statusKey}|${search}`;
+  const filterKey = `${documentType ?? 'all'}|${statusKey}|${search}|${overdueIds?.join(',') ?? ''}`;
   const resetKey = `${filterKey}|${sortAscending ? 'asc' : 'desc'}`;
 
   // Filtre, arama veya sıralama değiştiğinde geçerli sayfa artık anlamsızlaşır — her
@@ -129,7 +138,7 @@ export default function ObligationsByTypeScreen() {
         workspaceId: activeWorkspaceId as string,
         documentType,
         statuses,
-        dueBefore,
+        ids: overdueIds,
         search: search || undefined,
       }),
     enabled,
@@ -154,7 +163,7 @@ export default function ObligationsByTypeScreen() {
       ]);
       return { active, total };
     },
-    enabled,
+    enabled: !!activeWorkspaceId,
   });
 
   const summary = summaryQuery.data;
@@ -175,7 +184,7 @@ export default function ObligationsByTypeScreen() {
         workspaceId: activeWorkspaceId as string,
         documentType,
         statuses,
-        dueBefore,
+        ids: overdueIds,
         search: search || undefined,
         page: effectivePage,
         pageSize: LIST_PAGE_SIZE,

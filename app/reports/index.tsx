@@ -52,7 +52,7 @@ import {
   type DateRange,
 } from '@/features/reports/api';
 import { exportReportPdf, type ReportPdfSections } from '@/features/reports/pdf';
-import { ACTIVE_OBLIGATION_STATUSES, listObligations } from '@/features/obligations/api';
+import { ACTIVE_OBLIGATION_STATUSES, listAllObligations } from '@/features/obligations/api';
 import { VALUE_UNITS } from '@/features/valueUnits/units';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -263,7 +263,7 @@ export default function ReportsScreen() {
   });
   const obligationsSummaryQuery = useQuery({
     queryKey: enabled ? queryKeys.dashboardActiveObligations(ws) : ['reports', 'disabled'],
-    queryFn: () => listObligations({ workspaceId: ws, statuses: ACTIVE_OBLIGATION_STATUSES, pageSize: 200 }),
+    queryFn: () => listAllObligations({ workspaceId: ws, statuses: ACTIVE_OBLIGATION_STATUSES }),
     enabled,
   });
   const accountBalancesQuery = useQuery({

@@ -41,8 +41,12 @@ export function projectBalance(
   const outgoing: ForecastItem[] = [];
 
   for (const item of items) {
-    // Vadesi geçmiş ve henüz ödenmemiş kayıtlar bugün çıkıyor sayılır.
-    const key = item.dueDate < isoDay(start) ? isoDay(start) : item.dueDate;
+    // Vadesi geçmiş ve henüz ödenmemiş borçlar bugün çıkıyor sayılır (temkinli). Vadesi geçmiş alacak
+    // ise tahsil edileceği belli olmadığından tahmine girmez — bugün gelirmiş gibi saymak, eksiye
+    // düşecek bir hesabı olduğundan rahat gösterirdi.
+    const overdue = item.dueDate < isoDay(start);
+    if (overdue && item.direction === 'receivable') continue;
+    const key = overdue ? isoDay(start) : item.dueDate;
     const delta = item.direction === 'payable' ? -item.amountMinor : item.amountMinor;
     byDay.set(key, (byDay.get(key) ?? 0) + delta);
     if (item.direction === 'payable') outgoing.push(item);

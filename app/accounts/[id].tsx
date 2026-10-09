@@ -257,7 +257,7 @@ export default function AccountDetailScreen() {
     const heroAmountColor = theme.colors.textPrimary;
     const loadedStatementCount = statementMonths.filter((m) => m.obligation).length;
     const sourceAccounts = (accountsQuery.data ?? []).filter(
-      (a) => a.type !== 'credit_card' && a.type !== 'pos'
+      (a) => a.type !== 'credit_card' && a.type !== 'pos' && a.currency_code === account.currency_code
     );
 
     function afterCardPayment() {

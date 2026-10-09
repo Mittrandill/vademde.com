@@ -4,6 +4,7 @@ import type { Tables, TablesInsert } from '@/db/database.types';
 import { createTransaction, createTransfer } from '@/features/transactions/api';
 import { createInstallmentPlan, createObligation, type Obligation } from '@/features/obligations/api';
 import { getValueUnit } from '@/features/valueUnits/units';
+import { formatValueUnitAmount } from '@/utils/money';
 
 export type Payment = Tables<'payments'>;
 
@@ -68,6 +69,41 @@ async function planInstallmentSlices(obligationId: string, amountMinor: number):
   return slices;
 }
 
+
+// Kalan borcu aşan ödeme reddedilir: fazlası eskiden son taksite eklenip kalan 0'a kırpıldığı için
+// kayıt "ödendi" görünürken fazla tutar hiçbir yerde görünmeden kayboluyordu. Fazla tutar için
+// Ödeme Yap/Tahsilat Al akışı (avans) kullanılır. `releaseMinor`: düzenlenen ödemenin mevcut tutarı.
+async function assertWithinRemaining(
+  obligationId: string,
+  installmentId: string | null | undefined,
+  amountMinor: number,
+  releaseMinor = 0
+): Promise<void> {
+  if (amountMinor <= 0) throw new Error('Tutar sıfırdan büyük olmalı');
+  const { data: obligation, error } = await supabase
+    .from('obligations')
+    .select('remaining_amount_minor, currency_code')
+    .eq('id', obligationId)
+    .single();
+  if (error) throw error;
+  let remainingMinor = obligation.remaining_amount_minor;
+  if (installmentId) {
+    const { data: installment, error: installmentError } = await supabase
+      .from('installments')
+      .select('remaining_amount_minor')
+      .eq('id', installmentId)
+      .single();
+    if (installmentError) throw installmentError;
+    remainingMinor = installment.remaining_amount_minor;
+  }
+  const allowedMinor = remainingMinor + releaseMinor;
+  if (amountMinor > allowedMinor) {
+    throw new Error(
+      `Tutar kalan borcu aşıyor (en fazla ${formatValueUnitAmount(allowedMinor, obligation.currency_code)}). Fazla tutar için Ödeme yap / Tahsilat al ekranını kullanın.`
+    );
+  }
+}
+
 export async function listPaymentsForObligation(obligationId: string): Promise<Payment[]> {
   const { data, error } = await supabase
     .from('payments')
@@ -115,22 +151,70 @@ export interface RecordPaymentInput {
 // planInstallmentSlices). Her dilim kendi payments + transaction çiftini alır — ödeme ile
 // hareket arasındaki 1:1 ilişki korunur ki updatePayment/deletePayment tek satır üzerinden
 // tutarlı çalışsın. Dönen değer ilk dilimdir; dekont (receipt_document_id) yalnızca ona bağlanır.
-export async function recordPayment(input: RecordPaymentInput): Promise<Payment> {
+async function buildPaymentItems(input: RecordPaymentInput) {
+  await assertWithinRemaining(input.obligation_id, input.installment_id, input.amount_minor);
   const slices: InstallmentSlice[] = input.installment_id
     ? [{ installmentId: input.installment_id, amountMinor: input.amount_minor }]
     : await planInstallmentSlices(input.obligation_id, input.amount_minor);
 
-  let first: Payment | null = null;
-  for (const [index, slice] of slices.entries()) {
-    const payment = await insertPaymentWithTransaction({
-      ...input,
-      installment_id: slice.installmentId,
-      amount_minor: slice.amountMinor,
-      receipt_document_id: index === 0 ? (input.receipt_document_id ?? null) : null,
-    });
-    first ??= payment;
-  }
-  return first as Payment;
+  return Promise.all(
+    slices.map(async (slice, index) => ({
+      transaction: input.account_id
+        ? {
+            workspace_id: input.workspace_id,
+            account_id: input.account_id,
+            direction: input.obligationDirection === 'payable' ? 'expense' : 'income',
+            category_id: input.obligationCategoryId ?? null,
+            counterparty_id: input.obligationCounterpartyId ?? null,
+            amount_minor: slice.amountMinor,
+            financing_minor: await computeFinancingMinor(input.obligation_id, slice.installmentId, slice.amountMinor),
+            currency_code: input.obligationCurrencyCode,
+            payment_method: input.paymentMethod ?? null,
+            description: input.obligationTitle,
+            // payments.paid_at ile aynı tarih — verilmezse DB varsayılanı (şimdi) kullanılır.
+            occurred_at: input.paid_at ?? null,
+          }
+        : null,
+      payment: {
+        workspace_id: input.workspace_id,
+        obligation_id: input.obligation_id,
+        installment_id: slice.installmentId,
+        account_id: input.account_id ?? null,
+        amount_minor: slice.amountMinor,
+        paid_at: input.paid_at ?? null,
+        notes: input.notes ?? null,
+        // Dekont (receipt_document_id) yalnızca ilk dilime bağlanır.
+        receipt_document_id: index === 0 ? (input.receipt_document_id ?? null) : null,
+        fx_rate_try_minor: input.fx_rate_try_minor ?? null,
+      },
+    }))
+  );
+}
+
+// Tüm kayıtların tüm dilimleri (ödeme + varsa hesap hareketi) tek veritabanı işleminde yazılır
+// (record_payments): bir adım düşerse hiçbiri kalmaz — yetim hareket ya da yarım dağıtılmış ödeme
+// oluşmaz. Birden çok kayda dağıtılan ödemede de kayıtlar arası bütünlük bu sayede korunur.
+async function recordPaymentsBatch(inputs: RecordPaymentInput[]): Promise<Payment[]> {
+  const items = (await Promise.all(inputs.map(buildPaymentItems))).flat();
+  if (items.length === 0) return [];
+  const { data, error } = await supabase.rpc('record_payments' as never, { p_items: items } as never);
+  if (error) throw error;
+  return (data ?? []) as unknown as Payment[];
+}
+
+export async function recordPayment(input: RecordPaymentInput): Promise<Payment> {
+  const created = await recordPaymentsBatch([input]);
+  if (created.length === 0) throw new Error('Ödeme kaydedilemedi');
+  return created[0];
+}
+
+// Telafi: sonraki bir adım düşerse (ör. fazla tutarın avans kaydı) az önce yazılan ödemeler ve
+// hesap hareketleri geri alınır. Kayıtların kalan tutarı ve durumu silme tetikleyicileriyle döner.
+async function undoPayments(payments: Payment[]): Promise<void> {
+  const paymentIds = payments.map((p) => p.id);
+  const transactionIds = payments.map((p) => p.transaction_id).filter((id): id is string => !!id);
+  if (paymentIds.length > 0) await supabase.from('payments').delete().in('id', paymentIds);
+  if (transactionIds.length > 0) await supabase.from('transactions').delete().in('id', transactionIds);
 }
 
 // Borçlanma/borç verme türleri: ödemelerinin anapara kısmı gelir ya da gider değildir
@@ -167,53 +251,6 @@ async function computeFinancingMinor(
   return amountMinor;
 }
 
-async function insertPaymentWithTransaction({
-  obligationDirection,
-  obligationTitle,
-  obligationCategoryId,
-  obligationCounterpartyId,
-  obligationCurrencyCode,
-  paymentMethod,
-  ...input
-}: RecordPaymentInput): Promise<Payment> {
-  let transactionId: string | null = null;
-
-  if (input.account_id) {
-    const transactionInput: TablesInsert<'transactions'> = {
-      workspace_id: input.workspace_id,
-      account_id: input.account_id,
-      direction: obligationDirection === 'payable' ? 'expense' : 'income',
-      category_id: obligationCategoryId ?? null,
-      counterparty_id: obligationCounterpartyId ?? null,
-      amount_minor: input.amount_minor,
-      financing_minor: await computeFinancingMinor(input.obligation_id, input.installment_id, input.amount_minor),
-      currency_code: obligationCurrencyCode,
-      payment_method: paymentMethod ?? null,
-      description: obligationTitle,
-      // payments.paid_at ile aynı tarih — verilmezse (ör. OCR'ın geçmiş taksitleri otomatik
-      // "ödendi" işaretlemesi) DB varsayılanı (şimdi) kullanılır. Bu satır eksikti: transaction
-      // her zaman "şimdi" tarihiyle oluşuyordu, payments.paid_at ise seçilen tarihi taşıyordu —
-      // ikisi birbirinden sapıyor, Son Hareketler (occurred_at okur) yanlış tarih gösteriyordu.
-      ...(input.paid_at ? { occurred_at: input.paid_at } : {}),
-    };
-    const { data: transaction, error: transactionError } = await supabase
-      .from('transactions')
-      .insert(transactionInput)
-      .select('id')
-      .single();
-    if (transactionError) throw transactionError;
-    transactionId = transaction.id;
-  }
-
-  const { data, error } = await supabase
-    .from('payments')
-    .insert({ ...input, transaction_id: transactionId })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data;
-}
-
 export interface RecordPastInstallmentPaymentInput {
   workspace_id: string;
   obligation_id: string;
@@ -247,6 +284,9 @@ export interface UpdatePaymentInput {
 // hesap kaldırılırsa eski transaction silinir, hesap yeni eklenirse yeni bir transaction
 // oluşturulur — aksi halde ödeme kaydı ile hesap bakiyesi birbirinden sapar.
 export async function updatePayment(payment: Payment, input: UpdatePaymentInput): Promise<Payment> {
+  if (payment.obligation_id) {
+    await assertWithinRemaining(payment.obligation_id, payment.installment_id, input.amount_minor, payment.amount_minor);
+  }
   let transactionId = payment.transaction_id;
 
   if (input.account_id) {
@@ -348,35 +388,42 @@ export async function recordCardPayment({
     description: 'Kredi kartı ödemesi',
   });
 
-  const { data: openStatements, error } = await supabase
-    .from('obligations')
-    .select('id, remaining_amount_minor')
-    .eq('workspace_id', workspaceId)
-    .eq('account_id', cardAccountId)
-    .eq('document_type', 'kredi_karti_ekstresi')
-    .gt('remaining_amount_minor', 0)
-    .order('due_date', { ascending: true });
-  if (error) throw error;
+  // Ekstrelere dağıtım düşerse transfer tek başına kalıp kart borcunu ekstresiz düşürmesin diye
+  // telafi olarak transfer geri alınır (ödeme satırı yazılamadığı için başka bir şey silinmez).
+  try {
+    const { data: openStatements, error } = await supabase
+      .from('obligations')
+      .select('id, remaining_amount_minor')
+      .eq('workspace_id', workspaceId)
+      .eq('account_id', cardAccountId)
+      .eq('document_type', 'kredi_karti_ekstresi')
+      .gt('remaining_amount_minor', 0)
+      .order('due_date', { ascending: true });
+    if (error) throw error;
 
-  let unallocated = amountMinor;
-  const rows: TablesInsert<'payments'>[] = [];
-  for (const statement of openStatements ?? []) {
-    if (unallocated <= 0) break;
-    const applied = Math.min(unallocated, statement.remaining_amount_minor);
-    rows.push({
-      workspace_id: workspaceId,
-      obligation_id: statement.id,
-      amount_minor: applied,
-      account_id: null,
-      transaction_id: transfer.id,
-      paid_at: paidAt,
-    });
-    unallocated -= applied;
-  }
+    let unallocated = amountMinor;
+    const rows: TablesInsert<'payments'>[] = [];
+    for (const statement of openStatements ?? []) {
+      if (unallocated <= 0) break;
+      const applied = Math.min(unallocated, statement.remaining_amount_minor);
+      rows.push({
+        workspace_id: workspaceId,
+        obligation_id: statement.id,
+        amount_minor: applied,
+        account_id: null,
+        transaction_id: transfer.id,
+        paid_at: paidAt,
+      });
+      unallocated -= applied;
+    }
 
-  if (rows.length > 0) {
-    const { error: paymentsError } = await supabase.from('payments').insert(rows);
-    if (paymentsError) throw paymentsError;
+    if (rows.length > 0) {
+      const { error: paymentsError } = await supabase.from('payments').insert(rows);
+      if (paymentsError) throw paymentsError;
+    }
+  } catch (error) {
+    await supabase.from('transactions').delete().eq('id', transfer.id);
+    throw error;
   }
 }
 
@@ -557,12 +604,13 @@ export async function settleObligations(input: SettleObligationsInput): Promise<
 
   if (!input.accountId) throw new Error('Hesap seçin');
   const transactionIds: string[] = [];
-  for (const allocation of allocations) {
-    const payment = await recordPayment({
+  // Tüm kayıtlara dağıtılan ödemeler tek işlemde yazılır: bir kayıt düşerse hiçbiri uygulanmaz.
+  const createdPayments = await recordPaymentsBatch(
+    allocations.map((allocation) => ({
       workspace_id: input.workspaceId,
       obligation_id: allocation.obligation.id,
       installment_id: null,
-      account_id: input.accountId,
+      account_id: input.accountId as string,
       amount_minor: allocation.amountMinor,
       paid_at: input.paidAt,
       obligationDirection: input.direction,
@@ -572,38 +620,45 @@ export async function settleObligations(input: SettleObligationsInput): Promise<
       obligationCurrencyCode: allocation.obligation.currency_code,
       paymentMethod: input.method,
       fx_rate_try_minor: input.fxRateTryMinor ?? null,
-    });
-    if (payment.transaction_id) transactionIds.push(payment.transaction_id);
-  }
+    }))
+  );
+  for (const payment of createdPayments) if (payment.transaction_id) transactionIds.push(payment.transaction_id);
 
   let advanceObligation: Obligation | null = null;
   if (leftoverMinor > 0) {
     // Artan para gerçekten hesaptan çıktı/hesaba girdi: hareket yazılır ve avans kaydına bağlanır
     // (source_obligation_id — avans silinirse hareket de silinir, bkz. transactions FK).
-    advanceObligation = await createAdvanceObligation({
-      workspaceId: input.workspaceId,
-      settlementDirection: input.direction,
-      counterpartyId: input.counterpartyId,
-      counterpartyName: input.counterpartyName,
-      currencyCode: input.currencyCode,
-      amountMinor: leftoverMinor,
-      parentObligationId: null,
-      note: input.description?.trim() || null,
-    });
-    const created = await createTransaction({
-      workspace_id: input.workspaceId,
-      account_id: input.accountId,
-      direction: input.direction === 'payable' ? 'expense' : 'income',
-      category_id: input.categoryId ?? null,
-      counterparty_id: input.counterpartyId,
-      payment_method: input.method,
-      amount_minor: leftoverMinor,
-      currency_code: input.currencyCode,
-      occurred_at: input.paidAt,
-      description: advanceObligation.title,
-      source_obligation_id: advanceObligation.id,
-    });
-    transactionIds.push(created.id);
+    // Bu adım düşerse az önce uygulanan ödemeler ve yarım kalan avans geri alınır.
+    try {
+      advanceObligation = await createAdvanceObligation({
+        workspaceId: input.workspaceId,
+        settlementDirection: input.direction,
+        counterpartyId: input.counterpartyId,
+        counterpartyName: input.counterpartyName,
+        currencyCode: input.currencyCode,
+        amountMinor: leftoverMinor,
+        parentObligationId: null,
+        note: input.description?.trim() || null,
+      });
+      const created = await createTransaction({
+        workspace_id: input.workspaceId,
+        account_id: input.accountId,
+        direction: input.direction === 'payable' ? 'expense' : 'income',
+        category_id: input.categoryId ?? null,
+        counterparty_id: input.counterpartyId,
+        payment_method: input.method,
+        amount_minor: leftoverMinor,
+        currency_code: input.currencyCode,
+        occurred_at: input.paidAt,
+        description: advanceObligation.title,
+        source_obligation_id: advanceObligation.id,
+      });
+      transactionIds.push(created.id);
+    } catch (error) {
+      if (advanceObligation) await supabase.from('obligations').delete().eq('id', advanceObligation.id);
+      await undoPayments(createdPayments);
+      throw error;
+    }
   }
 
   return { allocations, leftoverMinor, instrumentObligation: null, advanceObligation, transactionIds };

@@ -1,6 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
-import { listValueUnitRates, sumToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
+import { listValueUnitRates, transactionToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
 import { EXCLUDE_CARD_STATEMENT_LUMP, profitAndLossMinor } from '@/features/reports/api';
 
 export interface IncomeExpenseTotals {
@@ -20,7 +20,7 @@ export async function getMonthTransactionTotals(
   const [{ data, error }, rates] = await Promise.all([
     supabase
       .from('transactions')
-      .select('amount_minor, financing_minor, direction, currency_code')
+      .select('amount_minor, financing_minor, fx_rate_try_minor, direction, currency_code')
       .eq('workspace_id', workspaceId)
       .in('direction', ['income', 'expense'])
       .or(EXCLUDE_CARD_STATEMENT_LUMP)
@@ -43,7 +43,7 @@ export async function getAllTimeIncomeExpenseTotals(workspaceId: string): Promis
   const [{ data, error }, rates] = await Promise.all([
     supabase
       .from('transactions')
-      .select('amount_minor, direction, currency_code')
+      .select('amount_minor, fx_rate_try_minor, direction, currency_code')
       .eq('workspace_id', workspaceId)
       .in('direction', ['income', 'expense']),
     listValueUnitRates(),
@@ -57,12 +57,15 @@ export async function getAllTimeIncomeExpenseTotals(workspaceId: string): Promis
 // bkz. features/accounts/api.ts. Doğrudan toplamak yerine her satır güncel TL karşılığına
 // çevrilir (bkz. features/valueUnits/api.ts sumToReferenceMinor).
 function sumByDirection(
-  rows: Pick<Tables<'transactions'>, 'amount_minor' | 'direction' | 'currency_code'>[],
+  rows: Pick<Tables<'transactions'>, 'amount_minor' | 'direction' | 'currency_code' | 'fx_rate_try_minor'>[],
   rates: ValueUnitRate[]
 ): IncomeExpenseTotals {
   return rows.reduce<IncomeExpenseTotals>(
     (totals, row) => {
-      const refMinor = sumToReferenceMinor([{ amountMinor: row.amount_minor, unitCode: row.currency_code }], rates);
+      const refMinor = transactionToReferenceMinor(
+        { amountMinor: row.amount_minor, unitCode: row.currency_code, fxRateTryMinor: row.fx_rate_try_minor },
+        rates
+      );
       if (row.direction === 'income') totals.incomeMinor += refMinor;
       else if (row.direction === 'expense') totals.expenseMinor += refMinor;
       return totals;

@@ -36,6 +36,7 @@ import {
   getObligation,
   listObligations,
   type ObligationWithRelations,
+  localIsoDate,
 } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import {
@@ -73,7 +74,7 @@ const METHODS: { key: SettlementMethod; label: string }[] = [
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 function minorToInput(amountMinor: number, unitCode: string): string {

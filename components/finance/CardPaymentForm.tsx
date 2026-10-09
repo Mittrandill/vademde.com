@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { localIsoDate } from '@/features/obligations/api';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -49,7 +50,7 @@ export function CardPaymentForm({
   );
   const [amountTouched, setAmountTouched] = useState(false);
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [dateStr, setDateStr] = useState(new Date().toISOString().slice(0, 10));
+  const [dateStr, setDateStr] = useState(localIsoDate());
 
   const mutation = useMutation({
     mutationFn: () => {

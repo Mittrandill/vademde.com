@@ -44,6 +44,7 @@ import {
   getLinkedDocument,
   type Installment,
   type Obligation,
+  localIsoDate,
 } from '@/features/obligations/api';
 import { listAccounts, type Account } from '@/features/accounts/api';
 import {
@@ -302,7 +303,7 @@ export default function ObligationDetailScreen() {
           : `${statusLabel} · ${daysToDue} gün`;
 
   // Ödeme planı tablosu (ortak InstallmentPlanTable): ödenmişler başta özetlenir, sıradaki vurgulanır.
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localIsoDate();
   const planRows: InstallmentPlanRow[] = installments.map((i) => ({
     key: i.id,
     number: i.installment_number,
@@ -944,10 +945,13 @@ function PaymentForm({
   // yerine artar — ekstre ile aynı kural.
   const isCardStatementPayment =
     obligation.document_type === 'kredi_karti_ekstresi' || obligation.document_type === 'nakit_avans';
+  // Hesap, kaydın değer birimiyle aynı olmalı: hareket kaydın biriminde yazılır ve bakiye birimlere
+  // bakmadan toplanır — USD borç TL hesaptan ödenirse 100 sent, TL hesaptan 1 ₺ düşerdi.
+  const sameUnitAccounts = accounts.filter((a) => a.currency_code === obligation.currency_code);
   const payableAccounts =
     obligation.direction === 'payable'
-      ? accounts.filter((a) => a.type !== 'pos' && (!isCardStatementPayment || a.type !== 'credit_card'))
-      : accounts;
+      ? sameUnitAccounts.filter((a) => a.type !== 'pos' && (!isCardStatementPayment || a.type !== 'credit_card'))
+      : sameUnitAccounts;
   // Yeni ödemede kaydın kendi hesabı (ör. çek/senette "vadede ödenecek hesap") geçerliyse önerilir.
   const [accountId, setAccountId] = useState<string | null>(
     editingPayment
@@ -959,7 +963,7 @@ function PaymentForm({
   // Ödeme varsayılan olarak işlem yapıldığı anın tarihiyle (DB varsayılanı) kaydedilir,
   // ama geçmiş/ileri tarihli ödemeler için kullanıcı bunu elle değiştirebilir.
   const [dateStr, setDateStr] = useState(
-    editingPayment ? editingPayment.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+    editingPayment ? editingPayment.paid_at.slice(0, 10) : localIsoDate()
   );
   // Dekont (Plus): yeni seçilen dosya ya da düzenlemede mevcut bağlantı. removedExisting,
   // kullanıcı kayıtlı dekontu ödemeden ayırdıysa true olur.

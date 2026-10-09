@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { fetchAll } from '@/services/fetchAll';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import { installmentTotalMatches } from '@/utils/validation';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
@@ -57,6 +58,8 @@ export interface ListObligationsFilter {
   search?: string;
   page?: number;
   pageSize?: number;
+  /** Yalnızca bu kayıtlar (gecikmiş filtresi: bkz. getOverdueObligationIds). Boş dizi → sonuç yok. */
+  ids?: string[];
   /** Bu tarihten (YYYY-MM-DD) önce vadeli kayıtlar — gecikmiş filtresi için.
    * Durum alanı vade geçince otomatik 'gecikti' olmadığından gecikme tarihten türetilir. */
   dueBefore?: string;
@@ -72,6 +75,7 @@ export async function listObligations({
   bankCode,
   accountId,
   statuses,
+  ids,
   dueFrom,
   dueTo,
   dueBefore,
@@ -80,6 +84,7 @@ export async function listObligations({
   pageSize = OBLIGATIONS_PAGE_SIZE,
   ascending = true,
 }: ListObligationsFilter): Promise<ObligationWithRelations[]> {
+  if (ids && ids.length === 0) return [];
   let query = supabase
     .from('obligations')
     .select('*, category:categories(name), counterparty:counterparties(name), account:accounts(name), payments(paid_at)')
@@ -90,6 +95,7 @@ export async function listObligations({
   if (bankCode) query = query.eq('bank_code', bankCode);
   if (accountId) query = query.eq('account_id', accountId);
   if (statuses?.length) query = query.in('status', statuses);
+  if (ids) query = query.in('id', ids);
   if (dueFrom) query = query.gte('due_date', dueFrom);
   if (dueTo) query = query.lte('due_date', dueTo);
   if (dueBefore) query = query.lt('due_date', dueBefore);
@@ -98,9 +104,100 @@ export async function listObligations({
 
   const { data, error } = await query
     .order('due_date', { ascending, nullsFirst: false })
+    .order('id')
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
   return data as unknown as ObligationWithRelations[];
+}
+
+// Gecikme ve "en yakın vade" bilgisi. obligations.due_date taksitli kayıtta İLK taksidin tarihidir ve
+// taksitler ödendikçe ilerlemez; ona bakmak ilk taksidi ödenmiş her kredi/aboneliği gecikmiş ve
+// "en yakın vadesi geçmişte" gösteriyordu. Ayrıca obligations.status hiçbir yerde otomatik 'gecikti'
+// olmaz (veritabanında bu durumda kayıt yoktur), yani status'a bakan gecikme sayıları hep 0'dı.
+// Taksitli kayıtta gecikme "vadesi geçmiş ve hâlâ açık taksit"tir (tutarı o taksitlerin kalanı);
+// taksitsiz kayıtta kaydın kendi vadesi ve kalan tutarıdır.
+export interface ObligationDueInfo {
+  /** Bugün ve sonrası en yakın açık vade; yoksa en eski açık (geçmiş) vade; hiç yoksa null. */
+  nextDueDate: string | null;
+  overdueMinor: number;
+  overdueCount: number;
+  /** Kaydın (iptal dışı) taksit planı var mı. */
+  hasInstallments: boolean;
+}
+
+export async function getDueInfoByObligation(
+  workspaceId: string,
+  rows: { id: string; due_date: string | null; remaining_amount_minor: number }[]
+): Promise<Record<string, ObligationDueInfo>> {
+  const todayIso = localIsoDate();
+  const installmentsByObligation: Record<string, { due_date: string; remaining_amount_minor: number }[]> = {};
+  for (let i = 0; i < rows.length; i += 100) {
+    const chunk = rows.slice(i, i + 100).map((r) => r.id);
+    const { data, error } = await supabase
+      .from('installments')
+      .select('obligation_id, due_date, remaining_amount_minor')
+      .eq('workspace_id', workspaceId)
+      .in('obligation_id', chunk)
+      .neq('status', 'iptal_edildi')
+      .limit(5000);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      (installmentsByObligation[row.obligation_id] ??= []).push(row);
+    }
+  }
+
+  const result: Record<string, ObligationDueInfo> = {};
+  for (const row of rows) {
+    const installments = installmentsByObligation[row.id];
+    const open = installments
+      ? installments.filter((i) => i.remaining_amount_minor > 0)
+      : row.remaining_amount_minor > 0 && row.due_date
+        ? [{ due_date: row.due_date, remaining_amount_minor: row.remaining_amount_minor }]
+        : [];
+    const overdue = open.filter((i) => i.due_date < todayIso);
+    const upcoming = open.filter((i) => i.due_date >= todayIso).map((i) => i.due_date).sort();
+    result[row.id] = {
+      nextDueDate: upcoming[0] ?? open.map((i) => i.due_date).sort()[0] ?? row.due_date,
+      overdueMinor: overdue.reduce((sum, i) => sum + i.remaining_amount_minor, 0),
+      overdueCount: overdue.length,
+      hasInstallments: !!installments,
+    };
+  }
+  return result;
+}
+
+// Gecikmiş kayıtların kimlikleri (liste filtresi ve sayaçlar için). obligations.due_date ilk taksit
+// tarihi olduğundan vadesi bugünden önce olan kayıtlar gerçek gecikmişlerin üst kümesidir; yalnızca
+// onlar taksit bazında elenir.
+export async function getOverdueObligationIds({
+  workspaceId,
+  direction,
+  documentType,
+}: {
+  workspaceId: string;
+  direction?: 'payable' | 'receivable';
+  documentType?: string;
+}): Promise<string[]> {
+  let query = supabase
+    .from('obligations')
+    .select('id, due_date, remaining_amount_minor')
+    .eq('workspace_id', workspaceId)
+    .in('status', ACTIVE_OBLIGATION_STATUSES)
+    .neq('document_type', 'avans')
+    .lt('due_date', localIsoDate())
+    .limit(1000);
+  if (direction) query = query.eq('direction', direction);
+  if (documentType) query = query.eq('document_type', documentType);
+  const { data: candidates, error } = await query;
+  if (error) throw error;
+  if (!candidates?.length) return [];
+  const info = await getDueInfoByObligation(workspaceId, candidates);
+  return candidates.filter((c) => (info[c.id]?.overdueCount ?? 0) > 0).map((c) => c.id);
+}
+
+// Yerel takvim günü (YYYY-MM-DD). toISOString() UTC'dir: Türkiye'de 00:00–03:00 arasında dünü verirdi.
+export function localIsoDate(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 export interface ObligationSummary {
@@ -192,48 +289,66 @@ export async function getDueBreakdown({
   counterpartyId?: string;
   documentType?: string;
 }): Promise<DueBreakdownResult> {
-  let obligationsQuery = supabase
-    .from('obligations')
-    .select('id, direction, document_type, currency_code, remaining_amount_minor, due_date')
-    .eq('workspace_id', workspaceId)
-    .in('status', ACTIVE_OBLIGATION_STATUSES)
-    // Avansın (ön ödeme/alınan avans) vadesi yoktur: gecikmiş/bu ay ödenecek sayılmaz, yalnızca
-    // cari bakiyesine girer (bkz. features/payments/api.ts createAdvanceObligation).
-    .neq('document_type', 'avans');
-  if (counterpartyId) obligationsQuery = obligationsQuery.eq('counterparty_id', counterpartyId);
-  if (documentType) obligationsQuery = obligationsQuery.eq('document_type', documentType);
-
-  const [{ data: obligationRows, error }, rates] = await Promise.all([obligationsQuery, listValueUnitRates()]);
-  if (error) throw error;
+  const [obligationRows, rates] = await Promise.all([
+    fetchAll<{
+      id: string;
+      direction: string;
+      document_type: string;
+      currency_code: string;
+      remaining_amount_minor: number;
+      due_date: string | null;
+    }>((from, to) => {
+      let query = supabase
+        .from('obligations')
+        .select('id, direction, document_type, currency_code, remaining_amount_minor, due_date')
+        .eq('workspace_id', workspaceId)
+        .in('status', ACTIVE_OBLIGATION_STATUSES)
+        // Avansın (ön ödeme/alınan avans) vadesi yoktur: gecikmiş/bu ay ödenecek sayılmaz, yalnızca
+        // cari bakiyesine girer (bkz. features/payments/api.ts createAdvanceObligation).
+        .neq('document_type', 'avans');
+      if (counterpartyId) query = query.eq('counterparty_id', counterpartyId);
+      if (documentType) query = query.eq('document_type', documentType);
+      return query.order('id').range(from, to);
+    }),
+    listValueUnitRates(),
+  ]);
 
   // Cari detayında faturayı kapatmış çek/senet carinin borcu/alacağı sayılmaz (bkz.
   // getSettlingInstrumentIds); genel ekranlarda (ana sayfa, Çeklerim) vadesi olan bir ödeme olarak kalır.
   const settlingInstrumentIds = counterpartyId
-    ? await getSettlingInstrumentIds(workspaceId, obligationRows ?? [])
+    ? await getSettlingInstrumentIds(workspaceId, obligationRows)
     : new Set<string>();
-  const obligations = (obligationRows ?? []).filter((o) => !settlingInstrumentIds.has(o.id));
+  const obligations = obligationRows.filter((o) => !settlingInstrumentIds.has(o.id));
   if (obligations.length === 0) {
     return { payable: { ...EMPTY_BREAKDOWN }, receivable: { ...EMPTY_BREAKDOWN } };
   }
 
-  const obligationIds = obligations.map((o) => o.id);
-  const { data: installmentRows, error: installmentError } = await supabase
-    .from('installments')
-    .select('obligation_id, due_date, remaining_amount_minor')
-    .eq('workspace_id', workspaceId)
-    .in('obligation_id', obligationIds)
-    .gt('remaining_amount_minor', 0);
-  if (installmentError) throw installmentError;
+  // .in() listesi URL'ye yazıldığı için çok sayıda kayıtta parçalara bölünür.
+  const installmentRows: { obligation_id: string; due_date: string; remaining_amount_minor: number }[] = [];
+  for (let i = 0; i < obligations.length; i += 100) {
+    const chunk = obligations.slice(i, i + 100).map((o) => o.id);
+    const rows = await fetchAll<{ obligation_id: string; due_date: string; remaining_amount_minor: number }>((from, to) =>
+      supabase
+        .from('installments')
+        .select('obligation_id, due_date, remaining_amount_minor')
+        .eq('workspace_id', workspaceId)
+        .in('obligation_id', chunk)
+        .gt('remaining_amount_minor', 0)
+        .order('id')
+        .range(from, to)
+    );
+    installmentRows.push(...rows);
+  }
 
   const byObligation = new Map<string, { dueDate: string; remainingMinor: number }[]>();
-  for (const row of installmentRows ?? []) {
+  for (const row of installmentRows) {
     const list = byObligation.get(row.obligation_id) ?? [];
     list.push({ dueDate: row.due_date, remainingMinor: row.remaining_amount_minor });
     byObligation.set(row.obligation_id, list);
   }
 
   const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = localIsoDate(today);
   // Ay sonu, ayın gün sayısı değişken olduğu için UTC ile hesaplanır (bkz.
   // utils/installmentPlan.ts addMonthsToIsoDate — aynı gerekçe).
   const monthEndIso = new Date(Date.UTC(today.getFullYear(), today.getMonth() + 1, 0))
@@ -287,25 +402,42 @@ export async function getObligationSummary({
   direction,
   documentType,
   statuses,
+  ids,
   dueBefore,
   search,
 }: Omit<ListObligationsFilter, 'page' | 'pageSize' | 'dueFrom' | 'dueTo'>): Promise<ObligationSummary> {
-  const todayIso = new Date().toISOString().slice(0, 10);
-  let query = supabase
-    .from('obligations')
-    .select('direction, remaining_amount_minor, total_amount_minor, currency_code, status, due_date')
-    .eq('workspace_id', workspaceId);
-  if (direction) query = query.eq('direction', direction);
-  if (documentType) query = query.eq('document_type', documentType);
-  if (statuses?.length) query = query.in('status', statuses);
-  if (dueBefore) query = query.lt('due_date', dueBefore);
-  const trimmedSearch = search?.trim();
-  if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
+  if (ids && ids.length === 0) {
+    return { count: 0, payableMinor: 0, receivableMinor: 0, payableTotalMinor: 0, receivableTotalMinor: 0, overdueCount: 0 };
+  }
+  type SummaryRow = {
+    id: string;
+    direction: string;
+    remaining_amount_minor: number;
+    total_amount_minor: number;
+    currency_code: string;
+    status: string;
+    due_date: string | null;
+  };
+  const [rows, rates, overdueIds] = await Promise.all([
+    fetchAll<SummaryRow>((from, to) => {
+      let query = supabase
+        .from('obligations')
+        .select('id, direction, remaining_amount_minor, total_amount_minor, currency_code, status, due_date')
+        .eq('workspace_id', workspaceId);
+      if (ids) query = query.in('id', ids);
+      if (direction) query = query.eq('direction', direction);
+      if (documentType) query = query.eq('document_type', documentType);
+      if (statuses?.length) query = query.in('status', statuses);
+      if (dueBefore) query = query.lt('due_date', dueBefore);
+      const trimmedSearch = search?.trim();
+      if (trimmedSearch) query = query.ilike('title', `%${trimmedSearch}%`);
+      return query.order('id').range(from, to);
+    }),
+    listValueUnitRates(),
+    getOverdueObligationIds({ workspaceId, direction, documentType }),
+  ]);
 
-  const [{ data, error }, rates] = await Promise.all([query, listValueUnitRates()]);
-  if (error) throw error;
-
-  const rows = data ?? [];
+  const overdueIdSet = new Set(overdueIds);
   const payableRows = rows.filter((r) => r.direction === 'payable');
   const receivableRows = rows.filter((r) => r.direction === 'receivable');
   return {
@@ -326,11 +458,7 @@ export async function getObligationSummary({
       receivableRows.map((r) => ({ amountMinor: r.total_amount_minor, unitCode: r.currency_code })),
       rates
     ),
-    overdueCount: rows.filter(
-      (r) =>
-        r.status === 'gecikti' ||
-        (r.remaining_amount_minor > 0 && !!r.due_date && r.due_date < todayIso && ACTIVE_OBLIGATION_STATUSES.includes(r.status))
-    ).length,
+    overdueCount: rows.filter((r) => overdueIdSet.has(r.id)).length,
   };
 }
 
@@ -349,18 +477,21 @@ export async function getObligationTotalsByType(
   workspaceId: string,
   statuses: Obligation['status'][] = ACTIVE_OBLIGATION_STATUSES
 ): Promise<Record<string, ObligationTypeTotal>> {
-  const [{ data, error }, rates] = await Promise.all([
-    supabase
-      .from('obligations')
-      .select('document_type, remaining_amount_minor, currency_code')
-      .eq('workspace_id', workspaceId)
-      .in('status', statuses),
+  const [data, rates] = await Promise.all([
+    fetchAll<{ document_type: string; remaining_amount_minor: number; currency_code: string }>((from, to) =>
+      supabase
+        .from('obligations')
+        .select('document_type, remaining_amount_minor, currency_code')
+        .eq('workspace_id', workspaceId)
+        .in('status', statuses)
+        .order('id')
+        .range(from, to)
+    ),
     listValueUnitRates(),
   ]);
-  if (error) throw error;
 
   const totals: Record<string, ObligationTypeTotal> = {};
-  for (const row of data ?? []) {
+  for (const row of data) {
     if (!row.document_type) continue;
     const current = totals[row.document_type] ?? { count: 0, totalMinor: 0 };
     totals[row.document_type] = {
@@ -378,6 +509,8 @@ export interface ListInstallmentsDueFilter {
   statuses?: Obligation['status'][];
   dueFrom?: string;
   dueTo?: string;
+  /** Yalnızca kalan tutarı > 0 olan (ödenmemiş) taksitler. */
+  openOnly?: boolean;
   page?: number;
   pageSize?: number;
 }
@@ -392,6 +525,7 @@ export async function listInstallmentsDue({
   statuses,
   dueFrom,
   dueTo,
+  openOnly,
   page = 0,
   pageSize = OBLIGATIONS_PAGE_SIZE,
 }: ListInstallmentsDueFilter): Promise<ObligationDueItem[]> {
@@ -407,9 +541,11 @@ export async function listInstallmentsDue({
   if (statuses?.length) query = query.in('obligation.status', statuses);
   if (dueFrom) query = query.gte('due_date', dueFrom);
   if (dueTo) query = query.lte('due_date', dueTo);
+  if (openOnly) query = query.gt('remaining_amount_minor', 0);
 
   const { data, error } = await query
     .order('due_date', { ascending: true })
+    .order('id')
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
 
@@ -427,6 +563,36 @@ export async function listInstallmentsDue({
     // ait ödemeler istenir (installment_id ile ilişkili), o yüzden yukarıdaki spread'i ezer.
     payments: row.payments,
   }));
+}
+
+// Toplam/özet hesaplayan ekranlar (Ana Sayfa, Raporlar, nakit tahmini) sabit "ilk 200 kayıt" yerine
+// tüm sayfaları okur — 200'ü aşınca borç/alacak toplamı sessizce eksik kalırdı. Supabase tek
+// istekte en fazla 1.000 satır döndürdüğü için sayfa boyutu 500'dür.
+const ALL_PAGES_SIZE = 500;
+const ALL_PAGES_LIMIT = 40;
+
+export async function listAllObligations(
+  filter: Omit<ListObligationsFilter, 'page' | 'pageSize'>
+): Promise<ObligationWithRelations[]> {
+  const all: ObligationWithRelations[] = [];
+  for (let page = 0; page < ALL_PAGES_LIMIT; page += 1) {
+    const rows = await listObligations({ ...filter, page, pageSize: ALL_PAGES_SIZE });
+    all.push(...rows);
+    if (rows.length < ALL_PAGES_SIZE) break;
+  }
+  return all;
+}
+
+export async function listAllInstallmentsDue(
+  filter: Omit<ListInstallmentsDueFilter, 'page' | 'pageSize'>
+): Promise<ObligationDueItem[]> {
+  const all: ObligationDueItem[] = [];
+  for (let page = 0; page < ALL_PAGES_LIMIT; page += 1) {
+    const rows = await listInstallmentsDue({ ...filter, page, pageSize: ALL_PAGES_SIZE });
+    all.push(...rows);
+    if (rows.length < ALL_PAGES_SIZE) break;
+  }
+  return all;
 }
 
 export async function getObligation(id: string): Promise<Obligation> {

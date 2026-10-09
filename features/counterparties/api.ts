@@ -1,6 +1,11 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
-import { ACTIVE_OBLIGATION_STATUSES, getSettlingInstrumentIds } from '@/features/obligations/api';
+import {
+  ACTIVE_OBLIGATION_STATUSES,
+  getDueInfoByObligation,
+  getSettlingInstrumentIds,
+  localIsoDate,
+} from '@/features/obligations/api';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { getValueUnit } from '@/features/valueUnits/units';
@@ -160,20 +165,26 @@ export async function getCounterpartyLedger(
   // güncel TL karşılığına çevrilir.
   const receivableMinor = rows.filter((r) => r.direction === 'receivable').reduce((sum, r) => sum + toRef(r), 0);
   const payableMinor = rows.filter((r) => r.direction === 'payable').reduce((sum, r) => sum + toRef(r), 0);
-  const overdue = rows.filter((r) => r.status === 'gecikti');
+  // Gecikme ve en yakın vade taksit bazında hesaplanır (bkz. getDueInfoByObligation).
+  const dueInfo = await getDueInfoByObligation(workspaceId, rows);
+  const overdueRows = rows.filter((r) => (dueInfo[r.id]?.overdueCount ?? 0) > 0);
   const dueDates = rows
-    .map((r) => r.due_date)
+    .map((r) => dueInfo[r.id]?.nextDueDate ?? null)
     .filter((d): d is string => !!d)
     .sort();
+  const todayIso = localIsoDate();
+  const nearestDueDate = dueDates.find((d) => d >= todayIso) ?? dueDates[0] ?? null;
+  const toOverdueRef = (r: { id: string; currency_code: string }) =>
+    sumToReferenceMinor([{ amountMinor: dueInfo[r.id].overdueMinor, unitCode: r.currency_code }], rates);
 
   return {
     receivableMinor,
     payableMinor,
     netMinor: receivableMinor - payableMinor,
-    overdueMinor: overdue.reduce((sum, r) => sum + toRef(r), 0),
-    overdueCount: overdue.length,
+    overdueMinor: overdueRows.reduce((sum, r) => sum + toOverdueRef(r), 0),
+    overdueCount: overdueRows.reduce((sum, r) => sum + dueInfo[r.id].overdueCount, 0),
     openCount: rows.length,
-    nearestDueDate: dueDates[0] ?? null,
+    nearestDueDate,
     instrumentPayableMinor: instruments
       .filter((r) => r.direction === 'payable')
       .reduce((sum, r) => sum + toRef(r), 0),

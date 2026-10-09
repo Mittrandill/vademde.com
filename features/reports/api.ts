@@ -1,11 +1,14 @@
 import { supabase } from '@/services/supabase';
+import { fetchAll } from '@/services/fetchAll';
 import {
   ACTIVE_OBLIGATION_STATUSES,
   listObligations,
   listInstallmentsDue,
+  getDueInfoByObligation,
+  localIsoDate,
   type ObligationDueItem,
 } from '@/features/obligations/api';
-import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
+import { listValueUnitRates, sumToReferenceMinor, transactionToReferenceMinor } from '@/features/valueUnits/api';
 
 // Kart ekstresinin tek satırlık toplam borç hareketi ("Kredi Kartı Ekstresi — Banka") bir
 // harcama değildir: harcamalar kendi kategorileri ve tarihleriyle ayrı satırlar olarak zaten
@@ -34,6 +37,7 @@ export function profitAndLossMinor(row: { amount_minor: number; financing_minor?
 type RangeTransactionRow = {
   amount_minor: number;
   financing_minor: number;
+  fx_rate_try_minor: number | null;
   direction: string;
   currency_code: string;
   account_id: string;
@@ -42,17 +46,16 @@ type RangeTransactionRow = {
 };
 
 async function listRangeTransactions(workspaceId: string, range: DateRange): Promise<RangeTransactionRow[]> {
-  let query = supabase
-    .from('transactions')
-    .select('amount_minor, financing_minor, direction, currency_code, account_id, transfer_to_account_id, occurred_at')
-    .eq('workspace_id', workspaceId)
-    .or(EXCLUDE_CARD_STATEMENT_LUMP);
-  if (range.from) query = query.gte('occurred_at', range.from);
-  if (range.to) query = query.lt('occurred_at', range.to);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
+  return fetchAll<RangeTransactionRow>((from, to) => {
+    let query = supabase
+      .from('transactions')
+      .select('amount_minor, financing_minor, fx_rate_try_minor, direction, currency_code, account_id, transfer_to_account_id, occurred_at')
+      .eq('workspace_id', workspaceId)
+      .or(EXCLUDE_CARD_STATEMENT_LUMP);
+    if (range.from) query = query.gte('occurred_at', range.from);
+    if (range.to) query = query.lt('occurred_at', range.to);
+    return query.order('id').range(from, to);
+  });
 }
 
 export async function getIncomeExpenseTotals(
@@ -62,7 +65,7 @@ export async function getIncomeExpenseTotals(
   const [rows, rates] = await Promise.all([listRangeTransactions(workspaceId, range), listValueUnitRates()]);
   return rows.reduce<IncomeExpenseTotals>(
     (totals, row) => {
-      const refMinor = sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
+      const refMinor = transactionToReferenceMinor({ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code, fxRateTryMinor: row.fx_rate_try_minor }, rates);
       if (row.direction === 'income') totals.incomeMinor += refMinor;
       else if (row.direction === 'expense') totals.expenseMinor += refMinor;
       return totals;
@@ -102,7 +105,7 @@ export async function getMonthlyComparison(workspaceId: string, monthsBack = 6):
     const key = `${occurred.getFullYear()}-${String(occurred.getMonth() + 1).padStart(2, '0')}`;
     const bucket = buckets.get(key);
     if (!bucket) continue;
-    const refMinor = sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
+    const refMinor = transactionToReferenceMinor({ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code, fxRateTryMinor: row.fx_rate_try_minor }, rates);
     if (row.direction === 'income') bucket.incomeMinor += refMinor;
     else bucket.expenseMinor += refMinor;
   }
@@ -122,6 +125,7 @@ export interface CategoryBreakdownItem {
 type CategoryTransactionRow = {
   amount_minor: number;
   financing_minor: number;
+  fx_rate_try_minor: number | null;
   currency_code: string;
   category: { id: string; name: string; icon: string | null; color: string | null } | null;
 };
@@ -132,27 +136,30 @@ export async function getCategoryBreakdown(
   direction: 'income' | 'expense',
   range: DateRange = {}
 ): Promise<CategoryBreakdownItem[]> {
-  let query = supabase
-    .from('transactions')
-    .select('amount_minor, financing_minor, currency_code, category:categories(id, name, icon, color)')
-    .eq('workspace_id', workspaceId)
-    .eq('direction', direction)
-    .or(EXCLUDE_CARD_STATEMENT_LUMP);
-  if (range.from) query = query.gte('occurred_at', range.from);
-  if (range.to) query = query.lt('occurred_at', range.to);
-
-  const [{ data, error }, rates] = await Promise.all([query, listValueUnitRates()]);
-  if (error) throw error;
+  const [data, rates] = await Promise.all([
+    fetchAll<CategoryTransactionRow>((from, to) => {
+      let query = supabase
+        .from('transactions')
+        .select('amount_minor, financing_minor, fx_rate_try_minor, currency_code, category:categories(id, name, icon, color)')
+        .eq('workspace_id', workspaceId)
+        .eq('direction', direction)
+        .or(EXCLUDE_CARD_STATEMENT_LUMP);
+      if (range.from) query = query.gte('occurred_at', range.from);
+      if (range.to) query = query.lt('occurred_at', range.to);
+      return query.order('id').range(from, to) as unknown as PromiseLike<{ data: CategoryTransactionRow[] | null; error: never }>;
+    }),
+    listValueUnitRates(),
+  ]);
 
   const totals = new Map<string, { name: string; icon: string | null; color: string | null; amountMinor: number }>();
   let grandTotal = 0;
-  for (const row of data as unknown as CategoryTransactionRow[]) {
+  for (const row of data) {
     if (profitAndLossMinor(row) <= 0) continue;
     const key = row.category?.id ?? 'uncategorized';
     const name = row.category?.name ?? 'Kategorisiz';
     const existing =
       totals.get(key) ?? { name, icon: row.category?.icon ?? null, color: row.category?.color ?? null, amountMinor: 0 };
-    const refMinor = sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
+    const refMinor = transactionToReferenceMinor({ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code, fxRateTryMinor: row.fx_rate_try_minor }, rates);
     existing.amountMinor += refMinor;
     totals.set(key, existing);
     grandTotal += refMinor;
@@ -180,6 +187,7 @@ export interface CounterpartyBreakdownItem {
 type CounterpartyTransactionRow = {
   amount_minor: number;
   financing_minor: number;
+  fx_rate_try_minor: number | null;
   currency_code: string;
   counterparty: { id: string; name: string } | null;
 };
@@ -189,21 +197,24 @@ export async function getCounterpartyBreakdown(
   workspaceId: string,
   range: DateRange = {}
 ): Promise<CounterpartyBreakdownItem[]> {
-  let query = supabase
-    .from('transactions')
-    .select('amount_minor, financing_minor, currency_code, counterparty:counterparties(id, name)')
-    .eq('workspace_id', workspaceId)
-    .in('direction', ['income', 'expense'])
-    .not('counterparty_id', 'is', null)
-    .or(EXCLUDE_CARD_STATEMENT_LUMP);
-  if (range.from) query = query.gte('occurred_at', range.from);
-  if (range.to) query = query.lt('occurred_at', range.to);
-
-  const [{ data, error }, rates] = await Promise.all([query, listValueUnitRates()]);
-  if (error) throw error;
+  const [data, rates] = await Promise.all([
+    fetchAll<CounterpartyTransactionRow>((from, to) => {
+      let query = supabase
+        .from('transactions')
+        .select('amount_minor, financing_minor, fx_rate_try_minor, currency_code, counterparty:counterparties(id, name)')
+        .eq('workspace_id', workspaceId)
+        .in('direction', ['income', 'expense'])
+        .not('counterparty_id', 'is', null)
+        .or(EXCLUDE_CARD_STATEMENT_LUMP);
+      if (range.from) query = query.gte('occurred_at', range.from);
+      if (range.to) query = query.lt('occurred_at', range.to);
+      return query.order('id').range(from, to) as unknown as PromiseLike<{ data: CounterpartyTransactionRow[] | null; error: never }>;
+    }),
+    listValueUnitRates(),
+  ]);
 
   const totals = new Map<string, CounterpartyBreakdownItem>();
-  for (const row of data as unknown as CounterpartyTransactionRow[]) {
+  for (const row of data) {
     if (!row.counterparty || profitAndLossMinor(row) <= 0) continue;
     const existing = totals.get(row.counterparty.id) ?? {
       counterpartyId: row.counterparty.id,
@@ -211,7 +222,7 @@ export async function getCounterpartyBreakdown(
       amountMinor: 0,
       count: 0,
     };
-    existing.amountMinor += sumToReferenceMinor([{ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code }], rates);
+    existing.amountMinor += transactionToReferenceMinor({ amountMinor: profitAndLossMinor(row), unitCode: row.currency_code, fxRateTryMinor: row.fx_rate_try_minor }, rates);
     existing.count += 1;
     totals.set(row.counterparty.id, existing);
   }
@@ -232,22 +243,26 @@ export interface AccountBalanceReportItem {
 // + transferlerin hesap bazlı net etkisi (docs/01-finansal-kayit-modeli.md §8 — transfer
 // toplam varlığı değiştirmez ama kaynak/hedef hesabı etkiler).
 export async function getAccountBalances(workspaceId: string): Promise<AccountBalanceReportItem[]> {
-  const [{ data: accounts, error: accountsError }, { data: transactions, error: transactionsError }] =
-    await Promise.all([
-      supabase
-        .from('accounts')
-        .select('id, name, type, bank_code, currency_code, opening_balance_minor')
-        .eq('workspace_id', workspaceId)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: true }),
+  type BalanceTransactionRow = { account_id: string; transfer_to_account_id: string | null; direction: string; amount_minor: number };
+  const [{ data: accounts, error: accountsError }, transactions] = await Promise.all([
+    supabase
+      .from('accounts')
+      .select('id, name, type, bank_code, currency_code, opening_balance_minor')
+      .eq('workspace_id', workspaceId)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: true }),
+    // 1.000 hareketi aşan çalışma alanlarında bakiye eksik hesaplanmasın diye sayfa sayfa okunur.
+    fetchAll<BalanceTransactionRow>((from, to) =>
       supabase
         .from('transactions')
         .select('account_id, transfer_to_account_id, direction, amount_minor')
-        .eq('workspace_id', workspaceId),
-    ]);
+        .eq('workspace_id', workspaceId)
+        .order('id')
+        .range(from, to)
+    ),
+  ]);
 
   if (accountsError) throw accountsError;
-  if (transactionsError) throw transactionsError;
 
   const deltas = new Map<string, number>();
   const addDelta = (accountId: string, delta: number) => deltas.set(accountId, (deltas.get(accountId) ?? 0) + delta);
@@ -284,7 +299,7 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
 // gösterilsin diye (bkz. app/(tabs)/takvim.tsx, app/(tabs)/index.tsx aynı desen) —
 // kredinin toplam borcu yalnızca /obligations/[id] detay sayfasında gösterilir.
 export async function getOverdueObligations(workspaceId: string): Promise<ObligationDueItem[]> {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localIsoDate();
   const [obligations, installmentItems] = await Promise.all([
     listObligations({ workspaceId, statuses: ACTIVE_OBLIGATION_STATUSES, dueTo: todayStr, pageSize: 200 }),
     listInstallmentsDue({ workspaceId, statuses: ACTIVE_OBLIGATION_STATUSES, dueTo: todayStr, pageSize: 200 }),
@@ -381,30 +396,43 @@ const CASH_FLOW_BUCKET_DEFS: Array<Pick<CashFlowBucket, 'label' | 'fromDay' | 't
 ];
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Beklenen nakit akışı: önümüzdeki 30 günün
-// borç/alacak dağılımı, haftalık gruplarla.
+// borç/alacak dağılımı, haftalık gruplarla. Taksitli kayıtlar (kredi, abonelik...) taksit
+// vadelerinden gelir: kaydın kendi vadesi ilk taksit tarihidir ve kalan tutarı TÜM taksitleri
+// kapsar — onunla hesaplamak ilk taksit tarihine bütün borcu yazar, sonraki taksitleri atlardı.
 export async function getCashFlowForecast(workspaceId: string, daysAhead = 30): Promise<CashFlowBucket[]> {
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const limit = new Date(today);
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayStr = localIsoDate(todayMidnight);
+  const limit = new Date(todayMidnight);
   limit.setDate(limit.getDate() + daysAhead);
-  const limitStr = limit.toISOString().slice(0, 10);
+  const limitStr = localIsoDate(limit);
 
-  const [obligations, rates] = await Promise.all([
+  const [obligations, installmentItems, rates] = await Promise.all([
     listObligations({
       workspaceId,
       statuses: ACTIVE_OBLIGATION_STATUSES,
       dueFrom: todayStr,
       dueTo: limitStr,
-      pageSize: 200,
+      pageSize: 500,
+    }),
+    listInstallmentsDue({
+      workspaceId,
+      statuses: ACTIVE_OBLIGATION_STATUSES,
+      dueFrom: todayStr,
+      dueTo: limitStr,
+      pageSize: 500,
     }),
     listValueUnitRates(),
   ]);
+  const info = await getDueInfoByObligation(workspaceId, obligations);
+  const plain = obligations.filter((o) => !info[o.id]?.hasInstallments);
 
   const buckets: CashFlowBucket[] = CASH_FLOW_BUCKET_DEFS.map((def) => ({ ...def, payableMinor: 0, receivableMinor: 0 }));
 
-  for (const obligation of obligations) {
-    if (!obligation.due_date) continue;
-    const diffDays = Math.round((new Date(obligation.due_date).getTime() - today.getTime()) / 86_400_000);
+  for (const obligation of [...plain, ...installmentItems]) {
+    if (!obligation.due_date || obligation.remaining_amount_minor <= 0) continue;
+    const [y, m, d] = obligation.due_date.split('-').map(Number);
+    const diffDays = Math.round((new Date(y, m - 1, d).getTime() - todayMidnight.getTime()) / 86_400_000);
     const bucket = buckets.find((b) => diffDays >= b.fromDay && diffDays <= b.toDay);
     if (!bucket) continue;
     const refMinor = sumToReferenceMinor(

@@ -1136,6 +1136,7 @@ export type Database = {
           currency_code: string
           description: string | null
           financing_minor: number
+          fx_rate_try_minor: number | null
           direction: string
           id: string
           occurred_at: string
@@ -1155,6 +1156,7 @@ export type Database = {
           currency_code?: string
           description?: string | null
           financing_minor?: number
+          fx_rate_try_minor?: number | null
           direction: string
           id?: string
           occurred_at?: string
@@ -1174,6 +1176,7 @@ export type Database = {
           currency_code?: string
           description?: string | null
           financing_minor?: number
+          fx_rate_try_minor?: number | null
           direction?: string
           id?: string
           occurred_at?: string
