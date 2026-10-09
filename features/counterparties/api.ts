@@ -3,6 +3,40 @@ import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import { ACTIVE_OBLIGATION_STATUSES, getSettlingInstrumentIds } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
+import { getValueUnit } from '@/features/valueUnits/units';
+
+type RateHistoryRow = { unit_code: string; rate_date: string; try_equivalent_minor: number };
+
+async function listRateHistory(): Promise<RateHistoryRow[]> {
+  const { data, error } = await supabase
+    .from('value_unit_rate_history' as never)
+    .select('unit_code, rate_date, try_equivalent_minor');
+  if (error) throw error;
+  return (data ?? []) as unknown as RateHistoryRow[];
+}
+
+// Kayıt tarihine en yakın günlük kur (geçmiş kayıtlar için "tahmini" kur).
+function nearestHistoricalRate(history: RateHistoryRow[], unitCode: string, isoDate: string): number | null {
+  const target = new Date(isoDate).getTime();
+  let best: RateHistoryRow | null = null;
+  let bestDistance = Infinity;
+  for (const row of history) {
+    if (row.unit_code !== unitCode) continue;
+    const distance = Math.abs(new Date(row.rate_date).getTime() - target);
+    if (distance < bestDistance) {
+      best = row;
+      bestDistance = distance;
+    }
+  }
+  return best?.try_equivalent_minor ?? null;
+}
+
+// amountMinor kendi biriminin hassasiyetindedir (units.ts precision); kur "1 tam birim = X kuruş TL".
+function toTryMinor(amountMinor: number, unitCode: string, rate: number | null): number {
+  if (unitCode === 'TRY') return amountMinor;
+  if (rate === null) return 0;
+  return Math.round((amountMinor / 10 ** getValueUnit(unitCode).precision) * rate);
+}
 
 export type Counterparty = Tables<'counterparties'>;
 
@@ -195,8 +229,12 @@ export interface StatementEntry {
    * (ör. peşin alışveriş) değiştirmez (0).
    */
   balanceEffectMinor: number;
-  /** Tek para birimli ekstrede bu satırdan sonraki cari bakiyesi; karışık birimde null. */
+  /** Bu satırdan sonraki cari bakiyesi (TL). Döviz/altın satırlar işlem anındaki kurla çevrilir. */
   runningBalanceMinor: number | null;
+  /** Döviz/altın satırın TL kuru (kuruş/birim). TL satırlarda null. */
+  fxRateTryMinor: number | null;
+  /** Kur kayıtta yoktu; kur geçmişinden ya da güncel kurdan tahmin edildi. */
+  fxRateEstimated: boolean;
   obligationId: string | null;
   transactionId: string | null;
   documentType: string | null;
@@ -226,6 +264,7 @@ interface StatementObligationRow {
   created_at: string;
   status: string;
   due_date: string | null;
+  fx_rate_try_minor: number | null;
 }
 
 // Çek ve senet: vadesindeki ödeme/tahsilat ayrı satır olarak değil, belgenin kendi satırında
@@ -239,6 +278,7 @@ interface StatementPaymentRow {
   paid_at: string;
   notes: string | null;
   settled_by_obligation_id: string | null;
+  fx_rate_try_minor: number | null;
   transaction_id: string | null;
   account: { name: string } | null;
   transaction: { payment_method: string | null } | null;
@@ -269,7 +309,7 @@ export async function getCounterpartyStatement(
   const [obligationsResult, transactionsResult] = await Promise.all([
     supabase
       .from('obligations')
-      .select('id, title, document_type, direction, total_amount_minor, currency_code, created_at, status, due_date')
+      .select('id, title, document_type, direction, total_amount_minor, currency_code, created_at, status, due_date, fx_rate_try_minor')
       .eq('workspace_id', workspaceId)
       .eq('counterparty_id', counterpartyId)
       .neq('status', 'iptal_edildi')
@@ -298,7 +338,7 @@ export async function getCounterpartyStatement(
     const { data, error } = await supabase
       .from('payments')
       .select(
-        'id, obligation_id, amount_minor, paid_at, notes, settled_by_obligation_id, transaction_id, account:accounts(name), transaction:transactions(payment_method)'
+        'id, obligation_id, amount_minor, paid_at, notes, settled_by_obligation_id, fx_rate_try_minor, transaction_id, account:accounts(name), transaction:transactions(payment_method)'
       )
       .in(
         'obligation_id',
@@ -362,6 +402,8 @@ export async function getCounterpartyStatement(
       currencyCode: o.currency_code,
       balanceEffectMinor: balanceEffect,
       runningBalanceMinor: null,
+      fxRateTryMinor: null,
+      fxRateEstimated: false,
       obligationId: o.id,
       transactionId: null,
       documentType: o.document_type,
@@ -392,6 +434,8 @@ export async function getCounterpartyStatement(
       currencyCode: obligation.currency_code,
       balanceEffectMinor: settlingInstrumentIds.has(obligation.id) ? 0 : paymentEffect(obligation, p.amount_minor),
       runningBalanceMinor: null,
+      fxRateTryMinor: null,
+      fxRateEstimated: false,
       obligationId: obligation.id,
       transactionId: p.transaction_id,
       documentType: obligation.document_type,
@@ -418,6 +462,8 @@ export async function getCounterpartyStatement(
       currencyCode: t.currency_code,
       balanceEffectMinor: 0,
       runningBalanceMinor: null,
+      fxRateTryMinor: null,
+      fxRateEstimated: false,
       obligationId: null,
       transactionId: t.id,
       documentType: null,
@@ -430,11 +476,28 @@ export async function getCounterpartyStatement(
   // Yürüyen bakiye eskiden yeniye hesaplanır; aynı anda oluşan kayıt ödemesinden önce gelir.
   const kindOrder: Record<StatementEntryKind, number> = { document: 0, payment: 1, transaction: 2 };
   entries.sort((a, b) => a.date.localeCompare(b.date) || kindOrder[a.kind] - kindOrder[b.kind]);
-  const singleCurrency = new Set(entries.map((e) => e.currencyCode)).size <= 1;
+  // Yürüyen bakiye TL'dir. Döviz/altın satırlar işlem anındaki kurla çevrilir (kayıtta saklı kur);
+  // kuru olmayan eski kayıtlar için kur geçmişinden en yakın tarih, o da yoksa güncel kur
+  // kullanılır ve satır "tahmini" işaretlenir. Satır tutarı kendi biriminde kalır.
+  const [rates, history] = await Promise.all([listValueUnitRates(), listRateHistory()]);
+  const paymentById = new Map(visiblePayments.map((p) => [p.id, p]));
   let running = 0;
   for (const entry of entries) {
-    running += entry.balanceEffectMinor;
-    entry.runningBalanceMinor = singleCurrency ? running : null;
+    let rate: number | null = null;
+    if (entry.currencyCode !== 'TRY') {
+      if (entry.kind === 'document') rate = obligationById.get(entry.obligationId as string)?.fx_rate_try_minor ?? null;
+      else if (entry.kind === 'payment') {
+        const payment = paymentById.get(entry.key.slice(2));
+        rate = payment?.fx_rate_try_minor ?? obligationById.get(entry.obligationId as string)?.fx_rate_try_minor ?? null;
+      }
+      if (rate === null) {
+        rate = nearestHistoricalRate(history, entry.currencyCode, entry.date) ?? rates.find((r) => r.unit_code === entry.currencyCode)?.try_equivalent_minor ?? null;
+        entry.fxRateEstimated = rate !== null;
+      }
+      entry.fxRateTryMinor = rate;
+    }
+    running += toTryMinor(entry.balanceEffectMinor, entry.currencyCode, rate);
+    entry.runningBalanceMinor = running;
   }
   return entries.reverse();
 }

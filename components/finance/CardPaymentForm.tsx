@@ -1,20 +1,24 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { AmountField, Button, DateField, Pressable, Row, Stack, Text } from '@/components/primitives';
-import { AccountPicker } from './AccountPicker';
+import { ScreenHeader } from '@/components/navigation/ScreenHeader';
+import { BigAmountInput, DateField, FieldGroup, Pill, Row, Text } from '@/components/primitives';
+import { TransferAccounts } from './TransferAccounts';
+import { getAccountBalances } from '@/features/reports/api';
 import { recordCardPayment } from '@/features/payments/api';
 import type { Account } from '@/features/accounts/api';
-import { formatAmountInput, parseAmountToMinor } from '@/utils/money';
+import { queryKeys } from '@/services/queryKeys';
+import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 
 export interface CardPaymentFormProps {
   workspaceId: string;
   cardAccountId: string;
   cardAccountName: string;
+  /** Transfer satırında "Alan" olarak gösterilen kart hesabının kendisi. */
+  cardAccount: Account;
   currencyCode: string;
   /** Formu güncel kart borcuyla önceden doldurur; kullanıcı tam, asgari veya herhangi bir
    * kısmi tutara serbestçe değiştirebilir. */
@@ -32,6 +36,7 @@ export function CardPaymentForm({
   workspaceId,
   cardAccountId,
   cardAccountName,
+  cardAccount,
   currencyCode,
   currentDebtMinor,
   sourceAccounts,
@@ -42,6 +47,7 @@ export function CardPaymentForm({
   const [amount, setAmount] = useState(
     formatAmountInput((Math.max(currentDebtMinor, 0) / 100).toFixed(2).replace('.', ','))
   );
+  const [amountTouched, setAmountTouched] = useState(false);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [dateStr, setDateStr] = useState(new Date().toISOString().slice(0, 10));
 
@@ -65,59 +71,89 @@ export function CardPaymentForm({
     onSuccess,
   });
 
+  const debtText = formatAmountInput((Math.max(currentDebtMinor, 0) / 100).toFixed(2).replace('.', ','));
+  const selectedAccount = sourceAccounts.find((a) => a.id === accountId) ?? null;
+
+  const balancesQuery = useQuery({
+    queryKey: queryKeys.reportAccountBalances(workspaceId),
+    queryFn: () => getAccountBalances(workspaceId),
+  });
+  const balances = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
+  balances.set(cardAccountId, currentDebtMinor);
+
+  const canSubmit = !!amount && !!selectedAccount && !mutation.isPending;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
-      <Stack gap="lg" style={{ flex: 1, padding: theme.screenEdge.standard }}>
-        <Row align="center">
-          <Text variant="pageTitle" style={{ flex: 1 }}>
-            Kart Borcu Öde
-          </Text>
-          <Pressable onPress={onClose} hitSlop={12}>
-            <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
-          </Pressable>
-        </Row>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xxl }}
+        >
+          <ScreenHeader
+            inline
+            title="Kart borcu öde"
+            leftLabel={{ label: 'Vazgeç', onPress: onClose }}
+            rightLabel={{ label: 'Kaydet', bold: true, disabled: !canSubmit, onPress: () => mutation.mutate() }}
+          />
 
-        <Text variant="body" color="textSecondary">
-          {cardAccountName}
-        </Text>
+          <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
+            <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.sm }}>
+              <BigAmountInput
+                value={amount}
+                onChangeText={(value) => {
+                  setAmount(value);
+                  setAmountTouched(true);
+                }}
+                symbol={currencyCode === 'TRY' ? '₺' : currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : undefined}
+              />
+              <Row gap="xs" style={{ justifyContent: 'center' }}>
+                <Pill
+                  label="Tamamı"
+                  selected={!amountTouched}
+                  onPress={() => {
+                    setAmount(debtText);
+                    setAmountTouched(false);
+                  }}
+                />
+                <Pill label="Kısmi tutar" selected={amountTouched} onPress={() => setAmountTouched(true)} />
+              </Row>
+            </View>
 
-        <Stack gap="sm">
-          <Text variant="caption" color="textSecondary">
-            TUTAR (TL)
-          </Text>
-          <AmountField placeholder="0,00" value={amount} onChangeText={setAmount} />
-        </Stack>
+            {sourceAccounts.length === 0 ? (
+              <Text variant="caption" color="danger" style={{ textAlign: 'center' }}>
+                Önce Hesaplar&apos;dan bir kasa/banka hesabı ekleyin.
+              </Text>
+            ) : (
+              <TransferAccounts
+                sourceAccounts={sourceAccounts}
+                targetAccounts={[cardAccount]}
+                fromId={accountId}
+                toId={cardAccountId}
+                onFromChange={setAccountId}
+                onToChange={() => {}}
+                onSwap={() => {}}
+                canSwap={false}
+                balances={balances}
+              />
+            )}
 
-        <DateField label="ÖDEME TARİHİ" value={dateStr} onChangeText={setDateStr} />
-
-        <Stack gap="sm">
-          <Text variant="caption" color="textSecondary">
-            KAYNAK HESAP
-          </Text>
-          {sourceAccounts.length === 0 ? (
-            <Text variant="body" color="textSecondary">
-              Önce Hesaplar&apos;dan bir kasa/banka hesabı ekleyin.
+            <Text variant="caption" color="textSecondary" style={{ textAlign: 'center', paddingHorizontal: 30 }}>
+              {`${cardAccountName} güncel borcu ${formatMinorAmount(Math.max(currentDebtMinor, 0), currencyCode)}. Ödeme gelir ya da gider sayılmaz; kart borcunu düşürür.`}
             </Text>
-          ) : (
-            <AccountPicker accounts={sourceAccounts} selectedId={accountId} onSelect={setAccountId} />
-          )}
-        </Stack>
 
-        {mutation.error ? (
-          <Text variant="caption" color="danger">
-            {mutation.error instanceof Error ? mutation.error.message : 'Ödeme kaydedilemedi'}
-          </Text>
-        ) : null}
+            <FieldGroup>
+              <DateField label="Tarih" value={dateStr} onChangeText={setDateStr} />
+            </FieldGroup>
 
-        <View style={{ flex: 1 }} />
-
-        <Button
-          label="Kaydet"
-          onPress={() => mutation.mutate()}
-          loading={mutation.isPending}
-          disabled={!amount || !accountId}
-        />
-      </Stack>
+            {mutation.error ? (
+              <Text variant="caption" color="danger">
+                {mutation.error instanceof Error ? mutation.error.message : 'Ödeme kaydedilemedi'}
+              </Text>
+            ) : null}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

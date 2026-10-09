@@ -38,6 +38,10 @@ import { CardPaymentForm } from '@/components/finance/CardPaymentForm';
 import { archiveAccount, getAccount, listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
+import {
+  listCardInstallmentPurchases,
+  progressOf,
+} from '@/features/cardInstallments/api';
 import { listTransactions, type TransactionWithRelations } from '@/features/transactions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { maskIban } from '@/utils/iban';
@@ -75,7 +79,7 @@ function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-type CreditCardTab = 'genel' | 'ekstreler' | 'hareketler';
+type CreditCardTab = 'genel' | 'ekstreler' | 'taksitler' | 'hareketler';
 type AccountTab = 'hareketler' | 'bilgiler' | 'kmh';
 
 interface StatementMonth {
@@ -159,6 +163,14 @@ export default function AccountDetailScreen() {
         pageSize: 24,
         ascending: false,
       }),
+    enabled: !!activeWorkspaceId && !!id && isCreditCardAccount,
+  });
+
+  // Taksitli alışverişler (card_installment_purchases) — kart detayında "Taksitler" sekmesi ve
+  // özet kartındaki "Taksitte kalan" bu sorgudan beslenir.
+  const purchasesQuery = useQuery({
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'card-installments', id] : ['card-installments', 'disabled'],
+    queryFn: () => listCardInstallmentPurchases(activeWorkspaceId as string, id as string),
     enabled: !!activeWorkspaceId && !!id && isCreditCardAccount,
   });
 
@@ -258,8 +270,13 @@ export default function AccountDetailScreen() {
       });
     }
 
+    const purchaseProgress = (purchasesQuery.data ?? []).map((p) => progressOf(p));
+    const activePurchases = purchaseProgress.filter((p) => p.paidCount < p.purchase.installment_count);
+    const installmentRemainingMinor = purchaseProgress.reduce((sum, p) => sum + p.remainingMinor, 0);
+
     const tabOptions: { key: CreditCardTab; label: string }[] = [
       { key: 'ekstreler', label: `Ekstreler (${loadedStatementCount})` },
+      { key: 'taksitler', label: `Taksitler (${activePurchases.length})` },
       { key: 'hareketler', label: 'Hareketler' },
       { key: 'genel', label: 'Kart bilgileri' },
     ];
@@ -336,6 +353,14 @@ export default function AccountDetailScreen() {
                 {nextDue ? dueDayFormatter.format(nextDue) : account.payment_due_day ? `Ayın ${account.payment_due_day}.` : 'Yok'}
               </Text>
             </Stack>
+            <Stack gap="xxs" style={{ flex: 1, alignItems: 'center' }}>
+              <Text variant="caption" color="textSecondary">
+                Taksitte kalan
+              </Text>
+              <Text style={{ fontSize: 15, fontWeight: '600' }} tabular>
+                {formatMinorAmount(installmentRemainingMinor, account.currency_code)}
+              </Text>
+            </Stack>
             <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
               <Text variant="caption" color="textSecondary">
                 Kullanılabilir
@@ -386,6 +411,42 @@ export default function AccountDetailScreen() {
                 : []),
             ]}
           />
+        ) : tab === 'taksitler' ? (
+          <Stack gap="md">
+            {purchaseProgress.length === 0 ? (
+              <EmptyState
+                icon="layers-outline"
+                message="Bu karta eklenmiş taksitli alışveriş yok."
+                actionLabel="Alışveriş ekle"
+                onActionPress={() => router.push(`/accounts/${account.id}/installments`)}
+              />
+            ) : (
+              <>
+                <Group>
+                  {purchaseProgress.map((p) => (
+                    <GroupedRow
+                      key={p.purchase.id}
+                      leading={<GroupedRowIcon name="layers" tone={p.paidCount >= p.purchase.installment_count ? 'success' : 'brandSoft'} />}
+                      title={p.purchase.merchant}
+                      subtitle={`${p.paidCount}/${p.purchase.installment_count} taksit · aylık ${formatMinorAmount(p.monthlyMinor, account.currency_code)}`}
+                      chevron={false}
+                      trailing={
+                        <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
+                          {formatMinorAmount(p.remainingMinor, account.currency_code)}
+                        </Text>
+                      }
+                    />
+                  ))}
+                </Group>
+                <Button
+                  label="Taksit yükü ve alışveriş ekle"
+                  variant="secondary"
+                  size="compact"
+                  onPress={() => router.push(`/accounts/${account.id}/installments`)}
+                />
+              </>
+            )}
+          </Stack>
         ) : tab === 'ekstreler' ? (
           <Group>
             {statementMonths.map((m) => {
@@ -501,6 +562,7 @@ export default function AccountDetailScreen() {
             workspaceId={activeWorkspaceId}
             cardAccountId={account.id}
             cardAccountName={account.name}
+            cardAccount={account}
             currencyCode={account.currency_code}
             currentDebtMinor={balanceMinor}
             sourceAccounts={sourceAccounts}

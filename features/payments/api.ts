@@ -85,6 +85,8 @@ export interface RecordPaymentInput {
   installment_id?: string | null;
   account_id?: string | null;
   amount_minor: number;
+  /** Döviz/altın ödemede işlem kuru (kuruş/birim); boşsa DB trigger'ı güncel kuru yazar. */
+  fx_rate_try_minor?: number | null;
   notes?: string | null;
   // Geçmiş tarihli taksitleri OCR sırasında otomatik "ödendi" işaretlerken (bkz.
   // review.tsx) gerçek vade tarihiyle kaydetmek için; verilmezse DB varsayılanı (şimdi) kullanılır.
@@ -456,6 +458,8 @@ export interface SettleObligationsInput {
   currencyCode: string;
   amountMinor: number;
   paidAt: string;
+  /** Döviz/altın ödemede işlem kuru (kuruş/birim). Boşsa veritabanı trigger'ı güncel kuru yazar. */
+  fxRateTryMinor?: number | null;
   method: SettlementMethod;
   targets: SettlementTarget[];
   /**
@@ -567,6 +571,7 @@ export async function settleObligations(input: SettleObligationsInput): Promise<
       obligationCounterpartyId: allocation.obligation.counterparty_id ?? input.counterpartyId,
       obligationCurrencyCode: allocation.obligation.currency_code,
       paymentMethod: input.method,
+      fx_rate_try_minor: input.fxRateTryMinor ?? null,
     });
     if (payment.transaction_id) transactionIds.push(payment.transaction_id);
   }

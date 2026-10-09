@@ -220,7 +220,9 @@ export default function CounterpartyDetailScreen() {
     { label: 'Tür', value: getCounterpartyTypeLabel(counterparty.type) },
     ...(counterparty.phone ? [{ label: 'Telefon', value: counterparty.phone }] : []),
     ...(counterparty.email ? [{ label: 'E-posta', value: counterparty.email }] : []),
-    ...(counterparty.tax_number ? [{ label: 'Vergi No', value: counterparty.tax_number }] : []),
+    ...(counterparty.tax_number
+      ? [{ label: counterparty.type === 'company' ? 'Vergi No' : counterparty.type === 'personel' ? 'TC Kimlik No' : 'TC / Vergi No', value: counterparty.tax_number }]
+      : []),
     { label: 'Alacak', value: formatMinorAmount(ledger?.receivableMinor ?? 0) },
     { label: 'Borç', value: formatMinorAmount(ledger?.payableMinor ?? 0) },
     { label: 'Geciken', value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
@@ -267,7 +269,7 @@ export default function CounterpartyDetailScreen() {
             {counterparty.name}
           </Text>
           <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            {[getCounterpartyTypeLabel(counterparty.type), counterparty.tax_number ? `VKN ${counterparty.tax_number}` : null]
+            {[getCounterpartyTypeLabel(counterparty.type), counterparty.tax_number ? `${counterparty.type === 'company' ? 'VKN' : 'TC/VKN'} ${counterparty.tax_number}` : null]
               .filter(Boolean)
               .join(' · ')}
           </Text>
@@ -687,7 +689,7 @@ function StatementTable({ entries }: { entries: StatementEntry[] }) {
                 </Text>
                 {closing.runningBalanceMinor !== null ? (
                   <Text tabular style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary }}>
-                    {signed(closing.runningBalanceMinor, closing.currencyCode)}
+                    {signed(closing.runningBalanceMinor, 'TRY')}
                   </Text>
                 ) : null}
               </View>
@@ -713,6 +715,7 @@ function StatementTableRow({ entry, last }: { entry: StatementEntry; last: boole
   const caption = [
     shortDateFormatter.format(new Date(entry.date)),
     isInstrument && entry.dueDate ? `vade ${shortDateFormatter.format(new Date(entry.dueDate))}` : entry.subtitle,
+    entry.fxRateTryMinor ? `kur ${entry.fxRateEstimated ? '≈ ' : ''}${formatMinorAmount(entry.fxRateTryMinor)}` : null,
     isInstrument && entry.status ? (DONE_STATUSES.has(entry.status) ? OBLIGATION_STATUS_LABEL[entry.status as ObligationStatus] : 'Bekliyor') : null,
   ]
     .filter(Boolean)
@@ -750,7 +753,7 @@ function StatementTableRow({ entry, last }: { entry: StatementEntry; last: boole
         {wholeAmount(entry.amountMinor, entry.currencyCode)}
       </Text>
       <Text tabular numberOfLines={1} style={{ width: TABLE_COLUMNS.balance, textAlign: 'right', fontSize: 15, fontWeight: '600' }}>
-        {entry.runningBalanceMinor !== null ? signed(entry.runningBalanceMinor, entry.currencyCode) : '—'}
+        {entry.runningBalanceMinor !== null ? signed(entry.runningBalanceMinor, 'TRY') : '—'}
       </Text>
     </Pressable>
   );

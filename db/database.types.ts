@@ -606,6 +606,7 @@ export type Database = {
           direction: string
           document_type: string
           due_date: string | null
+          fx_rate_try_minor: number | null
           id: string
           notes: string | null
           instrument_status: string | null
@@ -632,6 +633,7 @@ export type Database = {
           direction: string
           document_type: string
           due_date?: string | null
+          fx_rate_try_minor?: number | null
           id?: string
           notes?: string | null
           instrument_status?: string | null
@@ -658,6 +660,7 @@ export type Database = {
           direction?: string
           document_type?: string
           due_date?: string | null
+          fx_rate_try_minor?: number | null
           id?: string
           notes?: string | null
           instrument_status?: string | null
@@ -731,6 +734,7 @@ export type Database = {
           account_id: string | null
           amount_minor: number
           created_at: string
+          fx_rate_try_minor: number | null
           id: string
           installment_id: string | null
           notes: string | null
@@ -745,6 +749,7 @@ export type Database = {
           account_id?: string | null
           amount_minor: number
           created_at?: string
+          fx_rate_try_minor?: number | null
           id?: string
           installment_id?: string | null
           notes?: string | null
@@ -759,6 +764,7 @@ export type Database = {
           account_id?: string | null
           amount_minor?: number
           created_at?: string
+          fx_rate_try_minor?: number | null
           id?: string
           installment_id?: string | null
           notes?: string | null

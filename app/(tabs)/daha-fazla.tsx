@@ -9,7 +9,8 @@ import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
 import { Group, GroupedRowIcon, Pressable, Tag, Text } from '@/components/primitives';
 import { listAccounts } from '@/features/accounts/api';
-import { getObligationTotalsByType } from '@/features/obligations/api';
+import { listCounterparties } from '@/features/counterparties/api';
+import { getObligationTotalsByType, ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
 import { getMyProfile } from '@/features/profile/api';
 import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
@@ -61,6 +62,23 @@ export default function MoreScreen() {
       ? queryKeys.obligationTotalsByType(activeWorkspaceId)
       : ['obligation-type-totals', 'disabled'],
     queryFn: () => getObligationTotalsByType(activeWorkspaceId as string),
+    enabled: !!activeWorkspaceId,
+  });
+
+  // Çek ve senetler ekranı kapalı (ödenmiş/tahsil edilmiş/ciro edilmiş) kayıtları da listeler;
+  // menüdeki sayı o ekranla tutarlı olsun diye iptal dışındaki tüm durumlar sayılır.
+  const instrumentTotalsQuery = useQuery({
+    queryKey: activeWorkspaceId
+      ? [activeWorkspaceId, 'obligations', 'instrument-menu-totals']
+      : ['instrument-menu-totals', 'disabled'],
+    queryFn: () =>
+      getObligationTotalsByType(activeWorkspaceId as string, [...ACTIVE_OBLIGATION_STATUSES, 'odendi', 'tahsil_edildi']),
+    enabled: !!activeWorkspaceId,
+  });
+
+  const counterpartiesQuery = useQuery({
+    queryKey: activeWorkspaceId ? queryKeys.counterparties(activeWorkspaceId) : ['counterparties', 'disabled'],
+    queryFn: () => listCounterparties(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });
 
@@ -138,7 +156,11 @@ export default function MoreScreen() {
           <MenuRow
             icon={DOCUMENT_TYPE_ICON.cek ?? 'document-text'}
             label="Çek ve senetler"
-            detail={countText((totalsByType?.cek?.count ?? 0) + (totalsByType?.senet?.count ?? 0))}
+            detail={countText(
+              instrumentTotalsQuery.data
+                ? (instrumentTotalsQuery.data.cek?.count ?? 0) + (instrumentTotalsQuery.data.senet?.count ?? 0)
+                : undefined
+            )}
             href="/instruments"
           />
           <MenuRow
@@ -154,7 +176,12 @@ export default function MoreScreen() {
             detail={countText(totalsByType?.abonelik?.count)}
             href="/aboneliklerim"
           />
-          <MenuRow icon="people" label="Kişiler / Cariler" href="/counterparties" />
+          <MenuRow
+            icon="people"
+            label="Kişiler / Cariler"
+            detail={countText(counterpartiesQuery.data?.length)}
+            href="/counterparties"
+          />
         </MenuGroup>
 
         <MenuGroup title="Yönetim">

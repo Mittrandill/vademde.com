@@ -49,7 +49,8 @@ import { attachReceiptFile, useDocumentArchiveAccess, type PendingReceipt } from
 import { getValueUnit } from '@/features/valueUnits/units';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { addMonthsToIsoDate } from '@/utils/installmentPlan';
-import { formatAmountInput, formatMinorAmount, parseValueUnitAmountToMinor } from '@/utils/money';
+import { formatAmountInput, formatMinorAmount, parseAmountToMinor, parseValueUnitAmountToMinor } from '@/utils/money';
+import { listValueUnitRates } from '@/features/valueUnits/api';
 import { showErrorAlert, showSaveSuccess } from '@/utils/alerts';
 import { invalidatePaymentRelatedQueries, queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
@@ -174,6 +175,13 @@ function SettlementForm({
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const isPayable = direction === 'payable';
   const precision = getValueUnit(currencyCode).precision;
+
+  // Döviz/altın ödemede işlem kuru: güncel kurla dolu gelir, değiştirilebilir. Boş/geçersizse
+  // veritabanı trigger'ı güncel kuru yazar (bkz. payments_fill_fx_rate).
+  const ratesQuery = useQuery({ queryKey: queryKeys.valueUnitRates(), queryFn: listValueUnitRates, enabled: currencyCode !== 'TRY' });
+  const currentRateMinor = ratesQuery.data?.find((r) => r.unit_code === currencyCode)?.try_equivalent_minor ?? null;
+  const [fxRateInput, setFxRateInput] = useState<string | null>(null);
+  const fxRateText = fxRateInput ?? (currentRateMinor !== null ? (currentRateMinor / 100).toFixed(2).replace('.', ',') : '');
 
   const [counterpartyId, setCounterpartyId] = useState<string | null>(initialCounterpartyId);
   const [method, setMethod] = useState<SettlementMethod>(initialMethod ?? 'havale');
@@ -366,6 +374,7 @@ function SettlementForm({
         currencyCode,
         amountMinor,
         paidAt: parsedDate.toISOString(),
+        fxRateTryMinor: currencyCode === 'TRY' ? null : (parseAmountToMinor(fxRateText) ?? null),
         method,
         targets: selectedRecords,
         sources: selectedSources,
@@ -754,6 +763,15 @@ function SettlementForm({
                   />
                 )}
                 <DateField label="İşlem tarihi" value={dateStr} onChangeText={setDateStr} />
+                {currencyCode !== 'TRY' ? (
+                  <TextField
+                    label={`Kur (1 ${getValueUnit(currencyCode).quantityLabel} = ₺)`}
+                    placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : '0,00'}
+                    keyboardType="decimal-pad"
+                    value={fxRateText}
+                    onChangeText={setFxRateInput}
+                  />
+                ) : null}
                 {!cashless ? (
                   <TextField
                     label="Açıklama (isteğe bağlı)"

@@ -31,6 +31,7 @@ import { listCategories } from '@/features/categories/api';
 import { listCounterparties } from '@/features/counterparties/api';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { getValueUnit, VALUE_UNIT_LABEL } from '@/features/valueUnits/units';
+import { listValueUnitRates } from '@/features/valueUnits/api';
 import {
   createObligation,
   createInstallmentPlan,
@@ -45,7 +46,7 @@ import {
 import { createTransaction } from '@/features/transactions/api';
 import { recordPastInstallmentPayments } from '@/features/payments/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatAmountInput, parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
+import { formatAmountInput, parseValueUnitAmountToMinor, formatMinorAmount, formatValueUnitAmount, parseAmountToMinor } from '@/utils/money';
 import {
   buildAmortizedInstallments,
   buildFixedInstallments,
@@ -291,6 +292,14 @@ function ObligationForm({
   }, [valueUnitDefaulted, workspacesQuery.data, activeWorkspaceId]);
 
   const valueUnit = getValueUnit(valueUnitCode);
+
+  // Döviz/altın kayıtlarda işlem anındaki TL kuru: güncel kurla dolu gelir, kullanıcı değiştirebilir
+  // ve kayda yazılır (cari ekstresi bu kuru kullanır). TL kayıtlarda alan görünmez.
+  const ratesQuery = useQuery({ queryKey: queryKeys.valueUnitRates(), queryFn: listValueUnitRates, enabled: valueUnitCode !== 'TRY' });
+  const currentRateMinor = ratesQuery.data?.find((r) => r.unit_code === valueUnitCode)?.try_equivalent_minor ?? null;
+  const [fxRateInput, setFxRateInput] = useState<string | null>(null);
+  const fxRateText = fxRateInput ?? (currentRateMinor !== null ? (currentRateMinor / 100).toFixed(2).replace('.', ',') : '');
+  const fxRateMinor = valueUnitCode === 'TRY' || isEditing ? null : (parseAmountToMinor(fxRateText) ?? null);
   const isFiatUnit = valueUnit.unitType === 'fiat';
 
   // Kredi kayıtlarında borçlu taraf kişi/firma değil bankadır — KİŞİ/FİRMA alanı yerine
@@ -656,6 +665,7 @@ function ObligationForm({
         total_amount_minor: obligationTotalMinor,
         currency_code: valueUnitCode,
         value_unit_type: valueUnit.unitType,
+        fx_rate_try_minor: fxRateMinor && fxRateMinor > 0 ? fxRateMinor : null,
         due_date: dueDate,
         counterparty_id: counterpartyIdForType,
         account_id: accountId,
@@ -966,8 +976,24 @@ function ObligationForm({
                   }
                 />
               ) : (
-                <ValueUnitPicker label="Değer birimi" selectedId={valueUnitCode} onSelect={setValueUnitCode} />
+                <ValueUnitPicker
+                  label="Değer birimi"
+                  selectedId={valueUnitCode}
+                  onSelect={(code) => {
+                    setValueUnitCode(code);
+                    setFxRateInput(null);
+                  }}
+                />
               )}
+              {valueUnitCode !== 'TRY' && !isEditing && !isLendingType ? (
+                <TextField
+                  label={`Kur (1 ${valueUnit.quantityLabel} = ₺)`}
+                  placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : '0,00'}
+                  keyboardType="decimal-pad"
+                  value={fxRateText}
+                  onChangeText={setFxRateInput}
+                />
+              ) : null}
               <DocumentTypePicker
                 label="Belge türü"
                 selectedId={documentType}
