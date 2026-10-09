@@ -91,10 +91,11 @@ async function risingCategories(db: ReturnType<typeof createClient>, workspaceId
   const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
   const { data: rows } = await db
     .from('transactions')
-    .select('category_id, amount_minor, occurred_at, currency_code, category:categories(name)')
+    .select('category_id, amount_minor, financing_minor, occurred_at, currency_code, category:categories(name)')
     .eq('workspace_id', workspaceId)
     .eq('direction', 'expense')
     .eq('currency_code', 'TRY')
+    .or('description.is.null,description.not.ilike.Kredi Kartı Ekstresi*')
     .gte('occurred_at', start.toISOString())
     .not('category_id', 'is', null)
     .limit(5000);
@@ -109,7 +110,7 @@ async function risingCategories(db: ReturnType<typeof createClient>, workspaceId
     const idx = monthIndex(r.occurred_at);
     if (idx < 0 || idx > 2) continue;
     const entry = sums.get(r.category_id) ?? { name: r.category?.name ?? 'Kategori', m: [0, 0, 0] };
-    entry.m[idx] += r.amount_minor;
+    entry.m[idx] += Math.max(0, r.amount_minor - Math.min(r.financing_minor ?? 0, r.amount_minor));
     sums.set(r.category_id, entry);
   }
 

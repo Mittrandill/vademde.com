@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { fetchAll } from '@/services/fetchAll';
 import type { Tables } from '@/db/database.types';
 import { listValueUnitRates, transactionToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
 import { EXCLUDE_CARD_STATEMENT_LUMP, profitAndLossMinor } from '@/features/reports/api';
@@ -17,19 +18,19 @@ export async function getMonthTransactionTotals(
   const start = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1);
   const end = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
 
-  const [{ data, error }, rates] = await Promise.all([
-    supabase
+  const [data, rates] = await Promise.all([
+    fetchAll<Pick<Tables<'transactions'>, 'amount_minor' | 'financing_minor' | 'fx_rate_try_minor' | 'direction' | 'currency_code'>>((from, to) => supabase
       .from('transactions')
       .select('amount_minor, financing_minor, fx_rate_try_minor, direction, currency_code')
       .eq('workspace_id', workspaceId)
       .in('direction', ['income', 'expense'])
       .or(EXCLUDE_CARD_STATEMENT_LUMP)
       .gte('occurred_at', start.toISOString())
-      .lt('occurred_at', end.toISOString()),
+      .lt('occurred_at', end.toISOString())
+      .order('id').range(from, to)),
     listValueUnitRates(),
   ]);
 
-  if (error) throw error;
   return sumByDirection(
     data.map((row) => ({ ...row, amount_minor: profitAndLossMinor(row) })),
     rates
@@ -40,16 +41,16 @@ export async function getMonthTransactionTotals(
 // gelirler - giderler. Tarih filtresiz, dar seçim; veri hacmi büyürse sunucu
 // taraflı aggregate'e (RPC/view) taşınabilir.
 export async function getAllTimeIncomeExpenseTotals(workspaceId: string): Promise<IncomeExpenseTotals> {
-  const [{ data, error }, rates] = await Promise.all([
-    supabase
+  const [data, rates] = await Promise.all([
+    fetchAll<Pick<Tables<'transactions'>, 'amount_minor' | 'fx_rate_try_minor' | 'direction' | 'currency_code'>>((from, to) => supabase
       .from('transactions')
       .select('amount_minor, fx_rate_try_minor, direction, currency_code')
       .eq('workspace_id', workspaceId)
-      .in('direction', ['income', 'expense']),
+      .in('direction', ['income', 'expense'])
+      .order('id').range(from, to)),
     listValueUnitRates(),
   ]);
 
-  if (error) throw error;
   return sumByDirection(data, rates);
 }
 

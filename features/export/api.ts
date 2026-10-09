@@ -2,6 +2,7 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 
 import { supabase } from '@/services/supabase';
+import { fetchAll } from '@/services/fetchAll';
 
 // docs/07-guvenlik-gizlilik.md — kullanıcı kendi verisinin tamamını her zaman dışa
 // aktarabilmelidir (KVKK/GDPR veri taşınabilirliği). Bu yüzden TAM VERİ DIŞA AKTARIMI
@@ -21,6 +22,10 @@ const EXPORTED_TABLES = [
   'payments',
   'financial_documents',
   'reminders',
+  'card_installment_purchases',
+  'document_fields',
+  'document_line_items',
+  'document_extractions',
 ] as const;
 
 export interface WorkspaceExport {
@@ -46,10 +51,12 @@ export async function buildWorkspaceExport(workspaceId: string): Promise<Workspa
   // Supabase bağlantı havuzunu gereksiz zorluyor ve mobilde iptal edilen istekler
   // yarım paket üretebiliyordu.
   for (const table of EXPORTED_TABLES) {
-    const { data, error } = await supabase.from(table).select('*').eq('workspace_id', workspaceId);
-    if (error) throw error;
-    tables[table] = data ?? [];
-    counts[table] = data?.length ?? 0;
+    const data = await fetchAll<Record<string, unknown>>((from, to) =>
+      supabase.from(table as never).select('*').eq('workspace_id', workspaceId)
+        .order('id').range(from, to)
+    );
+    tables[table] = data;
+    counts[table] = data.length;
   }
 
   return {

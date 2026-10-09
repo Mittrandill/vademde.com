@@ -298,6 +298,7 @@ function TransactionForm({
           counterparty_id: direction === 'transfer' ? null : counterpartyId,
           payment_method: direction === 'transfer' ? null : paymentMethod || null,
           amount_minor: amountMinor,
+          currency_code: unitCode,
           occurred_at: occurredAt,
           description: description.trim() || null,
         });
@@ -312,6 +313,7 @@ function TransactionForm({
           fromAccountId: accountId,
           toAccountId: transferToAccountId,
           amountMinor,
+          currencyCode: unitCode,
           occurredAt,
           description: description.trim() || undefined,
         });
@@ -325,6 +327,7 @@ function TransactionForm({
         counterparty_id: counterpartyId,
         payment_method: paymentMethod || null,
         amount_minor: amountMinor,
+        currency_code: unitCode,
         occurred_at: occurredAt,
         description: description.trim() || null,
       });

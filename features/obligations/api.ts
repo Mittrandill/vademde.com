@@ -133,16 +133,15 @@ export async function getDueInfoByObligation(
   const installmentsByObligation: Record<string, { due_date: string; remaining_amount_minor: number }[]> = {};
   for (let i = 0; i < rows.length; i += 100) {
     const chunk = rows.slice(i, i + 100).map((r) => r.id);
-    const { data, error } = await supabase
+    const data = await fetchAll((from, to) => supabase
       .from('installments')
-      .select('obligation_id, due_date, remaining_amount_minor')
+      .select('obligation_id, due_date, remaining_amount_minor, status')
       .eq('workspace_id', workspaceId)
       .in('obligation_id', chunk)
-      .neq('status', 'iptal_edildi')
-      .limit(5000);
-    if (error) throw error;
+      .order('id').range(from, to));
     for (const row of data ?? []) {
-      (installmentsByObligation[row.obligation_id] ??= []).push(row);
+      const plan = (installmentsByObligation[row.obligation_id] ??= []);
+      if (row.status !== 'iptal_edildi') plan.push(row);
     }
   }
 
@@ -324,16 +323,15 @@ export async function getDueBreakdown({
   }
 
   // .in() listesi URL'ye yazıldığı için çok sayıda kayıtta parçalara bölünür.
-  const installmentRows: { obligation_id: string; due_date: string; remaining_amount_minor: number }[] = [];
+  const installmentRows: { obligation_id: string; due_date: string; remaining_amount_minor: number; status: string }[] = [];
   for (let i = 0; i < obligations.length; i += 100) {
     const chunk = obligations.slice(i, i + 100).map((o) => o.id);
-    const rows = await fetchAll<{ obligation_id: string; due_date: string; remaining_amount_minor: number }>((from, to) =>
+    const rows = await fetchAll<{ obligation_id: string; due_date: string; remaining_amount_minor: number; status: string }>((from, to) =>
       supabase
         .from('installments')
-        .select('obligation_id, due_date, remaining_amount_minor')
+        .select('obligation_id, due_date, remaining_amount_minor, status')
         .eq('workspace_id', workspaceId)
         .in('obligation_id', chunk)
-        .gt('remaining_amount_minor', 0)
         .order('id')
         .range(from, to)
     );
@@ -343,7 +341,11 @@ export async function getDueBreakdown({
   const byObligation = new Map<string, { dueDate: string; remainingMinor: number }[]>();
   for (const row of installmentRows) {
     const list = byObligation.get(row.obligation_id) ?? [];
-    list.push({ dueDate: row.due_date, remainingMinor: row.remaining_amount_minor });
+    // Keep an empty plan entry: a fully closed/cancelled plan must not fall back
+    // to the parent's original due date and count cancelled debt again.
+    if (row.status !== 'iptal_edildi' && row.remaining_amount_minor > 0) {
+      list.push({ dueDate: row.due_date, remainingMinor: row.remaining_amount_minor });
+    }
     byObligation.set(row.obligation_id, list);
   }
 

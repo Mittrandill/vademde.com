@@ -444,6 +444,20 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  const { data: canEdit, error: permissionError } = await authedClient.rpc('can_edit_workspace', {
+    target_workspace_id: document.workspace_id,
+  });
+  if (permissionError || canEdit !== true) {
+    return new Response(JSON.stringify({ error: 'Belge işleme için düzenleme yetkisi gerekir' }), {
+      status: 403, headers: jsonHeaders,
+    });
+  }
+  if (!['uploaded', 'failed', 'ready_for_review'].includes(document.status)) {
+    return new Response(JSON.stringify({ error: 'Bu belge mevcut durumunda yeniden işlenemez' }), {
+      status: 409, headers: jsonHeaders,
+    });
+  }
+
   // Depolama ve yazma işlemleri için service role (RLS'yi atlar, yalnızca sunucu tarafında).
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -614,7 +628,7 @@ Deno.serve(async (req: Request) => {
       provider: 'gemini',
       model: modelUsed,
       structured_output: parsed,
-    });
+    }).throwOnError();
 
     const fieldRows = (Array.isArray(parsed.fields) ? parsed.fields : []).map(
       (field: Record<string, unknown>) => ({
@@ -651,7 +665,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (fieldRows.length > 0) {
-      await adminClient.from('document_fields').insert(fieldRows);
+      await adminClient.from('document_fields').insert(fieldRows).throwOnError();
     }
 
     const lineItemRows: LineItemRow[] = [];
@@ -735,7 +749,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (lineItemRows.length > 0) {
-      await adminClient.from('document_line_items').insert(lineItemRows);
+      await adminClient.from('document_line_items').insert(lineItemRows).throwOnError();
     }
 
     // extracted_summary'nin anahtarları bilinçli olarak "*Minor" kalır: istemci (bkz.
@@ -839,13 +853,13 @@ Deno.serve(async (req: Request) => {
     await adminClient.rpc('increment_ocr_usage', {
       target_owner: ownerId,
       target_period: periodMonthIso,
-    });
+    }).throwOnError();
 
     await adminClient
       .from('document_processing_jobs')
       .update({ status: 'succeeded', completed_at: new Date().toISOString() })
       .eq('document_id', documentId)
-      .eq('status', 'processing');
+      .eq('status', 'processing').throwOnError();
 
     // Buraya ulaşıldıysa ham belge tercihe göre temizlenmiş, belge 'ready_for_review' ve
     // job 'succeeded' olarak yazılmıştır; istemci poll ile inceleme ekranına geçebilir.

@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { fetchAll } from '@/services/fetchAll';
 import { ACTIVE_OBLIGATION_STATUSES, getDueInfoByObligation, localIsoDate } from '@/features/obligations/api';
 import { BANK_NAME } from '@/features/banks/banks';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
@@ -27,24 +28,23 @@ export interface BankSummary {
 // bir hesabı, kredi kartı veya kredisi olan bankaların özeti. getCounterpartyBalances'ın
 // banka karşılığı — tek sorguyla, banka başına ayrı istek atmadan.
 export async function listBankSummaries(workspaceId: string): Promise<BankSummary[]> {
-  const [{ data: accounts, error: accountsError }, { data: loans, error: loansError }, rates] = await Promise.all([
-    supabase
+  const [accounts, loans, rates] = await Promise.all([
+    fetchAll((from, to) => supabase
       .from('accounts')
       .select('bank_code, type')
       .eq('workspace_id', workspaceId)
       .eq('is_archived', false)
-      .not('bank_code', 'is', null),
-    supabase
+      .not('bank_code', 'is', null).order('id').range(from, to)),
+    fetchAll((from, to) => supabase
       .from('obligations')
-      .select('bank_code, remaining_amount_minor, currency_code, status')
+      .select('id, bank_code, remaining_amount_minor, currency_code, status, due_date')
       .eq('workspace_id', workspaceId)
       .eq('document_type', LOAN_DOCUMENT_TYPE)
       .not('bank_code', 'is', null)
-      .in('status', ACTIVE_OBLIGATION_STATUSES),
+      .in('status', ACTIVE_OBLIGATION_STATUSES).order('id').range(from, to)),
     listValueUnitRates(),
   ]);
-  if (accountsError) throw accountsError;
-  if (loansError) throw loansError;
+  const dueInfo = await getDueInfoByObligation(workspaceId, loans);
 
   const byBank = new Map<string, BankSummary>();
   function entryFor(bankCode: string): BankSummary {
@@ -67,7 +67,7 @@ export async function listBankSummaries(workspaceId: string): Promise<BankSummar
     const entry = entryFor(loan.bank_code);
     entry.loanCount += 1;
     entry.loanDebtMinor += sumToReferenceMinor([{ amountMinor: loan.remaining_amount_minor, unitCode: loan.currency_code }], rates);
-    if (loan.status === 'gecikti') entry.overdueLoanCount += 1;
+    if ((dueInfo[loan.id]?.overdueCount ?? 0) > 0) entry.overdueLoanCount += 1;
   }
 
   return Array.from(byBank.values()).sort((a, b) =>

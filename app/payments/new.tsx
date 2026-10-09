@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { InteractionManager, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -44,8 +44,12 @@ import {
   isCashlessMethod,
   isInstrumentMethod,
   settleObligations,
+  type SettleObligationsInput,
   type SettlementMethod,
 } from '@/features/payments/api';
+import { acknowledgeOffset, cancelStoredOffset, loadStoredOffset, reverseStoredOffset, submitDurableOffset } from '@/features/payments/offsetQueue';
+import { acknowledgeCashSettlement, cancelStoredCashSettlement, loadStoredCashSettlement, submitDurableCashSettlement } from '@/features/payments/cashSettlementQueue';
+import { useSession } from '@/features/auth/useSession';
 import { attachReceiptFile, useDocumentArchiveAccess, type PendingReceipt } from '@/features/receipts/api';
 import { getValueUnit } from '@/features/valueUnits/units';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -172,6 +176,8 @@ function SettlementForm({
   initialSourceIds,
 }: SettlementFormProps) {
   const theme = useTheme();
+  const { session } = useSession();
+  const userId = session?.user.id;
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const isPayable = direction === 'payable';
@@ -263,7 +269,7 @@ function SettlementForm({
     enabled: !!activeWorkspaceId && isPayable,
   });
   const offsetSources = (oppositeQuery.data ?? []).filter(
-    (o) => o.currency_code === currencyCode && o.remaining_amount_minor > 0
+    (o) => o.currency_code === currencyCode && o.remaining_amount_minor > 0 && o.document_type !== 'kredi_karti_ekstresi'
   );
   const portfolio = (portfolioQuery.data ?? []).filter(
     (o) =>
@@ -289,6 +295,7 @@ function SettlementForm({
     (o) =>
       o.currency_code === currencyCode &&
       o.remaining_amount_minor > 0 &&
+      (method !== 'mahsup' || o.document_type !== 'kredi_karti_ekstresi') &&
       (!instrument || (o.document_type !== 'cek' && o.document_type !== 'senet'))
   );
 
@@ -357,8 +364,75 @@ function SettlementForm({
   });
   const balanceByAccount = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b]));
 
+  const offsetRecovery = useQuery({
+    queryKey: ['offset-recovery', userId, activeWorkspaceId],
+    queryFn: () => loadStoredOffset(userId!, activeWorkspaceId!),
+    enabled: !!userId && !!activeWorkspaceId,
+    networkMode: 'always', staleTime: 0, gcTime: 0,
+  });
+  const cashRecovery = useQuery({
+    queryKey: ['cash-settlement-recovery', userId, activeWorkspaceId],
+    queryFn: () => loadStoredCashSettlement(userId!, activeWorkspaceId!),
+    enabled: !!userId && !!activeWorkspaceId,
+    networkMode: 'always', staleTime: 0, gcTime: 0,
+  });
+  const resumeCash = useMutation({
+    mutationFn: async () => {
+      if (!userId || !cashRecovery.data) throw new Error('Saklanan ödeme yok');
+      return submitDurableCashSettlement(userId, cashRecovery.data.input);
+    },
+    onSuccess: () => {
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      void cashRecovery.refetch();
+    },
+    onError: (error) => { void cashRecovery.refetch(); showErrorAlert(error); }, networkMode: 'always',
+  });
+  const acknowledgeCash = useMutation({
+    mutationFn: () => acknowledgeCashSettlement(userId!, activeWorkspaceId!),
+    onSuccess: () => { void cashRecovery.refetch(); },
+    onError: (error) => showErrorAlert(error), networkMode: 'always',
+  });
+  const cancelCash = useMutation({
+    mutationFn: () => cancelStoredCashSettlement(userId!, activeWorkspaceId!),
+    onSuccess: () => {
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      void cashRecovery.refetch();
+    },
+    onError: (error) => { void cashRecovery.refetch(); showErrorAlert(error); }, networkMode: 'always',
+  });
+  const resumeOffset = useMutation({
+    mutationFn: async () => {
+      if (!userId || !offsetRecovery.data) throw new Error('Saklanan mahsup yok');
+      const result = await submitDurableOffset(userId, offsetRecovery.data.input);
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      await offsetRecovery.refetch();
+      return result;
+    },
+    onError: (error) => showErrorAlert(error), networkMode: 'always',
+  });
+  const acknowledge = useMutation({
+    mutationFn: () => acknowledgeOffset(userId!, activeWorkspaceId!),
+    onSuccess: () => { void offsetRecovery.refetch(); },
+    onError: (error) => showErrorAlert(error), networkMode: 'always',
+  });
+  const cancelOffset = useMutation({
+    mutationFn: () => cancelStoredOffset(userId!, activeWorkspaceId!),
+    onSuccess: () => { void offsetRecovery.refetch(); },
+    onError: (error) => showErrorAlert(error), networkMode: 'always',
+  });
+  const reverseOffset = useMutation({
+    mutationFn: () => reverseStoredOffset(userId!, activeWorkspaceId!),
+    onSuccess: () => {
+      if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
+      void offsetRecovery.refetch();
+    },
+    onError: (error) => { void offsetRecovery.refetch(); showErrorAlert(error); }, networkMode: 'always',
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!offsetRecovery.isSuccess || offsetRecovery.isFetching || offsetRecovery.data) throw new Error('Önce saklanan mahsup kontrol edilmeli');
+      if (!cashRecovery.isSuccess || cashRecovery.isFetching || cashRecovery.data) throw new Error('Önce saklanan ödeme kontrol edilmeli');
       if (!activeWorkspaceId || !counterpartyId) throw new Error('Kişi / firma seçin');
       if (!amountMinor || amountMinor <= 0) throw new Error('Tutar okunamadı, kontrol edin');
       const parsedDate = new Date(dateStr);
@@ -367,7 +441,7 @@ function SettlementForm({
         throw new Error('Vade tarihi okunamadı, kontrol edin');
       }
 
-      const result = await settleObligations({
+      const input: SettleObligationsInput = {
         workspaceId: activeWorkspaceId,
         direction,
         counterpartyId,
@@ -390,7 +464,10 @@ function SettlementForm({
               dueDates: dueRows,
             }
           : null,
-      });
+      };
+      const result = method === 'mahsup'
+        ? await submitDurableOffset(userId!, input)
+        : !cashless ? await submitDurableCashSettlement(userId!, input) : await settleObligations(input);
 
       if (result.instrumentObligation) {
         await syncObligationReminder(activeWorkspaceId, result.instrumentObligation).catch(() => undefined);
@@ -420,6 +497,7 @@ function SettlementForm({
       return { ...result, receiptFailed };
     },
     onSuccess: (result) => {
+      void cashRecovery.refetch();
       const closedCount = result.allocations.length;
       const advanceText =
         result.leftoverMinor > 0
@@ -440,7 +518,7 @@ function SettlementForm({
         });
       });
     },
-    onError: (error) => showErrorAlert(error),
+    onError: (error) => { void offsetRecovery.refetch(); void cashRecovery.refetch(); showErrorAlert(error); },
   });
 
   function toggleRecord(id: string) {
@@ -458,6 +536,8 @@ function SettlementForm({
   }
 
   const canSubmit =
+    !!userId && offsetRecovery.isSuccess && !offsetRecovery.isFetching && !offsetRecovery.data &&
+    cashRecovery.isSuccess && !cashRecovery.isFetching && !cashRecovery.data &&
     !!counterpartyId &&
     !!amountMinor &&
     amountMinor > 0 &&
@@ -469,6 +549,65 @@ function SettlementForm({
           ? dueRows.length > 0
           : !!accountId);
 
+  if (!userId || !offsetRecovery.isSuccess || offsetRecovery.isFetching || offsetRecovery.data) {
+    const saved = offsetRecovery.data;
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
+          <ScreenHeader inline title="Mahsup kontrolü" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
+          {saved ? <>
+            <Text variant="cardTitle">{saved.input.counterpartyName ?? 'Önceki cari'} · {formatMinorAmount(saved.input.amountMinor, saved.input.currencyCode)}</Text>
+            <Text>{saved.state === 'confirmed' ? 'Önceki mahsup kaydedildi. Yeni işlem için aşağıdan devam edin.'
+              : saved.state === 'cancelled' ? 'Önceki mahsup isteği iptal edildi. Borç/alacak kapanışı oluşturulmadı.'
+              : saved.state === 'reversed' ? 'Önceki mahsup geri alındı. İki tarafın kalan tutarı yeniden hesaplandı; sonraki ödemeler korunuyor.'
+              : saved.state === 'reversing' ? 'Önceki mahsubun geri alma sonucu belirsiz. Aynı geri almayı yeniden deneyin; yeni işlem başlatmayın.'
+              : 'Önceki mahsup sonucu belirsiz. Aynı kimlikle yeniden deneme, kayıt varsa ikinci kapanış oluşturmaz; yoksa özgün mahsubu tamamlar.'}</Text>
+            <Button label={saved.state === 'reversing' ? 'Aynı geri almayı yeniden dene' : saved.state !== 'pending' ? 'Yeni işlem başlat' : 'Aynı mahsubu yeniden dene'}
+              disabled={offsetRecovery.isFetching || cancelOffset.isPending} loading={resumeOffset.isPending || acknowledge.isPending || reverseOffset.isPending}
+              onPress={() => saved.state === 'reversing' ? reverseOffset.mutate() : saved.state !== 'pending' ? acknowledge.mutate() : resumeOffset.mutate()} />
+            {saved.state === 'pending' ? <>
+              <Text variant="caption" color="textSecondary">İptal yalnızca henüz kaydedilmemiş isteği durdurur; kaydedilmiş mahsubu geri almaz.</Text>
+              <Button label="Kaydedilmediyse iptal et" variant="secondary" loading={cancelOffset.isPending}
+                disabled={offsetRecovery.isFetching || resumeOffset.isPending} onPress={() => cancelOffset.mutate()} />
+            </> : null}
+            {saved.state === 'confirmed' ? <Button label="Bu mahsubu geri al" variant="dangerText"
+              loading={reverseOffset.isPending} disabled={offsetRecovery.isFetching || acknowledge.isPending}
+              onPress={() => Alert.alert('Mahsubu geri al', 'Bu işleme ait iki tarafın kapanışları kaldırılacak. Sonradan yapılan ödemeler silinmeyecek.', [
+                { text: 'Vazgeç', style: 'cancel' },
+                { text: 'Geri al', style: 'destructive', onPress: () => reverseOffset.mutate() },
+              ])} /> : null}
+          </> : <Text>{offsetRecovery.isError ? 'Saklanan mahsup kontrol edilemedi. Yeni işlem başlatılamaz.' : 'Saklanan mahsup kontrol ediliyor…'}</Text>}
+          {offsetRecovery.isError ? <Button label="Tekrar kontrol et" onPress={() => { void offsetRecovery.refetch(); }} /> : null}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+  if (!cashRecovery.isSuccess || cashRecovery.isFetching || cashRecovery.data) {
+    const saved = cashRecovery.data;
+    const busy = resumeCash.isPending || acknowledgeCash.isPending || cancelCash.isPending || cashRecovery.isFetching;
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
+          <ScreenHeader inline title="Ödeme kontrolü" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
+          {saved ? <>
+            <Text variant="cardTitle">{saved.input.counterpartyName ?? 'Önceki cari'} · {formatMinorAmount(saved.input.amountMinor, saved.input.currencyCode)}</Text>
+            <Text>{saved.state === 'confirmed' ? 'Önceki ödeme kaydedildi. Yeni işlem başlatmak için açık onay verin.'
+              : saved.state === 'cancelled' ? 'Önceki ödeme isteği iptal edildi. Bu istek finansal kayıt oluşturamaz.'
+              : 'Önceki ödeme sonucu belirsiz. Aynı kimlikle kontrol, kayıt varsa ikinci ödeme oluşturmaz; yoksa özgün isteği tamamlar.'}</Text>
+            <Button label={saved.state === 'pending' ? 'Aynı ödemeyi yeniden kontrol et' : 'Yeni işlem başlat'}
+              disabled={busy} loading={resumeCash.isPending || acknowledgeCash.isPending}
+              onPress={() => saved.state === 'pending' ? resumeCash.mutate() : acknowledgeCash.mutate()} />
+            {saved.state === 'pending' ? <>
+              <Text variant="caption" color="textSecondary">İptal yalnızca henüz kaydedilmemiş isteği durdurur; kaydedilmiş ödemeyi iade etmez.</Text>
+              <Button label="Kaydedilmediyse iptal et" variant="secondary" disabled={busy} loading={cancelCash.isPending}
+                onPress={() => cancelCash.mutate()} />
+            </> : null}
+          </> : <Text>{cashRecovery.isError ? 'Saklanan ödeme okunamadı. Yeni işlem başlatılamaz.' : 'Saklanan ödeme kontrol ediliyor…'}</Text>}
+          {cashRecovery.isError ? <Button label="Tekrar kontrol et" onPress={() => { void cashRecovery.refetch(); }} /> : null}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>

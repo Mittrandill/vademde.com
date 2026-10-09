@@ -70,6 +70,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "test:finance": "node tests/finance-regression.cjs",
     "postinstall": "patch-package"
   },
   "private": true

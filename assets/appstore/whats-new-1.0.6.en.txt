@@ -1,13 +1,22 @@
 Vademde 1.0.6
 
-• All-new design: new colors, new typefaces and redrawn screens. What you owe is purple, what you're owed is green; yellow is only for actions.
-• Due-date timeline: see payments and collections for the next 7, 30 and 90 days on a single line.
-• Quick add: long-press the Scan button to add an expense, income, transfer or dated record.
-• Cheque and promissory note portfolio: track received cheques in your portfolio, endorsed or sent for collection, and flag the ones that bounce.
-• My subscriptions and Currency & gold: see your monthly subscription total, upcoming renewals, the value of your foreign-currency and gold holdings and live rates.
-• Cash alerts: get warned in advance when an account may go negative.
-• Card installments: follow how installment purchases weigh on upcoming statements.
-• e-Invoice QR code: scan the QR code on an invoice and the form fills itself in.
-• Receivable reminders: send a reminder via WhatsApp, SMS or email.
-• Smart suggestions and Ask (Plus): savings suggestions and answers to your questions, based on your own records.
+• All-new design: Every screen has been redrawn with a cleaner, iOS-native look. What you owe is purple, what you're owed is green; yellow is only for actions. The welcome screens are new too.
+• Card statements, line by line: Scan a statement and every purchase is added to the card and to Transactions with its own date, automatically categorized by merchant. Review the suggestions and change anything before saving.
+• Redesigned credit card page: Current balance, limit, due date, statements and installments on one screen; pay your card directly from here.
+• Card installments: Track how installment purchases weigh on your upcoming statements.
+• Cheque and note portfolio: Keep received cheques in your portfolio, endorsed or deposited for collection; mark bounced ones. Each cheque's journey is shown on its detail page.
+• Due timeline: Payments and collections for the next 7, 30 and 90 days on the home screen.
+• Quick add: Long-press the Scan button to add an expense, income, transfer or scheduled record.
+• e-Invoice QR code: Scan the QR code on an invoice and the details fill in automatically.
+• No document lost when your quota is full: Scanned documents are saved as drafts so you can process them later from the home screen.
+• Redesigned reports: Preset periods and custom date ranges, change versus the previous period, and section selection for PDF export.
+• Transaction filters: Filter by date, type, account, category, contact and amount range.
+• Subscriptions and Currency & gold: See your monthly subscription total, upcoming renewals, the TRY value of your holdings and live rates.
+• Cash alert: Get notified in advance when an account may go negative in the coming days.
+• Payment reminders: Send a reminder via WhatsApp, SMS or email from a contact's page.
+• Contact statements now include foreign-currency records.
+• Unsaved-changes warning on forms; an info banner when you're offline.
+• If the app lock can't be opened, you can sign in again with your email and password.
+• Smart insights and Ask (Plus): Saving suggestions based on your records and answers to your questions.
+• More accurate numbers: Fixes for overpayments, overdue days and exchange rates on foreign-currency transactions; payment records are more reliable.
 • Minor improvements and bug fixes.

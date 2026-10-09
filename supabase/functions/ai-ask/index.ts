@@ -80,10 +80,11 @@ Deno.serve(async (req: Request) => {
   const windowStart = new Date(now.getTime() - WINDOW_DAYS * 86_400_000);
   const { data: rows } = await db
     .from('transactions')
-    .select('direction, amount_minor, occurred_at, currency_code, category:categories(name), counterparty:counterparties(name)')
+    .select('direction, amount_minor, financing_minor, occurred_at, currency_code, category:categories(name), counterparty:counterparties(name)')
     .eq('workspace_id', workspaceId)
     .in('direction', ['income', 'expense'])
     .eq('currency_code', 'TRY')
+    .or('description.is.null,description.not.ilike.Kredi Kartı Ekstresi*')
     .gte('occurred_at', windowStart.toISOString())
     .limit(MAX_ROWS);
   const transactions = (rows ?? []) as any[];
@@ -96,14 +97,15 @@ Deno.serve(async (req: Request) => {
   const byMonth: Record<string, { income: number; expense: number; count: number }> = {};
   const byMonthCategory: Record<string, Record<string, number>> = {};
   for (const t of transactions) {
+    const reportMinor = Math.max(0, t.amount_minor - Math.min(t.financing_minor ?? 0, t.amount_minor));
     const m = monthKey(t.occurred_at);
     byMonth[m] ??= { income: 0, expense: 0, count: 0 };
-    byMonth[m][t.direction === 'income' ? 'income' : 'expense'] += t.amount_minor;
+    byMonth[m][t.direction === 'income' ? 'income' : 'expense'] += reportMinor;
     byMonth[m].count += 1;
     if (t.direction === 'expense') {
       const category = t.category?.name ?? 'Kategorisiz';
       byMonthCategory[m] ??= {};
-      byMonthCategory[m][category] = (byMonthCategory[m][category] ?? 0) + t.amount_minor;
+      byMonthCategory[m][category] = (byMonthCategory[m][category] ?? 0) + reportMinor;
     }
   }
   const context = {

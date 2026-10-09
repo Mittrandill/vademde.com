@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { fetchAll } from '@/services/fetchAll';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import {
   ACTIVE_OBLIGATION_STATUSES,
@@ -79,14 +80,11 @@ export function getCounterpartyTypeLabel(type: string | null | undefined): strin
 }
 
 export async function listCounterparties(workspaceId: string): Promise<Counterparty[]> {
-  const { data, error } = await supabase
+  return fetchAll((from, to) => supabase
     .from('counterparties')
     .select('*')
     .eq('workspace_id', workspaceId)
-    .order('name', { ascending: true });
-
-  if (error) throw error;
-  return data;
+    .order('name', { ascending: true }).order('id').range(from, to));
 }
 
 export async function createCounterparty(input: TablesInsert<'counterparties'>): Promise<Counterparty> {
@@ -143,16 +141,15 @@ export async function getCounterpartyLedger(
   workspaceId: string,
   counterpartyId: string
 ): Promise<CounterpartyLedger> {
-  const [{ data, error }, rates] = await Promise.all([
-    supabase
+  const [data, rates] = await Promise.all([
+    fetchAll((from, to) => supabase
       .from('obligations')
       .select('id, document_type, direction, remaining_amount_minor, currency_code, status, due_date')
       .eq('workspace_id', workspaceId)
       .eq('counterparty_id', counterpartyId)
-      .in('status', ACTIVE_OBLIGATION_STATUSES),
+      .in('status', ACTIVE_OBLIGATION_STATUSES).order('id').range(from, to)),
     listValueUnitRates(),
   ]);
-  if (error) throw error;
 
   // Faturayı kapatmış çek/senet cari bakiyesinden ayrılır (bkz. getSettlingInstrumentIds).
   const settlingInstrumentIds = await getSettlingInstrumentIds(workspaceId, data ?? []);
@@ -198,16 +195,15 @@ export async function getCounterpartyLedger(
 // ayrı istek atılmaz. Dönüş Map değil düz nesnedir çünkü react-query cache'i AsyncStorage'a
 // JSON olarak yazılıyor (bkz. services/queryClient.ts).
 export async function getCounterpartyBalances(workspaceId: string): Promise<Record<string, number>> {
-  const [{ data, error }, rates] = await Promise.all([
-    supabase
+  const [data, rates] = await Promise.all([
+    fetchAll((from, to) => supabase
       .from('obligations')
       .select('id, document_type, counterparty_id, direction, remaining_amount_minor, currency_code')
       .eq('workspace_id', workspaceId)
       .not('counterparty_id', 'is', null)
-      .in('status', ACTIVE_OBLIGATION_STATUSES),
+      .in('status', ACTIVE_OBLIGATION_STATUSES).order('id').range(from, to)),
     listValueUnitRates(),
   ]);
-  if (error) throw error;
 
   // Faturayı kapatmış çek/senet cari bakiyesine ikinci kez girmez (bkz. getSettlingInstrumentIds).
   const settlingInstrumentIds = await getSettlingInstrumentIds(workspaceId, data ?? []);
@@ -317,15 +313,15 @@ export async function getCounterpartyStatement(
   workspaceId: string,
   counterpartyId: string
 ): Promise<StatementEntry[]> {
-  const [obligationsResult, transactionsResult] = await Promise.all([
-    supabase
+  const [obligationRows, transactionRows] = await Promise.all([
+    fetchAll((from, to) => supabase
       .from('obligations')
       .select('id, title, document_type, direction, total_amount_minor, currency_code, created_at, status, due_date, fx_rate_try_minor')
       .eq('workspace_id', workspaceId)
       .eq('counterparty_id', counterpartyId)
       .neq('status', 'iptal_edildi')
-      .limit(1000),
-    supabase
+      .order('id').range(from, to)),
+    fetchAll((from, to) => supabase
       .from('transactions')
       .select(
         'id, direction, amount_minor, currency_code, occurred_at, description, payment_method, source_obligation_id, account:accounts!transactions_account_id_fkey(name), payments(id)'
@@ -333,12 +329,10 @@ export async function getCounterpartyStatement(
       .eq('workspace_id', workspaceId)
       .eq('counterparty_id', counterpartyId)
       .in('direction', ['income', 'expense'])
-      .limit(1000),
+      .order('id').range(from, to)),
   ]);
-  if (obligationsResult.error) throw obligationsResult.error;
-  if (transactionsResult.error) throw transactionsResult.error;
 
-  const obligations = (obligationsResult.data ?? []) as StatementObligationRow[];
+  const obligations = obligationRows as StatementObligationRow[];
   const obligationById = new Map(obligations.map((o) => [o.id, o]));
   // Faturayı kapatmış çek/senet: cariyi zaten kapattığı için kendi satırı ve vadesindeki ödemesi
   // cari bakiyesini değiştirmez (bkz. getSettlingInstrumentIds) — bilgi satırı olarak görünür.
@@ -346,18 +340,19 @@ export async function getCounterpartyStatement(
 
   let payments: StatementPaymentRow[] = [];
   if (obligations.length > 0) {
-    const { data, error } = await supabase
+    for (let offset = 0; offset < obligations.length; offset += 100) {
+    const data = await fetchAll((from, to) => supabase
       .from('payments')
       .select(
         'id, obligation_id, amount_minor, paid_at, notes, settled_by_obligation_id, fx_rate_try_minor, transaction_id, account:accounts(name), transaction:transactions(payment_method)'
       )
       .in(
         'obligation_id',
-        obligations.map((o) => o.id)
+        obligations.slice(offset, offset + 100).map((o) => o.id)
       )
-      .limit(5000);
-    if (error) throw error;
-    payments = (data ?? []) as unknown as StatementPaymentRow[];
+      .order('id').range(from, to));
+    payments.push(...data as unknown as StatementPaymentRow[]);
+    }
   }
 
   const entries: StatementEntry[] = [];
@@ -459,7 +454,7 @@ export async function getCounterpartyStatement(
   // Kayda bağlı olmayan hareketler (peşin alış/satış vb.) bakiyeyi değiştirmez. Ödemeden doğan
   // hareketler (yukarıda ödeme satırı olarak var) ve bir kaydın parçası olan hareketler (avansın
   // parası — avans kaydıyla birlikte gösterilir) tekrar listelenmez.
-  for (const t of (transactionsResult.data ?? []) as unknown as StatementTransactionRow[]) {
+  for (const t of transactionRows as unknown as StatementTransactionRow[]) {
     if ((t.payments?.length ?? 0) > 0) continue;
     if (t.source_obligation_id && obligationById.has(t.source_obligation_id)) continue;
     const method = t.payment_method ? METHOD_LABEL[t.payment_method] : null;

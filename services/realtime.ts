@@ -3,6 +3,7 @@ import { InteractionManager } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { supabase } from '@/services/supabase';
+import { invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 
 const WORKSPACE_TABLES = [
   'accounts',
@@ -44,6 +45,9 @@ export function useWorkspaceRealtime(workspaceId: string | null) {
         for (const key of entities) {
           queryClient.invalidateQueries({ queryKey: [workspaceId, key] });
         }
+        // Cross-entity dependencies: transaction -> balance/report/counterparty.
+        invalidatePaymentRelatedQueries(queryClient, workspaceId);
+        queryClient.invalidateQueries({ queryKey: [workspaceId] });
       });
     };
 

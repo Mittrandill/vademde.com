@@ -83,7 +83,7 @@ Deno.serve(async (req: Request) => {
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'owner_id' }
-        );
+        ).throwOnError();
         break;
       }
       case 'CANCELLATION': {
@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
         await adminClient
           .from('subscriptions')
           .update({ will_renew: false, updated_at: new Date().toISOString() })
-          .eq('owner_id', ownerId);
+          .eq('owner_id', ownerId).throwOnError();
         break;
       }
       case 'EXPIRATION': {
@@ -104,14 +104,14 @@ Deno.serve(async (req: Request) => {
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'owner_id' }
-        );
+        ).throwOnError();
         break;
       }
       case 'BILLING_ISSUE': {
         await adminClient
           .from('subscriptions')
           .update({ status: 'grace_period', updated_at: new Date().toISOString() })
-          .eq('owner_id', ownerId);
+          .eq('owner_id', ownerId).throwOnError();
         break;
       }
       default:

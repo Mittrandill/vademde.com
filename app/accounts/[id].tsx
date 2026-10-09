@@ -272,8 +272,8 @@ export default function AccountDetailScreen() {
     }
 
     const purchaseProgress = (purchasesQuery.data ?? []).map((p) => progressOf(p));
-    const activePurchases = purchaseProgress.filter((p) => p.paidCount < p.purchase.installment_count);
-    const installmentRemainingMinor = purchaseProgress.reduce((sum, p) => sum + p.remainingMinor, 0);
+    const activePurchases = purchaseProgress.filter((p) => p.elapsedStatementCount < p.purchase.installment_count);
+    const installmentRemainingMinor = purchaseProgress.reduce((sum, p) => sum + p.futureStatementMinor, 0);
 
     const tabOptions: { key: CreditCardTab; label: string }[] = [
       { key: 'ekstreler', label: `Ekstreler (${loadedStatementCount})` },
@@ -360,7 +360,7 @@ export default function AccountDetailScreen() {
             </Stack>
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="caption" color="textSecondary">
-                Taksitte kalan
+                Gelecek taksit yükü
               </Text>
               <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
                 {formatMinorAmount(installmentRemainingMinor, account.currency_code)}
@@ -427,13 +427,13 @@ export default function AccountDetailScreen() {
                   {purchaseProgress.map((p) => (
                     <GroupedRow
                       key={p.purchase.id}
-                      leading={<GroupedRowIcon name="layers" tone={p.paidCount >= p.purchase.installment_count ? 'success' : 'brandSoft'} />}
+                      leading={<GroupedRowIcon name="layers" tone="brandSoft" />}
                       title={p.purchase.merchant}
-                      subtitle={`${p.paidCount}/${p.purchase.installment_count} taksit · aylık ${formatMinorAmount(p.monthlyMinor, account.currency_code)}`}
+                      subtitle={`${p.elapsedStatementCount}/${p.purchase.installment_count} dönem geçti · aylık ${formatMinorAmount(p.monthlyMinor, account.currency_code)}`}
                       chevron={false}
                       trailing={
                         <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
-                          {formatMinorAmount(p.remainingMinor, account.currency_code)}
+                          {formatMinorAmount(p.futureStatementMinor, account.currency_code)}
                         </Text>
                       }
                     />

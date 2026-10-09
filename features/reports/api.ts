@@ -356,18 +356,18 @@ export async function listTransactionsForExport(
   workspaceId: string,
   range: DateRange = {}
 ): Promise<ReportTransactionRow[]> {
-  let query = supabase
-    .from('transactions')
-    .select(
-      'occurred_at, description, direction, amount_minor, currency_code, category:categories(name), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name)'
-    )
-    .eq('workspace_id', workspaceId)
-    .order('occurred_at', { ascending: false });
-  if (range.from) query = query.gte('occurred_at', range.from);
-  if (range.to) query = query.lt('occurred_at', range.to);
-
-  const { data, error } = await query;
-  if (error) throw error;
+  const data = await fetchAll((from, to) => {
+    let query = supabase
+      .from('transactions')
+      .select(
+        'occurred_at, description, direction, amount_minor, currency_code, category:categories(name), counterparty:counterparties(name), account:accounts!transactions_account_id_fkey(name)'
+      )
+      .eq('workspace_id', workspaceId)
+      .order('occurred_at', { ascending: false }).order('id').range(from, to);
+    if (range.from) query = query.gte('occurred_at', range.from);
+    if (range.to) query = query.lt('occurred_at', range.to);
+    return query;
+  });
 
   return (data as unknown as ExportTransactionRow[]).map((row) => ({
     occurredAt: row.occurred_at,

@@ -256,12 +256,15 @@ export default function ReceiptResultScreen() {
 
       if (activeMatch) {
         const obligation = activeMatch.obligation;
+        if (payCapMinor != null && amountMinor > payCapMinor) {
+          throw new Error('Dekont tutarı kalan borcu aşıyor. Fazla tutarı kaybetmemek için Ödeme Yap / Tahsilat Al ekranından avanslı dağıtım yapın.');
+        }
         await recordPayment({
           workspace_id: activeWorkspaceId,
           obligation_id: obligation.id,
           installment_id: activeMatch.installment?.id ?? null,
           account_id: accountId,
-          amount_minor: Math.min(amountMinor, payCapMinor ?? amountMinor),
+          amount_minor: amountMinor,
           paid_at: paidAt,
           receipt_document_id: canLinkFile ? document.id : null,
           obligationDirection: obligation.direction as 'payable' | 'receivable',

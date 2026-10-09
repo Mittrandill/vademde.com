@@ -713,6 +713,7 @@ export default function DocumentReviewScreen() {
       }
 
       if (direction === 'payable' || direction === 'receivable') {
+        let pastPaymentsFailed = false;
         if (!documentType) throw new Error('Belge türü seçin');
         if (splitsCardSpending && statementCandidatesQuery.isFetching) {
           throw new Error('Mükerrer hareket kontrolünün tamamlanmasını bekleyin');
@@ -829,6 +830,7 @@ export default function DocumentReviewScreen() {
           } catch {
             // Geçmiş ödeme kayıtları başarısız olsa bile borç/taksit planı oluşturulmuş
             // kalır; kullanıcı taksitleri obligation detayından manuel "ödendi" işaretleyebilir.
+            pastPaymentsFailed = true;
           }
         }
 
@@ -883,7 +885,7 @@ export default function DocumentReviewScreen() {
 
         await markDocumentConfirmed(id as string, { obligationId: obligation.id });
         await syncObligationReminder(activeWorkspaceId, obligation);
-        return { installmentPlanFailed, cardTransactionsFailed };
+        return { installmentPlanFailed, cardTransactionsFailed, pastPaymentsFailed };
       }
 
       if (!accountId) throw new Error('Hesap seçin');
@@ -921,7 +923,9 @@ export default function DocumentReviewScreen() {
 
       // Kısmi başarılar sessizce geçilmez: ana kayıt oluştu ama yan kayıtlar
       // (taksit planı / ekstre harcamaları) yazılamadıysa kullanıcı bunu bilmeli.
-      const partialFailureMessage = result?.installmentPlanFailed
+      const partialFailureMessage = result?.pastPaymentsFailed
+        ? 'Borç ve taksit planı kaydedildi ancak geçmiş taksit ödemeleri kaydedilemedi. Bu taksitler ödenmiş sayılmadı; kaydı açıp ödemeleri kontrol edin. Belgeyi yeniden onaylamayın.'
+        : result?.installmentPlanFailed
         ? 'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.'
         : result?.cardTransactionsFailed
           ? 'Kart borcu kaydedildi ancak ekstre harcamaları işlem olarak eklenemedi. Hareketler ekranından manuel ekleyebilirsiniz.'
@@ -929,7 +933,7 @@ export default function DocumentReviewScreen() {
 
       if (partialFailureMessage) {
         Alert.alert(
-          result?.installmentPlanFailed ? 'Taksitler oluşturulamadı' : 'Harcamalar eklenemedi',
+          'Kayıt kısmen tamamlandı',
           partialFailureMessage,
           [
             {

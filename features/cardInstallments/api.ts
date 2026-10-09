@@ -40,11 +40,18 @@ export interface NewCardInstallmentPurchase {
 }
 
 export async function createCardInstallmentPurchase(input: NewCardInstallmentPurchase): Promise<void> {
+  const { data: account, error: accountError } = await supabase.from('accounts')
+    .select('workspace_id, currency_code, type').eq('id', input.accountId).single();
+  if (accountError) throw accountError;
+  if (account.workspace_id !== input.workspaceId || account.type !== 'credit_card') {
+    throw new Error('Taksit planı bu çalışma alanındaki bir kredi kartına ait olmalı.');
+  }
   const { error } = await supabase.from('card_installment_purchases' as never).insert({
     workspace_id: input.workspaceId,
     account_id: input.accountId,
     merchant: input.merchant.trim(),
     total_minor: input.totalMinor,
+    currency_code: account.currency_code,
     installment_count: input.installmentCount,
     first_statement_month: input.firstStatementMonth,
   } as never);
@@ -65,9 +72,9 @@ export function installmentAmounts(totalMinor: number, count: number): number[] 
 export interface PurchaseProgress {
   purchase: CardInstallmentPurchase;
   amounts: number[];
-  /** Kapanmış (geçmiş) ekstre sayısı kadar taksit ödenmiş sayılır — ekstre aylarına göre türetilir. */
-  paidCount: number;
-  remainingMinor: number;
+  /** Calendar progress only; this table has no payment linkage. */
+  elapsedStatementCount: number;
+  futureStatementMinor: number;
   monthlyMinor: number;
 }
 
@@ -80,9 +87,9 @@ export function progressOf(purchase: CardInstallmentPurchase, now: Date = new Da
   const amounts = installmentAmounts(purchase.total_minor, purchase.installment_count);
   const currentMonth = now.getFullYear() * 12 + now.getMonth();
   const elapsed = currentMonth - monthIndex(purchase.first_statement_month);
-  const paidCount = Math.max(0, Math.min(purchase.installment_count, elapsed));
-  const remainingMinor = amounts.slice(paidCount).reduce((s, v) => s + v, 0);
-  return { purchase, amounts, paidCount, remainingMinor, monthlyMinor: amounts[0] };
+  const elapsedStatementCount = Math.max(0, Math.min(purchase.installment_count, elapsed));
+  const futureStatementMinor = amounts.slice(elapsedStatementCount).reduce((s, v) => s + v, 0);
+  return { purchase, amounts, elapsedStatementCount, futureStatementMinor, monthlyMinor: amounts[0] };
 }
 
 export interface StatementLoad {

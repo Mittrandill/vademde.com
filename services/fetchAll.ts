@@ -16,7 +16,7 @@ export async function fetchAll<T>(
     if (error) throw error;
     const rows = data ?? [];
     all.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
+    if (rows.length < PAGE_SIZE) return all;
   }
-  return all;
+  throw new Error('Veri hacmi güvenli okuma sınırını aştı; eksik toplam gösterilmedi.');
 }

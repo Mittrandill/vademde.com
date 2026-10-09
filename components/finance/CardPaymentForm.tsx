@@ -6,10 +6,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
-import { BigAmountInput, DateField, FieldGroup, Pill, Row, Text } from '@/components/primitives';
+import { BigAmountInput, Button, DateField, FieldGroup, Pill, Row, Text } from '@/components/primitives';
 import { TransferAccounts } from './TransferAccounts';
 import { getAccountBalances } from '@/features/reports/api';
-import { recordCardPayment } from '@/features/payments/api';
+import { acknowledgeCardPayment, loadStoredCardPayment, submitDurableCardPayment } from '@/features/payments/cardPaymentQueue';
+import { useSession } from '@/features/auth/useSession';
 import type { Account } from '@/features/accounts/api';
 import { queryKeys } from '@/services/queryKeys';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
@@ -45,22 +46,40 @@ export function CardPaymentForm({
   onSuccess,
 }: CardPaymentFormProps) {
   const theme = useTheme();
+  const { session } = useSession();
+  const userId = session?.user.id;
   const [amount, setAmount] = useState(
     formatAmountInput((Math.max(currentDebtMinor, 0) / 100).toFixed(2).replace('.', ','))
   );
   const [amountTouched, setAmountTouched] = useState(false);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [dateStr, setDateStr] = useState(localIsoDate());
+  const storedQuery = useQuery({
+    queryKey: ['card-payment-recovery', userId, workspaceId, cardAccountId],
+    queryFn: () => loadStoredCardPayment(userId!, workspaceId, cardAccountId),
+    enabled: !!userId,
+    staleTime: 0,
+    gcTime: 0,
+    networkMode: 'always',
+  });
+  const stored = storedQuery.data;
+  const newPayment = useMutation({
+    mutationFn: () => acknowledgeCardPayment(userId!, workspaceId, cardAccountId),
+    onSuccess: () => { void storedQuery.refetch(); },
+  });
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      if (!userId || !storedQuery.isSuccess || storedQuery.isFetching) throw new Error('Önce saklanan ödeme kontrol edilmeli');
+      // Recovery always uses the original source, amount and date, not today's form defaults.
+      if (stored) return submitDurableCardPayment(userId, stored.input);
       if (!accountId || !amount) throw new Error('Eksik alan var');
       const amountMinor = parseAmountToMinor(amount);
       if (amountMinor === null || amountMinor <= 0) throw new Error('Tutar okunamadı, kontrol edin');
       const parsedDate = new Date(dateStr);
       if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
 
-      return recordCardPayment({
+      return submitDurableCardPayment(userId, {
         workspaceId,
         cardAccountId,
         sourceAccountId: accountId,
@@ -70,6 +89,8 @@ export function CardPaymentForm({
       });
     },
     onSuccess,
+    onError: () => { void storedQuery.refetch(); },
+    networkMode: 'always',
   });
 
   const debtText = formatAmountInput((Math.max(currentDebtMinor, 0) / 100).toFixed(2).replace('.', ','));
@@ -82,7 +103,35 @@ export function CardPaymentForm({
   const balances = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
   balances.set(cardAccountId, currentDebtMinor);
 
-  const canSubmit = !!amount && !!selectedAccount && !mutation.isPending;
+  const canSubmit = !!amount && !!selectedAccount && !!userId && storedQuery.isSuccess
+    && !storedQuery.isFetching && !stored && !mutation.isPending && !newPayment.isPending;
+
+  if (!userId || !storedQuery.isSuccess || storedQuery.isFetching || stored) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
+        <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
+          <ScreenHeader inline title="Kart ödeme kontrolü" leftLabel={{ label: 'Kapat', onPress: onClose }} />
+          {stored ? (
+            <>
+              <Text variant="cardTitle">{formatMinorAmount(stored.input.amountMinor, stored.input.currencyCode)}</Text>
+              <Text variant="caption" color="textSecondary">{new Date(stored.input.paidAt).toLocaleDateString('tr-TR')} · {sourceAccounts.find((a) => a.id === stored.input.sourceAccountId)?.name ?? 'Önceki kaynak hesap'}</Text>
+              <Text>{stored.state === 'confirmed'
+                ? 'Önceki ödeme başarıyla kaydedildi. Aynı ödeme yeniden oluşturulmayacak.'
+                : 'Önceki ödemenin sonucu belirsiz. Aynı kimlikle yeniden deneme, ödeme kaydedilmişse ikinci kayıt oluşturmaz; kaydedilmemişse özgün ödemeyi tamamlar.'}</Text>
+              <Button label={stored.state === 'confirmed' ? 'Yeni ödeme başlat' : 'Aynı ödemeyi yeniden dene'}
+                disabled={storedQuery.isFetching || !userId}
+                loading={mutation.isPending || newPayment.isPending}
+                onPress={() => stored.state === 'confirmed' ? newPayment.mutate() : mutation.mutate()} />
+            </>
+          ) : <Text>{storedQuery.isError ? 'Saklanan ödeme kontrol edilemedi. Kontrol tamamlanmadan yeni ödeme başlatılamaz.' : 'Saklanan ödeme kontrol ediliyor…'}</Text>}
+          {storedQuery.isError ? <Button label="Tekrar kontrol et" onPress={() => { void storedQuery.refetch(); }} /> : null}
+          {[storedQuery.error, mutation.error, newPayment.error].filter(Boolean).map((error, index) => (
+            <Text key={index} variant="caption" color="danger">{error instanceof Error ? error.message : 'Ödeme kontrol edilemedi'}</Text>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>

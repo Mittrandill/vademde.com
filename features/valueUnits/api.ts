@@ -56,14 +56,19 @@ export function convertToReferenceMinor(
 // docs/01-finansal-kayit-modeli.md §3.5 — birden çok kayıt (ör. bir kısmı TRY, bir kısmı
 // gram_altin) tek bir toplamda gösterilecekse önce her biri kendi biriminden TL karşılığına
 // çevrilip öyle toplanmalı; aksi halde "5 gram" ham sayı olarak "5 TL" gibi toplama girer.
-// Kur satırı bulunamayan (senkron hiç çalışmamış/silinmiş birim) kayıtlar toplamdan hariç
-// tutulur — yanlış bir TL karşılığı uydurmak, hiç göstermemekten daha kötüdür.
+// Missing rates make the result incomplete: fail explicitly instead of silently
+// dropping a debt from the total.
 export function sumToReferenceMinor(
   rows: { amountMinor: number; unitCode: string }[],
   rates: ValueUnitRate[]
 ): number {
   return rows.reduce(
-    (sum, row) => sum + (convertToReferenceMinor(row.amountMinor, row.unitCode, rates)?.amountMinor ?? 0),
+    (sum, row) => {
+      if (row.amountMinor === 0) return sum;
+      const converted = convertToReferenceMinor(row.amountMinor, row.unitCode, rates);
+      if (!converted) throw new Error(`${row.unitCode} kuru bulunamadı; eksik toplam hesaplanmadı.`);
+      return sum + converted.amountMinor;
+    },
     0
   );
 }

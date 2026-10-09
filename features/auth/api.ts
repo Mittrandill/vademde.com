@@ -1,4 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { assertNoPendingFinancialWrites } from '@/services/queryClient';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -106,11 +107,13 @@ export async function signInWithGoogle() {
 }
 
 export async function signOut() {
+  assertNoPendingFinancialWrites();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
 
 export async function deleteAccount(): Promise<void> {
+  assertNoPendingFinancialWrites();
   const { error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
   if (error) throw error;
   // Kullanıcı zaten sunucuda silindi; yerel oturumu temizlemek yeterli, sunucu hatası göz ardı edilir.

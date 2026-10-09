@@ -62,8 +62,8 @@ export default function CardInstallmentsScreen() {
 
   const purchases = useMemo(() => purchasesQuery.data ?? [], [purchasesQuery.data]);
   const progress = useMemo(() => purchases.map((p) => progressOf(p)), [purchases]);
-  const active = progress.filter((p) => p.paidCount < p.purchase.installment_count);
-  const totalRemaining = progress.reduce((s, p) => s + p.remainingMinor, 0);
+  const active = progress.filter((p) => p.elapsedStatementCount < p.purchase.installment_count);
+  const totalRemaining = progress.reduce((s, p) => s + p.futureStatementMinor, 0);
   const loads = useMemo(() => statementLoads(purchases), [purchases]);
   const maxLoad = Math.max(1, ...loads.map((l) => l.minor));
   const lastMonth = purchases.reduce<string | null>((latest, p) => {
@@ -179,16 +179,16 @@ export default function CardInstallmentsScreen() {
                   </View>
                   <InstallmentStrip
                     items={p.amounts.map((_, i) => ({
-                      status: i < p.paidCount ? 'paid' : i === p.paidCount ? 'next' : 'upcoming',
+                      status: i === p.elapsedStatementCount ? 'next' : 'upcoming',
                     }))}
                     height={8}
                   />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text variant="caption" color="textSecondary">
-                      {p.purchase.installment_count} taksit · {p.paidCount}/{p.purchase.installment_count} ödendi
+                      {p.purchase.installment_count} dönem · {p.elapsedStatementCount} dönem geçti
                     </Text>
                     <Text variant="caption" color="textSecondary" tabular>
-                      kalan {formatMinorAmount(p.remainingMinor)}
+                      gelecek yük {formatMinorAmount(p.futureStatementMinor)}
                     </Text>
                   </View>
                 </Pressable>
@@ -198,7 +198,7 @@ export default function CardInstallmentsScreen() {
         )}
 
         <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.xxs }}>
-          Taksitler her ay ilgili ekstre dönemine sayılır; ödenen taksit sayısı ekstre aylarından hesaplanır.
+          Bu ekran ekstre takvimini ve gelecek dönem yükünü gösterir. Geçen dönemler ödendi anlamına gelmez; gerçek borç ve ödemeler kart hesabı ile ekstre kayıtlarında izlenir.
         </Text>
       </ScrollView>
 
