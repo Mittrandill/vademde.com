@@ -323,8 +323,8 @@ export default function HomeScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Ara"
-                onPress={() => router.push('/search')}
+                accessibilityLabel="Akıllı öneriler ve yapay zekâ sohbeti"
+                onPress={() => router.push('/insights')}
                 style={{
                   width: 40,
                   height: 40,
@@ -335,7 +335,7 @@ export default function HomeScreen() {
                   marginRight: 8,
                 }}
               >
-                <Ionicons name="search" size={19} color={theme.colors.textPrimary} />
+                <Ionicons name="sparkles" size={19} color={theme.colors.textPrimary} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"

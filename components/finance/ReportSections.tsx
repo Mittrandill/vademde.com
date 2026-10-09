@@ -151,12 +151,13 @@ export function SmartSummary({ text, onPress }: { text: string; onPress?: () => 
   );
 }
 
-// Net: Ana Sayfa uyarı kartı stilinde; ton net pozitifse yeşil, negatifse kırmızı. Büyük tutar tonda,
-// altında yön cümlesi; sağ altta trend illüstrasyonu. Dokununca aylık tablo açılır.
+// Net: Ana Sayfa uyarı kartı stilinde; zemin her zaman nötr siyah-gri degrade (ton yalnızca tutarın
+// rengidir: net pozitifse yeşil, negatifse kırmızı). Altında yön cümlesi; sağ altta trend illüstrasyonu. Dokununca aylık tablo açılır.
 export function NetCard({ net, onPress }: { net: number; onPress?: () => void }) {
   const theme = useTheme();
   const positive = net >= 0;
   const tone = positive ? theme.colors.receivable : theme.colors.danger;
+  const neutral = theme.colors.textSecondary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -169,10 +170,10 @@ export function NetCard({ net, onPress }: { net: number; onPress?: () => void })
         overflow: 'hidden',
         backgroundColor: theme.colors.surfacePrimary,
         borderWidth: 1,
-        borderColor: withAlpha(tone, 0.32),
+        borderColor: withAlpha(neutral, 0.28),
       }}
     >
-      <GlowBackground id="r-net" tone={tone} />
+      <GlowBackground id="r-net" tone={neutral} />
       <View pointerEvents="none" style={{ position: 'absolute', right: -30, bottom: -62, opacity: positive ? 1 : 0.45 }}>
         <Art source={require('@/assets/reports/net.png')} width={290} ratio={0.75} />
       </View>
@@ -197,8 +198,8 @@ export function NetCard({ net, onPress }: { net: number; onPress?: () => void })
         <View style={{ flex: 1 }} />
         {onPress ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-            <Text style={{ color: tone, fontWeight: '600', fontSize: 15 }}>Aylık tabloyu gör</Text>
-            <Ionicons name="arrow-forward" size={15} color={tone} />
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: '600', fontSize: 15 }}>Aylık tabloyu gör</Text>
+            <Ionicons name="arrow-forward" size={15} color={theme.colors.textPrimary} />
           </View>
         ) : null}
       </View>
