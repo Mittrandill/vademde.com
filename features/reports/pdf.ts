@@ -61,12 +61,99 @@ const C = {
   graphite: '#2B2D31',
   saffron: '#FFB000',
   saffronText: '#8A5F00',
+  violet: '#6B4DFF',
   ok: '#14804F',
   okBar: '#52CE96',
   bad: '#D23B35',
 };
 
+// Sayfalı düzen ölçüleri (CSS px = pt; sayfa A4 ile aynı 595 × 842).
+const PAGE = { top: 40, side: 40, bottom: 78, footerBottom: 26 };
+
+// Footer'ı her sayfanın en altına sabitlemek için içerik bölümleri sabit yükseklikli sayfalara
+// yerleştirilir; sığmayan tablo satırlarıyla bölünür ve "(devam)" ile sonraki sayfaya geçer.
+// iOS'ta (WKWebView) çalışır. Android'de expo-print'in WebView'ı betik çalıştırmaz; orada akış
+// düzeni kalır ve footer içeriğin sonunda görünür.
+const PAGINATE_JS = `(function () {
+  var flow = document.getElementById('flow');
+  var foot = document.getElementById('flow-ft');
+  var pages = document.getElementById('pages');
+  if (!flow || !foot || !pages) return;
+  var queue = Array.prototype.slice.call(flow.children);
+  var body;
+  function newPage() {
+    var page = document.createElement('div');
+    page.className = 'page';
+    body = document.createElement('div');
+    body.className = 'page-body';
+    page.appendChild(body);
+    var f = foot.cloneNode(true);
+    f.removeAttribute('id');
+    page.appendChild(f);
+    pages.appendChild(page);
+  }
+  function over() { return body.scrollHeight > body.clientHeight + 1; }
+  function continuation(block, skip) {
+    var rest = block.cloneNode(true);
+    Array.prototype.slice.call(rest.children).forEach(function (c) {
+      if (!c.classList.contains('sec-h') && c.tagName !== 'TABLE') rest.removeChild(c);
+    });
+    var h = rest.querySelector('h2');
+    if (h && h.textContent.indexOf('(devam)') < 0) h.textContent += ' (devam)';
+    var rows = rest.querySelectorAll('tbody tr');
+    for (var i = 0; i < skip; i++) rows[i].parentNode.removeChild(rows[i]);
+    return rest;
+  }
+  newPage();
+  var guard = 0;
+  while (queue.length && guard++ < 500) {
+    var block = queue.shift();
+    body.appendChild(block);
+    if (!over()) continue;
+    body.removeChild(block);
+    var rows = block.querySelectorAll('tbody tr');
+    if (rows.length > 1) {
+      var piece = block.cloneNode(true);
+      var tb = piece.querySelector('tbody');
+      while (tb.firstChild) tb.removeChild(tb.firstChild);
+      body.appendChild(piece);
+      var fit = 0;
+      for (var i = 0; i < rows.length; i++) {
+        tb.appendChild(rows[i].cloneNode(true));
+        if (over()) { tb.removeChild(tb.lastChild); break; }
+        fit++;
+      }
+      if (fit >= 2 || (fit >= 1 && body.children.length === 1)) {
+        if (fit < rows.length) queue.unshift(continuation(block, fit));
+        if (queue.length) newPage();
+        continue;
+      }
+      body.removeChild(piece);
+    }
+    if (body.children.length === 0) { body.appendChild(block); if (queue.length) newPage(); continue; }
+    newPage();
+    queue.unshift(block);
+  }
+  var all = pages.querySelectorAll('.page');
+  for (var p = 0; p < all.length; p++) {
+    var pg = all[p].querySelector('.pg');
+    if (pg) pg.textContent = 'Sayfa ' + (p + 1) + ' / ' + all.length + ' · ';
+  }
+  var st = document.createElement('style');
+  st.textContent = '@page { size: ${A4.width}px ${A4.height}px; margin: 0; }';
+  document.head.appendChild(st);
+  document.documentElement.className += ' paged';
+})();`;
+
 const money = (minor: number, currency = 'TRY') => formatMinorAmount(minor, currency);
+
+// Marka sembolü (components/brand/VademdeMark.tsx ile aynı çizim). Kâğıt beyaz olduğu için "V" grafit,
+// çubuklar marka renklerinde sabit.
+function markSvg(height: number): string {
+  // viewBox çizimin sınırlarına kırpılmıştır (orijinal 1024×980 tuvalde bol boşluk var).
+  const width = Math.round(height * (620 / 820));
+  return `<svg width="${width}" height="${height}" viewBox="202 80 620 820" xmlns="http://www.w3.org/2000/svg"><path fill="${C.ink}" d="M221.2,330.7l203.6,311.2c17.7,27.1,48,43.5,80.4,43.5h15.4c32.5,0,62.8-16.5,80.6-43.8l201.7-310.9h-80.7c-17.7,0-34.3,8.9-44.1,23.6l-159.8,240.2c-.8,1.2-2.1,1.9-3.6,1.9h-6c-1.4,0-2.8-.7-3.6-1.9l-156.3-237.6c-10.7-16.3-29-26.2-48.6-26.2h-79.1Z"/><g fill="${C.violet}"><rect x="490.3" y="725.1" width="43.4" height="164" rx="21.7"/><rect x="575.2" y="704.8" width="43.4" height="124.3" rx="21.7"/><rect x="405.3" y="695.3" width="43.4" height="140.9" rx="21.7"/></g><g fill="${C.saffron}"><rect x="404.7" y="231.9" width="43.4" height="185" rx="21.7"/><rect x="489.6" y="174.5" width="43.4" height="277.7" rx="21.7"/><path d="M617.4,341l-24.2,37.1c-2.2,3.3-5.9,5.3-9.8,5.3h-3c-3.2,0-5.8-2.6-5.8-5.8V112.8c0-12,9.8-21.8,21.8-21.8h0c12,0,21.7,9.7,21.8,21.7l1.2,221.9c0,2.3-.7,4.6-1.9,6.5Z"/></g></svg>`;
+}
 
 function esc(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -91,8 +178,8 @@ function section(title: string, body: string, note?: string): string {
   return `<section class="sec"><div class="sec-h"><h2>${esc(title)}</h2>${note ? `<span class="note">${esc(note)}</span>` : ''}</div>${body}</section>`;
 }
 
-function kpi(label: string, value: string, tone: 'ink' | 'ok' | 'bad' = 'ink', sub?: string): string {
-  return `<div class="kpi"><div class="kpi-l">${esc(label)}</div><div class="kpi-v ${tone}">${esc(value)}</div>${sub ? `<div class="kpi-s">${esc(sub)}</div>` : ''}</div>`;
+function kpi(label: string, value: string, tone: 'ink' | 'ok' | 'bad' = 'ink', sub?: string, dot?: string): string {
+  return `<div class="kpi"><div class="kpi-l">${dot ? `<i style="background:${dot}"></i>` : ''}${esc(label)}</div><div class="kpi-v ${tone}">${esc(value)}</div>${sub ? `<div class="kpi-s">${esc(sub)}</div>` : ''}</div>`;
 }
 
 function table(head: string[], rows: string[][], alignRight: number[] = [], empty = 'Kayıt yok.'): string {
@@ -146,11 +233,18 @@ function categoryTable(items: CategoryBreakdownItem[], barColor: string): string
   );
 }
 
-function buildReportHtml(input: ReportPdfInput): string {
+export function buildReportHtml(input: ReportPdfInput): string {
   const sec = input.sections ?? ALL_SECTIONS;
   const generatedAt = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date());
   const net = input.incomeMinor - input.expenseMinor;
   const savings = input.incomeMinor > 0 ? Math.round((net / input.incomeMinor) * 100) : null;
+  // Gider geliri aşınca "−%106 tasarruf" anlamsız; bunun yerine aşım oranı yazılır.
+  const savingsKpi =
+    savings === null
+      ? kpi('Tasarruf oranı', '—', 'ink', 'Gelir kaydı yok')
+      : savings < 0
+        ? kpi('Tasarruf oranı', 'Tasarruf yok', 'ink', `Gider geliri %${Math.abs(savings)} aştı`)
+        : kpi('Tasarruf oranı', `%${savings}`, 'ink', 'Gelirin kenara kalan kısmı');
 
   const parts: string[] = [];
 
@@ -159,10 +253,10 @@ function buildReportHtml(input: ReportPdfInput): string {
       section(
         'Gelir ve gider özeti',
         `<div class="kpis">
-          ${kpi('Gelir', money(input.incomeMinor), 'ok')}
-          ${kpi('Gider', money(input.expenseMinor))}
+          ${kpi('Gelir', money(input.incomeMinor), 'ok', undefined, C.okBar)}
+          ${kpi('Gider', money(input.expenseMinor), 'ink', undefined, C.saffron)}
           ${kpi('Net', `${net < 0 ? '−' : ''}${money(Math.abs(net))}`, net < 0 ? 'bad' : 'ok', net < 0 ? 'Gider geliri aştı' : 'Gelir gideri aştı')}
-          ${kpi('Tasarruf oranı', savings === null ? '—' : `%${savings}`, 'ink', savings === null ? 'Gelir kaydı yok' : undefined)}
+          ${savingsKpi}
         </div>`
       )
     );
@@ -280,30 +374,41 @@ function buildReportHtml(input: ReportPdfInput): string {
   }
   .num, td.r { font-variant-numeric: tabular-nums; }
 
-  .band { background: ${C.graphite}; color: #F6F5F1; border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
-  .mark { width: 34px; height: 34px; border-radius: 9px; background: ${C.saffron}; color: ${C.graphite}; font-weight: 800; font-size: 20px; display: flex; align-items: center; justify-content: center; }
-  .brand { flex: 1; }
-  .brand b { font-size: 15pt; letter-spacing: -0.02em; display: block; }
-  .brand span { font-size: 9pt; color: #B1B2AA; }
-  .meta { text-align: right; font-size: 9pt; color: #B1B2AA; }
-  .meta b { color: #F6F5F1; font-size: 11pt; display: block; }
+  .hd-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid ${C.line}; }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo svg { display: block; }
+  .logo b { font-size: 14pt; font-weight: 700; letter-spacing: -0.03em; }
+  .doc-type { font-size: 7.5pt; font-weight: 600; letter-spacing: 0.16em; color: ${C.ink2}; text-transform: uppercase; }
+  .hd-main { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 18px 0 16px; }
+  .eyebrow { font-size: 7.5pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: ${C.saffronText}; }
+  h1 { font-size: 22pt; line-height: 1.1; margin: 4px 0 0; letter-spacing: -0.03em; font-weight: 700; }
+  .hd-meta { display: flex; gap: 22px; margin: 0; }
+  .hd-meta div { border-left: 2px solid ${C.line}; padding-left: 9px; }
+  .hd-meta dt { font-size: 7.5pt; color: ${C.ink3}; text-transform: uppercase; letter-spacing: 0.06em; }
+  .hd-meta dd { margin: 2px 0 0; font-size: 9.5pt; font-weight: 600; white-space: nowrap; }
+  .hd-rule { display: flex; height: 3px; }
+  .hd-rule i { width: 56px; background: ${C.saffron}; border-radius: 2px 0 0 2px; }
+  .hd-rule s { flex: 1; background: ${C.ink}; border-radius: 0 2px 2px 0; }
 
-  .sec { margin-top: 18px; break-inside: avoid; page-break-inside: avoid; }
-  .sec-h { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1.5px solid ${C.ink}; padding-bottom: 4px; margin-bottom: 8px; }
-  h2 { font-size: 11.5pt; margin: 0; letter-spacing: -0.01em; }
+  .sec { margin-top: 22px; break-inside: avoid; page-break-inside: avoid; }
+  .sec-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  h2 { font-size: 11pt; margin: 0; letter-spacing: -0.01em; display: flex; align-items: center; gap: 7px; }
+  h2::before { content: ''; width: 3px; height: 11px; border-radius: 2px; background: ${C.saffron}; }
   .note { font-size: 8pt; color: ${C.ink3}; }
 
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid ${C.line}; border-bottom: 1px solid ${C.line}; }
   .kpis.three { grid-template-columns: repeat(3, 1fr); }
-  .kpi { background: ${C.fill}; border-radius: 8px; padding: 9px 10px; }
-  .kpi-l { font-size: 8pt; color: ${C.ink2}; text-transform: uppercase; letter-spacing: 0.04em; }
-  .kpi-v { font-size: 13pt; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  .kpi-s { font-size: 8pt; color: ${C.ink3}; margin-top: 1px; }
+  .kpi { padding: 11px 12px; border-left: 1px solid ${C.line}; }
+  .kpi:first-child { border-left: none; padding-left: 0; }
+  .kpi-l { font-size: 7.5pt; font-weight: 600; color: ${C.ink2}; text-transform: uppercase; letter-spacing: 0.06em; display: flex; align-items: center; gap: 5px; }
+  .kpi-l i { width: 6px; height: 6px; border-radius: 3px; display: inline-block; }
+  .kpi-v { font-size: 14pt; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; white-space: nowrap; }
+  .kpi-s { font-size: 7.5pt; color: ${C.ink3}; margin-top: 2px; }
 
   table { width: 100%; border-collapse: collapse; font-size: 9pt; }
   thead { display: table-header-group; }
   tr { break-inside: avoid; page-break-inside: avoid; }
-  th { text-align: left; font-size: 8pt; font-weight: 600; color: ${C.ink2}; text-transform: uppercase; letter-spacing: 0.03em; padding: 5px 6px; border-bottom: 1px solid ${C.line}; }
+  th { text-align: left; font-size: 8pt; font-weight: 600; color: ${C.ink2}; text-transform: uppercase; letter-spacing: 0.03em; padding: 6px 6px; border-bottom: 1px solid ${C.ink}; }
   td { padding: 6px; border-bottom: 1px solid ${C.line}; vertical-align: middle; }
   th.r, td.r { text-align: right; white-space: nowrap; }
   td.muted { color: ${C.ink3}; font-style: italic; }
@@ -322,17 +427,47 @@ function buildReportHtml(input: ReportPdfInput): string {
   .bad { color: ${C.bad}; }
   .ink { color: ${C.ink}; }
 
-  .foot { margin-top: 22px; padding-top: 8px; border-top: 1px solid ${C.line}; font-size: 8pt; color: ${C.ink3}; display: flex; justify-content: space-between; }
+  .ft { margin-top: 28px; padding-top: 10px; border-top: 1px solid ${C.line}; display: flex; align-items: center; justify-content: space-between; gap: 16px; break-inside: avoid; page-break-inside: avoid; }
+  .ft-l { display: flex; align-items: center; gap: 8px; }
+  .ft-l svg { display: block; }
+  .ft-l b { font-size: 8.5pt; display: block; letter-spacing: -0.01em; }
+  .ft-l span { font-size: 7.5pt; color: ${C.ink3}; }
+  .ft-r { font-size: 7.5pt; color: ${C.ink3}; text-align: right; white-space: nowrap; }
+  .ft-r b { color: ${C.ink2}; font-weight: 600; }
+
+  /* Sayfalı düzen (PAGINATE_JS çalışınca): her sayfa sabit ölçülü, footer sayfanın en altında. */
+  .page { position: relative; width: ${A4.width}px; height: ${A4.height - 1}px; padding: ${PAGE.top}px ${PAGE.side}px 0; overflow: hidden; break-after: page; page-break-after: always; }
+  .page:last-child { break-after: auto; page-break-after: auto; }
+  .page-body { height: ${A4.height - 1 - PAGE.top - PAGE.bottom}px; overflow: hidden; }
+  .page-body > .sec:first-child { margin-top: 0; }
+  .page > .ft { position: absolute; left: ${PAGE.side}px; right: ${PAGE.side}px; bottom: ${PAGE.footerBottom}px; margin: 0; }
+  .paged #flow, .paged #flow-ft { display: none; }
 </style>
 </head>
 <body>
-  <div class="band">
-    <div class="mark">V</div>
-    <div class="brand"><b>Finans raporu</b><span>${esc(input.workspaceName || 'Vademde')}</span></div>
-    <div class="meta"><b>${esc(input.periodLabel)}</b>${esc(generatedAt)}</div>
-  </div>
+  <div id="flow">
+  <header>
+    <div class="hd-top">
+      <div class="logo">${markSvg(30)}<b>Vademde</b></div>
+      <div class="doc-type">Finans raporu</div>
+    </div>
+    <div class="hd-main">
+      <div><div class="eyebrow">Rapor dönemi</div><h1>${esc(input.periodLabel)}</h1></div>
+      <dl class="hd-meta">
+        <div><dt>Çalışma alanı</dt><dd>${esc(input.workspaceName || 'Kişisel')}</dd></div>
+        <div><dt>Oluşturulma</dt><dd>${esc(generatedAt)}</dd></div>
+      </dl>
+    </div>
+    <div class="hd-rule"><i></i><s></s></div>
+  </header>
   ${parts.join('\n')}
-  <div class="foot"><span>Vademde ile oluşturuldu · Tutarlar kayıtlı verilerden hesaplanmıştır.</span><span>${esc(generatedAt)}</span></div>
+  </div>
+  <footer class="ft" id="flow-ft">
+    <div class="ft-l">${markSvg(20)}<div><b>Vademde ile oluşturuldu</b><span>Tutarlar uygulamaya kaydedilen verilerden hesaplanmıştır.</span></div></div>
+    <div class="ft-r"><b class="pg"></b>${esc(input.workspaceName || 'Kişisel')} · ${esc(generatedAt)}</div>
+  </footer>
+  <div id="pages"></div>
+  <script>${PAGINATE_JS}</script>
 </body>
 </html>`;
 }

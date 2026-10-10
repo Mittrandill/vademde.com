@@ -12,7 +12,7 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | — | `eas build --platform all --profile production --auto-submit-with-profile alpha` → TestFlight | 2026-10-10 |
+| iOS | build 50 | `eas build --platform all --profile production --auto-submit-with-profile alpha` ile alındı (build ID `d5d3a1d6…`, commit `3f4e3e6`). App Store Connect'teki 1.0.6 sürüm kaydı 1.0.7'ye çevrildi, build 50 seçilip **incelemeye gönderildi**. 1.0.6 (build 49) hiç incelemeye gönderilmedi | 2026-10-10 |
 | Android | — | aynı komut → Play **alpha** (kapalı test) kanalı; production'a test sonrası terfi | 2026-10-10 |
 
 Finans bütünlüğü ve kullanıcı mesajları paketi (ayrıntı: `docs/17-duzeltme-durumu-2026-10-09.md` "Ek tur"). Önce
@@ -35,7 +35,7 @@ test kanallarında doğrulanır, sonra production'a gönderilir.
 
 ---
 
-## 1.0.6 — Hazırlanıyor (2026-10-05)
+## 1.0.6 — Yayınlanmadı, 1.0.7'ye birleştirildi (2026-10-05)
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|

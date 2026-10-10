@@ -1,0 +1,24 @@
+Vademde 1.0.7
+
+• Yepyeni tasarım: Tüm ekranlar baştan çizildi; daha sade, iOS'a uygun bir görünüm. Ödeyeceklerin mor, alacakların yeşil; sarı yalnızca aksiyon için. Tanıtım ekranları da yenilendi.
+• Kredi kartı ekstresi harcama harcama: Ekstreyi tarattığında her harcama kendi tarihiyle karta ve Hareketler'e eklenir, işyeri adına göre otomatik kategorilenir. Kaydetmeden önce önerileri görür, istediğini değiştirirsin.
+• Kredi kartı sayfası yenilendi: Güncel borç, ekstre borcu ve kullanılabilir limit ayrı ayrı; son ödeme, ekstreler ve taksitler tek ekranda. Kart borcunu doğrudan buradan öde, tutar ekstre borcuyla hazır gelir.
+• Kart taksitleri: Taksitli alışverişlerin gelecek ekstrelere yansıyan yükünü takip et.
+• Çek ve senet portföyü: Aldığın çekleri portföyde, ciro edilmiş ya da tahsile verilmiş olarak izle; karşılıksız çıkanları işaretle. Her çekin yolculuğu kayıt detayında.
+• Vade hattı: Önümüzdeki 7, 30 ve 90 günün ödeme ve tahsilatları ana sayfada.
+• Hızlı ekle: Tara düğmesine uzun basarak gider, gelir, transfer ya da vadeli kayıt ekle.
+• e-Fatura karekodu: Faturadaki karekodu okut, bilgiler otomatik dolsun.
+• Kota dolduğunda belge kaybolmaz: Taradığın belge taslak olarak saklanır, ana sayfadan sonra işlersin.
+• Raporlar yenilendi: Hazır dönemler ve özel tarih aralığı, önceki döneme göre değişim, PDF'te bölüm seçimi.
+• Hareketler'de filtre: Tarih, tür, hesap, kategori, kişi ve tutar aralığına göre süz.
+• Aboneliklerim ile Döviz ve altın: Aylık abonelik toplamını, yaklaşan yenilemeleri, kasalarının TL karşılığını ve güncel kurları gör.
+• Nakit uyarısı: Bir hesabın önümüzdeki günlerde eksiye düşebileceğini önceden bildirimle öğren.
+• Alacak hatırlatma: Cari sayfasından WhatsApp, SMS ya da e-posta ile hatırlatma gönder.
+• Cari ekstresi dövizli kayıtları da gösterir.
+• Formlarda kaydedilmemiş değişiklik uyarısı; internet yokken bilgilendirme şeridi.
+• Uygulama kilidi açılamazsa e-posta ve şifrenle yeniden giriş yapabilirsin.
+• Akıllı öneriler ve Sor (Plus): Kayıtlarına dayanan tasarruf önerileri ve sorularına yanıtlar.
+• Kesintiye dayanıklı ödemeler: Ödeme, tahsilat, ciro ya da kart ödemesi sırasında bağlantı koparsa yarım kalan işlem otomatik tamamlanır; olmazsa tek dokunuşla tekrar deneyebilir ya da iptal edebilirsin.
+• Çek ve senetle ödeme tek adımda kaydedilir; okunan çekin tutarı borçtan fazlaysa fark avans olarak yazılır.
+• Daha doğru hesaplar: Fazla ödemeler, gecikme günleri ve dövizli işlemlerin kuru düzeltildi; ödemesi yapılmış kayıtlar yanlışlıkla bozulamaz.
+• Küçük iyileştirmeler ve hata düzeltmeleri.

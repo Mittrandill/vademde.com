@@ -1,0 +1,24 @@
+Vademde 1.0.7
+
+• All-new design: Every screen has been redrawn with a cleaner, iOS-native look. What you owe is purple, what you're owed is green; yellow is only for actions. The welcome screens are new too.
+• Card statements, line by line: Scan a statement and every purchase is added to the card and to Transactions with its own date, automatically categorized by merchant. Review the suggestions and change anything before saving.
+• Redesigned credit card page: Current balance, statement balance and available limit shown separately, with due date, statements and installments on one screen. Pay your card directly from here; the amount is pre-filled with your statement balance.
+• Card installments: Track how installment purchases weigh on your upcoming statements.
+• Cheque and note portfolio: Keep received cheques in your portfolio, endorsed or deposited for collection; mark bounced ones. Each cheque's journey is shown on its detail page.
+• Due timeline: Payments and collections for the next 7, 30 and 90 days on the home screen.
+• Quick add: Long-press the Scan button to add an expense, income, transfer or scheduled record.
+• e-Invoice QR code: Scan the QR code on an invoice and the details fill in automatically.
+• No document lost when your quota is full: Scanned documents are saved as drafts so you can process them later from the home screen.
+• Redesigned reports: Preset periods and custom date ranges, change versus the previous period, and section selection for PDF export.
+• Transaction filters: Filter by date, type, account, category, contact and amount range.
+• Subscriptions and Currency & gold: See your monthly subscription total, upcoming renewals, the TRY value of your holdings and live rates.
+• Cash alert: Get notified in advance when an account may go negative in the coming days.
+• Payment reminders: Send a reminder via WhatsApp, SMS or email from a contact's page.
+• Contact statements now include foreign-currency records.
+• Unsaved-changes warning on forms; an info banner when you're offline.
+• If the app lock can't be opened, you can sign in again with your email and password.
+• Smart insights and Ask (Plus): Saving suggestions based on your records and answers to your questions.
+• Interruption-proof payments: If your connection drops during a payment, collection, endorsement or card payment, the unfinished transaction completes automatically; if not, you can retry or cancel with one tap.
+• Paying with a cheque or note is saved in a single step; if a scanned cheque exceeds the amount owed, the difference is recorded as an advance.
+• More accurate numbers: Fixes for overpayments, overdue days and exchange rates on foreign-currency transactions; records with payments can no longer be broken by accident.
+• Minor improvements and bug fixes.
