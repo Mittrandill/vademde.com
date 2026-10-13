@@ -1,0 +1,17 @@
+{
+  "name": "vademde-reels-yenilendi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "render": "node build.mjs && node render.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/inter": "5.1.0",
+    "esbuild": "0.24.0",
+    "framer-motion": "11.11.17",
+    "playwright": "1.48.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

@@ -1,0 +1,98 @@
+/* Graphite Finance açık tema tokenları — theme/colors.ts (lightColors) ile aynı palet */
+:root{
+  --bg:#F6F5F1; --surface:#FFFFFF; --graphite:#1F2126; --text:#1F2126; --text2:#6E6F66; --border:#E2E2DC;
+  --saffron:#FFB000; --violet:#6B4DFF; --green:#14804F;
+  --font:"Inter",-apple-system,"SF Pro Display",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--bg)}
+body{font-family:var(--font);-webkit-font-smoothing:antialiased;color:var(--text)}
+.stage{position:relative;width:1080px;height:1920px;overflow:hidden;isolation:isolate}
+.bg{position:absolute;inset:0;z-index:-2}
+.dots{position:absolute;left:0;right:0;top:0;height:2400px;z-index:-1;opacity:.55;
+  background-image:radial-gradient(rgba(31,33,38,.13) 2px,transparent 2.5px);background-size:44px 44px;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 30%,#000 70%,transparent 100%)}
+.grain{position:absolute;inset:0;z-index:50;pointer-events:none;opacity:.18;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+.progress{position:absolute;left:0;right:0;bottom:0;height:8px;background:var(--saffron);transform-origin:left;z-index:40}
+.swoosh{position:absolute;left:-760px;top:560px;width:2600px;height:820px;transform:rotate(-14deg);z-index:30;border-radius:200px}
+
+h1{font-size:88px;line-height:1.04;font-weight:800;letter-spacing:-.042em}
+.line{display:block;position:relative;width:max-content}
+.mask{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em;margin-right:.22em;position:relative;z-index:1}
+.mask:last-child{margin-right:0}
+.marker{position:absolute;left:-.12em;right:-.12em;bottom:.08em;height:.42em;background:var(--saffron);border-radius:.12em;transform-origin:left;z-index:0;display:block}
+
+/* Giriş */
+.intro{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.intro-mark{width:250px;filter:drop-shadow(0 26px 40px rgba(31,33,38,.18))}
+.intro-word{font-size:168px;font-weight:800;letter-spacing:-.05em;line-height:1;margin-top:34px;display:flex}
+.intro-word .mask{margin-right:0}
+.intro-stamp{position:relative;font-size:168px;font-weight:800;letter-spacing:-.05em;line-height:1;margin-top:-6px}
+.intro-stamp span{position:relative;z-index:1}
+.intro-tag{margin-top:56px;font-size:34px;font-weight:600;color:var(--text2);letter-spacing:.01em}
+.floater{position:absolute;left:50%;top:50%;margin:-40px 0 0 -100px;display:flex;align-items:center;gap:14px;padding:22px 34px;border-radius:26px;
+  background:var(--surface);font-size:36px;font-weight:700;box-shadow:0 24px 60px rgba(31,33,38,.14),inset 0 0 0 2px var(--border)}
+.floater i{width:16px;height:16px;border-radius:50%;background:var(--saffron)}
+.floater:nth-child(2n) i{background:var(--violet)}
+
+/* Sahneler */
+.scene{position:absolute;inset:0}
+.copy{position:absolute;left:84px;right:84px;top:140px;z-index:6}
+.kick-row{margin-bottom:30px}
+.kicker{display:inline-flex;align-items:center;gap:16px;padding:12px 26px 12px 12px;border-radius:999px;background:var(--graphite);color:#F6F5F1;
+  font-size:28px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;transform-origin:left center}
+.kicker b{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:var(--saffron);color:var(--graphite);font-size:24px;letter-spacing:0}
+.persp{position:absolute;inset:0;perspective:2200px}
+.phone-wrap{position:absolute;left:50%;top:560px;margin-left:-310px;width:620px;transform-origin:50% 60%}
+
+/* iPhone 17 Pro gövdesi (açık zeminde) */
+.phone{position:relative;width:620px;padding:16px;border-radius:102px;background:#0A0B0D;
+  box-shadow:0 0 0 4px #9A9CA2,0 0 0 7px #2A2B30,0 0 0 8px #C9CBD0,0 80px 140px rgba(31,33,38,.32),0 26px 50px rgba(31,33,38,.22)}
+.phone .screen{position:relative;border-radius:86px;overflow:hidden;aspect-ratio:1206/2622;background:#1F2126}
+.phone .screen>img{display:block;width:100%;height:auto}
+.phone .dim{position:absolute;inset:0;background:#0A0B0D;display:block}
+.phone.small{padding:12px;border-radius:78px}
+.phone.small .screen{border-radius:66px}
+.pop{position:absolute;border-radius:22px;background-repeat:no-repeat;z-index:3}
+
+/* Çek */
+.cheque{position:absolute;left:44px;top:330px;width:500px;padding:30px 32px;border-radius:12px;z-index:4;
+  background:linear-gradient(160deg,#FBF8EF,#ECE6D6);color:#2A2B30;font-family:"Courier New",ui-monospace,monospace;font-size:22px;
+  box-shadow:0 40px 80px rgba(0,0,0,.45);overflow:visible}
+.cheque .row{display:flex;justify-content:space-between;align-items:baseline}
+.cheque .bank{font-family:var(--font);font-weight:800;font-size:24px;letter-spacing:.02em}
+.cheque .cline{height:4px;border-radius:2px;background:#CFC9B8;margin-top:22px}
+.cheque .amount{position:relative;font-weight:700;font-size:28px;padding:4px 10px;border-radius:6px;
+  box-shadow:0 0 0 calc(var(--hl) * 4px) var(--saffron);background:rgba(255,176,0,calc(var(--hl) * .2))}
+.cheque .tag{position:absolute;top:-50px;left:-6px;font-family:var(--font);font-style:normal;font-size:20px;font-weight:700;background:var(--saffron);
+  color:var(--graphite);padding:5px 12px;border-radius:8px;white-space:nowrap;transform-origin:left bottom}
+.cheque .scan{position:absolute;left:-20px;right:-20px;height:4px;background:var(--saffron);display:block;
+  box-shadow:0 0 24px 6px rgba(255,176,0,.65)}
+
+/* Çip ve bildirim */
+.chip{position:absolute;z-index:8;display:flex;align-items:center;gap:16px;padding:24px 34px;border-radius:999px;background:var(--surface);
+  font-size:34px;font-weight:700;white-space:nowrap;box-shadow:0 30px 70px rgba(31,33,38,.22),inset 0 0 0 2px var(--border);transform-origin:center}
+.chip .dot{width:20px;height:20px;border-radius:50%}
+.chip small{font-size:30px;color:var(--text2);font-weight:500}
+.notif{position:absolute;left:-40px;right:-40px;top:70px;z-index:5;display:flex;gap:24px;align-items:center;padding:26px 30px;border-radius:44px;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(20px);box-shadow:0 34px 80px rgba(0,0,0,.35)}
+.notif img{width:84px;height:84px;border-radius:20px}
+.notif .nt{display:flex;justify-content:space-between;font-size:28px;font-weight:700}
+.notif .nt small{font-size:24px;font-weight:500;color:var(--text2)}
+.notif .nb{font-size:24px;line-height:1.3;color:#3A3B40;margin-top:4px}
+
+/* Kapanış */
+.outro{position:absolute;inset:0}
+.outro-copy{position:absolute;left:0;right:0;top:130px;display:flex;flex-direction:column;align-items:center;text-align:center;z-index:4}
+.outro-copy .line{margin:0 auto}
+.outro-mark{width:140px;margin-bottom:26px}
+.outro h1{font-size:136px;line-height:1.02}
+.cta{position:relative;overflow:hidden;margin-top:48px;padding:30px 66px;border-radius:999px;background:var(--graphite);color:#F6F5F1;
+  font-size:42px;font-weight:800;letter-spacing:-.01em;box-shadow:0 26px 60px rgba(31,33,38,.3)}
+.cta .arrow{color:var(--saffron);margin-left:10px}
+.cta .shine{position:absolute;top:-20%;left:0;width:36%;height:140%;transform:skewX(-20deg);display:block;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent)}
+.store{margin-top:26px;font-size:30px;font-weight:600;color:var(--text2);letter-spacing:.03em}
+.fan{position:absolute;left:0;right:0;top:1000px;height:1200px}
+.fan-phone{position:absolute;left:50%;top:0;transform-origin:50% 100%}
