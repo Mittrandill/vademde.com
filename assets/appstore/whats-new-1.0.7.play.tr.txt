@@ -1,0 +1,8 @@
+• Yepyeni, sade tasarım
+• Kredi kartı son ödemesi takvimde, toplam borçta ve hatırlatmalarda
+• Kart sayfası: güncel borç, ekstre borcu, kullanılabilir limit ve taksitler
+• Ekstre harcamaları otomatik kategorilenir
+• Çek/senet portföyü, ciro ve karşılıksız takibi
+• Hareketlerde filtre, raporlarda özel tarih aralığı
+• Döviz ve altın, nakit uyarısı, alacak hatırlatma
+• Kesintiye dayanıklı ödemeler ve daha doğru hesaplar

@@ -8,11 +8,28 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.7 — Android production (2026-10-19)
+
+| Platform | Build | Durum | Gönderim |
+|---|---|---|---|
+| Android | versionCode 16 | `eas build --platform android --profile production --auto-submit-with-profile production` (build `bb6e4bde-889e-45c8-a9b7-3bbdfe5838cb`, commit `1161efd`) → Play **production**, `releaseStatus: completed` (submission `1907f9d5-1011-4b06-925c-22c0c9547265`). Google incelemesi sonrası yayına girer | 2026-10-19 |
+
+Neden: 10 Ekim'deki Android 1.0.7 build'i (versionCode 15) yalnızca alpha'ya gitmiş, production 9 Ekim'den beri 1.0.6'da
+kalmıştı. Runtime politikası `appVersion` olduğu için 1.0.7 OTA'ları Play kullanıcılarına inmiyordu. Bu build 2026-10-19
+OTA içeriğini (kart son ödemesi, rapor PDF) zaten içerir. Kurumsal hesap olduğundan kapalı test şartı yok.
+
+- `eas.json` submit anahtar yolu `./google-service-account.json` olarak düzeltildi (`1161efd`) — 2 Ekim'de eski,
+  diskte olmayan `google-play-service-account.json` adına dönmüştü.
+- Play "Yenilikler" (500 karakter sınırı): `assets/appstore/whats-new-1.0.7.play.tr.txt` — EAS submit metni
+  göndermez, Play Console'dan elle girilir.
+
+---
+
 ## 1.0.7 OTA — Kredi kartı son ödemesi + rapor PDF (2026-10-19)
 
 | Platform | Kanal | Durum | Gönderim |
 |---|---|---|---|
-| iOS + Android | production (runtime 1.0.7) | `eas update --channel production --environment production` — update group `6b1794ad-c718-481f-a6ea-9a0b7ce23d96` (iOS `01a15310-8b00-7802-b228-2d0557b3063b`, Android `01a15310-8b00-7518-a592-063cd97f5085`). 1.0.7 iki mağazada da yayındaydı | 2026-10-19 |
+| iOS + Android | production (runtime 1.0.7) | `eas update --channel production --environment production` — update group `6b1794ad-c718-481f-a6ea-9a0b7ce23d96` (iOS `01a15310-8b00-7802-b228-2d0557b3063b`, Android `01a15310-8b00-7518-a592-063cd97f5085`). iOS 1.0.7 yayındaydı; Android production hâlâ 1.0.6 (versionCode 14) olduğu için Android kullanıcılarına inmedi — aşağıdaki Android 1.0.7 production girişine bakın | 2026-10-19 |
 
 Gerçek kullanıcı geri bildirimi: kredi kartı son ödemeleri takvimde görünmüyor, kart borcu toplam borca girmiyor.
 Sebep: takvim, toplam borç ve yaklaşan vadeler yalnızca `obligations` okuyordu; kart borcu kart hesabında (açılış +
