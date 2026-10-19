@@ -20,6 +20,7 @@ import {
   type ObligationDueItem,
 } from '@/features/obligations/api';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
+import { useCardDueItems } from '@/features/accounts/cardDues';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { addDays, addMonths, getMonthGridWeeks, getWeekDays, isSameMonth, toDateKey } from '@/utils/calendar';
@@ -86,12 +87,20 @@ export default function TakvimScreen() {
     queryFn: listValueUnitRates,
   });
 
+  // Kredi kartlarının sıradaki son ödemesi (ekstre kaydı olmayan kart borcu) — bkz. cardDues.ts.
+  const { items: cardDueItems } = useCardDueItems(activeWorkspaceId);
+
   const obligations = useMemo<ObligationDueItem[]>(() => {
     const installmentItems = installmentsQuery.data ?? [];
     const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
     const plainObligations = (obligationsQuery.data ?? []).filter((o) => !obligationIdsWithInstallments.has(o.id));
-    return [...plainObligations, ...installmentItems];
-  }, [obligationsQuery.data, installmentsQuery.data]);
+    const from = toDateKey(gridStart);
+    const to = toDateKey(gridEnd);
+    const cardDues = cardDueItems.filter((c) => !!c.due_date && c.due_date >= from && c.due_date <= to);
+    return [...plainObligations, ...installmentItems, ...cardDues].sort((a, b) =>
+      (a.due_date ?? '').localeCompare(b.due_date ?? '')
+    );
+  }, [obligationsQuery.data, installmentsQuery.data, cardDueItems, gridStart, gridEnd]);
 
   const obligationsByDay = useMemo(() => {
     const map = new Map<string, typeof obligations>();
@@ -309,7 +318,7 @@ function DaySelectionDetail({
         <Stack gap="xs">
           {selectedDayItems.map((obligation) => (
             <CalendarObligationRow
-              key={obligation.id}
+              key={obligation.installment_id ?? obligation.id}
               workspaceId={activeWorkspaceId as string}
               obligation={obligation}
             />

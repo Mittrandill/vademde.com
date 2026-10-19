@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import { getStatementUploadReminders, upsertAccountReminder } from '@/features/reminders/api';
+import { getCardPaymentDueReminders, getStatementUploadReminders, upsertAccountReminder } from '@/features/reminders/api';
 import { reconcileReminders, type ReminderTarget } from '@/services/reminderSync';
 import { periodKeyForDueDate, type CreditCardPeriodAccount } from '@/utils/creditCardPeriod';
 import type { Account } from '@/features/accounts/api';
@@ -84,6 +84,59 @@ export async function syncCreditCardStatementReminder(
   await reconcileReminders({
     workspaceId,
     existing: existingReminders,
+    keyOf: (r) => `${r.period_key}|${r.stage}`,
+    targets,
+    upsert: upsertAccountReminder,
+  });
+}
+
+// Kartın son ödeme günü hatırlatması — kullanıcı takvime ya da kayıt olarak hiçbir şey eklemeden,
+// kartın ayarlarındaki son ödeme gününden. Hedef dönem, features/accounts/cardDues.ts'in ürettiği
+// sıradaki son ödemedir (ekstresi girilmemiş, borcu olan ilk dönem). Ekstre girilmiş dönemin
+// hatırlatması o ekstre kaydının kendi vade hatırlatmasıyla gelir; burada tekrar planlanmaz.
+// nextDue null ise (borç yok / ekstre karşılıyor / ödeme günü yok) açık hatırlatmalar iptal edilir.
+const CARD_DUE_STAGES = [
+  { stage: '3_days_before', daysBefore: 3 },
+  { stage: 'due_day', daysBefore: 0 },
+] as const;
+
+export async function syncCardPaymentDueReminders(
+  workspaceId: string,
+  accountId: string,
+  nextDue: { dueDate: string; periodKey: string } | null
+): Promise<void> {
+  const existing = await getCardPaymentDueReminders(accountId);
+  const now = Date.now();
+  const extraFor = (periodKey: string, stage: string) => ({
+    account_id: accountId,
+    kind: 'card_payment_due',
+    period_key: periodKey,
+    stage,
+  });
+
+  const targets: ReminderTarget[] = [];
+  if (nextDue) {
+    const [y, m, d] = nextDue.dueDate.split('-').map(Number);
+    for (const { stage, daysBefore } of CARD_DUE_STAGES) {
+      const remindAt = new Date(y, m - 1, d - daysBefore, 10, 0, 0);
+      targets.push({
+        key: `${nextDue.periodKey}|${stage}`,
+        remindAt: remindAt.getTime() > now ? remindAt : null,
+        extra: extraFor(nextDue.periodKey, stage),
+      });
+    }
+  }
+  // Artık hedef olmayan dönemlerin (ödendi, ekstre girildi, ayar değişti) bekleyen hatırlatmaları iptal.
+  const targetKeys = new Set(targets.map((t) => t.key));
+  for (const row of existing) {
+    const key = `${row.period_key}|${row.stage}`;
+    if (targetKeys.has(key) || row.status !== 'scheduled') continue;
+    targets.push({ key, remindAt: null, extra: extraFor(row.period_key as string, row.stage) });
+  }
+
+  await reconcileReminders({
+    workspaceId,
+    existing,
     keyOf: (r) => `${r.period_key}|${r.stage}`,
     targets,
     upsert: upsertAccountReminder,

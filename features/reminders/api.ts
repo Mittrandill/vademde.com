@@ -33,6 +33,16 @@ export async function getStatementUploadReminders(accountId: string): Promise<Re
   return data;
 }
 
+export async function getCardPaymentDueReminders(accountId: string): Promise<Reminder[]> {
+  const { data, error } = await supabase
+    .from('reminders')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('kind', 'card_payment_due');
+  if (error) throw error;
+  return data;
+}
+
 export async function upsertAccountReminder(input: TablesInsert<'reminders'>): Promise<Reminder> {
   const { data, error } = await supabase
     .from('reminders')

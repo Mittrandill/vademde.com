@@ -53,6 +53,13 @@ function contentFor(reminder: DeliveredReminder): ReminderContent | null {
       onPress: () => router.push(`/accounts/${reminder.account!.id}`),
     };
   }
+  if (reminder.kind === 'card_payment_due' && reminder.account) {
+    return {
+      title: 'Kredi kartı son ödeme',
+      body: `${reminder.account.name} son ödeme günü ${reminder.stage === 'due_day' ? 'bugün' : '3 gün sonra'}. Kart borcunuzu ödemeyi unutmayın.`,
+      onPress: () => router.push(`/accounts/${reminder.account!.id}`),
+    };
+  }
   if (reminder.obligation) {
     const message = buildObligationReminderMessage(
       reminder.obligation,
@@ -245,8 +252,8 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
 
   const isUnread = !item.read_at;
   const overdue = item.stage === 'overdue_1_day';
-  const tone = item.kind === 'statement_upload' ? 'default' : overdue ? 'danger' : item.obligation?.direction === 'receivable' ? 'success' : 'brandSoft';
-  const icon = item.kind === 'statement_upload' ? 'card' : overdue ? 'alert-circle' : 'alarm';
+  const tone = item.kind === 'statement_upload' || item.kind === 'card_payment_due' ? 'default' : overdue ? 'danger' : item.obligation?.direction === 'receivable' ? 'success' : 'brandSoft';
+  const icon = item.kind === 'statement_upload' || item.kind === 'card_payment_due' ? 'card' : overdue ? 'alert-circle' : 'alarm';
 
   const options: ActionSheetOption[] = [];
   if (item.obligation) {

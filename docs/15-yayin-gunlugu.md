@@ -8,7 +8,35 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
-## 1.0.7 — Test (2026-10-10)
+## 1.0.7 OTA — Kredi kartı son ödemesi + rapor PDF (2026-10-19)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.7) | `eas update --channel production --environment production` — update group `6b1794ad-c718-481f-a6ea-9a0b7ce23d96` (iOS `01a15310-8b00-7802-b228-2d0557b3063b`, Android `01a15310-8b00-7518-a592-063cd97f5085`). 1.0.7 iki mağazada da yayındaydı | 2026-10-19 |
+
+Gerçek kullanıcı geri bildirimi: kredi kartı son ödemeleri takvimde görünmüyor, kart borcu toplam borca girmiyor.
+Sebep: takvim, toplam borç ve yaklaşan vadeler yalnızca `obligations` okuyordu; kart borcu kart hesabında (açılış +
+hareketler / ekstre çapası) yaşıyor. Canlıda 41 aktif kartın 35'ine hiç ekstre girilmemişti.
+
+### Kullanıcıya görünen değişiklikler
+
+- Kredi kartının sıradaki son ödemesi takvimde, Ana Sayfa "Yaklaşan vadeler"de ve widget'ta kendiliğinden görünür
+  (ekstre/kayıt girmeye gerek yok). Tutar = güncel kart borcu − açık ekstrelerin kalanı; dokununca kart sayfası açılır.
+- Kart borcu Ana Sayfa'daki toplam borca dahil.
+- Kart son ödeme hatırlatması: 3 gün önce ve son ödeme günü 10:00 (borç yoksa / dönemin ekstresi girildiyse iptal).
+- Takvim Liste görünümü artık tarih sırasında (taksitler sona yığılmıyordu).
+- Rapor PDF yenilemesi (gerçek logo, yeni başlık/altbilgi — commit `9156863`) bu OTA ile gitti.
+
+### Teknik değişiklikler
+
+- `features/accounts/cardDues.ts` (`buildCardDueItems`, `useCardDueItems`), test: `tests/card-dues.cjs`.
+- Migration `reminders_card_payment_due` (production'a uygulandı, ekleyici): `reminders.kind`'a `card_payment_due`.
+- `send-reminders` v7 (`verify_jwt` açık) — yeni tür için bildirim metni. Eski build'ler yeni türü bildirim listesinde göstermez, kırılmaz.
+- OTA komutunda `--environment production` şart: `.env.local`'de RevenueCat anahtarları yok, EAS production ortamında var.
+
+---
+
+## 1.0.7 — Yayında (2026-10-10 gönderildi)
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|

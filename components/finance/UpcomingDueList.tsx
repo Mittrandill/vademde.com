@@ -96,12 +96,15 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
                     backgroundColor: theme.colors.receivable,
                     color: theme.colors.onAction,
                     onPress: () =>
-                      router.push({
-                        pathname: '/obligations/[id]',
-                        params: { id: o.id, pay: '1', ...(o.installment_id ? { installmentId: o.installment_id } : {}) },
-                      }),
+                      o.card_due_account_id
+                        ? router.push(`/accounts/${o.card_due_account_id}`)
+                        : router.push({
+                            pathname: '/obligations/[id]',
+                            params: { id: o.id, pay: '1', ...(o.installment_id ? { installmentId: o.installment_id } : {}) },
+                          }),
                   },
-                  ...(o.installment_id
+                  // Kartın son ödemesi (bkz. cardDues.ts) bir kayıt olmadığı için ertelenemez.
+                  ...(o.installment_id || o.card_due_account_id
                     ? []
                     : [
                         {
@@ -169,7 +172,7 @@ function DueRow({ item: o, today }: { item: ObligationDueItem; today: Date }) {
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push(`/obligations/${o.id}`)}
+      onPress={() => router.push(o.card_due_account_id ? `/accounts/${o.card_due_account_id}` : `/obligations/${o.id}`)}
       style={{ backgroundColor: theme.colors.surfacePrimary, minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
     >
       <View style={{ width: 34, alignItems: 'center' }}>

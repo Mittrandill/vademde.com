@@ -28,8 +28,19 @@ export function CalendarObligationRow({ obligation }: CalendarObligationRowProps
   const isPayable = obligation.direction === 'payable';
   const isTerminal = obligation.status === 'odendi' || obligation.status === 'tahsil_edildi' || obligation.status === 'iptal_edildi';
   const isInstallment = !!obligation.installment_id;
+  // Kartın sıradaki son ödemesi bir kayıt değildir (bkz. features/accounts/cardDues.ts): detay da
+  // ödeme de kart sayfasından yapılır.
+  const cardDueAccountId = obligation.card_due_account_id ?? null;
+
+  function handleOpen() {
+    router.push(cardDueAccountId ? `/accounts/${cardDueAccountId}` : `/obligations/${obligation.id}`);
+  }
 
   function handleMarkPaid() {
+    if (cardDueAccountId) {
+      router.push(`/accounts/${cardDueAccountId}`);
+      return;
+    }
     if (obligation.document_type === 'kredi_karti_ekstresi' && obligation.account_id) {
       router.push(`/accounts/${obligation.account_id}`);
       return;
@@ -47,7 +58,7 @@ export function CalendarObligationRow({ obligation }: CalendarObligationRowProps
   return (
     <Card>
       <Row gap="sm">
-        <Pressable onPress={() => router.push(`/obligations/${obligation.id}`)} style={{ flex: 1 }}>
+        <Pressable onPress={handleOpen} style={{ flex: 1 }}>
           <Row gap="sm">
             <ObligationIcon
               documentType={obligation.document_type}
@@ -62,6 +73,11 @@ export function CalendarObligationRow({ obligation }: CalendarObligationRowProps
                 {isInstallment ? ` — ${obligation.installment_number}. Taksit` : ''}
               </Text>
               <Row gap="xs">
+                {cardDueAccountId ? (
+                  <Text variant="caption" color="textSecondary">
+                    Güncel kart borcu
+                  </Text>
+                ) : null}
                 {obligation.counterparty?.name ? (
                   <Text variant="caption" color="textSecondary">
                     {obligation.counterparty.name}

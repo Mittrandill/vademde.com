@@ -66,7 +66,7 @@ interface ReminderRow {
   workspace_id: string;
   obligation_id: string | null;
   account_id: string | null;
-  kind: 'obligation_due' | 'statement_upload';
+  kind: 'obligation_due' | 'statement_upload' | 'card_payment_due';
   stage: string;
   remind_at: string;
   obligation: {
@@ -113,6 +113,16 @@ function contentFor(
     return {
       title: 'Ekstre yüklemeyi unutmayın',
       body: `${reminder.account.name} — bu ayki ekstrenizi tarayın veya kart borcunu elle girin.`,
+      data: { accountId: reminder.account.id, stage: reminder.stage },
+    };
+  }
+  // Kartın son ödeme günü (ekstre kaydı olmadan, kartın son ödeme gününden — bkz. app
+  // services/creditCardReminders.ts syncCardPaymentDueReminders).
+  if (reminder.kind === 'card_payment_due' && reminder.account) {
+    const when = reminder.stage === 'due_day' ? 'bugün' : '3 gün sonra';
+    return {
+      title: 'Kredi kartı son ödeme',
+      body: `${reminder.account.name} son ödeme günü ${when}. Kart borcunuzu ödemeyi unutmayın.`,
       data: { accountId: reminder.account.id, stage: reminder.stage },
     };
   }

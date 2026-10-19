@@ -35,7 +35,8 @@ import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
-import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
+import { syncCardPaymentDueReminders, syncCreditCardStatementReminder } from '@/services/creditCardReminders';
+import { statementPeriodKey, useCardDueItems } from '@/features/accounts/cardDues';
 import { useReflowKey } from '@/services/reflow';
 import { useWidgetSnapshot } from '@/features/dashboard/useWidgetSnapshot';
 
@@ -224,14 +225,32 @@ export default function HomeScreen() {
     return totals.incomeMinor - totals.expenseMinor;
   }, [monthTotalsQuery.data]);
 
+  // Kart borcu obligations'ta değil kart hesabında yaşar; ekstre kaydıyla karşılanmayan kısmı
+  // kartın sıradaki son ödemesi olarak eklenir — toplam borca, yaklaşan vadelere ve widget'a
+  // yansısın diye (bkz. features/accounts/cardDues.ts).
+  const cardDues = useCardDueItems(activeWorkspaceId);
+
+  // Kartın son ödeme günü hatırlatmaları sıradaki son ödemeye göre her açılışta senkronize edilir.
+  useEffect(() => {
+    if (!activeWorkspaceId || !accountsQuery.data || !cardDues.isSuccess) return;
+    for (const account of accountsQuery.data) {
+      if (account.type !== 'credit_card') continue;
+      const due = cardDues.items.find((i) => i.card_due_account_id === account.id);
+      const nextDue = due?.due_date
+        ? { dueDate: due.due_date, periodKey: statementPeriodKey(account, due.due_date) }
+        : null;
+      syncCardPaymentDueReminders(activeWorkspaceId, account.id, nextDue).catch(() => {});
+    }
+  }, [activeWorkspaceId, accountsQuery.data, cardDues.isSuccess, cardDues.items]);
+
   const activeObligations = useMemo<ObligationDueItem[]>(() => {
     const installmentItems = dueInstallmentsQuery.data ?? [];
     const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
     const plainObligations = (activeObligationsQuery.data ?? []).filter(
       (o) => !obligationIdsWithInstallments.has(o.id)
     );
-    return [...plainObligations, ...installmentItems];
-  }, [activeObligationsQuery.data, dueInstallmentsQuery.data]);
+    return [...plainObligations, ...installmentItems, ...cardDues.items];
+  }, [activeObligationsQuery.data, dueInstallmentsQuery.data, cardDues.items]);
 
   const payableObligations = useMemo(
     () => activeObligations.filter((o) => o.direction === 'payable'),
@@ -271,6 +290,7 @@ export default function HomeScreen() {
       monthTotalsQuery.isSuccess &&
       activeObligationsQuery.isSuccess &&
       dueInstallmentsQuery.isSuccess &&
+      cardDues.isSuccess &&
       valueUnitRatesQuery.isSuccess,
     obligations: activeObligations,
     rates: valueUnitRatesQuery.data ?? [],

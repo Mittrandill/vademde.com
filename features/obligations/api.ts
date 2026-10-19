@@ -25,6 +25,9 @@ export type ObligationWithRelations = Obligation & {
 export type ObligationDueItem = ObligationWithRelations & {
   installment_id?: string | null;
   installment_number?: number | null;
+  /** Doluysa bu kalem bir kayıt değil, kartın sıradaki son ödemesidir (bkz. features/accounts/cardDues.ts);
+   * id sanaldır, detay için /accounts/[card_due_account_id] açılır. */
+  card_due_account_id?: string | null;
 };
 
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
