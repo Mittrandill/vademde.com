@@ -1,0 +1,22 @@
+{
+  "name": "vademde-ig-vade-takvimi",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Instagram reklam videosu: post-it'ler uçar, Vademde takvimi kalır (Framer Motion, kare kare render).",
+  "scripts": {
+    "assets": "python3 scripts/prepare-assets.py",
+    "build": "esbuild src/main.tsx --bundle --outfile=build/bundle.js --loader:.png=file --loader:.woff2=file --loader:.woff=file --asset-names=[name]-[hash] --jsx=automatic --minify && cp src/index.html build/index.html",
+    "sfx": "python3 scripts/sfx.py",
+    "render": "node scripts/render.mjs",
+    "all": "npm run build && npm run sfx && npm run render"
+  },
+  "dependencies": {
+    "@fontsource/caveat": "5.1.0",
+    "framer-motion": "11.11.17",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0"
+  }
+}

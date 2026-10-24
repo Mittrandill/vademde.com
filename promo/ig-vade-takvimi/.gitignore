@@ -1,0 +1,5 @@
+node_modules/
+build/
+out/*
+!out/vademde-vade-takvimi.mp4
+!out/vademde-vade-takvimi-muziksiz.mp4
