@@ -10,6 +10,7 @@ import { initDatabase } from '@/db';
 import { asyncStoragePersister, attachFocusManager, queryClient } from '@/services/queryClient';
 import { configurePurchases, logOutPurchases } from '@/services/purchases';
 import { initMetaAds } from '@/services/metaAds';
+import { attachAnalyticsLifecycle, setAnalyticsSignedIn } from '@/services/analytics';
 import { useAppUpdatePrompt } from '@/services/appUpdate';
 import { registerPushToken, unregisterCurrentPushToken } from '@/services/pushToken';
 import { useWorkspaceRealtime } from '@/services/realtime';
@@ -36,6 +37,7 @@ function RootNavigator() {
 
   useEffect(() => {
     const userId = session?.user?.id;
+    setAnalyticsSignedIn(!!userId);
     if (userId) {
       configurePurchases(userId);
       registerPushToken(userId);
@@ -160,9 +162,11 @@ export default function RootLayout() {
     initMetaAds().catch((error) => {
       console.warn('Meta Ads SDK başlatılamadı', error);
     });
+    const detachAnalytics = attachAnalyticsLifecycle();
     return () => {
       detachFocusManager();
       detachAuthDeepLinks();
+      detachAnalytics();
     };
   }, []);
 

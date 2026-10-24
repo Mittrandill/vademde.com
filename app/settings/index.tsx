@@ -11,6 +11,8 @@ import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
 import { getMySubscription, getPlanLimits } from '@/features/subscriptions/api';
 import { exportWorkspaceJson } from '@/features/export/api';
+import { setAnalyticsConsent } from '@/services/analytics';
+import { useAnalyticsConsentStore } from '@/store/analyticsConsentStore';
 import { showErrorAlert } from '@/utils/alerts';
 import { getMyProfile } from '@/features/profile/api';
 import { listMyWorkspaces } from '@/features/workspaces/api';
@@ -78,6 +80,7 @@ export default function SettingsScreen() {
   // veriyor, kullanıcı açmış.
   const appLockEnabled = useAppLockStore((s) => s.enabled);
   const setAppLockEnabled = useAppLockStore((s) => s.setEnabled);
+  const analyticsEnabled = useAnalyticsConsentStore((s) => s.enabled);
   const biometricSupportQuery = useQuery({ queryKey: ['biometric-support'], queryFn: getBiometricSupport });
   const biometricSupport = biometricSupportQuery.data;
   const biometricLabel = biometricSupport?.label ?? 'Biyometrik';
@@ -208,6 +211,15 @@ export default function SettingsScreen() {
               />
             </>
           ) : null}
+          {/* KVKK m.5/1 açık rıza: varsayılan KAPALI. Açıkken yalnızca hangi ekranların ve abonelik
+              adımlarının kullanıldığı paylaşılır; tutar, belge ve kişi bilgisi asla paylaşılmaz. */}
+          <GroupedToggleRow
+            leading={<GroupedRowIcon name="analytics-outline" />}
+            title="Kullanım analitiği"
+            subtitle="Uygulamayı geliştirmemize yardım edin: yalnızca hangi ekranların kullanıldığı paylaşılır, finansal veriniz paylaşılmaz."
+            value={analyticsEnabled}
+            onValueChange={setAnalyticsConsent}
+          />
           <GroupedRow
             leading={<GroupedRowIcon name="download-outline" />}
             title="Verilerimi Dışa Aktar"

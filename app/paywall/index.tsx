@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
+import { track } from '@/services/analytics';
 import { Button, Pressable, Row, SegmentedControl, Stack, Tag, Text } from '@/components/primitives';
 import {
   currentPeriodMonth,
@@ -92,6 +93,11 @@ export default function PaywallScreen() {
   const queryClient = useQueryClient();
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('yearly');
   const [chosenPlan, setChosenPlan] = useState<PlanCode | null>(null);
+
+  // Abonelik ekranı görüntülemesi (yalnızca kullanıcı analitik iznini verdiyse gönderilir).
+  useEffect(() => {
+    track('paywall_viewed', { screen: 'paywall' });
+  }, []);
   const [purchasingPlan, setPurchasingPlan] = useState<PlanCode | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -163,6 +169,7 @@ export default function PaywallScreen() {
       return;
     }
     setPurchasingPlan(selectedPlan);
+    track('checkout_started', { plan: selectedPlan, billing_period: billingPeriod });
     try {
       await purchasePackage(selectedPackage);
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
@@ -299,7 +306,10 @@ export default function PaywallScreen() {
                   key={plan}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
-                  onPress={() => setChosenPlan(plan)}
+                  onPress={() => {
+                    setChosenPlan(plan);
+                    track('plan_selected', { plan, billing_period: billingPeriod });
+                  }}
                 >
                   <View
                     style={{

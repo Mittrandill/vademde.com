@@ -43,7 +43,12 @@ const SECTIONS: Section[] = [
       'gibi ödeme bilgileriniz bizde saklanmaz; ödemeler doğrudan Apple App Store üzerinden ' +
       'işlenir.\n' +
       '• Cihaz ve kullanım verileri: uygulama sürümü, işletim sistemi, hata kayıtları ve bildirim ' +
-      'izin durumu.',
+      'izin durumu.\n' +
+      '• Kullanım analitiği (yalnızca Ayarlar > Gizlilik > Kullanım analitiği anahtarını açarsanız): ' +
+      'uygulamanın hangi ekranlarının ve abonelik adımlarının (abonelik ekranını görüntüleme, plan ' +
+      'seçme, ödemeye başlama) kullanıldığı, olayın zamanı, uygulama sürümü ve iOS/Android bilgisi. ' +
+      'Bu olaylar hesabınızla ilişkilendirilir; tutar, belge içeriği, kişi veya firma bilgisi ' +
+      'hiçbir zaman bu olaylara eklenmez.',
   },
   {
     title: '3. İşleme Amaçları',
@@ -56,7 +61,10 @@ const SECTIONS: Section[] = [
       'alma işlemlerini doğrulamak; hizmeti güvenli tutmak, hataları tespit etmek ve teknik ' +
       'destek sağlamak; yasal yükümlülüklerimizi yerine getirmek. Belgeleriniz üzerinde çalışan ' +
       'yapay zekâ hiçbir zaman kesin bir finansal kayıt oluşturmaz; her OCR sonucu, kayda ' +
-      'dönüşmeden önce sizin gözden geçirmenize ve onayınıza sunulur.',
+      'dönüşmeden önce sizin gözden geçirmenize ve onayınıza sunulur. Kullanım analitiğini ' +
+      'açarsanız, ürünü geliştirmek için hangi özelliklerin kullanıldığını ve abonelik ' +
+      'adımlarında nerede zorlandığınızı anlamak amacıyla kullanılır; reklam veya profilleme ' +
+      'için kullanılmaz ve üçüncü kişilerle paylaşılmaz.',
   },
   {
     title: '4. Hukuki Sebep',
@@ -65,7 +73,9 @@ const SECTIONS: Section[] = [
       'doğrudan ilgili olması" ve "veri sorumlusunun meşru menfaati" hukuki sebeplerine ' +
       'dayanılarak; belge görüntüsünün yurt dışında yerleşik yapay zekâ hizmetine (bkz. madde 5) ' +
       'aktarımı ise KVKK m.9 uyarınca uygulama içinde ayrıca alınan açık rızanıza dayanılarak ' +
-      'işlenmektedir.',
+      'işlenmektedir. Kullanım analitiği, KVKK m.5/1 uyarınca yalnızca Ayarlar\'da açıkça ' +
+      'verdiğiniz rızaya dayanır; rızanızı dilediğiniz an aynı anahtardan geri alabilirsiniz ' +
+      've bundan sonra yeni olay toplanmaz.',
   },
   {
     title: '5. Verilerinizi Kimlerle Paylaşıyoruz',
@@ -107,7 +117,8 @@ const SECTIONS: Section[] = [
       'belgeleri sakla" açıksa siz silene kadar; kapalıysa (varsayılan) yapay zekâ analizi ' +
       'tamamlanır tamamlanmaz otomatik olarak silinir. Hesabınızı sildiğinizde tüm veriler ' +
       '(belgeler dahil) kalıcı olarak silinir; yasal olarak saklanması zorunlu kayıtlar ' +
-      'hariçtir.',
+      'hariçtir. Kullanım analitiği olayları hesabınız silinene kadar saklanır ve hesabınızla ' +
+      'birlikte silinir.',
   },
   {
     title: '8. Haklarınız (KVKK m.11)',
