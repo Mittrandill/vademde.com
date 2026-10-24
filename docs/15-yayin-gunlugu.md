@@ -30,7 +30,7 @@ OTA içeriğini (kart son ödemesi, rapor PDF) zaten içerir. Kurumsal hesap old
 | Platform | Kanal | Durum | Gönderim |
 |---|---|---|---|
 | iOS | production (runtime 1.0.7) | `eas update --channel production --environment production --platform ios` — update group `8064bc97-104b-4fc7-87f0-0308aefeafa3` (iOS `01a16d5e-2920-766d-8b45-3e1153f7d558`), commit `ac6bf08` | 2026-10-24 |
-| Android | production (runtime 1.0.7) | `eas update --channel production --environment production --platform android` — update group `0c0a0d1b-7b94-42ca-a159-219b0e015eb9` (Android `01a16d84-9b0d-7b56-9731-65a8dd9a28f0`), commit `38c10c1`. Play Veri güvenliği formu (Uygulama işlemleri + Kullanıcı kimlikleri: Analiz) aynı gün incelemeye gönderildi | 2026-10-24 |
+| Android | production (runtime 1.0.7) | `eas update --channel production --environment production --platform android` — update group `a577c197-3777-4881-aec3-08b24d339fa0` (Android `01a16d86-0ff6-711e-961b-aaec40ebee20`), commit `8d820f7` — aynı içerik bir kez daha yayınlandı; önceki grup `0c0a0d1b-7b94-42ca-a159-219b0e015eb9` (commit `38c10c1`) onun altında kaldı. Play Veri güvenliği formu (Uygulama işlemleri + Kullanıcı kimlikleri: Analiz) aynı gün incelemeye gönderildi | 2026-10-24 |
 
 - Ayarlar > Gizlilik > **Kullanım analitiği** anahtarı (varsayılan KAPALI, KVKK açık rıza). Açıkken
   `app_opened`, `paywall_viewed`, `plan_selected`, `checkout_started` olayları `analytics_ingest_events` RPC'sine gider.
