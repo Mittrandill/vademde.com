@@ -5,7 +5,7 @@
   "description": "Instagram reklam videosu: post-it'ler uçar, Vademde takvimi kalır (Framer Motion, kare kare render).",
   "scripts": {
     "assets": "python3 scripts/prepare-assets.py",
-    "build": "esbuild src/main.tsx --bundle --outfile=build/bundle.js --loader:.png=file --loader:.woff2=file --loader:.woff=file --asset-names=[name]-[hash] --jsx=automatic --minify && cp src/index.html build/index.html",
+    "build": "esbuild src/main.tsx --bundle --outfile=build/bundle.js --loader:.png=file --loader:.svg=file --loader:.woff2=file --loader:.woff=file --asset-names=[name]-[hash] --jsx=automatic --minify && cp src/index.html build/index.html",
     "sfx": "python3 scripts/sfx.py",
     "render": "node scripts/render.mjs",
     "all": "npm run build && npm run sfx && npm run render"

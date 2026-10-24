@@ -240,13 +240,16 @@ def logo():
     return out
 
 
-def stamp():
-    sec = 0.5
+def chip(pitch=1.0):
+    """Vaat çipi: yumuşak pop + kısa cam tınısı."""
+    sec = 0.6
     t = t_axis(sec)
-    thud = np.sin(2 * np.pi * (62 + 60 * np.exp(-t / 0.02)) * t) * np.exp(-t / 0.12) * 1.1
-    body = lowpass(noise(sec), 900) * np.exp(-t / 0.05) * 0.7
-    click = highpass(noise(sec), 3000) * np.exp(-t / 0.006) * 0.4
-    return thud + body + click
+    f = 988 * pitch
+    tone = (np.sin(2 * np.pi * f * t) + 0.3 * np.sin(2 * np.pi * f * 3.01 * t) * np.exp(-t / 0.05)) * np.exp(-t / 0.18) * 0.22
+    x = np.zeros(len(t))
+    p = pop(520 * pitch)
+    x[: len(p)] += p * 0.8
+    return x + tone
 
 
 def sparkle():
@@ -276,6 +279,8 @@ def render_cue(cue):
         return scan(cue["until"] - cue["t"])
     if kind == "ding":
         return ding(cue.get("pitch", 1.0))
+    if kind == "chip":
+        return chip(cue.get("pitch", 1.0))
     return globals()[kind]()
 
 

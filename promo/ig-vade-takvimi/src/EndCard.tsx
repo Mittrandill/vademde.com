@@ -1,43 +1,61 @@
 import { motion } from 'framer-motion';
 import { darkColors as C } from '../../../theme/colors';
 import { CANVAS_W } from './layout';
-import { easeInCubic, easeOutCubic, prog, springAt, useT } from './time';
+import { easeInOutCubic, easeOutCubic, prog, springAt, useT } from './time';
 import icon from '../assets/brand/icon.png';
 import wordmark from '../assets/brand/wordmark.png';
+import appStore from '../assets/brand/app-store.svg';
+import googlePlay from '../assets/brand/google-play.svg';
 
-export const STAMPS = [13.7, 13.95];
-
-function Stamp({ text, at, top, rot }: { text: string; at: number; top: number; rot: number }) {
-  const transform = useT((t) => {
-    const p = prog(t, at, at + 0.16);
-    const settle = Math.sin(Math.PI * prog(t, at + 0.16, at + 0.4)) * 0.05;
-    const scale = 2.6 - 1.6 * easeInCubic(p) - settle;
-    return `translateX(-50%) rotate(${rot}deg) scale(${scale})`;
-  });
-  const opacity = useT((t) => (t < at ? 0 : Math.min(1, prog(t, at, at + 0.08))));
+/** Uygulamanın kart dilinde vaat çipi: yeşil onay + metin. */
+function Promise({ text, at }: { text: string; at: number }) {
+  const opacity = useT((t) => easeOutCubic(prog(t, at, at + 0.3)));
+  const y = useT((t) => (1 - springAt(t, at, 0.7, 0.9)) * 36);
+  const check = useT((t) => springAt(t, at + 0.12, 0.5, 1.3));
   return (
     <motion.div
       style={{
-        position: 'absolute',
-        left: CANVAS_W / 2,
-        top,
-        transform,
         opacity,
-        padding: '14px 40px',
-        border: `6px solid ${C.brandPrimary}`,
-        borderRadius: 22,
-        background: 'rgba(255,176,0,0.10)',
-        color: C.brandPrimary,
-        fontSize: 56,
-        fontWeight: 900,
-        letterSpacing: 4,
+        y,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '18px 30px 18px 18px',
+        borderRadius: 999,
+        background: C.surfacePrimary,
+        border: `2px solid ${C.border}`,
+        fontSize: 38,
+        fontWeight: 600,
+        letterSpacing: -0.4,
+        color: C.textPrimary,
         whiteSpace: 'nowrap',
-        boxShadow: `0 0 50px rgba(255,176,0,0.25)`,
       }}
     >
+      <motion.div
+        style={{
+          scale: check,
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          background: C.receivable,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <svg width="26" height="26" viewBox="0 0 24 24">
+          <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke={C.onAction} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </motion.div>
       {text}
     </motion.div>
   );
+}
+
+function Badge({ src, at, height, width }: { src: string; at: number; height: number; width: number }) {
+  const opacity = useT((t) => easeOutCubic(prog(t, at, at + 0.3)));
+  const y = useT((t) => (1 - springAt(t, at, 0.7, 0.9)) * 40);
+  return <motion.img src={src} style={{ opacity, y, height, width }} />;
 }
 
 export function EndCard() {
@@ -47,7 +65,8 @@ export function EndCard() {
   const wordY = useT((t) => (1 - springAt(t, 13.28, 0.6)) * 40);
   const tagOpacity = useT((t) => easeOutCubic(prog(t, 13.42, 13.7)));
   const tagY = useT((t) => (1 - springAt(t, 13.42, 0.6)) * 40);
-  const storeOpacity = useT((t) => easeOutCubic(prog(t, 14.3, 14.6)));
+  // Rozetler oturduktan sonra üstlerinden geçen ince parlama
+  const shine = useT((t) => `translateX(${-400 + 1100 * easeInOutCubic(prog(t, 14.7, 15.3))}px) skewX(-20deg)`);
   return (
     <>
       <motion.div
@@ -66,7 +85,7 @@ export function EndCard() {
         style={{
           position: 'absolute',
           left: CANVAS_W / 2 - 115,
-          top: 300,
+          top: 290,
           width: 230,
           height: 230,
           borderRadius: 52,
@@ -76,13 +95,13 @@ export function EndCard() {
       />
       <motion.img
         src={wordmark}
-        style={{ position: 'absolute', left: CANVAS_W / 2 - 230, top: 572, width: 460, opacity: wordOpacity, y: wordY }}
+        style={{ position: 'absolute', left: CANVAS_W / 2 - 230, top: 560, width: 460, opacity: wordOpacity, y: wordY }}
       />
       <motion.div
         style={{
           position: 'absolute',
           left: 0,
-          top: 724,
+          top: 710,
           width: CANVAS_W,
           textAlign: 'center',
           fontFamily: '"Inter Display", Inter, sans-serif',
@@ -99,23 +118,47 @@ export function EndCard() {
         <br />
         <span style={{ color: C.brandPrimary }}>Tüm vadeler tek takvimde.</span>
       </motion.div>
-      <Stamp text="REKLAMSIZ" at={STAMPS[0]} top={920} rot={-5} />
-      <Stamp text="İNDİRMESİ ÜCRETSİZ" at={STAMPS[1]} top={1050} rot={3} />
-      <motion.div
+      <div
         style={{
           position: 'absolute',
           left: 0,
-          top: 1196,
+          top: 892,
           width: CANVAS_W,
-          textAlign: 'center',
-          fontSize: 36,
-          fontWeight: 600,
-          color: C.textSecondary,
-          opacity: storeOpacity,
+          display: 'flex',
+          justifyContent: 'center',
+          gap: 20,
         }}
       >
-        App Store ve Google Play'de
-      </motion.div>
+        <Promise text="Reklam yok" at={13.65} />
+        <Promise text="İndirmesi ücretsiz" at={13.8} />
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 1040,
+          width: CANVAS_W,
+          display: 'flex',
+          justifyContent: 'center',
+          gap: 28,
+        }}
+      >
+        <div style={{ position: 'relative', display: 'flex', gap: 28, overflow: 'hidden', borderRadius: 16 }}>
+          <Badge src={appStore} at={14.05} height={104} width={(104 * 135) / 40} />
+          <Badge src={googlePlay} at={14.18} height={104} width={(104 * 135) / 40} />
+          <motion.div
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: 120,
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)',
+              transform: shine,
+            }}
+          />
+        </div>
+      </div>
     </>
   );
 }

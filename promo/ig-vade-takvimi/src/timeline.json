@@ -1,13 +1,13 @@
 {
   "fps": 30,
-  "duration": 15,
+  "duration": 16,
   "scenes": {
-    "postits": [0, 2.05],
-    "sil": [2.05, 3.3],
-    "takvim": [3.3, 7.45],
-    "home": [7.45, 9.85],
-    "tara": [9.85, 12.9],
-    "end": [12.9, 15]
+    "postits": [0,  2.05],
+    "sil": [2.05,  3.3],
+    "takvim": [3.3,  7.45],
+    "home": [7.45,  9.85],
+    "tara": [9.85,  12.9],
+    "end": [12.9,  16]
   },
   "sfx": [
     { "t": 0.0, "kind": "impact" },
@@ -40,8 +40,8 @@
     { "t": 12.55, "kind": "success" },
     { "t": 12.9, "kind": "whoosh", "pitch": 0.7 },
     { "t": 13.1, "kind": "logo" },
-    { "t": 13.7, "kind": "stamp" },
-    { "t": 13.95, "kind": "stamp" },
-    { "t": 14.3, "kind": "sparkle" }
+    { "t": 13.65, "kind": "chip", "pitch": 1.0 },
+    { "t": 13.8, "kind": "chip", "pitch": 1.26 },
+    { "t": 14.05, "kind": "sparkle" }
   ]
 }

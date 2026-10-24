@@ -1,32 +1,12 @@
-import { motion } from 'framer-motion';
 import { darkColors as C } from '../../../theme/colors';
-import { EndCard, STAMPS } from './EndCard';
+import { EndCard } from './EndCard';
 import { Headline, Subline } from './Headline';
 import { CANVAS_H, CANVAS_W, HEADLINE_TOP } from './layout';
 import { Phone } from './Phone';
 import { Hl } from './primitives';
 import { EraseSweep, PostItScene } from './PostIts';
-import { prog, useT } from './time';
-
-/** Damga darbelerinde tüm kare kısa süre sarsılır. */
-function useShake() {
-  return useT((t) => {
-    let dx = 0;
-    let dy = 0;
-    for (const at of STAMPS) {
-      const p = prog(t, at + 0.14, at + 0.34);
-      if (p > 0 && p < 1) {
-        const a = (1 - p) * 14;
-        dx += Math.sin(p * 40) * a;
-        dy += Math.cos(p * 33) * a * 0.6;
-      }
-    }
-    return `translate(${dx}px, ${dy}px)`;
-  });
-}
 
 export function Video() {
-  const transform = useShake();
   return (
     <div
       style={{
@@ -41,7 +21,7 @@ export function Video() {
         color: C.textPrimary,
       }}
     >
-      <motion.div style={{ position: 'absolute', inset: 0, transform }}>
+      <div style={{ position: 'absolute', inset: 0 }}>
         <PostItScene />
         <EraseSweep />
         <Phone />
@@ -55,7 +35,7 @@ export function Video() {
         <Subline inAt={11.7} outAt={12.85} top={HEADLINE_TOP + 184}>
           Onaylamadan kayıt oluşmaz.
         </Subline>
-      </motion.div>
+      </div>
     </div>
   );
 }
