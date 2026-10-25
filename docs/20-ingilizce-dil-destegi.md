@@ -36,7 +36,7 @@
 - [x] 3. Ortak bileşenler (`components/` tamamı)
 - [x] 4. Ekranlar (`app/`) — çeviri tamam; cihazda görsel kontrol bekliyor
 - [x] 5. Özellik katmanının sabit kullanıcı metinleri (`features/`, `services/`, `utils/`)
-- [x] 6. Sunucu kodu: profil dili, bildirim/AI, kategori kataloğu, sunucu hata eşlemesi — yerel doğrulandı; canlı migration/deploy bekliyor
+- [x] 6. Sunucu: profil dili, bildirim/AI, kategori kataloğu, sunucu hata eşlemesi — yerel doğrulandı; canlı migration ve beş Edge Function yayını tamam
 - [x] 7. Yasal metinler (gizlilik, kullanım koşulları) İngilizce
 - [x] 8. Widget metinleri (Swift) — kod ve JS aktarımı tamam; Xcode derlemesi/cihaz doğrulaması bekliyor
 - [ ] 9. Doğrulama: TR'de hiçbir metin değişmedi mi (regresyon), EN'de Türkçe kalan metin taraması, cihazda deneme
@@ -138,16 +138,34 @@
   Canlı Supabase CLI erişimi `Invalid access token` hatası verdi; yeniden giriş başlatıldı.
   **Bu kayıt yazılırken migration ve Edge Function yayını uygulanmamıştı; oturum yenilenmeli.**
 
-**Sıradaki ilk iş:** Supabase oturumunu yenileyip canlı migration/deploy durumunu doğrulamak;
-ardından aşama 9 — TR/EN cihaz kontrolü (özellikle uzun İngilizce metinler,
+- 2026-10-25 — **Canlı yayın tamamlandı.** `3286e37` main'e fast-forward birleştirildi ve
+  `origin/main`'e push edildi. Sürüm 1.0.8. Supabase oturumu yenilendikten sonra
+  `20261025184930_add_server_locale_support` canlı `wgdirnckmlicctreyoxk` projesine uygulandı.
+  Eski yerel/canlı migration adları farklı olduğundan yalnızca yeni migration çalıştırıldı;
+  SQL ve migration geçmişi kaydı tek transaction içinde commit edildi (5 sn lock / 30 sn
+  statement timeout). Eski migration'lar yeniden çalıştırılmadı, geçmiş kayıtları silinmedi.
+  Canlı doğrulama: 224 profil `tr`, 5 eski içgörü `tr`; her dilde personal/business katalogları
+  45 kayıt; Türkçe business kataloğu birebir aynı; profil RLS açık; onboarding authenticated
+  rolüne açık, anon'a kapalı. Mevcut kullanıcı adları ve finans kayıtlarını değiştiren SQL yok.
+  `send-reminders`, `send-cash-alerts`, `ai-ask`, `generate-insights`, `process-document`
+  `_shared/` bağımlılıklarıyla yayınlandı; JWT doğrulaması açık tutuldu.
+  Yayın sonrası beş endpoint yetkisiz POST'u 401 ile reddetti; `ai-ask` ve `process-document`
+  CORS ön kontrolü 200/ok döndü (canlı runtime açıldı, iş verisi/model/bildirim çağrısı yok).
+  Migration öncesi advisor'da mevcut SECURITY DEFINER erişim ve sızmış şifre koruması
+  uyarıları vardı; bu çeviri yayını kapsamında ilgisiz yetkiler/Auth ayarları değiştirilmedi.
+  Son advisor/fonksiyon envanter kontrolünde CLI erişim belirteci yeniden geçersiz döndü;
+  bu son yönetim kontrolleri tamamlanamadı. Öncesindeki migration doğrulaması ve deploy
+  başarılıydı; yukarıdaki HTTP kontrolleri de yayından sonra geçti.
+  **Mobil build/OTA yayınlanmadı**; runtimeVersion appVersion olduğu için 1.0.8 native build
+  hazırlanmalı. Eski 1.0.7 uygulamaları mağaza güncellemesine kadar mevcut sürümde kalır.
+
+**Sıradaki ilk iş:** aşama 9 — TR/EN cihaz kontrolü (özellikle uzun İngilizce metinler,
 para/tarih girişi, dil değişimi, yasal metinler ve widget). Swift widget için macOS/Xcode
-derlemesi ve uygulama/widget dil geçişi kontrolü gerekiyor. Ardından sunucu yayını ve
+derlemesi ve uygulama/widget dil geçişi kontrolü gerekiyor. Ardından
 mağaza hazırlığı (aşama 10). `app.json` sürümü 1.0.8.
 
-Sunucu yayını için migration önce uygulanmalı; ardından `send-reminders`, `send-cash-alerts`,
-`ai-ask`, `generate-insights`, `process-document` ortak `_shared/` dosyalarıyla deploy edilmeli.
-Uygulamanın yeni sürümü `ai_insights.locale` beklediğinden migration uygulama dağıtımından önce gelmeli.
-Bu oturum canlı yayın yapmadı. Canlı şema/advisor kontrolü ve gerçek push/Gemini denemesi bekliyor.
+Migration ve beş Edge Function yayını tamamlandı. Yeni uygulamanın beklediği
+`ai_insights.locale` canlıda var. Gerçek kullanıcı oturumuyla push/Gemini/OCR denemesi bekliyor.
 Eski serbest biçimli OCR uyarıları kullanıcının kararıyla özgün Türkçe hâlinde korunur;
 bunun için veri dönüşümü yapılmayacak.
 
@@ -161,11 +179,10 @@ normalizasyonundaki `tr-TR` dönüşümleri ve kayıtlı kategori adları arayü
 Banka resmî adları ve OCR eşleştirme alias'ları özel isim/veri olarak korundu. `reports/api.ts`
 `EXCLUDE_CARD_STATEMENT_LUMP` içindeki eski Türkçe açıklama filtresi veri uyumluluğu içindir;
 sunucu İngilizce açıklamalar üretmeye başlarken o filtreyi de değerlendir.
-Kalan büyük aşamalar: Swift native derlemesi, sunucu yayını ve cihaz/mağaza doğrulaması.
+Kalan büyük aşamalar: Swift native derlemesi ve cihaz/mağaza doğrulaması.
 
 **Bilinen açıklar:** paywall `formatPrice` için `narrowSymbol` kullanılmadı (Hermes riski);
-eski serbest OCR uyarılarında yalnızca Türkçe metin bulunabiliyor. Yeni sunucu kodu deploy edilmeden
-canlı davranış eski hâlinde kalır. Migration tabanlı Postgres testi temel tabloları izole kurar;
+eski serbest OCR uyarıları kullanıcının kabulüyle Türkçe korunuyor. Migration tabanlı Postgres testi temel tabloları izole kurar;
 canlı projenin tüm mevcut trigger/policy/privilege bileşimini doğrulamanın yerini tutmaz.
 
 **Araçlar (`scripts/i18n/`, depo kökünden çalıştır):**
