@@ -55,7 +55,7 @@ const PLAN_ERROR_MESSAGES: { code: string; title: string; message: string }[] = 
   {
     code: 'TEAM_PLAN_REQUIRED',
     title: 'Ekip özelliği',
-    message: 'Ekip üyesi davet etmek İşletme planında kullanılabilir.',
+    message: 'Ekip üyesi davet etmek Plus ve İşletme planlarında kullanılabilir.',
   },
   {
     code: 'RECEIPT_ARCHIVE_PLAN_REQUIRED',

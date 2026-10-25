@@ -35,6 +35,7 @@ import {
   type WorkspaceMember,
   type WorkspaceRole,
 } from '@/features/workspaces/members';
+import { getAllPlanLimits } from '@/features/subscriptions/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { queryKeys } from '@/services/queryKeys';
 import { showErrorAlert } from '@/utils/alerts';
@@ -108,8 +109,8 @@ export default function WorkspaceDetailScreen() {
     enabled: !!workspaceId && isOwner,
   });
 
-  // docs/10-abonelik-gelir-modeli.md — ekip üyeliği İşletme planının özelliğidir
-  // (plan_limits.max_team_members free/plus'ta null). Sunucu da reddeder
+  // docs/10-abonelik-gelir-modeli.md — ekip üyeliği Plus ve İşletme planlarının özelliğidir
+  // (plan_limits.max_team_members free'de null). Sunucu da reddeder
   // (create_workspace_invite → TEAM_PLAN_REQUIRED); buradaki kontrol yalnızca kullanıcıyı
   // hataya düşürmeden önce durdurmak ve neyin kilitli olduğunu göstermek içindir.
   // planQuery.data null gelirse (RPC henüz uygulanmamış bir ortam) hiçbir şey kilitlenmez —
@@ -118,6 +119,16 @@ export default function WorkspaceDetailScreen() {
   const planState = planQuery.data ?? null;
   const teamLimit = planState?.teamMemberLimit ?? null;
   const teamLocked = !!planState && teamLimit === null;
+
+  // Kilitli ekranda gösterilen plan başına üye sayıları sabit yazılmaz; paywall ile aynı
+  // plan_limits kaynağından okunur ki limit değişince metin geride kalmasın.
+  const planLimitsQuery = useQuery({
+    queryKey: queryKeys.planLimits(),
+    queryFn: getAllPlanLimits,
+    enabled: teamLocked,
+  });
+  const plusTeamLimit = planLimitsQuery.data?.find((l) => l.plan === 'plus')?.max_team_members ?? null;
+  const isletmeTeamLimit = planLimitsQuery.data?.find((l) => l.plan === 'isletme')?.max_team_members ?? null;
 
   function invalidateTeam() {
     queryClient.invalidateQueries({ queryKey: queryKeys.workspaceMembers(workspaceId) });
@@ -399,13 +410,14 @@ export default function WorkspaceDetailScreen() {
               {teamLocked ? (
                 <Stack gap="sm">
                   <Text variant="body">
-                    Ekip üyesi davet etmek İşletme planında kullanılabilir.
+                    Ekip üyesi davet etmek Plus ve İşletme planlarında kullanılabilir.
                   </Text>
                   <Text variant="caption" color="textSecondary">
-                    İşletme planında çalışma alanınızı 10 kişiye kadar paylaşabilir, üyelere
-                    düzenleyici veya görüntüleyici rolü verebilirsiniz.
+                    {plusTeamLimit && isletmeTeamLimit
+                      ? `Çalışma alanınızı Plus planında ${plusTeamLimit}, İşletme planında ${isletmeTeamLimit} kişiye kadar paylaşabilir, üyelere düzenleyici veya görüntüleyici rolü verebilirsiniz.`
+                      : 'Çalışma alanınızı ekibinizle paylaşabilir, üyelere düzenleyici veya görüntüleyici rolü verebilirsiniz.'}
                   </Text>
-                  <Button label="İşletme planını gör" icon="people-outline" onPress={() => router.push('/paywall')} />
+                  <Button label="Planları gör" icon="people-outline" onPress={() => router.push('/paywall')} />
                 </Stack>
               ) : (
                 <Stack gap="md">

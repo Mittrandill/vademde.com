@@ -8,6 +8,21 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.7 OTA — Ekip üyesi limitleri: Plus 2, İşletme 50 (2026-10-25)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.7) | `eas update --channel production --environment production` — update group `9fd84999-2cc6-43e5-8ec8-839582d3706a` (iOS `01a173fc-b7ca-76fc-8bc3-9282674f7cf2`, Android `01a173fc-b7ca-74d6-a847-c4c04b3c6a98`), commit `5b2a7a1` + commit edilmemiş değişiklikler | 2026-10-25 |
+
+- Asıl değişiklik sunucuda: `plan_limits.max_team_members` Plus `null → 2`, İşletme `10 → 50`
+  (migration `20261025164706_team_member_limits_plus_isletme`). Paywall, abonelik ve üyeler ekranları sayıyı
+  tablodan okuduğu için OTA'sız da güncellendi.
+- OTA yalnızca Ücretsiz kullanıcıya görünen kilitli davet metnini (`app/workspace/[id]/members.tsx`, artık
+  sayıları `plan_limits`'ten okur) ve `TEAM_PLAN_REQUIRED` mesajını (`utils/alerts.ts`) düzeltir.
+- Web (vademde.app) aynı gün `45847a3` ile yayınlandı: fiyatlandırma, plan kartları, abonelik, çalışma alanı detayı.
+
+---
+
 ## 1.0.7 — Android production (2026-10-19)
 
 | Platform | Build | Durum | Gönderim |
@@ -71,8 +86,8 @@ hareketler / ekstre çapası) yaşıyor. Canlıda 41 aktif kartın 35'ine hiç e
 
 | Platform | Build | Durum | Gönderim |
 |---|---|---|---|
-| iOS | build 50 | `eas build --platform all --profile production --auto-submit-with-profile alpha` ile alındı (build ID `d5d3a1d6…`, commit `3f4e3e6`). App Store Connect'teki 1.0.6 sürüm kaydı 1.0.7'ye çevrildi, build 50 seçilip **incelemeye gönderildi**. 1.0.6 (build 49) hiç incelemeye gönderilmedi | 2026-10-10 |
-| Android | — | aynı komut → Play **alpha** (kapalı test) kanalı; production'a test sonrası terfi | 2026-10-10 |
+| iOS | build 50 | `eas build --platform all --profile production --auto-submit-with-profile alpha` ile alındı (build ID `d5d3a1d6-6ea6-4688-9868-cbcce66edf40`, commit `3f4e3e6`) → TestFlight (submission `962f363f-e14f-41c4-b401-8fe006dac889`). App Store Connect'teki 1.0.6 sürüm kaydı 1.0.7'ye çevrildi, build 50 seçilip **incelemeye gönderildi**. 1.0.6 (build 49) hiç incelemeye gönderilmedi | 2026-10-10 |
+| Android | versionCode 15 | aynı komut (build ID `27dc4c38-c0f4-47c5-a812-d6c23eee5b19`) → Play **alpha** (kapalı test) kanalı (submission `c6b84d0d-10a8-4c84-ab95-7405e9914326`); production'a test sonrası terfi | 2026-10-10 |
 
 Finans bütünlüğü ve kullanıcı mesajları paketi (ayrıntı: `docs/17-duzeltme-durumu-2026-10-09.md` "Ek tur"). Önce
 test kanallarında doğrulanır, sonra production'a gönderilir.

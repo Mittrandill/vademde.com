@@ -8,8 +8,11 @@
 | Plan | Kapsam |
 |---|---|
 | Ücretsiz | 1 kişisel çalışma alanı, temel gelir-gider ve borç-alacak, sınırlı OCR, temel bildirim ve rapor |
-| Vademde Plus | Birden fazla çalışma alanı, daha yüksek OCR kotası, gelişmiş rapor, sınırsız dışa aktarma, belge arşivi, düzenli işlemler, Face ID |
-| Vademde İşletme | Ekip üyeleri, roller, audit log, gelişmiş cari rapor, yüksek dosya/OCR kotası ve işletme özellikleri |
+| Vademde Plus | Birden fazla çalışma alanı, 2 ekip üyesi, daha yüksek OCR kotası, gelişmiş rapor, sınırsız dışa aktarma, belge arşivi, düzenli işlemler, Face ID |
+| Vademde İşletme | 50 ekip üyesi, roller, audit log, gelişmiş cari rapor, yüksek dosya/OCR kotası ve işletme özellikleri |
+
+Ekip üyesi sayısı çalışma alanı sahibini içermez (Plus: sahip + 2 kişi). Limitler 2026-10-25'te
+Plus için `null → 2`, İşletme için `10 → 50` yapıldı (`20261025164706_team_member_limits_plus_isletme.sql`).
 
 ## 14.0 Limitlerin uygulanma durumu
 
