@@ -77,7 +77,7 @@ function checkedPreview(data: unknown, obligationId: string): InstrumentBouncePr
     || !result.workspace_id || !result.currency_code || !Number.isSafeInteger(result.replacement_claim_minor) || result.replacement_claim_minor < 0
     || !Array.isArray(result.invalidated_ids) || !result.invalidated_ids.includes(obligationId)
     || !Array.isArray(result.impacts) || !result.snapshot || result.impacts.some((o) => !o.id || !o.currency_code
-      || !Number.isSafeInteger(o.reopened_minor) || o.reopened_minor < 0)) throw new Error('Karşılıksız işlem sonucu doğrulanamadı; aynı kaydı tekrar kontrol edin');
+      || !Number.isSafeInteger(o.reopened_minor) || o.reopened_minor < 0)) throw new Error(t('runtime.unverifiedBounce'));
   return result;
 }
 export async function previewInstrumentBounce(obligationId: string): Promise<InstrumentBouncePreview> {
@@ -90,12 +90,12 @@ export async function markBounced(obligationId: string, expected: InstrumentBoun
   checkedPreview(expected, obligationId);
   const { data: session, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
-  if (!session.session?.user.id) throw new Error('Karşılıksız işlem için giriş yapın');
+  if (!session.session?.user.id) throw new Error(t('runtime.bounceSignIn'));
   const { data, error } = await supabase.rpc('bounce_instrument_atomic' as never, {
     p_expected_actor: session.session.user.id, p_obligation_id: obligationId, p_expected: expected,
   } as never);
   if (error) throw error;
   const result = checkedPreview(data, obligationId);
-  if (result.state !== 'bounced') throw new Error('Karşılıksız işlem tamamlanmadı; aynı kaydı kontrol edin');
+  if (result.state !== 'bounced') throw new Error(t('runtime.bounceIncomplete'));
   return result;
 }

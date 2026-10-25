@@ -48,7 +48,7 @@ import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { showSuccessAlert } from '@/utils/alerts';
 import type { ValueUnitType } from '@/features/valueUnits/units';
 import { capitalizeUi, localeDateFormatter, upperUi, zeroFractionPattern } from '@/i18n/format';
-import { t } from '@/i18n';
+import { t, useLanguage } from '@/i18n';
 
 // Tahsilat Al / Ödeme Yap → /payments/new (bkz. features/payments/api.ts settleObligations).
 // Önceden "Çek/Senet" seçimi Borç/Alacak formuna gidip bağımsız yeni bir kayıt açıyordu; faturaya
@@ -67,6 +67,7 @@ type DetailTab = 'genel' | 'kayitlar' | 'hareketler';
 // DetailHeroCard üzerinden paylaşılıyor) — tek büyük kart (kimlik, ana bakiye, ikincil
 // istatistikler) ve altında Genel/Açık Kayıtlar/Hareketler sekmeleri.
 export default function CounterpartyDetailScreen() {
+  const language = useLanguage();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -146,7 +147,7 @@ export default function CounterpartyDetailScreen() {
   // Belge arşivi (Plus): bu cariyle ilgili ödemelere eklenmiş dekontlar (bkz. features/receipts/api.ts).
   const archive = useDocumentArchiveAccess();
   const receiptsQuery = useQuery({
-    queryKey: [activeWorkspaceId, 'receipt-archive', id],
+    queryKey: [activeWorkspaceId, 'receipt-archive', id, language],
     queryFn: () => listReceiptArchive({ workspaceId: activeWorkspaceId as string, counterpartyId: id as string }),
     enabled: enabled && archive.allowed,
   });

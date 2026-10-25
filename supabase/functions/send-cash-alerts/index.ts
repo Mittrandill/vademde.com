@@ -8,6 +8,8 @@
 // edilmiş sayılmaz; vadesi geçmiş borç bugün çıkar. Tüm sorgular sayfalıdır (Supabase 1.000 satır sınırı).
 // Aynı hesap (toplam için sabit kimlik) için en fazla 7 günde bir bildirim (cash_alert_log).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { resolveLocale } from '../_shared/locale.ts';
+import { cashAlertContent } from '../_shared/cashAlertContent.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -20,15 +22,12 @@ const MIN_DAYS_BETWEEN_ALERTS = 7;
 const TOTAL_ALERT_ID = '00000000-0000-0000-0000-000000000000';
 const ACTIVE_STATUSES = ['taslak', 'inceleme_gerekli', 'bekliyor', 'kismen_odendi', 'gecikti', 'kismen_tahsil_edildi'];
 
-const tl = (minor: number) =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(minor / 100);
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
 
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-type Db = ReturnType<typeof createClient>;
+type Db = ReturnType<typeof createClient<any>>;
 
 // Supabase tek istekte en fazla 1.000 satır döndürür; sayfa sayfa okunur (kararlı sıralama için id).
 async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
@@ -135,6 +134,10 @@ Deno.serve(async (_req: Request) => {
   const tokensByUser = new Map<string, string[]>();
   for (const t of tokenRows ?? []) tokensByUser.set(t.user_id, [...(tokensByUser.get(t.user_id) ?? []), t.token]);
   if (tokensByUser.size === 0) return Response.json({ success: true, alerts: 0 });
+  const { data: profiles, error: profilesError } = await db.from('profiles').select('id, locale').in('id', [...tokensByUser.keys()]);
+  if (profilesError) return Response.json({ success: false, error: profilesError.message }, { status: 500 });
+  const localeByUser = new Map((profiles ?? []).map((p) => [p.id, resolveLocale(p.locale)]));
+
 
   const { data: members } = await db
     .from('workspace_members')
@@ -190,8 +193,9 @@ Deno.serve(async (_req: Request) => {
       .gte('sent_at', new Date(Date.now() - MIN_DAYS_BETWEEN_ALERTS * 86_400_000).toISOString());
     const recentlyAlerted = new Set((recent ?? []).map((r: { account_id: string }) => r.account_id));
 
-    const notify = (title: string, body: string, accountKey: string, logId: string) => {
+    const notify = (accountName: string | null, firstNegativeDate: string, lowest: number, accountKey: string, logId: string) => {
       for (const userId of userIds) {
+        const { title, body } = cashAlertContent(localeByUser.get(userId) ?? 'tr', accountName, firstNegativeDate, lowest);
         for (const token of tokensByUser.get(userId) ?? []) {
           messages.push({
             to: token,
@@ -215,8 +219,7 @@ Deno.serve(async (_req: Request) => {
       const { firstNegativeDate, lowest } = project(start, accountItems);
       if (!firstNegativeDate) continue;
       notify(
-        'Nakit uyarısı',
-        `${account.name} ${dayMonth.format(new Date(firstNegativeDate))} tarihinde eksiye düşebilir (en düşük ${tl(lowest)}).`,
+        account.name, firstNegativeDate, lowest,
         account.id,
         account.id
       );
@@ -235,8 +238,7 @@ Deno.serve(async (_req: Request) => {
       const { firstNegativeDate, lowest } = project(startTotal, items);
       if (firstNegativeDate) {
         notify(
-          'Nakit uyarısı',
-          `Hesabı atanmamış ödemeler dahil, toplam TL bakiyen ${dayMonth.format(new Date(firstNegativeDate))} tarihinde eksiye düşebilir (en düşük ${tl(lowest)}).`,
+          null, firstNegativeDate, lowest,
           'toplam',
           TOTAL_ALERT_ID
         );

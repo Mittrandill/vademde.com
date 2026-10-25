@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 // Aşama 2 — Ekip paylaşımı istemci katmanı. Üyelik, roller ve davet kodları.
 // Tüm yetki kontrolleri sunucuda (SECURITY DEFINER RPC'ler + RLS) yapılır; buradaki
 // fonksiyonlar yalnızca çağrı sarmalayıcılarıdır. Roller: owner | editor | viewer.
@@ -80,7 +81,7 @@ export async function revokeWorkspaceInvite(inviteId: string): Promise<void> {
 export async function redeemWorkspaceInvite(code: string): Promise<string> {
   const { data, error } = await supabase.rpc('redeem_workspace_invite', { p_code: code.trim().toUpperCase() });
   if (error) throw error;
-  if (!data) throw new Error('Çalışma alanına katılınamadı');
+  if (!data) throw new Error(t('runtime.workspaceJoinFailed'));
   return data as string;
 }
 

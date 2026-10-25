@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import { supabase } from '@/services/supabase';
@@ -27,7 +28,7 @@ async function assertOwner(userId: string) {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
   // Only local queue ownership; server authorization still comes from RPC/RLS.
-  if (!userId || data.session?.user.id !== userId) throw new Error('Oturum değişti. Ödemeyi kendi hesabınızla tekrar kontrol edin.');
+  if (!userId || data.session?.user.id !== userId) throw new Error(t('runtime.cardPaymentSessionChanged'));
 }
 
 function fingerprint(input: CardPaymentDraft): string {
@@ -39,7 +40,7 @@ async function read(userId: string, workspaceId: string, cardId: string): Promis
   const raw = await AsyncStorage.getItem(keyFor(userId, workspaceId, cardId));
   if (raw === null) return null;
   let record: StoredCardPayment;
-  try { record = JSON.parse(raw); } catch { throw new Error('Saklanan ödeme okunamadı. Yeni ödeme yapmadan işlem geçmişini kontrol edin.'); }
+  try { record = JSON.parse(raw); } catch { throw new Error(t('runtime.cardPaymentUnreadable')); }
   const input = record?.input;
   if (record?.version !== 1 || record.userId !== userId || !['pending', 'confirmed'].includes(record.state)
     || !input || input.actorId !== userId || input.workspaceId !== workspaceId || input.cardAccountId !== cardId
@@ -48,7 +49,7 @@ async function read(userId: string, workspaceId: string, cardId: string): Promis
     || !Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0
     || typeof input.currencyCode !== 'string' || !input.currencyCode
     || typeof input.paidAt !== 'string' || !Number.isFinite(Date.parse(input.paidAt))) {
-    throw new Error('Saklanan ödeme bilgisi geçersiz. Yeni ödeme yapmadan işlem geçmişini kontrol edin.');
+    throw new Error(t('runtime.invalidStoredCardPayment'));
   }
   return record;
 }
@@ -64,7 +65,7 @@ export function submitDurableCardPayment(userId: string, draft: CardPaymentDraft
     await assertOwner(userId);
     let record = await read(userId, draft.workspaceId, draft.cardAccountId);
     if (record && fingerprint(record.input) !== fingerprint(draft)) {
-      throw new Error('Önce bu kartın önceki ödeme sonucunu kontrol edin. Bekleyen işlem değiştirilmez.');
+      throw new Error(t('runtime.pendingCardPayment'));
     }
     if (record?.state === 'confirmed') return record;
     if (!record) {
@@ -73,7 +74,7 @@ export function submitDurableCardPayment(userId: string, draft: CardPaymentDraft
         || [draft.workspaceId, draft.cardAccountId, draft.sourceAccountId, draft.currencyCode]
           .some((value) => typeof value !== 'string' || !value)
         || draft.cardAccountId === draft.sourceAccountId) {
-        throw new Error('Ödeme hesabı, tutarı veya tarihi geçersiz');
+        throw new Error(t('runtime.invalidCardPayment'));
       }
       record = { version: 1, userId, state: 'pending', input: { ...draft, actorId: userId, requestId: randomUUID() } };
       // Fail closed: no network write until the durable ID AND original payload are saved.
@@ -95,7 +96,7 @@ export function acknowledgeCardPayment(userId: string, workspaceId: string, card
   return serialize(key, async () => {
     await assertOwner(userId);
     const record = await read(userId, workspaceId, cardId);
-    if (record?.state !== 'confirmed') throw new Error('Sonucu belirsiz ödeme silinemez. Önce aynı işlemi kontrol edin.');
+    if (record?.state !== 'confirmed') throw new Error(t('runtime.uncertainCardPayment'));
     await AsyncStorage.removeItem(key);
   });
 }

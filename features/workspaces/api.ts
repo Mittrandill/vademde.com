@@ -1,5 +1,7 @@
+import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
+import { syncCurrentProfileLocale } from '@/services/profileLocale';
 
 export type Workspace = Tables<'workspaces'>;
 
@@ -15,9 +17,10 @@ export async function listMyWorkspaces(): Promise<Workspace[]> {
 }
 
 export async function createWorkspace(input: Pick<TablesInsert<'workspaces'>, 'name' | 'type'>) {
+  await syncCurrentProfileLocale();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
-  if (!userData.user) throw new Error('Oturum bulunamadı');
+  if (!userData.user) throw new Error(t('runtime.noSession'));
 
   const { data, error } = await supabase
     .from('workspaces')
@@ -37,13 +40,14 @@ export async function setupInitialWorkspaces(input: {
   name?: string | null;
   openingBalanceMinor?: number | null;
 }): Promise<string> {
+  await syncCurrentProfileLocale();
   const { data, error } = await supabase.rpc('setup_initial_workspaces', {
     p_mode: input.mode,
     p_name: input.name ?? undefined,
     p_opening_balance_minor: input.openingBalanceMinor ?? undefined,
   });
   if (error) throw error;
-  if (!data) throw new Error('Çalışma alanı oluşturulamadı');
+  if (!data) throw new Error(t('runtime.workspaceCreateFailed'));
   return data as string;
 }
 

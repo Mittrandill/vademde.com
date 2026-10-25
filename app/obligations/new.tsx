@@ -60,14 +60,17 @@ import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys
 import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { ScanPromptBanner } from '@/components/finance/ScanPromptBanner';
-import { amountPlaceholder, getInputDecimalSeparator, localeDateFormatter } from '@/i18n/format';
+import { getLanguage, t, useLanguage } from '@/i18n';
+import { amountPlaceholder, getInputDecimalSeparator, localeDateFormatter, lowerUi, upperUi, unitForCount } from '@/i18n/format';
 
 type Direction = 'payable' | 'receivable';
 
-const DIRECTIONS: Array<{ value: Direction; label: string }> = [
-  { value: 'payable', label: 'Borç' },
-  { value: 'receivable', label: 'Alacak' },
-];
+function getDirections(): Array<{ value: Direction; label: string }> {
+  return [
+    { value: 'payable', label: t('obligations.form.payable') },
+    { value: 'receivable', label: t('obligations.form.receivable') },
+  ];
+}
 
 // Düzenlemede mevcut bir taksit planının satırı — `id`/`original` doluysa DB'deki gerçek
 // taksite karşılık gelir, `locked` (tamamen ödenmiş) satırların tarih/tutarı değiştirilemez
@@ -87,6 +90,7 @@ interface PlanRow {
 const shortDateFormatter = localeDateFormatter({ day: '2-digit', month: 'short' });
 
 export default function NewObligationScreen() {
+  useLanguage();
   const theme = useTheme();
   const reflowKey = useReflowKey();
   const { id, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam } =
@@ -115,7 +119,7 @@ export default function NewObligationScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {friendlyErrorMessage(existingQuery.error, 'Kayıt yüklenemedi')}
+              {friendlyErrorMessage(existingQuery.error, t('obligations.form.loadFailed'))}
             </Text>
           ) : null}
         </Stack>
@@ -178,6 +182,7 @@ function ObligationForm({
   initialTitle,
   initialAmountMinor,
 }: ObligationFormProps) {
+  useLanguage();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -441,19 +446,19 @@ function ObligationForm({
   }
 
   function getPlanValidationError(rows: PlanRow[]): string | null {
-    if (rows.length === 0) return 'En az bir taksit olmalı.';
+    if (rows.length === 0) return t('obligations.form.atLeastOne');
     let previous: number | null = null;
     for (const row of rows) {
       const amountMinor = parseValueUnitAmountToMinor(row.amountStr, valueUnitCode);
-      if (amountMinor === null || amountMinor <= 0) return `${row.installmentNumber}. taksit tutarı okunamadı.`;
+      if (amountMinor === null || amountMinor <= 0) return t('obligations.form.invalidAmount', { n: row.installmentNumber });
       const parsedDate = new Date(row.dueDate);
-      if (Number.isNaN(parsedDate.getTime())) return `${row.installmentNumber}. taksit tarihi okunamadı.`;
-      if (previous !== null && parsedDate.getTime() < previous) return 'Taksit tarihleri sıralı olmalı.';
+      if (Number.isNaN(parsedDate.getTime())) return t('obligations.form.invalidDate', { n: row.installmentNumber });
+      if (previous !== null && parsedDate.getTime() < previous) return t('obligations.form.orderedDates');
       previous = parsedDate.getTime();
       if (row.original) {
         const paidMinor = Math.max(0, row.original.amount_minor - row.original.remaining_amount_minor);
         if (amountMinor < paidMinor) {
-          return `${row.installmentNumber}. taksit için ödenen tutardan düşük tutar girilemez.`;
+          return t('obligations.form.belowPaidInstallment', { n: row.installmentNumber });
         }
       }
     }
@@ -558,13 +563,13 @@ function ObligationForm({
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!activeWorkspaceId || !title.trim() || !documentType) {
-        throw new Error('Eksik alan var');
+        throw new Error(t('obligations.form.missingField'));
       }
       if (isPlanEditing ? planTotalMinor <= 0 : !totalAmountMinor) {
-        throw new Error('Eksik alan var');
+        throw new Error(t('obligations.form.missingField'));
       }
       if (isCashAdvanceType && depositAccountId && !depositTargetAccounts.some((a) => a.id === depositAccountId)) {
-        throw new Error('Nakdin yatırıldığı hesap avansla aynı para biriminde olmalı');
+        throw new Error(t('obligations.form.depositCurrency'));
       }
 
       const bankCodeForType = BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null;
@@ -580,7 +585,7 @@ function ObligationForm({
         const nextTotalMinor = isPlanEditing ? planTotalMinor : totalAmountMinor;
         if (initial && initial.remaining_amount_minor > 0 && nextTotalMinor < paidSoFarMinor) {
           throw new Error(
-            `Toplam tutar, şimdiye kadar ödenen ${formatValueUnitAmount(paidSoFarMinor, valueUnitCode)} tutarın altına düşürülemez.`
+            t('obligations.form.belowPaidTotal', { amount: formatValueUnitAmount(paidSoFarMinor, valueUnitCode) })
           );
         }
         let paidRows: RecordPastInstallmentPaymentInput[] = [];
@@ -651,7 +656,7 @@ function ObligationForm({
                     installment_id: installmentId,
                     amount_minor: amountMinor,
                     paid_at: row.dueDate,
-                    notes: 'Geçmiş vade, plan düzenlenirken ödendi işaretlendi',
+                    notes: t('obligations.form.pastPaidEdit'),
                   }
                 : null;
             })
@@ -732,7 +737,7 @@ function ObligationForm({
             installment_id: installment.id,
             amount_minor: installment.amount_minor,
             paid_at: installment.due_date,
-            notes: 'Geçmiş vade, kayıt oluşturulurken ödendi işaretlendi',
+            notes: t('obligations.form.pastPaidCreate'),
           }));
         if (paidRows.length > 0) await recordPastInstallmentPayments(paidRows);
       }
@@ -752,7 +757,7 @@ function ObligationForm({
           source_obligation_id: obligation.id,
           currency_code: valueUnitCode,
           occurred_at: new Date().toISOString(),
-          description: `Nakit avans — ${title.trim()}`,
+          description: t('obligations.form.cashAdvanceDescription', { title: title.trim() }),
         });
       }
 
@@ -773,7 +778,7 @@ function ObligationForm({
           source_obligation_id: obligation.id,
           currency_code: valueUnitCode,
           occurred_at: new Date().toISOString(),
-          description: `Ödünç verildi — ${title.trim()}`,
+          description: t('obligations.form.lendingDescription', { title: title.trim() }),
         });
       }
 
@@ -787,7 +792,7 @@ function ObligationForm({
       // net bir onay verir hem de Alert'in kapanış animasyonuyla ekran geçişinin aynı
       // anda tetiklenip Fabric'i çökertmesini önler (aynı çakışma sınıfı için bkz.
       // aşağıdaki deleteMutation).
-      showSuccessAlert(isEditing ? 'Kayıt başarıyla güncellendi.' : 'Kayıt başarıyla oluşturuldu.', () => {
+      showSuccessAlert(isEditing ? t('obligations.form.updated') : t('obligations.form.created'), () => {
         router.back();
         InteractionManager.runAfterInteractions(() => {
           // Yalnızca [workspaceId, 'obligations'] tazelenirse cari detayındaki bakiye
@@ -812,7 +817,7 @@ function ObligationForm({
       // kaydın detayına dönmek yerine doğrudan listeye çıkılır. Navigasyon başarı
       // Alert'inin "Tamam" butonuna ertelenir — bu sırayla çalıştığı için (silme
       // onayı Alert'i çoktan kapanmış olur) Fabric çakışma riski oluşmaz.
-      showSuccessAlert('Kayıt başarıyla silindi.', () => {
+      showSuccessAlert(t('obligations.form.deleted'), () => {
         router.replace('/(tabs)/hareketler');
         InteractionManager.runAfterInteractions(() => {
           if (activeWorkspaceId) {
@@ -826,13 +831,13 @@ function ObligationForm({
 
   function confirmDelete() {
     Alert.alert(
-      'Kaydı Sil',
+      t('obligations.form.deleteTitle'),
       hasInstallments
-        ? 'Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?'
-        : 'Bu kayıt, varsa ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?',
+        ? t('obligations.form.deletePlanBody')
+        : t('obligations.form.deleteBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
+        { text: t('obligations.form.cancel'), style: 'cancel' },
+        { text: t('obligations.form.delete'), style: 'destructive', onPress: () => deleteMutation.mutate() },
       ]
     );
   }
@@ -847,7 +852,7 @@ function ObligationForm({
     (!isLendingType || !!accountId);
 
   const detailAccounts = isLendingType ? lendingSourceAccounts : isCashAdvanceType || isCardStatementType ? creditCardAccounts : generalAccounts;
-  const accountRowLabel = isLendingType ? 'Kaynak hesap' : isCashAdvanceType || isCardStatementType ? 'Kredi kartı' : 'Hesap';
+  const accountRowLabel = isLendingType ? t('obligations.form.sourceAccount') : isCashAdvanceType || isCardStatementType ? t('obligations.form.creditCard') : t('obligations.form.account');
 
   if (inPlanStep) {
     const planTotal = installmentPreview.reduce((sum, i) => sum + i.amountMinor, 0);
@@ -865,13 +870,13 @@ function ObligationForm({
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard }} keyboardShouldPersistTaps="handled">
             <Stack gap="lg">
-              <ScreenHeader inline title="Taksit planı" leftLabel={{ label: 'Geri', onPress: () => setStep(1) }} />
+              <ScreenHeader inline title={t('obligations.form.planTitle')} leftLabel={{ label: t('obligations.form.back'), onPress: () => setStep(1) }} />
 
               <Stack gap="xs">
                 <Row align="center" gap="sm">
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="caption" color="textSecondary">
-                      {installmentPreview.length} {periodLabels.unit.toLocaleLowerCase('tr-TR')} · Toplam
+                      {t('obligations.form.planSummary', { count: installmentPreview.length, unit: unitForCount(lowerUi(periodLabels.unit), installmentPreview.length) })}
                     </Text>
                     <Text variant="displayAmount" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                       {formatMinorAmount(planTotal, valueUnitCode)}
@@ -879,7 +884,7 @@ function ObligationForm({
                   </Stack>
                 </Row>
                 <Text variant="caption" color="textSecondary">
-                  Tarih, tutar ve ödeme durumunu değiştirmek için taksite dokunun.
+                  {t('obligations.form.tapInstallment')}
                 </Text>
               </Stack>
 
@@ -887,8 +892,8 @@ function ObligationForm({
                 <Stack gap="xs">
                   <FieldGroup>
                     <TextField
-                      label="Aylık faiz oranı % (isteğe bağlı)"
-                      placeholder="2,5"
+                      label={t('obligations.form.interestLabel')}
+                      placeholder={`2${getInputDecimalSeparator()}5`}
                       keyboardType="decimal-pad"
                       value={interestRateStr}
                       onChangeText={setInterestRateStr}
@@ -896,15 +901,15 @@ function ObligationForm({
                   </FieldGroup>
                   <Text variant="caption" color="textSecondary">
                     {isCashAdvanceType
-                      ? 'Taksitler azalan bakiye üzerinden hesaplanır; faiz değişince plan yeniden oluşur ve elle yaptığınız düzenlemeler sıfırlanır.'
-                      : 'Anapara üzerinden azalan bakiyeyle hesaplanır; faiz değişince plan yeniden oluşur ve elle yaptığınız düzenlemeler sıfırlanır.'}
+                      ? t('obligations.form.advanceInterestHelp')
+                      : t('obligations.form.interestHelp')}
                   </Text>
                 </Stack>
               ) : null}
 
               <InstallmentPlanTable
                 currencyCode={valueUnitCode}
-                unitLabel={periodLabels.unit.toLocaleLowerCase('tr-TR')}
+                unitLabel={lowerUi(periodLabels.unit)}
                 rows={installmentPreview.map((item) => ({
                   key: String(item.installmentNumber),
                   number: item.installmentNumber,
@@ -918,50 +923,49 @@ function ObligationForm({
 
               {paidPreviewCount > 0 ? (
                 <Text variant="caption" style={{ color: theme.colors.success }}>
-                  {paidPreviewCount} {periodLabels.unit.toLocaleLowerCase('tr-TR')} ödendi olarak kaydedilecek. Bu ödemeler
-                  geçmiş tarihli işlenir ve hesap bakiyelerinizi değiştirmez.
+                  {t('obligations.form.previewPaid', { count: paidPreviewCount, unit: unitForCount(lowerUi(periodLabels.unit), paidPreviewCount) })}
                 </Text>
               ) : null}
 
               {saveMutation.error ? (
                 <Text variant="caption" color="danger">
-                  {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
+                  {friendlyErrorMessage(saveMutation.error, t('obligations.form.saveFailed'))}
                 </Text>
               ) : null}
 
-              <Button label="Kaydet" onPress={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={!canSubmit} />
+              <Button label={t('obligations.form.save')} onPress={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={!canSubmit} />
             </Stack>
           </ScrollView>
         </KeyboardAvoidingView>
         <BottomSheet
           visible={!!editingPlanItem}
           onClose={() => setEditingPlanItemNumber(null)}
-          title={editingPlanItem ? `${editingPlanItem.installmentNumber}. ${periodLabels.unit.toLocaleLowerCase('tr-TR')}` : undefined}
+          title={editingPlanItem ? `${editingPlanItem.installmentNumber}. ${lowerUi(periodLabels.unit)}` : undefined}
         >
           {editingPlanItem ? (
             <Stack gap="md">
               <FieldGroup>
                 <DateField
-                  label="Vade"
+                  label={t('obligations.form.due')}
                   value={planEdits[editingPlanItem.installmentNumber]?.dueDate ?? editingPlanItem.dueDate}
                   onChangeText={(value) => editPlanItem(editingPlanItem.installmentNumber, { dueDate: value })}
                 />
                 <AmountField
-                  label="Tutar"
+                  label={t('obligations.form.amount')}
                   precision={valueUnit.precision}
                   value={editingPlanAmount}
                   onChangeText={(value) => editPlanItem(editingPlanItem.installmentNumber, { amountStr: value })}
                 />
               </FieldGroup>
               <Row align="center" style={{ justifyContent: 'space-between', paddingHorizontal: 4 }}>
-                <Text style={{ fontWeight: '500' }}>Ödendi</Text>
+                <Text style={{ fontWeight: '500' }}>{t('obligations.form.paid')}</Text>
                 <Switch
                   value={isPreviewPaid(editingPlanItem)}
                   onValueChange={(value) => togglePreviewPaid(editingPlanItem.installmentNumber, value)}
                   trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
                 />
               </Row>
-              <Button label="Tamam" onPress={() => setEditingPlanItemNumber(null)} />
+              <Button label={t('obligations.form.done')} onPress={() => setEditingPlanItemNumber(null)} />
             </Stack>
           ) : null}
         </BottomSheet>
@@ -976,23 +980,23 @@ function ObligationForm({
           <Stack gap="lg">
             <ScreenHeader
               inline
-              title={isEditing ? 'Düzenle' : 'Yeni kayıt'}
-              leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+              title={isEditing ? t('obligations.form.edit') : t('obligations.form.newRecord')}
+              leftLabel={{ label: t('obligations.form.cancel'), onPress: () => router.back() }}
             />
 
             {!isEditing ? (
-              <ScanPromptBanner description="Çek, senet, fatura veya kredi belgesini tara; tür, tutar ve vade otomatik dolsun." />
+              <ScanPromptBanner description={t('obligations.form.scanHelp')} />
             ) : null}
 
             {directionLocked ? (
               // Ödemesi/bağlı hareketi olan kaydın yönü değiştirilemez: eski ödemeler eski yönde
               // kalır ve cari bakiye ters döner (veritabanı da reddeder — guard_obligation_edit).
               <FieldGroup>
-                <FormRow label="Yön" value={DIRECTIONS.find((d) => d.value === direction)?.label ?? ''} />
+                <FormRow label={t('obligations.form.direction')} value={getDirections().find((d) => d.value === direction)?.label ?? ''} />
               </FieldGroup>
             ) : (
               <SegmentedControl
-                options={DIRECTIONS.map((d) => ({ key: d.value, label: d.label }))}
+                options={getDirections().map((d) => ({ key: d.value, label: d.label }))}
                 value={direction}
                 onChange={(value) => {
                   setDirection(value);
@@ -1012,16 +1016,16 @@ function ObligationForm({
                 // biriminden türetilir — o hesapta ne varsa onunla ödünç verilir, ayrıca
                 // seçilmez. İkisinde de burada yalnızca bilgi amaçlı gösterilir.
                 <FormRow
-                  label="Değer birimi"
+                  label={t('obligations.form.valueUnit')}
                   value={
                     isLendingType && !accountId
-                      ? 'Aşağıdan kaynak hesap seçin'
+                      ? t('obligations.form.selectSourceBelow')
                       : (VALUE_UNIT_LABEL[valueUnitCode] ?? valueUnitCode)
                   }
                 />
               ) : (
                 <ValueUnitPicker
-                  label="Değer birimi"
+                  label={t('obligations.form.valueUnit')}
                   selectedId={valueUnitCode}
                   onSelect={(code) => {
                     setValueUnitCode(code);
@@ -1031,15 +1035,15 @@ function ObligationForm({
               )}
               {valueUnitCode !== 'TRY' && !isEditing && !isLendingType ? (
                 <TextField
-                  label={`Kur (1 ${valueUnit.quantityLabel} = ₺)`}
-                  placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : amountPlaceholder()}
+                  label={t('obligations.form.exchangeRate', { unit: valueUnit.quantityLabel })}
+                  placeholder={currentRateMinor === null ? t('obligations.form.noRate') : amountPlaceholder()}
                   keyboardType="decimal-pad"
                   value={fxRateText}
                   onChangeText={setFxRateInput}
                 />
               ) : null}
               <DocumentTypePicker
-                label="Belge türü"
+                label={t('obligations.form.documentType')}
                 selectedId={documentType}
                 onSelect={(value) => {
                   setDocumentType(value);
@@ -1064,18 +1068,18 @@ function ObligationForm({
                   }
                 }}
               />
-              <TextField label="Başlık" placeholder="Örn. Ocak ayı kira çeki" value={title} onChangeText={setTitle} />
+              <TextField label={t('obligations.form.title')} placeholder={t('obligations.form.titlePlaceholder')} value={title} onChangeText={setTitle} />
               {isPlanEditing ? (
                 <FormRow
-                  label="Tutar"
-                  value={`${formatValueUnitAmount(planTotalMinor, valueUnitCode)} — taksit planının toplamı`}
+                  label={t('obligations.form.amount')}
+                  value={t('obligations.form.planTotal', { amount: formatValueUnitAmount(planTotalMinor, valueUnitCode) })}
                 />
               ) : (
                 <AmountField
                   label={
                     isPerInstallmentMode
-                      ? `${periodLabels.unitTitle} başına tutar (${valueUnit.quantityLabel})`
-                      : `Tutar (${valueUnit.quantityLabel})`
+                      ? t('obligations.form.amountPerUnit', { period: periodLabels.unitTitle, unit: valueUnit.quantityLabel })
+                      : t('obligations.form.amountInUnit', { unit: valueUnit.quantityLabel })
                   }
                   placeholder={valueUnit.precision === 0 ? '1' : amountPlaceholder()}
                   precision={valueUnit.precision}
@@ -1085,7 +1089,7 @@ function ObligationForm({
               )}
               {isPlanEditing ? null : (
                 <DateField
-                  label={!isEditing && installmentCount > 1 ? 'İlk vade' : 'Vade'}
+                  label={!isEditing && installmentCount > 1 ? t('obligations.form.firstDue') : t('obligations.form.due')}
                   value={dueDate}
                   onChangeText={setDueDate}
                 />
@@ -1096,8 +1100,8 @@ function ObligationForm({
               <Stack gap="xs">
                 <SegmentedControl
                   options={[
-                    { key: 'total', label: 'Toplam tutar' },
-                    { key: 'per_installment', label: `Her ${periodLabels.unit} tutarı` },
+                    { key: 'total', label: t('obligations.form.totalAmount') },
+                    { key: 'per_installment', label: t('obligations.form.eachPeriod', { unit: periodLabels.unit }) },
                   ]}
                   value={amountMode}
                   onChange={(value) => {
@@ -1108,8 +1112,8 @@ function ObligationForm({
                 />
                 <Text variant="caption" color="textSecondary">
                   {isPerInstallmentMode
-                    ? `Girilen tutar her ${periodLabels.unit} için ayrı ayrı işlenir; toplam ${formatValueUnitAmount(totalAmountMinor, valueUnitCode)} olur.`
-                    : `Girilen tutar toplam borçtur; ${installmentCount} ${periodLabels.unitDative} bölünür.`}
+                    ? t('obligations.form.eachPeriodHelp', { unit: periodLabels.unit, amount: formatValueUnitAmount(totalAmountMinor, valueUnitCode) })
+                    : t('obligations.form.splitHelp', { count: installmentCount, unit: unitForCount(getLanguage() === 'en' ? periodLabels.unit : periodLabels.unitDative, installmentCount) })}
                 </Text>
               </Stack>
             ) : null}
@@ -1140,7 +1144,7 @@ function ObligationForm({
             <FieldGroup>
               {isLoanType || isSubscriptionType || isCashAdvanceType || isCardStatementType ? null : activeWorkspaceId ? (
                 <CounterpartyPicker
-                  label={isSalaryType ? 'Personel' : 'Kişi / firma'}
+                  label={isSalaryType ? t('obligations.form.staff') : t('obligations.form.party')}
                   workspaceId={activeWorkspaceId}
                   counterparties={counterpartiesQuery.data ?? []}
                   selectedId={counterpartyId}
@@ -1148,7 +1152,7 @@ function ObligationForm({
                   // Maaş kaydında listede olmayan bir isim yazılıp oluşturulursa doğrudan
                   // personel olarak kaydedilir; müşteri/tedarikçi listesine karışmaz.
                   defaultType={isSalaryType ? 'personel' : 'individual'}
-                  placeholder={isSalaryType ? 'Personel seçin' : 'Kişi / firma seçin'}
+                  placeholder={isSalaryType ? t('obligations.form.selectStaff') : t('obligations.form.selectParty')}
                   onCreated={() => {
                     queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });
                   }}
@@ -1156,23 +1160,23 @@ function ObligationForm({
               ) : null}
               {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
                 <BankPicker
-                  label="Banka"
-                  placeholder={isLoanType ? 'Banka seçin' : 'Banka seçin (isteğe bağlı)'}
+                  label={t('obligations.form.bank')}
+                  placeholder={isLoanType ? t('obligations.form.selectBank') : t('obligations.form.optionalBank')}
                   selectedId={bankCode}
                   onSelect={setBankCode}
                 />
               ) : null}
               {isSubscriptionType ? (
-                <ServicePicker label="Servis" placeholder="Servis seçin (isteğe bağlı)" selectedId={serviceCode} onSelect={setServiceCode} />
+                <ServicePicker label={t('obligations.form.service')} placeholder={t('obligations.form.optionalService')} selectedId={serviceCode} onSelect={setServiceCode} />
               ) : null}
               {categoriesQuery.isPending ? (
-                <FormRow label="Kategori" value="Kategoriler yükleniyor…" />
+                <FormRow label={t('obligations.form.category')} value={t('obligations.form.loadingCategories')} />
               ) : (categoriesQuery.data ?? []).length === 0 ? (
-                <FormRow label="Kategori" value="Bu türde kategori yok. Kategoriler'den ekleyebilirsiniz." />
+                <FormRow label={t('obligations.form.category')} value={t('obligations.form.noCategories')} />
               ) : (
                 <CategoryPicker
-                  label="Kategori"
-                  placeholder="Kategori seçin (isteğe bağlı)"
+                  label={t('obligations.form.category')}
+                  placeholder={t('obligations.form.optionalCategory')}
                   categories={categoriesQuery.data ?? []}
                   selectedId={categoryId}
                   onSelect={setCategoryId}
@@ -1183,16 +1187,16 @@ function ObligationForm({
                   label={accountRowLabel}
                   value={
                     isLendingType
-                      ? "Önce Hesaplar'dan bir kasa/banka hesabı ekleyin."
+                      ? t('obligations.form.addSourceFirst')
                       : isCashAdvanceType || isCardStatementType
-                        ? "Önce Hesaplar'dan bir kredi kartı ekleyin."
-                        : "Önce Hesaplar'dan bir hesap ekleyin."
+                        ? t('obligations.form.addCardFirst')
+                        : t('obligations.form.addAccountFirst')
                   }
                 />
               ) : (
                 <AccountPicker
                   label={accountRowLabel}
-                  placeholder={isLendingType ? 'Kaynak hesap seçin' : isCashAdvanceType || isCardStatementType ? 'Kredi kartı seçin' : 'Hesap seçin (isteğe bağlı)'}
+                  placeholder={isLendingType ? t('obligations.form.selectSource') : isCashAdvanceType || isCardStatementType ? t('obligations.form.selectCard') : t('obligations.form.optionalAccount')}
                   accounts={detailAccounts}
                   selectedId={accountId}
                   onSelect={(value) => {
@@ -1208,7 +1212,7 @@ function ObligationForm({
 
             {isLendingType ? (
               <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.md }}>
-                Ödünç verilen tutar kaynak hesaptan düşülür.
+                {t('obligations.form.lendingHelp')}
               </Text>
             ) : null}
 
@@ -1234,11 +1238,10 @@ function ObligationForm({
                   <Row gap="sm" align="center">
                     <Stack gap="xxs" style={{ flex: 1 }}>
                       <Text variant="cardTitle">
-                        Bu {documentType === 'cek' ? 'çek' : 'senet'} bir faturanın karşılığı mı?
+                        {t('obligations.form.invoiceQuestion', { type: documentType === 'cek' ? t('obligations.form.check') : t('obligations.form.promissoryNote') })}
                       </Text>
                       <Text variant="caption" color="textSecondary">
-                        {direction === 'receivable' ? 'Tahsilat Al' : 'Ödeme Yap'} ile kaydedin; fatura bu tutar
-                        kadar kapanır, borç iki kez görünmez.
+                        {t('obligations.form.invoiceHelp', { action: direction === 'receivable' ? t('obligations.form.collect') : t('obligations.form.pay') })}
                       </Text>
                     </Stack>
                     <Ionicons name="chevron-forward" size={18} color={theme.colors.textPrimary} />
@@ -1250,42 +1253,41 @@ function ObligationForm({
             {isSubscriptionType ? (
               <Stack gap="sm">
                 <Text variant="label" color="textSecondary">
-                  YENİLEME
+                  {t('obligations.form.renewal')}
                 </Text>
                 <SegmentedControl
                   stretch
                   options={[
-                    { key: 'monthly', label: 'Aylık' },
-                    { key: 'yearly', label: 'Yıllık' },
+                    { key: 'monthly', label: t('obligations.form.monthly') },
+                    { key: 'yearly', label: t('obligations.form.yearly') },
                   ]}
                   value={billingPeriod}
                   onChange={setBillingPeriod}
                 />
-                <DateField label="DENEME BİTİŞ TARİHİ (İSTEĞE BAĞLI)" value={trialEndsOn} onChangeText={setTrialEndsOn} />
+                <DateField label={t('obligations.form.trialEnd')} value={trialEndsOn} onChangeText={setTrialEndsOn} />
               </Stack>
             ) : null}
 
             {isCashAdvanceType && !isEditing ? (
               <Stack gap="sm">
                 <Text variant="label" color="textSecondary">
-                  NAKİT NEREYE YATIRILDI? (İSTEĞE BAĞLI)
+                  {t('obligations.form.depositTitle')}
                 </Text>
                 {depositTargetAccounts.length === 0 ? (
                   <Text variant="body" color="textSecondary">
-                    Nakdi bir kasa/banka hesabına yatırdıysanız önce o hesabı ekleyin.
+                    {t('obligations.form.addDepositFirst')}
                   </Text>
                 ) : (
                   <AccountPicker
                     accounts={depositTargetAccounts}
                     selectedId={depositAccountId}
                     onSelect={setDepositAccountId}
-                    title="Hesap Seç"
-                    placeholder="Hesap seçin"
+                    title={t('obligations.form.accountTitle')}
+                    placeholder={t('obligations.form.selectAccount')}
                   />
                 )}
                 <Text variant="caption" color="textSecondary">
-                  Seçilirse çekilen tutar (TUTAR alanı, faizden etkilenmez) o hesaba gelir olarak
-                  otomatik işlenir.
+                  {t('obligations.form.depositHelp')}
                 </Text>
               </Stack>
             ) : null}
@@ -1305,12 +1307,12 @@ function ObligationForm({
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
+                {friendlyErrorMessage(saveMutation.error, t('obligations.form.saveFailed'))}
               </Text>
             ) : null}
 
             <Button
-              label={needsPlanStep ? 'Devam' : isEditing ? 'Güncelle' : 'Kaydet'}
+              label={needsPlanStep ? t('obligations.form.continue') : isEditing ? t('obligations.form.update') : t('obligations.form.save')}
               onPress={() => (needsPlanStep ? setStep(2) : saveMutation.mutate())}
               loading={!needsPlanStep && saveMutation.isPending}
               disabled={!canSubmit}
@@ -1318,7 +1320,7 @@ function ObligationForm({
 
             {isEditing ? (
               <Button
-                label="Sil"
+                label={t('obligations.form.delete')}
                 variant="danger"
                 onPress={confirmDelete}
                 loading={deleteMutation.isPending}
@@ -1368,6 +1370,7 @@ function InstallmentPlanEditor({
   onTogglePaid,
   onExtend,
 }: InstallmentPlanEditorProps) {
+  useLanguage();
   const theme = useTheme();
   const firstRow = rows[0] ?? null;
   const lastIndex = rows.length - 1;
@@ -1380,17 +1383,16 @@ function InstallmentPlanEditor({
   return (
     <Stack gap="sm">
       <Text variant="label" color="textSecondary">
-        TAKSİT PLANI
+        {t('obligations.form.planHeading')}
       </Text>
 
       <Stack gap="sm">
         <Text variant="label" color="textSecondary">
-          BAŞLANGIÇ TARİHİ
+          {t('obligations.form.startDate')}
         </Text>
         {!firstRow || firstRow.locked ? (
           <Text variant="body" color="textSecondary">
-            {firstRow ? shortDateFormatter.format(new Date(firstRow.dueDate)) : '—'} — ilk {unitLabel.toLocaleLowerCase('tr-TR')}
-            {' '}ödendiği için başlangıç tarihi değiştirilemez.
+            {t('obligations.form.lockedStart', { date: firstRow ? shortDateFormatter.format(new Date(firstRow.dueDate)) : '—', unit: lowerUi(unitLabel) })}
           </Text>
         ) : (
           <DateField value={firstRow.dueDate} onChangeText={onStartDateChange} />
@@ -1455,7 +1457,7 @@ function InstallmentPlanEditor({
                           {row.installmentNumber}. {unitLabel} — {shortDateFormatter.format(new Date(row.dueDate))}
                         </Text>
                         <Text variant="caption" style={{ color: theme.colors.success, fontWeight: '600' }}>
-                          Ödendi
+                          {t('obligations.form.paid')}
                         </Text>
                       </Stack>
                       <Text variant="body" tabular>
@@ -1471,7 +1473,7 @@ function InstallmentPlanEditor({
                         {isLast && canRemoveLast ? (
                           <Pressable
                             accessibilityRole="button"
-                            accessibilityLabel="Taksiti kaldır"
+                            accessibilityLabel={t('obligations.form.removeInstallment')}
                             onPress={onRemoveLast}
                             hitSlop={8}
                           >
@@ -1494,7 +1496,7 @@ function InstallmentPlanEditor({
                             color: row.markPaid ? theme.colors.success : theme.colors.textSecondary,
                           }}
                         >
-                          {row.markPaid ? 'Ödendi olarak kaydedilecek' : 'Ödenmedi'}
+                          {row.markPaid ? t('obligations.form.willBePaid') : t('obligations.form.unpaid')}
                         </Text>
                         <Switch
                           value={row.markPaid}
@@ -1512,21 +1514,20 @@ function InstallmentPlanEditor({
 
       {markedPaidCount > 0 ? (
         <Text variant="caption" style={{ color: theme.colors.success }}>
-          {markedPaidCount} {unitLabel.toLocaleLowerCase('tr-TR')} ödendi olarak kaydedilecek. Bu ödemeler
-          vade tarihiyle işlenir ve hesap bakiyelerinizi değiştirmez.
+          {t('obligations.form.markedPaid', { count: markedPaidCount, unit: unitForCount(lowerUi(unitLabel), markedPaidCount) })}
         </Text>
       ) : null}
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${unitLabel} ekle`}
+        accessibilityLabel={t('obligations.form.addUnitA11y', { unit: unitLabel })}
         onPress={onAdd}
         style={{ alignSelf: 'flex-start', paddingVertical: theme.spacing.xs }}
       >
         <Row gap="xs" align="center">
           <Ionicons name="add-circle-outline" size={18} color={theme.colors.textPrimary} />
           <Text variant="body" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
-            {unitLabel} Ekle
+            {t('obligations.form.addUnit', { unit: unitLabel })}
           </Text>
         </Row>
       </Pressable>
@@ -1536,12 +1537,12 @@ function InstallmentPlanEditor({
       <Card>
         <Stack gap="sm">
           <Text variant="label" color="textSecondary">
-            PLANI UZAT
+            {t('obligations.form.extendHeading')}
           </Text>
           <Row gap="sm" align="center">
             <View style={{ flex: 1 }}>
               <TextField
-                label={`KAÇ ${unitLabel.toLocaleUpperCase('tr-TR')}`}
+                label={t('obligations.form.extendCount', { unit: upperUi(unitForCount(unitLabel, 2)) })}
                 placeholder="12"
                 keyboardType="number-pad"
                 value={extendCountStr}
@@ -1550,7 +1551,7 @@ function InstallmentPlanEditor({
             </View>
             <View style={{ flex: 1 }}>
               <AmountField
-                label="YENİ TUTAR"
+                label={t('obligations.form.newAmount')}
                 placeholder={rows[lastIndex]?.amountStr || (precision === 0 ? '1' : amountPlaceholder())}
                 precision={precision}
                 value={extendAmountStr}
@@ -1559,15 +1560,10 @@ function InstallmentPlanEditor({
             </View>
           </Row>
           <Text variant="caption" color="textSecondary">
-            Tutar boş bırakılırsa son {unitLabel.toLocaleLowerCase('tr-TR')} tutarı ({
-              formatValueUnitAmount(
-                parseValueUnitAmountToMinor(rows[lastIndex]?.amountStr ?? '', currencyCode) ?? 0,
-                currencyCode
-              )
-            }) devam eder.
+            {t('obligations.form.extendHelp', { unit: lowerUi(unitLabel), amount: formatValueUnitAmount(parseValueUnitAmountToMinor(rows[lastIndex]?.amountStr ?? '', currencyCode) ?? 0, currencyCode) })}
           </Text>
           <Button
-            label="Planı Uzat"
+            label={t('obligations.form.extend')}
             variant="secondary"
             icon="calendar-outline"
             disabled={extendCount <= 0}

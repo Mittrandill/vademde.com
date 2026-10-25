@@ -18,6 +18,7 @@ import { getAccountBalances, type AccountBalanceReportItem } from '@/features/re
 import { ACTIVE_OBLIGATION_STATUSES, type ObligationDueItem } from '@/features/obligations/api';
 import { computeStatementPeriod, periodKeyFor, periodKeyForDueDate } from '@/utils/creditCardPeriod';
 import { localDay } from '@/utils/cardDebt';
+import { t, useLanguage } from '@/i18n';
 
 export interface CardStatementRef {
   account_id: string | null;
@@ -88,7 +89,7 @@ export function buildCardDueItems(
       workspace_id: account.workspace_id,
       direction: 'payable',
       document_type: 'kredi_karti_ekstresi',
-      title: `${account.name} son ödeme`,
+      title: t('runtime.cardDueTitle', { account: account.name }),
       // Ödeme günü girilmemiş kartta tarih yoktur: takvimde görünmez ama toplam borca girer.
       due_date: next?.dueDate ?? null,
       total_amount_minor: amountMinor,
@@ -133,6 +134,7 @@ async function listCardStatementRefs(workspaceId: string): Promise<CardStatement
 // Sorgu anahtarları Ana Sayfa/hesaplar ekranlarıyla aynıdır (önbellek paylaşılır); ekstre
 // listesi [ws, 'obligations', ...] altında olduğu için ödeme/kayıt değişikliklerinde tazelenir.
 export function useCardDueItems(workspaceId: string | null): { items: ObligationDueItem[]; isSuccess: boolean } {
+  const language = useLanguage();
   const accountsQuery = useQuery({
     queryKey: workspaceId ? queryKeys.accounts(workspaceId) : ['accounts', 'disabled'],
     queryFn: () => listAccounts(workspaceId as string),
@@ -155,7 +157,7 @@ export function useCardDueItems(workspaceId: string | null): { items: Obligation
       hasCards && balancesQuery.data && statementsQuery.data
         ? buildCardDueItems(accountsQuery.data ?? [], balancesQuery.data, statementsQuery.data)
         : [],
-    [hasCards, accountsQuery.data, balancesQuery.data, statementsQuery.data]
+    [hasCards, accountsQuery.data, balancesQuery.data, statementsQuery.data, language]
   );
 
   return {

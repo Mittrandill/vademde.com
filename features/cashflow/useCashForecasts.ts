@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { t } from '@/i18n';
 import { useQuery } from '@tanstack/react-query';
 
 import { listAccounts } from '@/features/accounts/api';
@@ -117,7 +118,7 @@ export function useCashForecasts(workspaceId: string | null) {
       ...perAccount,
       {
         accountId: TOTAL_FORECAST_ID,
-        name: 'Tüm TL hesaplar',
+        name: t('runtime.totalTryAccounts'),
         bankCode: null,
         currentBalanceMinor: totalBalanceMinor,
         forecast: projectBalance(totalBalanceMinor, forecastable.map(toItem), FORECAST_DAYS),

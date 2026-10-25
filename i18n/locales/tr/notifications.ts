@@ -1,5 +1,6 @@
 // Bildirimler ekranı ve yerel/push hatırlatma metinleri.
 export const notifications = {
+  reminderChannel: 'Borç/alacak hatırlatmaları',
   title: 'Bildirimler',
   actions: 'İşlemler',
   today: 'BUGÜN',

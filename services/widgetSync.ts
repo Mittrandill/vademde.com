@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { getLanguage, type AppLanguage } from '@/i18n';
 
 // iOS ana ekran / kilit ekranı widget'ları (targets/widget) uygulamayla App Group
 // UserDefaults üzerinden konuşur; widget ağa/Supabase'e hiç bağlanmaz. Uygulama yalnızca
@@ -7,6 +8,7 @@ import { Platform } from 'react-native';
 export const WIDGET_APP_GROUP = 'group.com.akintkaya.vademde.widget';
 const SNAPSHOT_KEY = 'snapshot';
 const HIDE_KEY = 'hideAmounts';
+const LANGUAGE_KEY = 'language';
 
 export interface WidgetDueItem {
   title: string;
@@ -21,6 +23,7 @@ export interface WidgetDueItem {
 
 export interface WidgetSnapshot {
   v: 1;
+  language: AppLanguage;
   workspaceId: string;
   workspaceName: string;
   updatedAt: number;
@@ -38,6 +41,7 @@ export interface WidgetSnapshot {
 
 type Storage = {
   set: (key: string, value?: string) => void;
+  get: (key: string) => string | null;
 };
 
 let cachedStorage: Storage | null | undefined;
@@ -69,7 +73,36 @@ function write(key: string, value: string | undefined) {
 }
 
 export function writeWidgetSnapshot(snapshot: WidgetSnapshot) {
-  write(SNAPSHOT_KEY, JSON.stringify(snapshot));
+  if (snapshot.language !== getLanguage()) return;
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.set(LANGUAGE_KEY, snapshot.language);
+    storage.set(SNAPSHOT_KEY, JSON.stringify(snapshot));
+    cachedReload?.();
+  } catch {
+    // Widget writes must never interrupt the app.
+  }
+}
+
+export function writeWidgetLanguage(language: AppLanguage) {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    const raw = storage.get(SNAPSHOT_KEY);
+    const snapshotLanguage = raw ? (JSON.parse(raw).language ?? 'tr') : null;
+    // Amounts and document labels in snapshots are already formatted. Do not mix languages.
+    if (snapshotLanguage && snapshotLanguage !== language) storage.set(SNAPSHOT_KEY, undefined);
+    storage.set(LANGUAGE_KEY, language);
+    cachedReload?.();
+  } catch {
+    // A malformed legacy snapshot must not prevent the language preference from changing.
+    try {
+      storage.set(SNAPSHOT_KEY, undefined);
+      storage.set(LANGUAGE_KEY, language);
+      cachedReload?.();
+    } catch {}
+  }
 }
 
 export function clearWidgetSnapshot() {

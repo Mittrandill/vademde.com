@@ -4,6 +4,7 @@
 // "kaynak" bilgisi (kayıt sayısı + tarih aralığı) koddan hesaplanır, modelden alınmaz.
 // Gemini anahtarı sunucuda kalır (process-document ile aynı secret). Plus plan kapısı vardır.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { userLocale, localeTag, formatTry } from '../_shared/locale.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -27,8 +28,6 @@ const MAX_QUESTION_LENGTH = 400;
 const WINDOW_DAYS = 120;
 const MAX_ROWS = 3000;
 
-const tl = (minor: number) =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(minor / 100);
 
 type Period = 'this_month' | 'last_month' | 'last_90_days';
 
@@ -39,7 +38,6 @@ function periodRange(period: Period, now: Date): { from: Date; to: Date } {
   return { from: new Date(now.getTime() - 90 * 86_400_000), to: now };
 }
 
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -52,6 +50,9 @@ Deno.serve(async (req: Request) => {
   const { data: userData } = await db.auth.getUser();
   const user = userData?.user;
   if (!user) return json({ error: 'unauthorized' }, 401);
+  const locale = await userLocale(db, user.id);
+  const tl = (minor: number) => formatTry(minor, locale);
+  const dayMonth = new Intl.DateTimeFormat(localeTag(locale), { day: 'numeric', month: 'long' });
 
   let workspaceId: string | undefined;
   let question: string | undefined;
@@ -103,14 +104,14 @@ Deno.serve(async (req: Request) => {
     byMonth[m][t.direction === 'income' ? 'income' : 'expense'] += reportMinor;
     byMonth[m].count += 1;
     if (t.direction === 'expense') {
-      const category = t.category?.name ?? 'Kategorisiz';
+      const category = t.category?.name ?? (locale === 'en' ? 'Uncategorized' : 'Kategorisiz');
       byMonthCategory[m] ??= {};
       byMonthCategory[m][category] = (byMonthCategory[m][category] ?? 0) + reportMinor;
     }
   }
   const context = {
     today: now.toISOString().slice(0, 10),
-    currency: 'TRY (yalnızca TL kayıtlar; döviz kayıtları dahil değil)',
+    currency: locale === 'en' ? 'TRY (TRY records only; foreign currency records excluded)' : 'TRY (yalnızca TL kayıtlar; döviz kayıtları dahil değil)',
     months: Object.fromEntries(
       Object.entries(byMonth).map(([m, v]) => [
         m,
@@ -129,7 +130,7 @@ Deno.serve(async (req: Request) => {
     ),
   };
 
-  const prompt = `Sen Vademde finans uygulamasının asistanısın. Kullanıcının sorusunu YALNIZCA aşağıdaki veriye dayanarak, kısa ve sade Türkçe ile yanıtla.
+  const prompt = `Sen Vademde finans uygulamasının asistanısın. Kullanıcının sorusunu YALNIZCA aşağıdaki veriye dayanarak, kısa ve sade ${locale === 'en' ? 'İngilizce' : 'Türkçe'} ile yanıtla. Kullanıcının soru dilinden bağımsız olarak bu yanıt dilini kullan.
 KURALLAR:
 - Rakamları veriden olduğu gibi kullan; hesaplama gerekiyorsa yalnızca verideki rakamlarla yap; veride olmayan bir şeyi uydurma. Veri yetmiyorsa bunu söyle.
 - Yatırım, kredi, vergi veya hukuki tavsiye verme.

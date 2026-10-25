@@ -10,13 +10,14 @@ import { getCounterparty } from '@/features/counterparties/api';
 import { listReceiptArchive, normalizeName, useDocumentArchiveAccess } from '@/features/receipts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { localeDateFormatter } from '@/i18n/format';
-import { t } from '@/i18n';
+import { t, useLanguage } from '@/i18n';
 
 const monthFormatter = localeDateFormatter({ month: 'long', year: 'numeric' });
 
 // Belge arşivi (Plus): ödemelere eklenen dekontların tek yerde listesi. counterpartyId
 // verilirse yalnızca o cariyle ilgili dekontlar gösterilir (cari sayfasındaki "Tümünü gör").
 export default function ReceiptArchiveScreen() {
+  const language = useLanguage();
   const theme = useTheme();
   const { counterpartyId } = useLocalSearchParams<{ counterpartyId?: string }>();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -30,7 +31,7 @@ export default function ReceiptArchiveScreen() {
   });
 
   const archiveQuery = useQuery({
-    queryKey: [activeWorkspaceId, 'receipt-archive', counterpartyId ?? 'all'],
+    queryKey: [activeWorkspaceId, 'receipt-archive', counterpartyId ?? 'all', language],
     queryFn: () => listReceiptArchive({ workspaceId: activeWorkspaceId as string, counterpartyId }),
     enabled: !!activeWorkspaceId && archive.allowed,
   });

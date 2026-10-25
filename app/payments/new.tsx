@@ -61,21 +61,24 @@ import { listValueUnitRates } from '@/features/valueUnits/api';
 import { friendlyErrorMessage, isNetworkError, showErrorAlert, showSaveSuccess } from '@/utils/alerts';
 import { invalidatePaymentRelatedQueries, queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
-import { amountPlaceholder, getInputDecimalSeparator, localeDateFormatter } from '@/i18n/format';
+import { t, useLanguage } from '@/i18n';
+import { amountPlaceholder, getInputDecimalSeparator, localeDateFormatter, lowerUi, upperUi } from '@/i18n/format';
 
 type SettlementDirection = 'payable' | 'receivable';
 
-const METHODS: { key: SettlementMethod; label: string }[] = [
-  { key: 'havale', label: 'Havale/EFT' },
-  { key: 'nakit', label: 'Nakit' },
-  { key: 'kredi_karti', label: 'Kredi Kartı' },
-  { key: 'online_odeme', label: 'Online' },
-  { key: 'cek', label: 'Çek' },
-  { key: 'senet', label: 'Senet' },
-  // Yalnızca uygun kayıt varken gösterilir (bkz. availableMethods).
-  { key: 'ciro', label: 'Çek Ciro' },
-  { key: 'mahsup', label: 'Mahsup' },
-];
+function getMethods(): { key: SettlementMethod; label: string }[] {
+  return [
+    { key: 'havale', label: t('payments.transfer') },
+    { key: 'nakit', label: t('payments.cash') },
+    { key: 'kredi_karti', label: t('payments.creditCard') },
+    { key: 'online_odeme', label: t('payments.online') },
+    { key: 'cek', label: t('payments.check') },
+    { key: 'senet', label: t('payments.note') },
+    // Yalnızca uygun kayıt varken gösterilir (bkz. availableMethods).
+    { key: 'ciro', label: t('payments.endorse') },
+    { key: 'mahsup', label: t('payments.offset') },
+  ];
+}
 
 const handledKey = (requestId: string | undefined, state: string) => `${requestId ?? ''}:${state}`;
 
@@ -133,7 +136,7 @@ export default function SettlementScreen() {
       (params.direction === 'receivable' ? 'receivable' : 'payable'));
   const method = endorseId
     ? 'ciro'
-    : METHODS.some((m) => m.key === params.method)
+    : getMethods().some((m) => m.key === params.method)
       ? (params.method as SettlementMethod)
       : undefined;
   const amountMinor = params.amountMinor ? Number(params.amountMinor) : undefined;
@@ -180,6 +183,7 @@ function SettlementForm({
   initialDescription,
   initialSourceIds,
 }: SettlementFormProps) {
+  useLanguage();
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id;
@@ -277,7 +281,7 @@ function SettlementForm({
       o.currency_code === currencyCode &&
       o.remaining_amount_minor > 0 && o.remaining_amount_minor === o.total_amount_minor
   );
-  const availableMethods = METHODS.filter((m) =>
+  const availableMethods = getMethods().filter((m) =>
     m.key === 'mahsup' ? offsetSources.length > 0 : m.key === 'ciro' ? isPayable && portfolio.length > 0 : true
   );
 
@@ -354,7 +358,7 @@ function SettlementForm({
     }
   }
 
-  const instrumentLabel = method === 'cek' ? 'Çek' : 'Senet';
+  const instrumentLabel = method === 'cek' ? t('payments.check') : t('payments.note');
   const counterpartyName = counterpartiesQuery.data?.find((c) => c.id === counterpartyId)?.name ?? null;
   // Hesap satırında güncel bakiye (tuval OdemeKaydet: "Bakiye ₺31.400,00").
   const balancesQuery = useQuery({
@@ -391,17 +395,17 @@ function SettlementForm({
   const justFailed = useRef(false);
 
   function recoveredLabel(input: SettleObligationsInput) {
-    return input.method === 'ciro' ? 'çek/senet cirosu' : input.method === 'mahsup' ? 'mahsup'
-      : input.direction === 'payable' ? 'ödeme' : 'tahsilat';
+    return input.method === 'ciro' ? t('payments.endorsementLower') : input.method === 'mahsup' ? lowerUi(t('payments.offset'))
+      : input.direction === 'payable' ? t('payments.paymentLower') : t('payments.collectionLower');
   }
   function announceRecovered(input: SettleObligationsInput) {
-    Alert.alert('İşlem tamamlandı', `Bağlantı kesildiği için yarım kalan ${recoveredLabel(input)} (${[input.counterpartyName, formatMinorAmount(input.amountMinor, input.currencyCode)].filter(Boolean).join(' · ')}) kaydedildi.`);
+    Alert.alert(t('payments.completed'), t('payments.recoveredBody', { type: recoveredLabel(input), details: [input.counterpartyName, formatMinorAmount(input.amountMinor, input.currencyCode)].filter(Boolean).join(' · ') }));
   }
 
   const resumeCash = useMutation({
     mutationFn: async () => {
       const saved = cashRecovery.data;
-      if (!userId || !activeWorkspaceId || !saved) throw new Error('Tamamlanacak işlem bulunamadı');
+      if (!userId || !activeWorkspaceId || !saved) throw new Error(t('payments.noPending'));
       await submitDurableCashSettlement(userId, saved.input);
       autoHandled.current.add(handledKey(saved.input.requestId, 'confirmed'));
       await acknowledgeCashSettlement(userId, activeWorkspaceId).catch(() => undefined);
@@ -435,7 +439,7 @@ function SettlementForm({
   const resumeOffset = useMutation({
     mutationFn: async () => {
       const saved = offsetRecovery.data;
-      if (!userId || !activeWorkspaceId || !saved) throw new Error('Tamamlanacak işlem bulunamadı');
+      if (!userId || !activeWorkspaceId || !saved) throw new Error(t('payments.noPending'));
       await submitDurableOffset(userId, saved.input);
       autoHandled.current.add(handledKey(saved.input.requestId, 'confirmed'));
       await acknowledgeOffset(userId, activeWorkspaceId).catch(() => undefined);
@@ -521,14 +525,14 @@ function SettlementForm({
   const saveMutation = useMutation({
     mutationFn: async () => {
       setRecoveryError(null);
-      if (!offsetRecovery.isSuccess || offsetRecovery.isFetching || offsetRecovery.data) throw new Error('Önce saklanan mahsup kontrol edilmeli');
-      if (!cashRecovery.isSuccess || cashRecovery.isFetching || cashRecovery.data) throw new Error('Önce saklanan ödeme kontrol edilmeli');
-      if (!activeWorkspaceId || !counterpartyId) throw new Error('Kişi / firma seçin');
-      if (!amountMinor || amountMinor <= 0) throw new Error('Tutar okunamadı, kontrol edin');
+      if (!offsetRecovery.isSuccess || offsetRecovery.isFetching || offsetRecovery.data) throw new Error(t('payments.checkOffsetFirst'));
+      if (!cashRecovery.isSuccess || cashRecovery.isFetching || cashRecovery.data) throw new Error(t('payments.checkPaymentFirst'));
+      if (!activeWorkspaceId || !counterpartyId) throw new Error(t('payments.selectParty'));
+      if (!amountMinor || amountMinor <= 0) throw new Error(t('payments.invalidAmount'));
       const parsedDate = new Date(dateStr);
-      if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
+      if (Number.isNaN(parsedDate.getTime())) throw new Error(t('payments.invalidDate'));
       if (instrument && dueRows.some((row) => Number.isNaN(new Date(row.dueDate).getTime()))) {
-        throw new Error('Vade tarihi okunamadı, kontrol edin');
+        throw new Error(t('payments.invalidDue'));
       }
 
       const input: SettleObligationsInput = {
@@ -604,17 +608,17 @@ function SettlementForm({
       const closedCount = result.allocations.length;
       const advanceText =
         result.leftoverMinor > 0
-          ? ` Artan ${formatMinorAmount(result.leftoverMinor, currencyCode)} cariye ${isPayable ? 'ön ödeme (alacak)' : 'alınan avans (borç)'} olarak yazıldı; sonraki faturadan Mahsup ile düşebilirsin.`
+          ? t('payments.advanceSaved', { amount: formatMinorAmount(result.leftoverMinor, currencyCode), type: isPayable ? t('payments.prepaymentReceivable') : t('payments.advancePayable') })
           : '';
       const base =
         method === 'mahsup'
-          ? `${closedCount} kayıt mahsup edildi. Para hareketi oluşmadı.`
+          ? t('payments.offsetSaved', { count: closedCount })
           : method === 'ciro'
-            ? `${selectedSources.length} çek/senet ciro edildi${closedCount > 0 ? `, ${closedCount} kayıt kapatıldı` : ''}.${advanceText}`
+            ? t('payments.endorsed', { count: selectedSources.length, closed: closedCount > 0 ? t('payments.closedSuffix', { count: closedCount }) : '', advance: advanceText })
             : instrument
-              ? `${instrumentLabel} kaydedildi${closedCount > 0 ? ` ve ${closedCount} kayıt bu tutar kadar kapatıldı` : ''}. Para, ${instrumentLabel.toLocaleLowerCase('tr-TR')} vadesinde ${isPayable ? 'ödendiğinde hesaptan çıkar' : 'tahsil edildiğinde hesaba girer'}.${advanceText}`
-              : `${isPayable ? 'Ödeme' : 'Tahsilat'} kaydedildi${closedCount > 0 ? `, ${closedCount} kayda uygulandı` : ''}.${advanceText}`;
-      const message = result.receiptFailed ? `${base} Dekont yüklenemedi; hareketi düzenleyerek yeniden ekleyebilirsiniz.` : base;
+              ? t(isPayable ? 'payments.instrumentSavedPayable' : 'payments.instrumentSavedReceivable', { type: instrumentLabel, unit: lowerUi(instrumentLabel), closed: closedCount > 0 ? t('payments.instrumentClosedSuffix', { count: closedCount }) : '', advance: advanceText })
+              : t('payments.cashSaved', { type: isPayable ? t('payments.payment') : t('payments.collection'), applied: closedCount > 0 ? t('payments.appliedSuffix', { count: closedCount }) : '', advance: advanceText });
+      const message = result.receiptFailed ? t('payments.receiptFailed', { message: base }) : base;
       const refresh = () => InteractionManager.runAfterInteractions(() => {
         if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
       });
@@ -624,18 +628,18 @@ function SettlementForm({
       }
       const workspaceId = activeWorkspaceId;
       const close = () => { void acknowledgeOffset(userId, workspaceId).catch(() => undefined); router.back(); refresh(); };
-      Alert.alert('Başarılı', message, [
+      Alert.alert(t('payments.success'), message, [
         {
-          text: 'Geri al',
+          text: t('payments.undo'),
           style: 'destructive',
           onPress: () => {
             reverseStoredOffset(userId, workspaceId)
               .then(() => acknowledgeOffset(userId, workspaceId).catch(() => undefined))
-              .then(() => Alert.alert('Mahsup geri alındı', 'İki tarafın kalan tutarı eski haline döndü.', [{ text: 'Tamam', onPress: close }]))
+              .then(() => Alert.alert(t('payments.reversed'), t('payments.reversedBody'), [{ text: t('payments.done'), onPress: close }]))
               .catch((error) => { showErrorAlert(error); close(); });
           },
         },
-        { text: 'Tamam', onPress: close },
+        { text: t('payments.done'), onPress: close },
       ]);
     },
     onError: async (error) => {
@@ -699,9 +703,9 @@ function SettlementForm({
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
-          <ScreenHeader inline title={isPayable ? 'Ödeme yap' : 'Tahsilat al'} leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
-          <Text>{friendlyErrorMessage(offsetRecovery.error ?? cashRecovery.error, 'Ekran açılamadı. Lütfen tekrar deneyin.')}</Text>
-          <Button label="Tekrar dene" onPress={() => { void offsetRecovery.refetch(); void cashRecovery.refetch(); }} />
+          <ScreenHeader inline title={isPayable ? t('payments.payTitle') : t('payments.collectTitle')} leftLabel={{ label: t('payments.close'), onPress: () => router.back() }} />
+          <Text>{friendlyErrorMessage(offsetRecovery.error ?? cashRecovery.error, t('payments.openFailed'))}</Text>
+          <Button label={t('payments.retry')} onPress={() => { void offsetRecovery.refetch(); void cashRecovery.refetch(); }} />
         </ScrollView>
       </SafeAreaView>
     );
@@ -709,27 +713,27 @@ function SettlementForm({
   if (stuck && !recoveryBusy) {
     const input = stuck.saved.input;
     const reversing = stuck.kind === 'offset' && stuck.saved.state === 'reversing';
-    const label = reversing ? 'Mahsup geri alma' : input.method === 'ciro' ? 'Çek/senet cirosu'
-      : input.method === 'mahsup' ? 'Mahsup' : input.direction === 'payable' ? 'Ödeme' : 'Tahsilat';
+    const label = reversing ? t('payments.reverseOffset') : input.method === 'ciro' ? t('payments.endorsement')
+      : input.method === 'mahsup' ? t('payments.offset') : input.direction === 'payable' ? t('payments.payment') : t('payments.collection');
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}>
-          <ScreenHeader inline title="Yarım kalan işlem" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
+          <ScreenHeader inline title={t('payments.pending')} leftLabel={{ label: t('payments.close'), onPress: () => router.back() }} />
           <Stack gap="xxs">
             <Text variant="cardTitle">{label} · {formatMinorAmount(input.amountMinor, input.currencyCode)}</Text>
             {input.counterpartyName ? <Text variant="caption" color="textSecondary">{input.counterpartyName}</Text> : null}
           </Stack>
           <Text>
             {!recoveryError || isNetworkError(recoveryError)
-              ? 'Bağlantı kesildiği için bu işlem tamamlanamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'
-              : `${friendlyErrorMessage(recoveryError, 'Bu işlem tamamlanamadı.')} Tekrar deneyebilir ya da işlemi iptal edebilirsiniz.`}
+              ? t('payments.networkInterrupted')
+              : t('payments.recoveryError', { error: friendlyErrorMessage(recoveryError, t('payments.incomplete')) })}
           </Text>
-          <Button label="Tekrar dene"
+          <Button label={t('payments.retry')}
             onPress={() => stuck.kind === 'cash' ? resumeCash.mutate() : reversing ? reverseOffset.mutate() : resumeOffset.mutate()} />
           {!reversing ? <>
-            <Button label="İşlemi iptal et" variant="secondary"
+            <Button label={t('payments.cancelTransaction')} variant="secondary"
               onPress={() => stuck.kind === 'cash' ? cancelCash.mutate() : cancelOffset.mutate()} />
-            <Text variant="caption" color="textSecondary">İşlem zaten kaydedildiyse iptal edilmez, olduğu gibi korunur.</Text>
+            <Text variant="caption" color="textSecondary">{t('payments.savedPreserved')}</Text>
           </> : null}
         </ScrollView>
       </SafeAreaView>
@@ -752,8 +756,8 @@ function SettlementForm({
           <Stack gap="lg">
             <ScreenHeader
               inline
-              title={isPayable ? 'Ödeme yap' : 'Tahsilat al'}
-              leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+              title={isPayable ? t('payments.payTitle') : t('payments.collectTitle')}
+              leftLabel={{ label: t('payments.cancel'), onPress: () => router.back() }}
             />
 
             {/* Tuval OdemeKaydet: bağlam satırı, ortada büyük tutar, Tamamı / Kısmi tutar. */}
@@ -765,7 +769,7 @@ function SettlementForm({
               ) : null}
               {method === 'ciro' ? (
                 <Text variant="displayAmount" tabular style={{ fontSize: 40, lineHeight: 46 }}>
-                  {sourceTotalMinor > 0 ? formatMinorAmount(sourceTotalMinor, currencyCode) : 'Çek/senet seçin'}
+                  {sourceTotalMinor > 0 ? formatMinorAmount(sourceTotalMinor, currencyCode) : t('payments.selectInstrument')}
                 </Text>
               ) : (
                 <View style={{ alignSelf: 'stretch' }}>
@@ -782,9 +786,9 @@ function SettlementForm({
               )}
               {method !== 'ciro' && suggestedMinor > 0 ? (
                 <Row gap="xs" style={{ justifyContent: 'center' }}>
-                  <Pill label="Tamamı" selected={!amountTouched} onPress={() => setAmountTouched(false)} />
+                  <Pill label={t('payments.full')} selected={!amountTouched} onPress={() => setAmountTouched(false)} />
                   <Pill
-                    label="Kısmi tutar"
+                    label={t('payments.partial')}
                     selected={amountTouched}
                     onPress={() => {
                       if (!amountTouched) setAmount(displayAmount);
@@ -797,7 +801,7 @@ function SettlementForm({
 
             <Stack gap="sm">
               <Text variant="label" color="textSecondary">
-                KİŞİ / FİRMA
+                {t('payments.partyHeading')}
               </Text>
               {activeWorkspaceId ? (
                 <CounterpartyPicker
@@ -822,13 +826,13 @@ function SettlementForm({
             {counterpartyId ? (
               <Stack gap="sm">
                 <Text variant="label" color="textSecondary">
-                  {isPayable ? 'KAPATILACAK BORÇLAR' : 'KAPATILACAK ALACAKLAR'}
+                  {isPayable ? t('payments.payablesHeading') : t('payments.receivablesHeading')}
                 </Text>
                 {openRecords.length === 0 ? (
                   <Text variant="body" color="textSecondary">
                     {openQuery.isPending
-                      ? 'Açık kayıtlar yükleniyor…'
-                      : `Bu kişiyle açık bir ${isPayable ? 'borç' : 'alacak'} yok. Tutar ${isPayable ? 'ön ödeme' : 'avans'} olarak kaydedilir.`}
+                      ? t('payments.loadingOpen')
+                      : t(isPayable ? 'payments.noOpenPayable' : 'payments.noOpenReceivable')}
                   </Text>
                 ) : (
                   <Stack gap="xs">
@@ -852,7 +856,7 @@ function SettlementForm({
 
             <Stack gap="sm">
               <Text variant="label" color="textSecondary">
-                {isPayable ? 'ÖDEME YÖNTEMİ' : 'TAHSİLAT YÖNTEMİ'}
+                {isPayable ? t('payments.payMethod') : t('payments.collectMethod')}
               </Text>
               <SegmentedControl<SettlementMethod>
                 options={availableMethods}
@@ -868,11 +872,11 @@ function SettlementForm({
               />
               {method === 'mahsup' ? (
                 <Text variant="caption" color="textSecondary">
-                  Bu cariyle ters yöndeki kayıtlar (ör. önceden yapılmış ön ödeme/avans) karşılıklı kapatılır; para hareketi oluşmaz.
+                  {t('payments.offsetHelp')}
                 </Text>
               ) : method === 'ciro' ? (
                 <Text variant="caption" color="textSecondary">
-                  Müşteriden aldığın çek/senedi bu cariye verirsin: çek portföyden çıkar, seçilen borçlar kapanır; hesaptan para çıkmaz.
+                  {t('payments.endorseHelp')}
                 </Text>
               ) : null}
             </Stack>
@@ -880,7 +884,7 @@ function SettlementForm({
             {method === 'mahsup' || method === 'ciro' ? (
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary">
-                  {method === 'ciro' ? 'CİRO EDİLECEK ÇEK / SENETLER' : isPayable ? 'MAHSUP EDİLECEK ALACAKLAR' : 'MAHSUP EDİLECEK BORÇLAR'}
+                  {method === 'ciro' ? t('payments.endorseSources') : isPayable ? t('payments.offsetReceivables') : t('payments.offsetPayables')}
                 </Text>
                 <Stack gap="xs">
                   {sourceList.map((record) => (
@@ -902,10 +906,10 @@ function SettlementForm({
                 {allocation.allocations.length === 0
                   ? ''
                   : allocation.allocations.every((a) => a.amountMinor >= a.obligation.remaining_amount_minor)
-                    ? `${allocation.allocations.length} kayıt tamamen kapanır.`
-                    : 'Son kayıt kısmen kapanır, kalan tutarı açık kalır.'}
+                    ? t('payments.fullyClosed', { count: allocation.allocations.length })
+                    : t('payments.partialClose')}
                 {allocation.leftoverMinor > 0 && method !== 'mahsup'
-                  ? ` Artan ${formatMinorAmount(allocation.leftoverMinor, currencyCode)} cariye ${isPayable ? 'ön ödeme (alacak)' : 'alınan avans (borç)'} olarak yazılır ve cari bakiyesine girer.`
+                  ? t('payments.advancePreview', { amount: formatMinorAmount(allocation.leftoverMinor, currencyCode), type: isPayable ? t('payments.prepaymentReceivable') : t('payments.advancePayable') })
                   : ''}
               </Text>
             ) : null}
@@ -914,17 +918,17 @@ function SettlementForm({
               <Card>
                 <Stack gap="md">
                   <Stack gap="xxs">
-                    <Text variant="cardTitle">{instrumentLabel} bilgileri</Text>
+                    <Text variant="cardTitle">{t('payments.instrumentInfo', { type: instrumentLabel })}</Text>
                     <Text variant="caption" color="textSecondary">
                       {isPayable
-                        ? `Seçilen borçlar bu tutar kadar kapanır, vadeli bir ${instrumentLabel.toLocaleLowerCase('tr-TR')} borcu açılır. Para vadede ödediğinizde hesaptan çıkar.`
-                        : `Seçilen alacaklar bu tutar kadar kapanır, vadeli bir ${instrumentLabel.toLocaleLowerCase('tr-TR')} alacağı açılır. Para vadede tahsil ettiğinizde hesaba girer.`}
+                        ? t('payments.instrumentPayableHelp', { type: lowerUi(instrumentLabel) })
+                        : t('payments.instrumentReceivableHelp', { type: lowerUi(instrumentLabel) })}
                     </Text>
                   </Stack>
 
                   <TextField
-                    label={`${instrumentLabel.toLocaleUpperCase('tr-TR')} NO (İSTEĞE BAĞLI)`}
-                    placeholder="Örn. 1234567"
+                    label={t('payments.instrumentNumber', { type: upperUi(instrumentLabel) })}
+                    placeholder={t('payments.numberPlaceholder')}
                     value={instrumentNo}
                     onChangeText={setInstrumentNo}
                   />
@@ -932,14 +936,14 @@ function SettlementForm({
                   {method === 'cek' ? (
                     <Stack gap="sm">
                       <Text variant="label" color="textSecondary">
-                        BANKA (İSTEĞE BAĞLI)
+                        {t('payments.optionalBank')}
                       </Text>
                       <BankPicker selectedId={bankCode} onSelect={setBankCode} />
                     </Stack>
                   ) : (
                     <Stack gap="sm">
                       <Text variant="label" color="textSecondary">
-                        VADE SAYISI
+                        {t('payments.dueCount')}
                       </Text>
                       <Row gap="sm" align="center">
                         <StepButton icon="remove" disabled={dueCount <= 1} onPress={() => setDueCount((c) => Math.max(1, c - 1))} />
@@ -948,14 +952,14 @@ function SettlementForm({
                         </Text>
                         <StepButton icon="add" disabled={dueCount >= 24} onPress={() => setDueCount((c) => Math.min(24, c + 1))} />
                         <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                          {dueCount > 1 ? 'Aylık eşit vadeler' : 'Tek vade'}
+                          {dueCount > 1 ? t('payments.monthlyDue') : t('payments.singleDue')}
                         </Text>
                       </Row>
                     </Stack>
                   )}
 
                   <DateField
-                    label={effectiveDueCount > 1 ? 'İLK VADE TARİHİ' : 'VADE TARİHİ'}
+                    label={effectiveDueCount > 1 ? t('payments.firstDue') : t('payments.due')}
                     value={firstDueDate}
                     onChangeText={setFirstDueDate}
                   />
@@ -965,7 +969,7 @@ function SettlementForm({
                       {dueRows.map((row, index) => (
                         <Row key={index} style={{ justifyContent: 'space-between' }}>
                           <Text variant="caption" color="textSecondary">
-                            {index + 1}. vade · {shortDateFormatter.format(new Date(row.dueDate))}
+                            {t('payments.nthDue', { n: index + 1, date: shortDateFormatter.format(new Date(row.dueDate)) })}
                           </Text>
                           <Text variant="caption" tabular>
                             {formatMinorAmount(row.amountMinor, currencyCode)}
@@ -978,13 +982,13 @@ function SettlementForm({
                   {instrumentAccounts.length > 0 ? (
                     <Stack gap="sm">
                       <Text variant="label" color="textSecondary">
-                        {isPayable ? 'VADEDE ÖDENECEK HESAP (İSTEĞE BAĞLI)' : 'VADEDE TAHSİL EDİLECEK HESAP (İSTEĞE BAĞLI)'}
+                        {isPayable ? t('payments.payAtDueAccount') : t('payments.collectAtDueAccount')}
                       </Text>
                       <AccountPicker
                         accounts={instrumentAccounts}
                         selectedId={instrumentAccountId}
                         onSelect={setInstrumentAccountId}
-                        placeholder="Hesap seçin"
+                        placeholder={t('payments.selectAccount')}
                       />
                     </Stack>
                   ) : null}
@@ -994,13 +998,13 @@ function SettlementForm({
               <FieldGroup>
                 {methodAccounts.length === 0 ? (
                   <FormRow
-                    label={isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
+                    label={isPayable ? t('payments.paymentAccount') : t('payments.collectionAccount')}
                     value={
                       method === 'kredi_karti'
                         ? isPayable
-                          ? "Kayıtlı kredi kartı yok. Hesaplar'dan kart ekleyin."
-                          : 'Kart tahsilatı için POS veya banka hesabı ekleyin.'
-                        : "Önce Hesaplar'dan bir hesap ekleyin."
+                          ? t('payments.noCards')
+                          : t('payments.addPos')
+                        : t('payments.addAccount')
                     }
                   />
                 ) : (
@@ -1008,11 +1012,11 @@ function SettlementForm({
                     accounts={methodAccounts}
                     selectedId={accountId}
                     onSelect={setAccountId}
-                    title="Hesap seç"
+                    title={t('payments.selectAccountTitle')}
                     renderTrigger={(selected, open) => (
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={selected ? `Hesap: ${selected.name}` : 'Hesap seçin'}
+                        accessibilityLabel={selected ? t('payments.accountA11y', { name: selected.name }) : t('payments.selectAccount')}
                         onPress={open}
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: theme.spacing.md, paddingVertical: 10, minHeight: 60 }}
                       >
@@ -1023,11 +1027,11 @@ function SettlementForm({
                         )}
                         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                           <Text numberOfLines={1} style={{ fontWeight: '500', color: selected ? theme.colors.textPrimary : theme.colors.mutedControl }}>
-                            {selected ? selected.name : isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
+                            {selected ? selected.name : isPayable ? t('payments.paymentAccount') : t('payments.collectionAccount')}
                           </Text>
                           {selected && balanceByAccount.has(selected.id) ? (
                             <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
-                              Bakiye {formatMinorAmount(balanceByAccount.get(selected.id)!.balanceMinor, balanceByAccount.get(selected.id)!.currencyCode)}
+                              {t('payments.balance', { amount: formatMinorAmount(balanceByAccount.get(selected.id)!.balanceMinor, balanceByAccount.get(selected.id)!.currencyCode) })}
                             </Text>
                           ) : null}
                         </View>
@@ -1036,11 +1040,11 @@ function SettlementForm({
                     )}
                   />
                 )}
-                <DateField label="İşlem tarihi" value={dateStr} onChangeText={setDateStr} />
+                <DateField label={t('payments.date')} value={dateStr} onChangeText={setDateStr} />
                 {currencyCode !== 'TRY' ? (
                   <TextField
-                    label={`Kur (1 ${getValueUnit(currencyCode).quantityLabel} = ₺)`}
-                    placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : amountPlaceholder()}
+                    label={t('payments.exchangeRate', { unit: getValueUnit(currencyCode).quantityLabel })}
+                    placeholder={currentRateMinor === null ? t('payments.noRate') : amountPlaceholder()}
                     keyboardType="decimal-pad"
                     value={fxRateText}
                     onChangeText={setFxRateInput}
@@ -1048,8 +1052,8 @@ function SettlementForm({
                 ) : null}
                 {!cashless ? (
                   <TextField
-                    label="Açıklama (isteğe bağlı)"
-                    placeholder={isPayable ? 'Örn. Mart faturası ödemesi' : 'Örn. Mart tahsilatı'}
+                    label={t('payments.description')}
+                    placeholder={isPayable ? t('payments.paymentPlaceholder') : t('payments.collectionPlaceholder')}
                     value={description}
                     onChangeText={setDescription}
                   />
@@ -1059,7 +1063,7 @@ function SettlementForm({
 
             {instrument || method === 'mahsup' || method === 'ciro' ? (
               <FieldGroup>
-                <DateField label="İşlem tarihi" value={dateStr} onChangeText={setDateStr} />
+                <DateField label={t('payments.date')} value={dateStr} onChangeText={setDateStr} />
               </FieldGroup>
             ) : null}
 
@@ -1068,7 +1072,7 @@ function SettlementForm({
             ) : null}
 
             <Button
-              label={isPayable ? 'Ödemeyi kaydet' : 'Tahsilatı kaydet'}
+              label={isPayable ? t('payments.savePayment') : t('payments.saveCollection')}
               onPress={() => saveMutation.mutate()}
               disabled={!canSubmit || saveMutation.isPending}
               loading={saveMutation.isPending}
@@ -1095,6 +1099,7 @@ function RecordOption({
   showCounterparty?: boolean;
   onToggle: () => void;
 }) {
+  useLanguage();
   const theme = useTheme();
   const closes = appliedMinor > 0 && appliedMinor >= record.remaining_amount_minor;
   return (
@@ -1122,7 +1127,7 @@ function RecordOption({
             </Text>
             <Text variant="caption" color="textSecondary" numberOfLines={1}>
               {showCounterparty && record.counterparty?.name ? `${record.counterparty.name} · ` : ''}
-              {DOCUMENT_TYPE_LABEL[record.document_type] ?? 'Kayıt'}
+              {DOCUMENT_TYPE_LABEL[record.document_type] ?? t('payments.record')}
               {record.due_date ? ` · ${shortDateFormatter.format(new Date(record.due_date))}` : ''}
             </Text>
           </Stack>
@@ -1133,9 +1138,9 @@ function RecordOption({
             <Text variant="caption" color={appliedMinor > 0 ? undefined : 'textSecondary'} style={appliedMinor > 0 ? { color: theme.colors.success } : undefined}>
               {appliedMinor > 0
                 ? closes
-                  ? 'Kapanır'
-                  : `${formatMinorAmount(appliedMinor, record.currency_code)} düşer`
-                : 'kalan'}
+                  ? t('payments.closes')
+                  : t('payments.deducted', { amount: formatMinorAmount(appliedMinor, record.currency_code) })
+                : t('payments.remaining')}
             </Text>
           </Stack>
         </Row>

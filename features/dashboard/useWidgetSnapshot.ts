@@ -1,3 +1,4 @@
+import { t, useLanguage } from '@/i18n';
 import { useEffect } from 'react';
 
 import type { ObligationDueItem } from '@/features/obligations/api';
@@ -49,6 +50,7 @@ interface Input {
 // Ana Sayfa'nın zaten çektiği verilerden widget özetini üretip App Group'a yazar.
 // Yalnızca aktif çalışma alanı; veri gelmeden (enabled=false) önceki boş değerler yazılmaz.
 export function useWidgetSnapshot(input: Input) {
+  const language = useLanguage();
   const {
     workspaceId,
     workspaceName,
@@ -72,7 +74,7 @@ export function useWidgetSnapshot(input: Input) {
 
     const items: WidgetDueItem[] = open.slice(0, MAX_ITEMS).map(({ o, diff }) => ({
       title: o.counterparty?.name || o.title,
-      kind: DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt',
+      kind: DOCUMENT_TYPE_LABEL[o.document_type] ?? t('runtime.record'),
       date: dayKey(startOfDay(new Date(o.due_date as string))),
       amount: trimZeroDecimals(formatMinorAmount(o.remaining_amount_minor, o.currency_code)),
       receivable: o.direction === 'receivable',
@@ -95,6 +97,7 @@ export function useWidgetSnapshot(input: Input) {
 
     writeWidgetSnapshot({
       v: 1,
+      language,
       workspaceId,
       workspaceName: workspaceName ?? '',
       updatedAt: Date.now(),
@@ -110,6 +113,7 @@ export function useWidgetSnapshot(input: Input) {
       items,
     });
   }, [
+    language,
     enabled,
     workspaceId,
     workspaceName,

@@ -17,20 +17,20 @@ struct NextDueView: View {
                     HStack(alignment: .center) {
                         ItemMark(item: item)
                         Spacer()
-                        Chip(text: item.relative(from: entry.date), tint: item.overdue ? VT.bad : VT.brandText)
+                        Chip(text: item.relative(from: entry.date, language: entry.language), tint: item.overdue ? VT.bad : VT.brandText)
                     }
                     Spacer(minLength: 4)
-                    WidgetLabel(text: "Sıradaki vade")
+                    WidgetLabel(text: entry.language.text(.nextDue))
                     Text(money(item.amount, hidden: entry.hideAmounts))
                         .font(.system(size: 22, weight: .bold)).foregroundColor(VT.text)
                         .minimumScaleFactor(0.6).lineLimit(1)
                         .padding(.top, 2)
-                    Text("\(item.title) · \(item.kind.lowercased())")
+                    Text("\(item.title) · \(item.kind.lowercased(with: entry.language.locale))")
                         .font(.system(size: 12)).foregroundColor(VT.text2).lineLimit(1)
                         .padding(.top, 2)
                 }
             } else {
-                EmptyState()
+                EmptyState(language: entry.language)
             }
         }
         .widgetURL(openList)
@@ -41,8 +41,8 @@ struct NextDueView: View {
 struct NextDueWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeNextDue", provider: VademdeProvider()) { NextDueView(entry: $0) }
-            .configurationDisplayName("Sıradaki vade")
-            .description("En yakın kayıt ve kalan gün.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.nextDue)))
+            .description(Text(WidgetLanguage.current.text(.nextDueDescription)))
             .supportedFamilies([.systemSmall])
     }
 }
@@ -57,15 +57,15 @@ struct WeekView: View {
                 let total = max(s.weekPayableMinor + s.weekReceivableMinor, 1)
                 let payShare = s.weekPayableMinor / total
                 VStack(alignment: .leading, spacing: 0) {
-                    WidgetLabel(text: "Bu hafta")
+                    WidgetLabel(text: entry.language.text(.thisWeek))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Ödenecek").font(.system(size: 12)).foregroundColor(VT.text2)
+                        Text(entry.language.text(.toPay)).font(.system(size: 12)).foregroundColor(VT.text2)
                         Text(money(s.weekPayable, hidden: entry.hideAmounts))
                             .font(.system(size: 17, weight: .bold)).foregroundColor(VT.text)
                             .minimumScaleFactor(0.6).lineLimit(1)
                     }.padding(.top, 8)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Tahsil edilecek").font(.system(size: 12)).foregroundColor(VT.text2)
+                        Text(entry.language.text(.toCollect)).font(.system(size: 12)).foregroundColor(VT.text2)
                         Text(money(s.weekReceivable, hidden: entry.hideAmounts))
                             .font(.system(size: 17, weight: .bold)).foregroundColor(VT.ok)
                             .minimumScaleFactor(0.6).lineLimit(1)
@@ -82,7 +82,7 @@ struct WeekView: View {
                     .opacity(entry.hideAmounts || s.weekPayableMinor + s.weekReceivableMinor == 0 ? 0.35 : 1)
                 }
             } else {
-                EmptyState()
+                EmptyState(language: entry.language)
             }
         }
         .widgetURL(openCalendar)
@@ -93,8 +93,8 @@ struct WeekView: View {
 struct WeekWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeWeek", provider: VademdeProvider()) { WeekView(entry: $0) }
-            .configurationDisplayName("Bu hafta")
-            .description("Önümüzdeki 7 günde ödenecek ve tahsil edilecek tutar.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.thisWeek)))
+            .description(Text(WidgetLanguage.current.text(.weekDescription)))
             .supportedFamilies([.systemSmall])
     }
 }
@@ -105,13 +105,14 @@ struct DueRowView: View {
     let item: DueItem
     let now: Date
     let hidden: Bool
+    let language: WidgetLanguage
     var body: some View {
         let dateColor: Color = item.overdue ? VT.bad : (item.days(from: now) <= 1 ? VT.brandText : VT.text2)
         HStack(spacing: 10) {
-            Text(item.dateLabel(from: now))
+            Text(item.dateLabel(from: now, language: language))
                 .font(.system(size: 13, weight: .bold)).foregroundColor(dateColor)
                 .frame(width: 44, alignment: .leading).lineLimit(1).minimumScaleFactor(0.8)
-            Text("\(item.title) · \(item.overdue ? "gecikti" : item.kind.lowercased())")
+            Text("\(item.title) · \(item.overdue ? language.text(.overdue) : item.kind.lowercased(with: language.locale))")
                 .font(.system(size: 15)).foregroundColor(VT.text2).lineLimit(1)
             Spacer(minLength: 4)
             Text(money((item.receivable ? "+" : "") + item.amount, hidden: hidden))
@@ -129,13 +130,13 @@ struct UpcomingView: View {
             if let s = entry.snapshot, !s.items.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        WidgetLabel(text: "Yaklaşan vadeler")
+                        WidgetLabel(text: entry.language.text(.upcoming))
                         Spacer()
                         AppMark()
                     }
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(s.items.prefix(3).enumerated()), id: \.offset) { _, item in
-                            DueRowView(item: item, now: entry.date, hidden: entry.hideAmounts)
+                            DueRowView(item: item, now: entry.date, hidden: entry.hideAmounts, language: entry.language)
                         }
                     }.padding(.top, 12)
                     Spacer(minLength: 0)
@@ -143,16 +144,16 @@ struct UpcomingView: View {
             } else if entry.snapshot != nil {
                 VStack(alignment: .leading) {
                     HStack {
-                        WidgetLabel(text: "Yaklaşan vadeler")
+                        WidgetLabel(text: entry.language.text(.upcoming))
                         Spacer()
                         AppMark()
                     }
                     Spacer()
-                    Text("Açık vade yok").font(.system(size: 15, weight: .semibold)).foregroundColor(VT.text)
+                    Text(entry.language.text(.noOpenDue)).font(.system(size: 15, weight: .semibold)).foregroundColor(VT.text)
                     Spacer()
                 }.frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                EmptyState()
+                EmptyState(language: entry.language)
             }
         }
         .widgetURL(openCalendar)
@@ -163,8 +164,8 @@ struct UpcomingView: View {
 struct UpcomingWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeUpcoming", provider: VademdeProvider()) { UpcomingView(entry: $0) }
-            .configurationDisplayName("Yaklaşan vadeler")
-            .description("En yakın 3 vadeli kayıt.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.upcoming)))
+            .description(Text(WidgetLanguage.current.text(.upcomingDescription)))
             .supportedFamilies([.systemMedium])
     }
 }
@@ -183,21 +184,21 @@ struct SummaryView: View {
                         Link(destination: openScan) {
                             HStack(spacing: 4) {
                                 Image(systemName: "viewfinder").font(.system(size: 12, weight: .semibold))
-                                Text("Tara").font(.system(size: 12, weight: .semibold))
+                                Text(entry.language.text(.scan)).font(.system(size: 12, weight: .semibold))
                             }
                             .foregroundColor(VT.onBrand)
                             .padding(.horizontal, 10).frame(height: 28)
                             .background(VT.brand).clipShape(Capsule())
                         }
                     }
-                    Text("Toplam bakiye").font(.system(size: 12)).foregroundColor(VT.text2).padding(.top, 8)
+                    Text(entry.language.text(.balance)).font(.system(size: 12)).foregroundColor(VT.text2).padding(.top, 8)
                     Text(money(s.balance, hidden: entry.hideAmounts))
                         .font(.system(size: 30, weight: .bold)).foregroundColor(VT.text)
                         .minimumScaleFactor(0.6).lineLimit(1)
                     HStack(spacing: 16) {
-                        (Text("Alacak ").foregroundColor(VT.text2)
+                        (Text(entry.language.text(.receivable)).foregroundColor(VT.text2)
                             + Text(money(s.receivable, hidden: entry.hideAmounts)).foregroundColor(VT.ok).fontWeight(.semibold))
-                        (Text("Borç ").foregroundColor(VT.text2)
+                        (Text(entry.language.text(.payable)).foregroundColor(VT.text2)
                             + Text(money(s.payable, hidden: entry.hideAmounts)).foregroundColor(VT.text).fontWeight(.semibold))
                     }
                     .font(.system(size: 12)).padding(.top, 8).lineLimit(1)
@@ -206,7 +207,7 @@ struct SummaryView: View {
                         ForEach(Array(s.items.prefix(4).enumerated()), id: \.offset) { _, item in
                             HStack(spacing: 10) {
                                 ItemMark(item: item)
-                                Text("\(item.title) · \(item.relative(from: entry.date).lowercased())")
+                                Text("\(item.title) · \(item.relative(from: entry.date, language: entry.language).lowercased(with: entry.language.locale))")
                                     .font(.system(size: 15)).foregroundColor(item.overdue ? VT.bad : VT.text).lineLimit(1)
                                 Spacer(minLength: 4)
                                 Text(money((item.receivable ? "+" : "") + item.amount, hidden: entry.hideAmounts))
@@ -219,7 +220,7 @@ struct SummaryView: View {
                     Spacer(minLength: 0)
                 }
             } else {
-                EmptyState()
+                EmptyState(language: entry.language)
             }
         }
         .widgetURL(openList)
@@ -230,8 +231,8 @@ struct SummaryView: View {
 struct SummaryWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeSummary", provider: VademdeProvider()) { SummaryView(entry: $0) }
-            .configurationDisplayName("Özet ve tarama")
-            .description("Bakiye, 4 vade ve Tara kısayolu.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.summary)))
+            .description(Text(WidgetLanguage.current.text(.summaryDescription)))
             .supportedFamilies([.systemLarge])
     }
 }
@@ -251,7 +252,7 @@ struct LockDaysView: View {
                 } currentValueLabel: {
                     VStack(spacing: 0) {
                         Text(late ? "!" : "\(d)").font(.system(size: 20, weight: .bold))
-                        Text(late ? "GECİKTİ" : "GÜN").font(.system(size: 8, weight: .semibold)).minimumScaleFactor(0.7)
+                        Text(late ? entry.language.text(.overdueUpper) : entry.language.dayCaption(d)).font(.system(size: 8, weight: .semibold)).minimumScaleFactor(0.7)
                     }
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
@@ -270,8 +271,8 @@ struct LockDaysView: View {
 struct LockDaysWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeLockDays", provider: VademdeProvider()) { LockDaysView(entry: $0) }
-            .configurationDisplayName("Kalan gün")
-            .description("Sıradaki vadeye kaç gün kaldığı.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.daysLeft)))
+            .description(Text(WidgetLanguage.current.text(.daysDescription)))
             .supportedFamilies([.accessoryCircular])
     }
 }
@@ -284,17 +285,17 @@ struct LockNextView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Image(systemName: "calendar").font(.system(size: 11, weight: .bold))
-                        Text("SIRADAKİ VADE").font(.system(size: 11, weight: .bold))
+                        Text(entry.language.text(.nextDueUpper)).font(.system(size: 11, weight: .bold))
                     }
                     .opacity(0.8)
                     Text(money(item.amount, hidden: entry.hideAmounts)).font(.system(size: 16, weight: .bold))
                         .minimumScaleFactor(0.7).lineLimit(1)
-                    Text("\(item.title) · \(item.relative(from: entry.date).lowercased())")
+                    Text("\(item.title) · \(item.relative(from: entry.date, language: entry.language).lowercased(with: entry.language.locale))")
                         .font(.system(size: 12)).opacity(0.85).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text("Vademde’yi açın").font(.system(size: 13))
+                Text(entry.language.text(.openApp)).font(.system(size: 13))
             }
         }
         .widgetURL(openList)
@@ -305,8 +306,8 @@ struct LockNextView: View {
 struct LockNextWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeLockNext", provider: VademdeProvider()) { LockNextView(entry: $0) }
-            .configurationDisplayName("Sıradaki vade")
-            .description("Tutar ve kayıt adı.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.nextDue)))
+            .description(Text(WidgetLanguage.current.text(.amountAndName)))
             .supportedFamilies([.accessoryRectangular])
     }
 }
@@ -317,7 +318,7 @@ struct LockInlineView: View {
     var body: some View {
         Group {
             if let item = entry.snapshot?.next {
-                let when = item.relative(from: entry.date).lowercased()
+                let when = item.relative(from: entry.date, language: entry.language).lowercased(with: entry.language.locale)
                 Label {
                     Text(entry.hideAmounts ? "\(item.kind) \(when)" : "\(item.kind) \(when) \(item.amount)")
                 } icon: {
@@ -335,8 +336,8 @@ struct LockInlineView: View {
 struct LockInlineWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeLockInline", provider: VademdeProvider()) { LockInlineView(entry: $0) }
-            .configurationDisplayName("Saatin üstünde")
-            .description("Sıradaki vade tek satırda.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.aboveClock)))
+            .description(Text(WidgetLanguage.current.text(.inlineDescription)))
             .supportedFamilies([.accessoryInline])
     }
 }
@@ -348,10 +349,10 @@ struct LockNetView: View {
             AccessoryWidgetBackground()
             if let s = entry.snapshot {
                 VStack(spacing: 0) {
-                    Text("BU AY").font(.system(size: 9, weight: .bold)).opacity(0.8)
+                    Text(entry.language.text(.thisMonthUpper)).font(.system(size: 9, weight: .bold)).opacity(0.8)
                     Text(entry.hideAmounts ? "•••" : s.monthNetShort).font(.system(size: 15, weight: .bold))
                         .minimumScaleFactor(0.6).lineLimit(1)
-                    Text("NET").font(.system(size: 9, weight: .semibold)).opacity(0.8)
+                    Text(entry.language.text(.netUpper)).font(.system(size: 9, weight: .semibold)).opacity(0.8)
                 }
             } else {
                 Image(systemName: "chart.line.uptrend.xyaxis")
@@ -365,8 +366,8 @@ struct LockNetView: View {
 struct LockNetWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "VademdeLockNet", provider: VademdeProvider()) { LockNetView(entry: $0) }
-            .configurationDisplayName("Bu ay net")
-            .description("Bu ayın gelir − gider farkı.")
+            .configurationDisplayName(Text(WidgetLanguage.current.text(.thisMonth)))
+            .description(Text(WidgetLanguage.current.text(.monthDescription)))
             .supportedFamilies([.accessoryCircular])
     }
 }

@@ -3,6 +3,8 @@ import type { Tables } from '@/db/database.types';
 import { generateUuid } from '@/utils/uuid';
 import { hashArrayBuffer } from '@/utils/hash';
 import { sanitizeStorageFileName } from '@/utils/storagePath';
+import { t } from '@/i18n';
+import { documentWarningEntries, type DocumentWarning } from './warnings';
 
 export type FinancialDocument = Tables<'financial_documents'>;
 export type DocumentField = Tables<'document_fields'>;
@@ -91,7 +93,7 @@ export async function uploadAndCreateDocument({
     // engelle; temizlik de başarısızsa iki hatayı birlikte görünür kıl.
     const { error: cleanupError } = await supabase.storage.from(BUCKET).remove([storagePath]);
     if (cleanupError) {
-      throw new Error(`${error.message}; yüklenen ham belge temizlenemedi: ${cleanupError.message}`);
+      throw new Error(t('documentWarnings.cleanupFailed', { error: error.message, cleanupError: cleanupError.message }));
     }
     throw error;
   }
@@ -115,7 +117,7 @@ export async function startProcessing(documentId: string): Promise<void> {
     try {
       const body = await context.clone().json();
       if (body?.quotaExceeded) {
-        throw new QuotaExceededError(body.error ?? 'Aylık OCR kotanız doldu');
+        throw new QuotaExceededError(t('documentWarnings.quotaExceeded'));
       }
     } catch (parseError) {
       if (parseError instanceof QuotaExceededError) throw parseError;
@@ -154,7 +156,7 @@ export async function getDocumentFields(documentId: string): Promise<DocumentFie
 // process-document, okuması şüpheli tutar/tarih gibi durumları structured_output.warnings
 // içine yazıyordu ama bu uyarılar hiçbir ekranda gösterilmiyordu — docs/04-ocr-belge-isleme.md
 // gereği kullanıcı onaylamadan önce belirsizlikleri görmeli. Onay ekranı bunu kullanır.
-export async function getDocumentWarnings(documentId: string): Promise<string[]> {
+export async function getDocumentWarnings(documentId: string): Promise<DocumentWarning[]> {
   const { data, error } = await supabase
     .from('document_extractions')
     .select('structured_output')
@@ -164,8 +166,7 @@ export async function getDocumentWarnings(documentId: string): Promise<string[]>
     .maybeSingle();
   if (error) throw error;
 
-  const warnings = (data?.structured_output as { warnings?: unknown } | null)?.warnings;
-  return Array.isArray(warnings) ? warnings.filter((w): w is string => typeof w === 'string') : [];
+  return documentWarningEntries(data?.structured_output);
 }
 
 export async function getSignedUrl(storagePath: string): Promise<string> {

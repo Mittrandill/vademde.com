@@ -1,7 +1,8 @@
 import { Alert, InteractionManager } from 'react-native';
 import { router } from 'expo-router';
 
-import { t } from '@/i18n';
+import { getLanguage, t } from '@/i18n';
+import { serverErrorMessage } from '@/i18n/serverErrorMessage';
 
 // Kayıt/güncelleme/silme sonrası tek tip başarı bildirimi. onOk içine ekran geçişi ve
 // önbellek geçersizleştirme konur (navigasyon hemen değil, kullanıcı "Tamam"a basınca
@@ -68,9 +69,7 @@ export function isNetworkError(error: unknown): boolean {
   return typeof message === 'string' && NETWORK_ERROR.test(message);
 }
 
-// Hata nesnesini kullanıcıya gösterilebilir tek bir Türkçe cümleye çevirir: bağlantı hataları
-// sabit bir metne, teknik/İngilizce ham mesajlar `fallback`'e düşer; sunucunun Türkçe iş kuralı
-// mesajları (ör. "Ödeme güncel kalan tutarı aşıyor") olduğu gibi kalır. Ekranlar hata metnini
+// Sunucu iş kuralları arayüz dilinde çözülür; teknik hatalar `fallback`'e düşer. Ekranlar hata metnini
 // doğrudan `error.message` ile değil bununla göstermelidir.
 export function friendlyErrorMessage(error: unknown, fallback = t('errors.generic')): string {
   const err = error as { message?: unknown; code?: unknown } | null;
@@ -82,7 +81,10 @@ export function friendlyErrorMessage(error: unknown, fallback = t('errors.generi
   if (err?.code === '42501' || /row-level security/i.test(raw)) {
     return t('errors.viewerOnly');
   }
+  const businessError = serverErrorMessage(raw);
+  if (businessError) return businessError;
   if (TECHNICAL_ERROR.test(raw)) return fallback;
+  if (getLanguage() === 'en' && /[çğıöşüÇĞİÖŞÜ]/.test(raw)) return fallback;
   return raw;
 }
 

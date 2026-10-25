@@ -20,9 +20,11 @@ import { attachNotificationTapHandler } from '@/services/notificationRouting';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Splash } from '@/components/brand/Splash';
-import { clearWidgetSnapshot } from '@/services/widgetSync';
+import { clearWidgetSnapshot, writeWidgetLanguage } from '@/services/widgetSync';
 import { AppLockGate } from '@/components/auth/AppLockGate';
-import { useLanguage } from '@/i18n';
+import { getLanguage, useLanguage } from '@/i18n';
+import { useLanguagePreferenceStore } from '@/store/languagePreferenceStore';
+import { useProfileLocaleSync } from '@/services/useProfileLocaleSync';
 
 function AppStatusBar() {
   const theme = useTheme();
@@ -31,11 +33,19 @@ function AppStatusBar() {
 
 function RootNavigator() {
   const { session, isLoading } = useSession();
+  const language = useLanguage();
+  useProfileLocaleSync(session?.user.id ?? null);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
 
   useWorkspaceRealtime(session ? activeWorkspaceId : null);
   useAppUpdatePrompt(!!session);
+
+  useEffect(() => {
+    const sync = () => writeWidgetLanguage(getLanguage());
+    if (useLanguagePreferenceStore.persist.hasHydrated()) sync();
+    return useLanguagePreferenceStore.persist.onFinishHydration(sync);
+  }, [language]);
 
   useEffect(() => {
     const userId = session?.user?.id;

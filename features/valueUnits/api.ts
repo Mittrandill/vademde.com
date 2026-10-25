@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
 import { getValueUnit } from '@/features/valueUnits/units';
@@ -66,7 +67,7 @@ export function sumToReferenceMinor(
     (sum, row) => {
       if (row.amountMinor === 0) return sum;
       const converted = convertToReferenceMinor(row.amountMinor, row.unitCode, rates);
-      if (!converted) throw new Error(`${row.unitCode} kuru bulunamadı; eksik toplam hesaplanmadı.`);
+      if (!converted) throw new Error(t('runtime.missingRate', { unit: row.unitCode }));
       return sum + converted.amountMinor;
     },
     0

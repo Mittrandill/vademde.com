@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 
 // card_installment_purchases (migration 20261005140000). Tipler db/database.types.ts'te henüz yok;
@@ -44,7 +45,7 @@ export async function createCardInstallmentPurchase(input: NewCardInstallmentPur
     .select('workspace_id, currency_code, type').eq('id', input.accountId).single();
   if (accountError) throw accountError;
   if (account.workspace_id !== input.workspaceId || account.type !== 'credit_card') {
-    throw new Error('Taksit planı bu çalışma alanındaki bir kredi kartına ait olmalı.');
+    throw new Error(t('runtime.cardPlanWorkspace'));
   }
   const { error } = await supabase.from('card_installment_purchases' as never).insert({
     workspace_id: input.workspaceId,

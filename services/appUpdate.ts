@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useEffect } from 'react';
 import { Alert, AppState, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -72,11 +73,11 @@ export async function checkForAppUpdate(): Promise<void> {
     await AsyncStorage.setItem(PROMPT_STATE_KEY, JSON.stringify(state));
 
     Alert.alert(
-      'Yeni sürüm hazır',
-      `Vademde ${release.version} App Store'da. Güncelleyerek son iyileştirmelere ve düzeltmelere ulaşabilirsiniz.`,
+      t('runtime.updateReady'),
+      t('runtime.updateBody', { version: release.version }),
       [
-        { text: 'Sonra', style: 'cancel' },
-        { text: 'Güncelle', onPress: () => Linking.openURL(release.url) },
+        { text: t('runtime.later'), style: 'cancel' },
+        { text: t('runtime.update'), onPress: () => Linking.openURL(release.url) },
       ]
     );
   } catch {

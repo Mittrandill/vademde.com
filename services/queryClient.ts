@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { QueryClient, onlineManager, focusManager } from '@tanstack/react-query';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -53,7 +54,7 @@ export function bindQueryCacheToUser(userId: string | null): Promise<void> {
 
 export function assertNoPendingFinancialWrites(): void {
   if (queryClient.getMutationCache().getAll().some((m) => m.state.status === 'pending')) {
-    throw new Error('Devam eden veya bağlantı bekleyen işlem var. İşlem sonuçlanmadan çıkış yapmayın.');
+    throw new Error(t('runtime.pendingWriteLogout'));
   }
 }
 

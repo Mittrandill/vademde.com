@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const ts = require('typescript');
+const i18next = require('i18next').createInstance();
 const root = path.resolve(__dirname, '..');
 const cache = new Map();
 function load(rel) {
@@ -16,12 +17,16 @@ function load(rel) {
   cache.set(file, mod);
   const req = (spec) => {
     if (spec === '@/services/supabase') return { supabase: {} };
-    if (spec.startsWith('@/')) return load(`${spec.slice(2)}.ts`);
+    if (spec === '@/i18n') return { t: i18next.t.bind(i18next) };
+    const loadLocal = (base) => load(fs.existsSync(path.join(root, base + '.ts')) ? base + '.ts' : path.join(base, 'index.ts'));
+    if (spec.startsWith('@/')) return loadLocal(spec.slice(2));
+    if (spec.startsWith('.')) return loadLocal(path.relative(root, path.resolve(path.dirname(file), spec)));
     return require(spec);
   };
   new Function('require', 'module', 'exports', outputText)(req, mod, mod.exports);
   return mod.exports;
 }
+i18next.init({ resources: { tr: { translation: load('i18n/locales/tr/index.ts').tr } }, lng: 'tr', fallbackLng: 'tr', initAsync: false, interpolation: { escapeValue: false } });
 const { computeCardDebt, statementCutoff } = load('utils/cardDebt.ts');
 const { pendingInstallmentMinor } = load('features/cardInstallments/api.ts');
 

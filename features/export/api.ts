@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 
@@ -92,7 +93,7 @@ export async function exportWorkspaceJson(workspaceId: string, workspaceName: st
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(file.uri, {
       mimeType: 'application/json',
-      dialogTitle: 'Vademde Veri Yedeği',
+      dialogTitle: t('runtime.backupTitle'),
       UTI: 'public.json',
     });
   }

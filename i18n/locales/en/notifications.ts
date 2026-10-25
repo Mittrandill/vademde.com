@@ -2,6 +2,7 @@ import type { notifications as tr } from '../tr/notifications';
 import type { Messages } from '../../types';
 
 export const notifications: Messages<typeof tr> = {
+  reminderChannel: 'Payable/receivable reminders',
   title: 'Notifications',
   actions: 'Actions',
   today: 'TODAY',

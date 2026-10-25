@@ -4,9 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const ts = require('typescript');
+const i18next = require('i18next').createInstance();
 const root = path.resolve(__dirname, '..');
 const cache = new Map();
 const STUBS = {
+  '@/i18n': { t: i18next.t.bind(i18next), useLanguage: () => i18next.language },
   react: { useMemo: (fn) => fn() },
   '@tanstack/react-query': { useQuery: () => ({}) },
   '@/services/supabase': { supabase: {} },
@@ -27,12 +29,18 @@ function load(rel) {
   cache.set(file, mod);
   const req = (spec) => {
     if (STUBS[spec]) return STUBS[spec];
-    if (spec.startsWith('@/')) return load(`${spec.slice(2)}.ts`);
+    const loadLocal = (base) => load(fs.existsSync(path.join(root, base + '.ts')) ? base + '.ts' : path.join(base, 'index.ts'));
+    if (spec.startsWith('@/')) return loadLocal(spec.slice(2));
+    if (spec.startsWith('.')) return loadLocal(path.relative(root, path.resolve(path.dirname(file), spec)));
     return require(spec);
   };
   new Function('require', 'module', 'exports', outputText)(req, mod, mod.exports);
   return mod.exports;
 }
+i18next.init({ resources: {
+  tr: { translation: load('i18n/locales/tr/index.ts').tr },
+  en: { translation: load('i18n/locales/en/index.ts').en },
+}, lng: 'tr', fallbackLng: 'tr', initAsync: false, interpolation: { escapeValue: false } });
 const { buildCardDueItems } = load('features/accounts/cardDues.ts');
 
 let passed = 0;
@@ -40,6 +48,17 @@ function check(name, fn) { fn(); passed += 1; console.log(`PASS ${name}`); }
 
 const card = { id: 'c1', workspace_id: 'w', name: 'Bonus', type: 'credit_card', bank_code: 'garanti', currency_code: 'TRY', statement_day: 15, payment_due_day: 25, created_at: '2026-08-01T09:00:00' };
 const bal = (minor, id = 'c1') => ({ accountId: id, name: '', type: 'credit_card', bankCode: null, currencyCode: 'TRY', balanceMinor: minor });
+
+check('dil değişiminde kart vadesi başlığı güncellenir; hesap adı ve tutar korunur', () => {
+  const args = [[{ ...card, name: 'Özel Hesabım' }], [bal(1000)], [], '2026-10-19'];
+  const [tr] = buildCardDueItems(...args);
+  assert.equal(tr.title, 'Özel Hesabım son ödeme');
+  i18next.changeLanguage('en');
+  const [en] = buildCardDueItems(...args);
+  assert.equal(en.title, 'Özel Hesabım payment due');
+  assert.deepEqual({ ...en, title: tr.title }, tr);
+  i18next.changeLanguage('tr');
+});
 
 check('ekstresiz kart: borç sıradaki son ödeme gününde', () => {
   const [item] = buildCardDueItems([card], [bal(500000)], [], '2026-10-19');

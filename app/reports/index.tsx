@@ -290,12 +290,12 @@ export default function ReportsScreen() {
     enabled,
   });
   const cashFlowQuery = useQuery({
-    queryKey: enabled ? queryKeys.reportCashFlow(ws) : ['reports', 'disabled'],
+    queryKey: enabled ? [...queryKeys.reportCashFlow(ws), getLanguage()] : ['reports', 'disabled'],
     queryFn: () => getCashFlowForecast(ws),
     enabled,
   });
   const monthlyComparisonQuery = useQuery({
-    queryKey: enabled ? queryKeys.reportMonthlyComparison(ws) : ['reports', 'disabled'],
+    queryKey: enabled ? [...queryKeys.reportMonthlyComparison(ws), getLanguage()] : ['reports', 'disabled'],
     queryFn: () => getMonthlyComparison(ws),
     enabled,
   });

@@ -16,7 +16,7 @@ import {
 import type { Obligation } from '@/features/obligations/api';
 import { formatMinorAmount } from '@/utils/money';
 import { showErrorAlert } from '@/utils/alerts';
-import { localeDateFormatter } from '@/i18n/format';
+import { localeDateFormatter, lowerUi } from '@/i18n/format';
 import { t } from '@/i18n';
 
 const dateFormatter = localeDateFormatter({ day: 'numeric', month: 'long', year: 'numeric' });
@@ -68,7 +68,7 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
   if (!status) return null;
 
   const open = status === 'portfoy' || status === 'tahsile_verildi';
-  const label = obligation.document_type === 'senet' ? 'senet' : 'çek';
+  const label = lowerUi(t(obligation.document_type === 'senet' ? 'runtime.note' : 'runtime.check'));
 
   const actions: { key: string; icon: keyof typeof Ionicons.glyphMap; title: string; text: string; onPress: () => void }[] =
     [];

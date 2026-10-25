@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
 
@@ -14,7 +15,7 @@ export interface CalendarExportObligation {
 const VADEMDE_REMINDER_LIST_NAME = 'Vademde';
 
 function titleFor(obligation: CalendarExportObligation): string {
-  const label = obligation.direction === 'payable' ? 'Ödeme' : 'Tahsilat';
+  const label = obligation.direction === 'payable' ? t('runtime.payment') : t('runtime.collection');
   return `${label}: ${obligation.title} — ${formatMinorAmount(obligation.remaining_amount_minor, obligation.currency_code)}`;
 }
 
@@ -29,7 +30,7 @@ async function getWritableEventCalendar(): Promise<Calendar.ExpoCalendar> {
   if (Platform.OS === 'ios') return Calendar.getDefaultCalendarSync();
   const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
   const writable = calendars.find((c) => c.allowsModifications);
-  if (!writable) throw new Error('Yazılabilir bir takvim bulunamadı.');
+  if (!writable) throw new Error(t('runtime.noWritableCalendar'));
   return writable;
 }
 
@@ -37,9 +38,9 @@ async function getWritableEventCalendar(): Promise<Calendar.ExpoCalendar> {
 // uygulamasına birer kopya bırakır; Vademde'nin kendi hatırlatma/bildirim akışını
 // (services/notifications.ts) hiçbir şekilde değiştirmez veya onun yerine geçmez.
 export async function addObligationToCalendar(obligation: CalendarExportObligation): Promise<void> {
-  if (!obligation.due_date) throw new Error('Bu kaydın vade tarihi yok.');
+  if (!obligation.due_date) throw new Error(t('runtime.noDueDate'));
   const { granted } = await Calendar.requestCalendarPermissions();
-  if (!granted) throw new Error('Takvim izni verilmedi.');
+  if (!granted) throw new Error(t('runtime.calendarDenied'));
 
   const calendar = await getWritableEventCalendar();
   const startDate = dueDateAt(obligation.due_date, 9);
@@ -49,7 +50,7 @@ export async function addObligationToCalendar(obligation: CalendarExportObligati
     title: titleFor(obligation),
     startDate,
     endDate,
-    notes: 'Vademde uygulamasından eklendi.',
+    notes: t('runtime.calendarNotes'),
   });
 }
 
@@ -72,16 +73,16 @@ async function getOrCreateReminderList(): Promise<Calendar.ExpoCalendar> {
 // expo-calendar'ın Hatırlatıcılar (Reminders) API'si yalnızca iOS'ta çalışır (EventKit
 // EKReminder Android'de yok) — bkz. docs/06-teknik-mimari.md, uygulama iOS öncelikli.
 export async function createObligationReminder(obligation: CalendarExportObligation): Promise<void> {
-  if (Platform.OS !== 'ios') throw new Error("Hatırlatıcılar şu an yalnızca iOS'ta destekleniyor.");
-  if (!obligation.due_date) throw new Error('Bu kaydın vade tarihi yok.');
+  if (Platform.OS !== 'ios') throw new Error(t('runtime.remindersIosOnly'));
+  if (!obligation.due_date) throw new Error(t('runtime.noDueDate'));
   const { granted } = await Calendar.requestRemindersPermissions();
-  if (!granted) throw new Error('Hatırlatıcılar izni verilmedi.');
+  if (!granted) throw new Error(t('runtime.remindersDenied'));
 
   const calendar = await getOrCreateReminderList();
 
   await calendar.createReminder({
     title: titleFor(obligation),
     dueDate: dueDateAt(obligation.due_date, 9),
-    notes: 'Vademde uygulamasından eklendi.',
+    notes: t('runtime.calendarNotes'),
   });
 }

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import { fetchAll } from '@/services/fetchAll';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
@@ -756,7 +757,7 @@ export async function createInstallmentPlan({
   installments,
 }: CreateInstallmentPlanInput): Promise<Installment[]> {
   if (!installmentTotalMatches(totalAmountMinor, installments.map((i) => i.amountMinor))) {
-    throw new Error('Taksit toplamı, ana tutarla uyuşmuyor.');
+    throw new Error(t('runtime.installmentTotalMismatch'));
   }
 
   const rows: TablesInsert<'installments'>[] = installments.map((installment) => ({

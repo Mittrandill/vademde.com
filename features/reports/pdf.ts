@@ -10,7 +10,8 @@ import type {
   MonthlyTotal,
 } from '@/features/reports/api';
 import type { ObligationWithRelations } from '@/features/obligations/api';
-import { localeDateFormatter } from '@/i18n/format';
+import { localeDateFormatter, formatPercent, fractionPattern } from '@/i18n/format';
+import { getLanguage, t } from '@/i18n';
 
 export interface ReportPdfInput {
   periodLabel: string;
@@ -75,7 +76,10 @@ const PAGE = { top: 40, side: 40, bottom: 78, footerBottom: 26 };
 // yerleştirilir; sığmayan tablo satırlarıyla bölünür ve "(devam)" ile sonraki sayfaya geçer.
 // iOS'ta (WKWebView) çalışır. Android'de expo-print'in WebView'ı betik çalıştırmaz; orada akış
 // düzeni kalır ve footer içeriğin sonunda görünür.
-const PAGINATE_JS = `(function () {
+function buildPaginationScript(): string {
+  return `(function () {
+  var continued = ${JSON.stringify(t('reportPdf.continued'))};
+  var pageTemplate = ${JSON.stringify(t('reportPdf.page', { page: '{{page}}', total: '{{total}}' }))};
   var flow = document.getElementById('flow');
   var foot = document.getElementById('flow-ft');
   var pages = document.getElementById('pages');
@@ -100,7 +104,7 @@ const PAGINATE_JS = `(function () {
       if (!c.classList.contains('sec-h') && c.tagName !== 'TABLE') rest.removeChild(c);
     });
     var h = rest.querySelector('h2');
-    if (h && h.textContent.indexOf('(devam)') < 0) h.textContent += ' (devam)';
+    if (h && h.textContent.indexOf(continued) < 0) h.textContent += ' ' + continued;
     var rows = rest.querySelectorAll('tbody tr');
     for (var i = 0; i < skip; i++) rows[i].parentNode.removeChild(rows[i]);
     return rest;
@@ -138,13 +142,14 @@ const PAGINATE_JS = `(function () {
   var all = pages.querySelectorAll('.page');
   for (var p = 0; p < all.length; p++) {
     var pg = all[p].querySelector('.pg');
-    if (pg) pg.textContent = 'Sayfa ' + (p + 1) + ' / ' + all.length + ' · ';
+    if (pg) pg.textContent = pageTemplate.replace('{{page}}', String(p + 1)).replace('{{total}}', String(all.length));
   }
   var st = document.createElement('style');
   st.textContent = '@page { size: ${A4.width}px ${A4.height}px; margin: 0; }';
   document.head.appendChild(st);
   document.documentElement.className += ' paged';
 })();`;
+}
 
 const money = (minor: number, currency = 'TRY') => formatMinorAmount(minor, currency);
 
@@ -183,7 +188,7 @@ function kpi(label: string, value: string, tone: 'ink' | 'ok' | 'bad' = 'ink', s
   return `<div class="kpi"><div class="kpi-l">${dot ? `<i style="background:${dot}"></i>` : ''}${esc(label)}</div><div class="kpi-v ${tone}">${esc(value)}</div>${sub ? `<div class="kpi-s">${esc(sub)}</div>` : ''}</div>`;
 }
 
-function table(head: string[], rows: string[][], alignRight: number[] = [], empty = 'Kayıt yok.'): string {
+function table(head: string[], rows: string[][], alignRight: number[] = [], empty = t('reportPdf.empty')): string {
   const th = head.map((h, i) => `<th class="${alignRight.includes(i) ? 'r' : ''}">${esc(h)}</th>`).join('');
   const body =
     rows.length === 0
@@ -206,7 +211,7 @@ function monthChart(items: MonthlyTotal[]): string {
   const grid = [0, 0.5, 1]
     .map((f) => {
       const gy = 6 + plotH - f * plotH;
-      return `<line x1="${axis}" y1="${gy}" x2="${w}" y2="${gy}" stroke="${C.line}" stroke-width="1"/><text x="${axis - 6}" y="${gy + 3}" text-anchor="end" font-size="8" fill="${C.ink3}">${esc(money(Math.round(max * f)).replace(/,\d{2}(?=\D*$)/, ''))}</text>`;
+      return `<line x1="${axis}" y1="${gy}" x2="${w}" y2="${gy}" stroke="${C.line}" stroke-width="1"/><text x="${axis - 6}" y="${gy + 3}" text-anchor="end" font-size="8" fill="${C.ink3}">${esc(money(Math.round(max * f)).replace(fractionPattern(), ''))}</text>`;
     })
     .join('');
   const bars = items
@@ -216,17 +221,17 @@ function monthChart(items: MonthlyTotal[]): string {
     })
     .join('');
   return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${grid}${bars}</svg>
-  <div class="legend"><span><i style="background:${C.okBar}"></i>Gelir</span><span><i style="background:${C.saffron}"></i>Gider</span></div>`;
+  <div class="legend"><span><i style="background:${C.okBar}"></i>${esc(t('reportPdf.income'))}</span><span><i style="background:${C.saffron}"></i>${esc(t('reportPdf.expense'))}</span></div>`;
 }
 
 function categoryTable(items: CategoryBreakdownItem[], barColor: string): string {
   return table(
-    ['Kategori', 'Pay', 'Tutar'],
+    [t('reportPdf.category'), t('reportPdf.share'), t('reportPdf.amount')],
     items.map((c) => {
       const pct = Math.round(c.percentage * 100);
       return [
         esc(c.name),
-        `<div class="pbar"><div class="pbar-t"><div class="pbar-f" style="width:${Math.max(2, pct)}%;background:${barColor}"></div></div><span>%${pct}</span></div>`,
+        `<div class="pbar"><div class="pbar-t"><div class="pbar-f" style="width:${Math.max(2, pct)}%;background:${barColor}"></div></div><span>${esc(formatPercent(pct))}</span></div>`,
         money(c.amountMinor),
       ];
     }),
@@ -242,88 +247,88 @@ export function buildReportHtml(input: ReportPdfInput): string {
   // Gider geliri aşınca "−%106 tasarruf" anlamsız; bunun yerine aşım oranı yazılır.
   const savingsKpi =
     savings === null
-      ? kpi('Tasarruf oranı', '—', 'ink', 'Gelir kaydı yok')
+      ? kpi(t('reportPdf.savingsRate'), '—', 'ink', t('reportPdf.noIncome'))
       : savings < 0
-        ? kpi('Tasarruf oranı', 'Tasarruf yok', 'ink', `Gider geliri %${Math.abs(savings)} aştı`)
-        : kpi('Tasarruf oranı', `%${savings}`, 'ink', 'Gelirin kenara kalan kısmı');
+        ? kpi(t('reportPdf.savingsRate'), t('reportPdf.noSavings'), 'ink', t('reportPdf.excessPercent', { percent: formatPercent(Math.abs(savings)) }))
+        : kpi(t('reportPdf.savingsRate'), formatPercent(savings), 'ink', t('reportPdf.savingsHelp'));
 
   const parts: string[] = [];
 
   if (sec.summary) {
     parts.push(
       section(
-        'Gelir ve gider özeti',
+        t('reportPdf.summary'),
         `<div class="kpis">
-          ${kpi('Gelir', money(input.incomeMinor), 'ok', undefined, C.okBar)}
-          ${kpi('Gider', money(input.expenseMinor), 'ink', undefined, C.saffron)}
-          ${kpi('Net', `${net < 0 ? '−' : ''}${money(Math.abs(net))}`, net < 0 ? 'bad' : 'ok', net < 0 ? 'Gider geliri aştı' : 'Gelir gideri aştı')}
+          ${kpi(t('reportPdf.income'), money(input.incomeMinor), 'ok', undefined, C.okBar)}
+          ${kpi(t('reportPdf.expense'), money(input.expenseMinor), 'ink', undefined, C.saffron)}
+          ${kpi(t('reportPdf.net'), `${net < 0 ? '−' : ''}${money(Math.abs(net))}`, net < 0 ? 'bad' : 'ok', net < 0 ? t('reportPdf.expenseExceeds') : t('reportPdf.incomeExceeds'))}
           ${savingsKpi}
         </div>`
       )
     );
     parts.push(
       section(
-        'Son 6 ay',
+        t('reportPdf.lastSixMonths'),
         monthChart(input.monthlyComparison) +
           table(
-            ['Ay', 'Gelir', 'Gider', 'Net'],
+            [t('reportPdf.month'), t('reportPdf.income'), t('reportPdf.expense'), t('reportPdf.net')],
             input.monthlyComparison.map((m) => {
               const n = m.incomeMinor - m.expenseMinor;
               return [esc(m.label), money(m.incomeMinor), money(m.expenseMinor), `<b class="${n < 0 ? 'bad' : ''}">${n < 0 ? '−' : ''}${money(Math.abs(n))}</b>`];
             }),
             [1, 2, 3]
           ),
-        'Seçili dönemden bağımsız, son 6 takvim ayı'
+        t('reportPdf.sixMonthsHelp')
       )
     );
   }
 
   if (sec.categories) {
-    parts.push(section('Giderler · kategoriye göre', categoryTable(input.expenseCategories, C.saffron)));
-    parts.push(section('Gelirler · kategoriye göre', categoryTable(input.incomeCategories, C.okBar)));
+    parts.push(section(t('reportPdf.expenseCategories'), categoryTable(input.expenseCategories, C.saffron)));
+    parts.push(section(t('reportPdf.incomeCategories'), categoryTable(input.incomeCategories, C.okBar)));
   }
 
   if (sec.obligations) {
     parts.push(
       section(
-        'Borç ve alacak',
+        t('reportPdf.obligations'),
         `<div class="kpis three">
-          ${kpi('Ödenecek', money(input.payableTotalMinor), 'ink', `${input.payableCount} açık kayıt`)}
-          ${kpi('Tahsil edilecek', money(input.receivableTotalMinor), 'ok', `${input.receivableCount} açık kayıt`)}
-          ${kpi('Gecikmiş', money(input.overdueObligations.reduce((s, o) => s + o.remaining_amount_minor, 0)), input.overdueObligations.length > 0 ? 'bad' : 'ink', `${input.overdueObligations.length} kayıt`)}
+          ${kpi(t('reportPdf.payable'), money(input.payableTotalMinor), 'ink', t('reportPdf.openCount', { count: input.payableCount }))}
+          ${kpi(t('reportPdf.receivable'), money(input.receivableTotalMinor), 'ok', t('reportPdf.openCount', { count: input.receivableCount }))}
+          ${kpi(t('reportPdf.overdue'), money(input.overdueObligations.reduce((s, o) => s + o.remaining_amount_minor, 0)), input.overdueObligations.length > 0 ? 'bad' : 'ink', t('reportPdf.recordCount', { count: input.overdueObligations.length }))}
         </div>`,
-        'Rapor tarihindeki açık kayıtlar'
+        t('reportPdf.openAtReport')
       )
     );
     parts.push(
       section(
-        'Gecikmiş ödemeler',
+        t('reportPdf.overduePayments'),
         table(
-          ['Kayıt', 'Kişi / firma', 'Vade', 'Gecikme', 'Kalan'],
+          [t('reportPdf.record'), t('reportPdf.party'), t('reportPdf.due'), t('reportPdf.delay'), t('reportPdf.remaining')],
           input.overdueObligations.map((o) => [
             esc(o.title),
             esc(o.counterparty?.name ?? '—'),
             o.due_date ? dateFmt.format(new Date(o.due_date)) : '—',
-            `${daysOverdue(o.due_date) ?? 0} gün`,
+            t('reportPdf.days', { count: daysOverdue(o.due_date) ?? 0 }),
             `<b class="bad">${money(o.remaining_amount_minor, o.currency_code)}</b>`,
           ]),
           [3, 4],
-          'Gecikmiş kayıt yok.'
+          t('reportPdf.noOverdue')
         )
       )
     );
     parts.push(
       section(
-        'Beklenen nakit akışı',
+        t('reportPdf.cashflow'),
         table(
-          ['Dönem', 'Giriş', 'Çıkış', 'Net'],
+          [t('reportPdf.period'), t('reportPdf.inflow'), t('reportPdf.outflow'), t('reportPdf.net')],
           input.cashFlow.map((b) => {
             const n = b.receivableMinor - b.payableMinor;
             return [esc(b.label), money(b.receivableMinor), money(b.payableMinor), `<b class="${n < 0 ? 'bad' : 'ok'}">${n < 0 ? '−' : '+'}${money(Math.abs(n))}</b>`];
           }),
           [1, 2, 3]
         ),
-        'Önümüzdeki 30 gün'
+        t('reportPdf.nextThirtyDays')
       )
     );
   }
@@ -331,9 +336,9 @@ export function buildReportHtml(input: ReportPdfInput): string {
   if (sec.counterparties) {
     parts.push(
       section(
-        'Kişi ve firmalar',
+        t('reportPdf.counterparties'),
         table(
-          ['Ad', 'Hareket', 'Tutar'],
+          [t('reportPdf.name'), t('reportPdf.transaction'), t('reportPdf.amount')],
           input.counterparties.map((c) => [esc(c.name), String(c.count), money(c.amountMinor)]),
           [1, 2]
         )
@@ -345,22 +350,22 @@ export function buildReportHtml(input: ReportPdfInput): string {
     const tryTotal = input.accountBalances.filter((a) => a.currencyCode === 'TRY').reduce((s, a) => s + a.balanceMinor, 0);
     parts.push(
       section(
-        'Hesap bakiyeleri',
+        t('reportPdf.accountBalances'),
         table(
-          ['Hesap', 'Bakiye'],
+          [t('reportPdf.account'), t('reportPdf.balance')],
           [
             ...input.accountBalances.map((a) => [esc(a.name), `<span class="${a.balanceMinor < 0 ? 'bad' : ''}">${money(a.balanceMinor, a.currencyCode)}</span>`]),
-            ...(input.accountBalances.length > 1 ? [['<b>Toplam (TL hesaplar)</b>', `<b>${money(tryTotal)}</b>`]] : []),
+            ...(input.accountBalances.length > 1 ? [[`<b>${esc(t('reportPdf.totalTry'))}</b>`, `<b>${money(tryTotal)}</b>`]] : []),
           ],
           [1],
-          'Hesap yok.'
+          t('reportPdf.noAccounts')
         )
       )
     );
   }
 
   return `<!doctype html>
-<html lang="tr">
+<html lang="${getLanguage()}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=${A4.width}" />
@@ -450,13 +455,13 @@ export function buildReportHtml(input: ReportPdfInput): string {
   <header>
     <div class="hd-top">
       <div class="logo">${markSvg(30)}<b>Vademde</b></div>
-      <div class="doc-type">Finans raporu</div>
+      <div class="doc-type">${esc(t('reportPdf.report'))}</div>
     </div>
     <div class="hd-main">
-      <div><div class="eyebrow">Rapor dönemi</div><h1>${esc(input.periodLabel)}</h1></div>
+      <div><div class="eyebrow">${esc(t('reportPdf.reportPeriod'))}</div><h1>${esc(input.periodLabel)}</h1></div>
       <dl class="hd-meta">
-        <div><dt>Çalışma alanı</dt><dd>${esc(input.workspaceName || 'Kişisel')}</dd></div>
-        <div><dt>Oluşturulma</dt><dd>${esc(generatedAt)}</dd></div>
+        <div><dt>${esc(t('reportPdf.workspace'))}</dt><dd>${esc(input.workspaceName || t('reportPdf.personal'))}</dd></div>
+        <div><dt>${esc(t('reportPdf.generatedAt'))}</dt><dd>${esc(generatedAt)}</dd></div>
       </dl>
     </div>
     <div class="hd-rule"><i></i><s></s></div>
@@ -464,11 +469,11 @@ export function buildReportHtml(input: ReportPdfInput): string {
   ${parts.join('\n')}
   </div>
   <footer class="ft" id="flow-ft">
-    <div class="ft-l">${markSvg(20)}<div><b>Vademde ile oluşturuldu</b><span>Tutarlar uygulamaya kaydedilen verilerden hesaplanmıştır.</span></div></div>
-    <div class="ft-r"><b class="pg"></b>${esc(input.workspaceName || 'Kişisel')} · ${esc(generatedAt)}</div>
+    <div class="ft-l">${markSvg(20)}<div><b>${esc(t('reportPdf.createdWith'))}</b><span>${esc(t('reportPdf.dataNote'))}</span></div></div>
+    <div class="ft-r"><b class="pg"></b>${esc(input.workspaceName || t('reportPdf.personal'))} · ${esc(generatedAt)}</div>
   </footer>
   <div id="pages"></div>
-  <script>${PAGINATE_JS}</script>
+  <script>${buildPaginationScript()}</script>
 </body>
 </html>`;
 }
@@ -480,6 +485,6 @@ export async function exportReportPdf(input: ReportPdfInput): Promise<void> {
 
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Vademde Raporu', UTI: 'com.adobe.pdf' });
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('reportPdf.shareTitle'), UTI: 'com.adobe.pdf' });
   }
 }

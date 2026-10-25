@@ -86,12 +86,13 @@ struct AppMark: View {
 }
 
 struct EmptyState: View {
+    let language: WidgetLanguage
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             AppMark(size: 28)
             Spacer()
-            Text("Vademde’yi açın").font(.system(size: 14, weight: .semibold)).foregroundColor(VT.text)
-            Text("Vadeler burada görünecek").font(.system(size: 11)).foregroundColor(VT.text2)
+            Text(language.text(.openApp)).font(.system(size: 14, weight: .semibold)).foregroundColor(VT.text)
+            Text(language.text(.emptyBody)).font(.system(size: 11)).foregroundColor(VT.text2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }

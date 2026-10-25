@@ -8,7 +8,8 @@
 // hatırlatmalar artık yalnızca burada, tam zamanı geldiğinde (remind_at <= now()) Expo Push
 // API üzerinden gönderilir.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { BANK_NAMES, SERVICE_NAMES } from './names.ts';
+import { contentFor, type ReminderRow } from '../_shared/reminderContent.ts';
+import { resolveLocale } from '../_shared/locale.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -19,134 +20,6 @@ const CHANNEL_ID = 'obligation-reminders';
 
 // obligations tablosundaki terminal durumlar — docs/01-finansal-kayit-modeli.md §3.4
 const TERMINAL_OBLIGATION_STATUSES = new Set(['odendi', 'tahsil_edildi', 'iptal_edildi']);
-
-// services/notifications.ts REMINDER_STAGES ile birebir aynı aşamalar; cümlenin sonundaki zaman ifadesi.
-const STAGE_WHEN: Record<string, string> = {
-  '7_days_before': '7 Gün Sonra',
-  '3_days_before': '3 Gün Sonra',
-  due_day: 'Bugün',
-  overdue_1_day: '1 Gün Gecikti',
-};
-
-// Cümledeki "{Tür} {Ödemeniz|Tahsilatınız}" kısmı. Türkçe iyelik eki programatik türetilemediği
-// için elle yazılmış eşleme; yön ve tür bilinmiyorsa genel "Ödemeniz / Tahsilatınız".
-const PAYABLE_NOUN: Record<string, string> = {
-  kredi: 'Kredi Ödemeniz',
-  kredi_karti_ekstresi: 'Kredi Kartı Ödemeniz',
-  nakit_avans: 'Nakit Avans Ödemeniz',
-  cek: 'Çek Ödemeniz',
-  senet: 'Senet Ödemeniz',
-  fatura: 'Fatura Ödemeniz',
-  abonelik: 'Abonelik Ödemeniz',
-  kira: 'Kira Ödemeniz',
-  maas: 'Maaş Ödemeniz',
-  vergi_sgk: 'Vergi / SGK Ödemeniz',
-  tedarikci_borcu: 'Tedarikçi Ödemeniz',
-  sozlesme_odeme_plani: 'Sözleşme Ödemeniz',
-};
-const RECEIVABLE_NOUN: Record<string, string> = {
-  cek: 'Çek Tahsilatınız',
-  senet: 'Senet Tahsilatınız',
-  borc_verme: 'Borç Tahsilatınız',
-  musteri_alacagi: 'Müşteri Tahsilatınız',
-  kira: 'Kira Tahsilatınız',
-};
-
-const UNIT_LABEL: Record<string, string> = {
-  TRY: 'TL',
-  gram_altin: 'Gram Altın',
-  ceyrek_altin: 'Çeyrek Altın',
-  yarim_altin: 'Yarım Altın',
-  tam_altin: 'Tam Altın',
-  cumhuriyet_altini: 'Cumhuriyet Altını',
-};
-
-interface ReminderRow {
-  id: string;
-  workspace_id: string;
-  obligation_id: string | null;
-  account_id: string | null;
-  kind: 'obligation_due' | 'statement_upload' | 'card_payment_due';
-  stage: string;
-  remind_at: string;
-  obligation: {
-    id: string;
-    title: string;
-    direction: 'payable' | 'receivable';
-    status: string;
-    remaining_amount_minor: number;
-    currency_code: string;
-    document_type: string | null;
-    bank_code: string | null;
-    service_code: string | null;
-    counterparty: { name: string } | null;
-  } | null;
-  account: { id: string; name: string } | null;
-}
-
-// "10.000 TL", "10.000,50 TL", "2 Çeyrek Altın". Kuruşsuz tutarda ondalık yazılmaz.
-// Sikke birimlerinde (çeyrek vb.) tutar adet olarak saklanır (ondalık yok, bkz. valueUnits/units.ts).
-function formatAmount(amountMinor: number, currencyCode: string): string {
-  const isCoin = ['ceyrek_altin', 'yarim_altin', 'tam_altin', 'cumhuriyet_altini'].includes(currencyCode);
-  const value = isCoin ? amountMinor : (Number.isFinite(amountMinor) ? amountMinor : 0) / 100;
-  const hasFraction = Math.abs(value - Math.round(value)) > 1e-9;
-  const text = new Intl.NumberFormat('tr-TR', {
-    minimumFractionDigits: hasFraction ? 2 : 0,
-    maximumFractionDigits: 2,
-  }).format(value);
-  return `${text} ${UNIT_LABEL[currencyCode] ?? currencyCode}`;
-}
-
-// Cümlenin öznesi: bankalı türlerde banka adı, abonelikte servis adı, aksi halde karşı taraf, o da yoksa başlık.
-function subjectFor(o: NonNullable<ReminderRow['obligation']>): string {
-  if (o.bank_code && BANK_NAMES[o.bank_code]) return BANK_NAMES[o.bank_code];
-  if (o.service_code && SERVICE_NAMES[o.service_code]) return SERVICE_NAMES[o.service_code];
-  if (o.counterparty?.name) return o.counterparty.name;
-  return o.title;
-}
-
-function contentFor(
-  reminder: ReminderRow,
-  nextInstallmentAmountMinor: number | undefined
-): { title: string; body: string; data: Record<string, unknown> } | null {
-  if (reminder.kind === 'statement_upload' && reminder.account) {
-    return {
-      title: 'Ekstre yüklemeyi unutmayın',
-      body: `${reminder.account.name} — bu ayki ekstrenizi tarayın veya kart borcunu elle girin.`,
-      data: { accountId: reminder.account.id, stage: reminder.stage },
-    };
-  }
-  // Kartın son ödeme günü (ekstre kaydı olmadan, kartın son ödeme gününden — bkz. app
-  // services/creditCardReminders.ts syncCardPaymentDueReminders).
-  if (reminder.kind === 'card_payment_due' && reminder.account) {
-    const when = reminder.stage === 'due_day' ? 'bugün' : '3 gün sonra';
-    return {
-      title: 'Kredi kartı son ödeme',
-      body: `${reminder.account.name} son ödeme günü ${when}. Kart borcunuzu ödemeyi unutmayın.`,
-      data: { accountId: reminder.account.id, stage: reminder.stage },
-    };
-  }
-  if (reminder.obligation) {
-    const o = reminder.obligation;
-    const type = o.document_type ?? '';
-    const noun =
-      o.direction === 'payable'
-        ? (PAYABLE_NOUN[type] ?? 'Ödemeniz')
-        : (RECEIVABLE_NOUN[type] ?? 'Tahsilatınız');
-    const when = STAGE_WHEN[reminder.stage] ?? '';
-    // Taksitli borçlarda (kredi vb.) gösterilecek tutar bir sonraki bekleyen taksidin
-    // kendi tutarıdır, obligation'ın toplam bakiyesi değil — services/notifications.ts'teki
-    // getNextPendingInstallment ile aynı mantık (bkz. o dosyadaki yorum).
-    const amountMinor = nextInstallmentAmountMinor ?? o.remaining_amount_minor;
-    const title = o.direction === 'payable' ? 'Ödeme Hatırlatması' : 'Tahsilat Hatırlatması';
-    return {
-      title,
-      body: `${subjectFor(o)} ${formatAmount(amountMinor, o.currency_code)} Tutarındaki ${noun} ${when}`.trim(),
-      data: { obligationId: o.id, stage: reminder.stage },
-    };
-  }
-  return null;
-}
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -239,6 +112,11 @@ Deno.serve(async (_req: Request) => {
   }
 
   const allUserIds = [...new Set((members ?? []).map((m) => m.user_id))];
+  const { data: profiles, error: profilesError } = await adminClient.from('profiles').select('id, locale')
+    .in('id', allUserIds.length ? allUserIds : ['00000000-0000-0000-0000-000000000000']);
+  if (profilesError) return Response.json({ success: false, error: profilesError.message }, { status: 500 });
+  const localeByUser = new Map((profiles ?? []).map((p) => [p.id, resolveLocale(p.locale)]));
+
   const { data: tokenRows, error: tokensError } = await adminClient
     .from('push_tokens')
     .select('user_id, token')
@@ -271,32 +149,16 @@ Deno.serve(async (_req: Request) => {
   const deliveredReminderIds: string[] = [];
 
   for (const reminder of toSend) {
-    const content = contentFor(
-      reminder,
-      reminder.obligation_id ? nextInstallmentByObligation.get(reminder.obligation_id) : undefined
-    );
-    if (!content) continue;
-
     const userIds = userIdsByWorkspace.get(reminder.workspace_id) ?? [];
-    const tokens = userIds.flatMap((uid) => tokensByUser.get(uid) ?? []);
-
-    if (tokens.length === 0) {
-      // Kayıtlı push token yok (izin verilmemiş/hiç giriş yapılmamış cihaz) — push
-      // gönderilecek bir şey yok ama satır yine de 'delivered' işaretlenir, aksi halde
-      // her 15 dakikada bir tekrar işlenmeye çalışılırdı.
-      deliveredReminderIds.push(reminder.id);
-      continue;
-    }
-
-    for (const token of tokens) {
-      messages.push({
-        to: token,
-        title: content.title,
-        body: content.body,
-        data: content.data,
-        sound: 'default',
-        channelId: CHANNEL_ID,
-      });
+    for (const uid of userIds) {
+      const content = contentFor(reminder,
+        reminder.obligation_id ? nextInstallmentByObligation.get(reminder.obligation_id) : undefined,
+        localeByUser.get(uid) ?? 'tr');
+      if (!content) continue;
+      for (const token of tokensByUser.get(uid) ?? []) {
+        messages.push({ to: token, title: content.title, body: content.body, data: content.data,
+          sound: 'default', channelId: CHANNEL_ID });
+      }
     }
     deliveredReminderIds.push(reminder.id);
   }

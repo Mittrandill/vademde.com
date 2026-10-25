@@ -35,7 +35,10 @@ import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/util
 import { isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { showErrorAlert, showSaveSuccess, friendlyErrorMessage } from '@/utils/alerts';
-import { getInputDecimalSeparator } from '@/i18n/format';
+import { formatPercent, getInputDecimalSeparator } from '@/i18n/format';
+import { t, useLanguage } from '@/i18n';
+import { receiptMatchReasonLabel } from '@/features/receipts/matchReasons';
+import { documentWarningText } from '@/features/documents/warnings';
 
 // docs/04-ocr-belge-isleme.md §7.7 ve docs/09-kullanici-akislari.md "Dekont eşleştirme" —
 // taranan belge bir banka dekontu olduğunda kredi/fiş gibi bir "sonuç ekranı": okunan alanlar,
@@ -44,17 +47,21 @@ import { getInputDecimalSeparator } from '@/i18n/format';
 
 type MoneyDirection = 'expense' | 'income';
 
-const DIRECTIONS: { key: MoneyDirection; label: string }[] = [
-  { key: 'expense', label: 'Yaptığım Ödeme' },
-  { key: 'income', label: 'Aldığım Ödeme' },
-];
+function getDirections(): { key: MoneyDirection; label: string }[] {
+  return [
+    { key: 'expense', label: t('receiptReview.paid') },
+    { key: 'income', label: t('receiptReview.received') },
+  ];
+}
 
-const TRANSFER_TYPE_LABEL: Record<string, string> = {
-  havale: 'Havale',
-  eft: 'EFT',
-  fast: 'FAST',
-  diger: 'Diğer',
-};
+function getTransferTypeLabels(): Record<string, string> {
+  return {
+    havale: t('receiptReview.transfer'),
+    eft: t('receiptReview.eft'),
+    fast: t('receiptReview.fast'),
+    diger: t('receiptReview.other'),
+  };
+}
 
 interface ReceiptSummary {
   bankName?: string | null;
@@ -77,6 +84,7 @@ function isoDatePart(value: string | null | undefined): string | null {
 
 export default function ReceiptResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  useLanguage();
   const theme = useTheme();
   const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
@@ -166,11 +174,11 @@ export default function ReceiptResultScreen() {
   // quickAddCardMutation ile aynı desen).
   const quickAddBankAccountMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId || !ownSideBankCode) throw new Error('Banka bulunamadı');
+      if (!activeWorkspaceId || !ownSideBankCode) throw new Error(t('receiptReview.bankMissing'));
       const normalizedIban = ownSideIban ? normalizeIban(ownSideIban) : '';
       const account = await createAccount({
         workspace_id: activeWorkspaceId,
-        name: ownSideBankName ?? 'Banka Hesabı',
+        name: ownSideBankName ?? t('receiptReview.bankAccount'),
         type: 'bank',
         bank_code: ownSideBankCode,
         iban: isValidIbanFormat(normalizedIban) ? normalizedIban : null,
@@ -249,16 +257,16 @@ export default function ReceiptResultScreen() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId || !document) throw new Error('Belge yüklenemedi');
-      if (amountMinor === null || amountMinor <= 0) throw new Error('Tutar okunamadı, kontrol edin');
+      if (!activeWorkspaceId || !document) throw new Error(t('receiptReview.loadFailed'));
+      if (amountMinor === null || amountMinor <= 0) throw new Error(t('receiptReview.invalidAmount'));
       const parsedDate = new Date(dateStr);
-      if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
+      if (Number.isNaN(parsedDate.getTime())) throw new Error(t('receiptReview.invalidDate'));
       const paidAt = parsedDate.toISOString();
 
       if (activeMatch) {
         const obligation = activeMatch.obligation;
         if (payCapMinor != null && amountMinor > payCapMinor) {
-          throw new Error('Dekont tutarı kalan borcu aşıyor. Fazla tutarı kaybetmemek için Ödeme Yap / Tahsilat Al ekranından avanslı dağıtım yapın.');
+          throw new Error(t('receiptReview.exceedsDebt'));
         }
         await recordPayment({
           workspace_id: activeWorkspaceId,
@@ -278,7 +286,7 @@ export default function ReceiptResultScreen() {
         return { obligationId: obligation.id };
       }
 
-      if (!accountId) throw new Error('Hareketi kaydetmek için bir hesap seçin');
+      if (!accountId) throw new Error(t('receiptReview.selectAccount'));
       // KİŞİ/FİRMA alanından kullanıcı zaten bir cariyle eşleştiyse (elle ya da otomatik) o
       // kullanılır. Eşleşmediyse ve OCR bir isim okuduysa (ör. "Ali Kaya" kayıtlı değil), bu
       // isimle yeni bir cari — faturada/fişte olduğu gibi (bkz. app/documents/[id]/review.tsx
@@ -304,14 +312,14 @@ export default function ReceiptResultScreen() {
         amount_minor: amountMinor,
         currency_code: currency,
         occurred_at: paidAt,
-        description: summary?.description?.trim() || counterpartyName || 'Banka dekontu',
+        description: summary?.description?.trim() || counterpartyName || t('receiptReview.bankReceipt'),
       });
       await markDocumentConfirmed(document.id, { transactionId: transaction.id });
       return { obligationId: null };
     },
     onSuccess: ({ obligationId }) => {
       showSaveSuccess(
-        obligationId ? 'Ödeme kaydedildi ve dekont ödemeye eklendi.' : 'Hareket kaydedildi.',
+        obligationId ? t('receiptReview.paymentSaved') : t('receiptReview.transactionSaved'),
         () => {
           if (obligationId) router.replace({ pathname: '/obligations/[id]', params: { id: obligationId } });
           else router.replace('/(tabs)/hareketler');
@@ -331,9 +339,9 @@ export default function ReceiptResultScreen() {
   });
 
   function confirmDiscard() {
-    Alert.alert('Dekont silinsin mi?', 'Taranan dekont kaydedilmeden atılır.', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => discardMutation.mutate() },
+    Alert.alert(t('receiptReview.discardTitle'), t('receiptReview.discardBody'), [
+      { text: t('receiptReview.cancel'), style: 'cancel' },
+      { text: t('receiptReview.delete'), style: 'destructive', onPress: () => discardMutation.mutate() },
     ]);
   }
 
@@ -348,17 +356,17 @@ export default function ReceiptResultScreen() {
   }
 
   const detailRows: { label: string; value: string | null | undefined }[] = [
-    { label: 'GÖNDEREN', value: [summary?.senderName, summary?.senderIban].filter(Boolean).join('\n') },
-    { label: 'ALICI', value: [summary?.recipientName, summary?.recipientIban].filter(Boolean).join('\n') },
-    { label: 'BANKA', value: summary?.bankName },
+    { label: t('receiptReview.sender'), value: [summary?.senderName, summary?.senderIban].filter(Boolean).join('\n') },
+    { label: t('receiptReview.recipient'), value: [summary?.recipientName, summary?.recipientIban].filter(Boolean).join('\n') },
+    { label: t('receiptReview.bank'), value: summary?.bankName },
     {
-      label: 'İŞLEM TÜRÜ',
-      value: summary?.transferType ? (TRANSFER_TYPE_LABEL[summary.transferType] ?? summary.transferType) : null,
+      label: t('receiptReview.transferType'),
+      value: summary?.transferType ? (getTransferTypeLabels()[summary.transferType] ?? summary.transferType) : null,
     },
-    { label: 'REFERANS NO', value: summary?.referenceNo },
-    { label: 'AÇIKLAMA', value: summary?.description },
+    { label: t('receiptReview.reference'), value: summary?.referenceNo },
+    { label: t('receiptReview.description'), value: summary?.description },
     {
-      label: 'MASRAF',
+      label: t('receiptReview.fee'),
       value: summary?.feeMinor ? formatMinorAmount(summary.feeMinor, currency) : null,
     },
   ].filter((row) => !!row.value);
@@ -374,7 +382,7 @@ export default function ReceiptResultScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}
         >
-          <ScreenHeader title="Dekontu kontrol et" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
+          <ScreenHeader title={t('receiptReview.title')} left={{ icon: 'close', accessibilityLabel: t('receiptReview.close'), onPress: () => router.back() }} />
 
           {imageUrl ? (
             <View
@@ -402,7 +410,7 @@ export default function ReceiptResultScreen() {
 
           {document.overall_confidence !== null && document.overall_confidence !== undefined ? (
             <Text variant="label" color="textSecondary">
-              GENEL GÜVEN · %{Math.round((document.overall_confidence ?? 0) * 100)}
+              {t('receiptReview.confidence', { percent: formatPercent(Math.round((document.overall_confidence ?? 0) * 100)) })}
             </Text>
           ) : null}
 
@@ -412,9 +420,9 @@ export default function ReceiptResultScreen() {
                 <Row gap="sm" align="center">
                   <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textPrimary} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle">Dekontu arşivle</Text>
+                    <Text variant="cardTitle">{t('receiptReview.archiveTitle')}</Text>
                     <Text variant="caption" color="textSecondary">
-                      Plus ile dekont ödemeye eklenir, arşivde saklanır ve tek dokunuşla açılır. Şimdilik yalnızca ödeme kaydedilir.
+                      {t('receiptReview.archiveHelp')}
                     </Text>
                   </Stack>
                   <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
@@ -429,12 +437,12 @@ export default function ReceiptResultScreen() {
                 <Row gap="xs" align="center">
                   <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
                   <Text variant="cardTitle" style={{ color: theme.colors.danger }}>
-                    Kontrol edilmesi gerekenler
+                    {t('receiptReview.warnings')}
                   </Text>
                 </Row>
-                {warnings.map((warning) => (
-                  <Text key={warning} variant="caption" color="textSecondary">
-                    • {warning}
+                {warnings.map((warning, index) => (
+                  <Text key={index} variant="caption" color="textSecondary">
+                    • {documentWarningText(warning)}
                   </Text>
                 ))}
               </Stack>
@@ -458,10 +466,10 @@ export default function ReceiptResultScreen() {
 
           <Stack gap="xs">
             <Text variant="label" color="textSecondary">
-              YÖN
+              {t('receiptReview.direction')}
             </Text>
             <SegmentedControl
-              options={DIRECTIONS}
+              options={getDirections()}
               value={direction}
               onChange={(value) => {
                 setDirection(value);
@@ -475,16 +483,16 @@ export default function ReceiptResultScreen() {
 
           <Stack gap="sm">
             <Text variant="label" color="textSecondary">
-              TUTAR
+              {t('receiptReview.amount')}
             </Text>
             <AmountField value={amount} onChangeText={(value) => { setAmount(value); setSelectedMatch(null); }} />
           </Stack>
 
-          <DateField label="İŞLEM TARİHİ" value={dateStr} onChangeText={setDateStr} />
+          <DateField label={t('receiptReview.date')} value={dateStr} onChangeText={setDateStr} />
 
           <Stack gap="sm">
             <Text variant="label" color="textSecondary">
-              KİŞİ / FİRMA
+              {t('receiptReview.party')}
             </Text>
             {activeWorkspaceId ? (
               <CounterpartyPicker
@@ -501,7 +509,7 @@ export default function ReceiptResultScreen() {
 
           <Stack gap="sm">
             <Text variant="label" color="textSecondary">
-              BU ÖDEME HANGİ KAYITLA İLGİLİ?
+              {t('receiptReview.relatedRecord')}
             </Text>
             {matchesQuery.isPending ? (
               <ActivityIndicator color={theme.colors.textPrimary} />
@@ -528,11 +536,11 @@ export default function ReceiptResultScreen() {
                     <Row gap="sm" align="center">
                       <RadioDot selected={isStandalone} />
                       <Stack gap="xxs" style={{ flex: 1 }}>
-                        <Text variant="cardTitle">Eşleşme yok</Text>
+                        <Text variant="cardTitle">{t('receiptReview.noMatch')}</Text>
                         <Text variant="caption" color="textSecondary">
                           {counterpartyId
-                            ? `Bu kişiyle açık bir borç/alacak yok; ön ödeme olarak bağımsız bir ${direction === 'expense' ? 'gider' : 'gelir'} kaydedilir.`
-                            : `Bağımsız bir ${direction === 'expense' ? 'gider' : 'gelir'} hareketi olarak kaydet`}
+                            ? t(direction === 'expense' ? 'receiptReview.noOpenExpense' : 'receiptReview.noOpenIncome')
+                            : t(direction === 'expense' ? 'receiptReview.standaloneExpense' : 'receiptReview.standaloneIncome')}
                         </Text>
                       </Stack>
                     </Row>
@@ -540,14 +548,14 @@ export default function ReceiptResultScreen() {
                 </Pressable>
                 {matches.length === 0 ? (
                   <Text variant="caption" color="textSecondary">
-                    Bu dekonta uyan açık bir borç/alacak bulunamadı.
+                    {t('receiptReview.noOpenMatch')}
                   </Text>
                 ) : null}
               </>
             )}
             {exceedsRemaining && payCapMinor !== null ? (
               <Text variant="caption" style={{ color: theme.colors.danger }}>
-                Tutar kalan tutardan fazla; en fazla {formatMinorAmount(payCapMinor, currency)} kaydedilir.
+                {t('receiptReview.exceedsRemaining', { amount: formatMinorAmount(payCapMinor, currency) })}
               </Text>
             ) : null}
           </Stack>
@@ -564,20 +572,20 @@ export default function ReceiptResultScreen() {
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">
                       {quickAddBankAccountMutation.isPending
-                        ? 'Hesap ekleniyor…'
-                        : `${ownSideBankName ?? 'Bu banka'} hesabınız kayıtlı değil`}
+                        ? t('receiptReview.addingAccount')
+                        : t('receiptReview.unregisteredBank', { bank: ownSideBankName ?? t('receiptReview.thisBank') })}
                     </Text>
                     <Text variant="caption" color="textSecondary">
                       {ownSideIban
-                        ? 'Dekonttaki IBAN ve banka ile otomatik eklensin, elle girmeyin.'
-                        : 'Dekonttaki bankayla otomatik eklensin, elle girmeyin.'}
+                        ? t('receiptReview.addWithIban')
+                        : t('receiptReview.addWithBank')}
                     </Text>
                   </Stack>
                   {quickAddBankAccountMutation.isPending ? (
                     <ActivityIndicator color={theme.colors.textPrimary} />
                   ) : (
                     <Text variant="cardTitle" style={{ color: theme.colors.textPrimary }}>
-                      Ekle
+                      {t('receiptReview.add')}
                     </Text>
                   )}
                 </Row>
@@ -592,7 +600,7 @@ export default function ReceiptResultScreen() {
             // ama hiçbir hesabın bakiyesi değişmez ve Hareketler'de hiç görünmez.
             <Stack gap="sm">
               <Text variant="label" color="textSecondary">
-                HESAP
+                {t('receiptReview.account')}
               </Text>
               <AccountPicker accounts={selectableAccounts} selectedId={accountId} onSelect={setAccountId} />
             </Stack>
@@ -600,13 +608,13 @@ export default function ReceiptResultScreen() {
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">
-              {friendlyErrorMessage(saveMutation.error, 'Kayıt oluşturulamadı')}
+              {friendlyErrorMessage(saveMutation.error, t('receiptReview.createFailed'))}
             </Text>
           ) : null}
 
           <Stack gap="sm">
             <Button
-              label="Ödeme olarak kaydet"
+              label={t('receiptReview.save')}
               onPress={() => saveMutation.mutate()}
               loading={saveMutation.isPending}
               disabled={
@@ -617,9 +625,9 @@ export default function ReceiptResultScreen() {
               }
             />
             <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-              Siz onaylamadan hiçbir kayıt oluşmaz.
+              {t('receiptReview.confirmHelp')}
             </Text>
-            <Button label="İptal Et" variant="danger" onPress={confirmDiscard} loading={discardMutation.isPending} />
+            <Button label={t('receiptReview.discard')} variant="danger" onPress={confirmDiscard} loading={discardMutation.isPending} />
           </Stack>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -659,6 +667,7 @@ function MatchOption({
   selected: boolean;
   onSelect: () => void;
 }) {
+  useLanguage();
   const theme = useTheme();
   const { obligation, installment } = match;
   const remaining = installment ? installment.remaining_amount_minor : obligation.remaining_amount_minor;
@@ -677,8 +686,8 @@ function MatchOption({
             </Text>
             <Text variant="caption" color="textSecondary" numberOfLines={1}>
               {obligation.counterparty?.name ? `${obligation.counterparty.name} · ` : ''}
-              {installment ? `${installment.installment_number}. taksit · ` : ''}
-              {match.reasons.join(' · ')}
+              {installment ? t('receiptReview.nthInstallment', { n: installment.installment_number }) : ''}
+              {match.reasons.map(receiptMatchReasonLabel).join(' · ')}
             </Text>
           </Stack>
           <Stack gap="xxs" align="flex-end">
@@ -686,7 +695,7 @@ function MatchOption({
               {formatMinorAmount(remaining, currency)}
             </Text>
             <Text variant="caption" color="textSecondary">
-              kalan
+              {t('receiptReview.remaining')}
             </Text>
           </Stack>
         </Row>

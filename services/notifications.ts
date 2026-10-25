@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import i18n, { t } from '@/i18n';
 
 import { getRemindersForObligation, upsertReminder } from '@/features/reminders/api';
 import { getNextPendingInstallment, type Obligation } from '@/features/obligations/api';
@@ -8,14 +9,17 @@ import { reconcileReminders, type ReminderTarget } from '@/services/reminderSync
 // docs/08-tasarim-sistemi.md ile ilgisiz, salt platform notu: Android 8+ açık bir kanal
 // olmadan varsayılan önem/ses davranışı kullanır — bu, cihazlar arası tutarsız görünüme
 // yol açabilir. app.json'da hiç kanal tanımı yoktu; burada bir kere, uygulama açılışında kurulur.
-if (Platform.OS === 'android') {
-  Notifications.setNotificationChannelAsync('obligation-reminders', {
-    name: 'Borç/alacak hatırlatmaları',
+function updateReminderChannel() {
+  if (Platform.OS !== 'android') return;
+  return Notifications.setNotificationChannelAsync('obligation-reminders', {
+    name: t('notifications.reminderChannel'),
     importance: Notifications.AndroidImportance.DEFAULT,
     sound: 'default',
     vibrationPattern: [0, 250, 250, 250],
   }).catch(() => {});
 }
+updateReminderChannel();
+i18n.on('languageChanged', updateReminderChannel);
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({

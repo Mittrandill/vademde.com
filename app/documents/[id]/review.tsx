@@ -74,8 +74,9 @@ import {
   matchStatementLines,
   statementMatchDateRange,
 } from '@/utils/cardStatement';
-import { getLocaleTag } from '@/i18n';
-import { getInputDecimalSeparator } from '@/i18n/format';
+import { getLocaleTag, t, useLanguage } from '@/i18n';
+import { formatPercent, getInputDecimalSeparator } from '@/i18n/format';
+import { documentWarningText } from '@/features/documents/warnings';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
@@ -119,6 +120,7 @@ function isoOrNull(value: string | null | undefined): string | null {
 }
 
 export default function DocumentReviewScreen() {
+  useLanguage();
   // accountId/documentType: hesap detayından "Ekstresi Ekle → Kameradan Tara" ile
   // gelindiğinde tara.tsx üzerinden taşınır (bkz. B2 notu). Kullanıcının açık niyeti
   // olduğu için aşağıdaki OCR tabanlı otomatik eşleştirmelerden (cardLastFourFromOcr)
@@ -362,8 +364,8 @@ export default function DocumentReviewScreen() {
     }
     setTitle(
       document.counterparty_name
-        ? `${DOCUMENT_TYPE_LABEL[document.document_type ?? ''] ?? 'Belge'} — ${document.counterparty_name}`
-        : (DOCUMENT_TYPE_LABEL[document.document_type ?? ''] ?? 'Yeni Belge')
+        ? `${DOCUMENT_TYPE_LABEL[document.document_type ?? ''] ?? t('documentReview.document')} — ${document.counterparty_name}`
+        : (DOCUMENT_TYPE_LABEL[document.document_type ?? ''] ?? t('documentReview.newDocument'))
     );
     setInitialized(true);
 
@@ -497,12 +499,12 @@ export default function DocumentReviewScreen() {
   // sonradan tamamlanır.
   const quickAddCardMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId || !cardLastFourFromOcr) throw new Error('Kart bilgisi eksik');
+      if (!activeWorkspaceId || !cardLastFourFromOcr) throw new Error(t('documentReview.missingCard'));
       const statementDay = cardStatementDateFromOcr ? Number(cardStatementDateFromOcr.slice(8, 10)) : NaN;
       const paymentDueDay = dueDate ? Number(dueDate.slice(8, 10)) : NaN;
       const account = await createAccount({
         workspace_id: activeWorkspaceId,
-        name: extractedBankName ? `${extractedBankName} Kredi Kartı` : `Kredi Kartı •••• ${cardLastFourFromOcr}`,
+        name: extractedBankName ? t('documentReview.namedCard', { bank: extractedBankName }) : t('documentReview.numberedCard', { lastFour: cardLastFourFromOcr }),
         type: 'credit_card',
         bank_code: bankCode,
         card_last_four: cardLastFourFromOcr,
@@ -533,11 +535,11 @@ export default function DocumentReviewScreen() {
     }
     setCardQuickAddOffered(true);
     Alert.alert(
-      'Kart Kayıtlı Değil',
-      `•••• ${cardLastFourFromOcr}${extractedBankName ? ` (${extractedBankName})` : ''} numaralı kart kayıtlı hesaplarınızda bulunamadı. Kayıtlı kartlarınıza eklemek ister misiniz?`,
+      t('documentReview.unregisteredCard'),
+      t('documentReview.offerCard', { lastFour: cardLastFourFromOcr, bank: extractedBankName ? ` (${extractedBankName})` : '' }),
       [
-        { text: 'Şimdi Değil', style: 'cancel' },
-        { text: 'Kartı Ekle', onPress: () => quickAddCardMutation.mutate() },
+        { text: t('documentReview.notNow'), style: 'cancel' },
+        { text: t('documentReview.addCard'), onPress: () => quickAddCardMutation.mutate() },
       ]
     );
     // quickAddCardMutation kasıtlı olarak deps dışında bırakıldı (yukarıdaki not).
@@ -562,6 +564,8 @@ export default function DocumentReviewScreen() {
     const feeCategory =
       categoriesQuery.data.find((c) => c.name === 'Banka & Kart Ücretleri') ??
       categoriesQuery.data.find((c) => c.name === 'Banka Masrafları') ??
+      categoriesQuery.data.find((c) => c.name === 'Bank & Card Fees') ??
+      categoriesQuery.data.find((c) => c.name === 'Bank Charges') ??
       null;
     const initial: Record<string, string | null> = {};
     for (const item of lineItemsQuery.data.filter(isCardExpenseLine)) {
@@ -612,7 +616,7 @@ export default function DocumentReviewScreen() {
     setCategoryAutoSet(true);
 
     const existing = categoriesQuery.data.find(
-      (c) => c.name.trim().toLocaleLowerCase('tr-TR') === 'kredi'
+      (c) => ['kredi', 'loan'].includes(c.name.trim().toLocaleLowerCase('tr-TR'))
     );
     if (existing) {
       setCategoryId(existing.id);
@@ -621,7 +625,7 @@ export default function DocumentReviewScreen() {
 
     createCategory({
       workspace_id: activeWorkspaceId,
-      name: 'Kredi',
+      name: t('domain.documentTypes.kredi'),
       kind: categoryKind,
       icon: DOCUMENT_TYPE_ICON.kredi,
     })
@@ -694,11 +698,11 @@ export default function DocumentReviewScreen() {
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId) throw new Error('Çalışma alanı bulunamadı');
+      if (!activeWorkspaceId) throw new Error(t('documentReview.noWorkspace'));
       const amountMinor = parseAmountToMinor(amount);
       // Eskiden çözümlenemeyen tutar sessizce NaN olup kayda yazılıyordu; artık kullanıcıya
       // dönülür (docs/01-finansal-kayit-modeli.md §8.1 — tutarsız veri asla yazılmaz).
-      if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
+      if (amountMinor === null) throw new Error(t('documentReview.invalidAmount'));
 
       // Kullanıcı KİŞİ/FİRMA alanından mevcut bir kayıtla eşleştirmediyse (bkz.
       // CounterpartyPicker) ve OCR bir isim okuduysa, yeni kişi/firma kaydı ancak burada —
@@ -726,12 +730,12 @@ export default function DocumentReviewScreen() {
 
       if (direction === 'payable' || direction === 'receivable') {
         let pastPaymentsFailed = false;
-        if (!documentType) throw new Error('Belge türü seçin');
+        if (!documentType) throw new Error(t('documentReview.selectType'));
         if (splitsCardSpending && statementCandidatesQuery.isFetching) {
-          throw new Error('Mükerrer hareket kontrolünün tamamlanmasını bekleyin');
+          throw new Error(t('documentReview.waitDuplicateCheck'));
         }
         if (splitsCardSpending && statementCandidatesQuery.isError) {
-          throw new Error('Mevcut hareketler karşılaştırılamadı. Tekrar deneyin');
+          throw new Error(t('documentReview.comparisonFailed'));
         }
 
         const hasInstallmentPlan = documentType === 'kredi' && installmentDrafts.length > 0;
@@ -787,7 +791,7 @@ export default function DocumentReviewScreen() {
           workspace_id: activeWorkspaceId,
           direction,
           document_type: documentType,
-          title: title.trim() || 'Belge',
+          title: title.trim() || t('documentReview.document'),
           total_amount_minor: installmentsSumMinor ?? amountMinor,
           currency_code: isCreditCardStatement ? 'TRY' : valueUnitCode,
           value_unit_type: getValueUnit(isCreditCardStatement ? 'TRY' : valueUnitCode).unitType,
@@ -797,7 +801,7 @@ export default function DocumentReviewScreen() {
           // Harcamalar satır satır kategorize edildiyse kart borcunun kendisi kategorisizdir.
           category_id: splitsCardSpending ? null : categoryId,
           bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
-          notes: documentNumber.trim() ? `Belge no: ${documentNumber.trim()}` : null,
+          notes: documentNumber.trim() ? t('documentReview.documentNumberNote', { number: documentNumber.trim() }) : null,
         });
         await linkDocumentObligation(id as string, obligation.id);
 
@@ -841,7 +845,7 @@ export default function DocumentReviewScreen() {
               // new Date(...).toISOString() RangeError fırlatıp tüm onayı düşürmesin diye
               // geçerlilik kontrol edilir.
               paid_at: isoOrNull(installment.due_date) ?? new Date().toISOString(),
-              notes: 'Otomatik: vadesi geçmiş taksit',
+              notes: t('documentReview.pastPaymentNote'),
             }));
           try {
             await recordPastInstallmentPayments(paidRows);
@@ -915,7 +919,7 @@ export default function DocumentReviewScreen() {
               currencyCode: obligation.currency_code,
               amountMinor: leftoverMinor,
               parentObligationId: obligation.id,
-              note: `${documentType === 'cek' ? 'Çek' : 'Senet'} fazlası`,
+              note: t('documentReview.instrumentExcess', { type: documentType === 'cek' ? t('documentReview.check') : t('documentReview.note') }),
             });
           }
         }
@@ -932,7 +936,7 @@ export default function DocumentReviewScreen() {
         return { installmentPlanFailed, cardTransactionsFailed, pastPaymentsFailed };
       }
 
-      if (!accountId) throw new Error('Hesap seçin');
+      if (!accountId) throw new Error(t('documentReview.selectAccount'));
       const transaction =
         direction === 'income' || direction === 'expense'
           ? await createTransaction({
@@ -968,20 +972,20 @@ export default function DocumentReviewScreen() {
       // Kısmi başarılar sessizce geçilmez: ana kayıt oluştu ama yan kayıtlar
       // (taksit planı / ekstre harcamaları) yazılamadıysa kullanıcı bunu bilmeli.
       const partialFailureMessage = result?.pastPaymentsFailed
-        ? 'Borç ve taksit planı kaydedildi ancak geçmiş taksit ödemeleri kaydedilemedi. Bu taksitler ödenmiş sayılmadı; kaydı açıp ödemeleri kontrol edin. Belgeyi yeniden onaylamayın.'
+        ? t('documentReview.pastPaymentsFailed')
         : result?.installmentPlanFailed
-        ? 'Borç kaydedildi ancak taksit planı otomatik oluşturulamadı. Kaydı açıp taksitleri manuel ekleyebilirsiniz.'
+        ? t('documentReview.planFailed')
         : result?.cardTransactionsFailed
-          ? 'Kart borcu kaydedildi ancak ekstre harcamaları işlem olarak eklenemedi. Hareketler ekranından manuel ekleyebilirsiniz.'
+          ? t('documentReview.spendingFailed')
           : null;
 
       if (partialFailureMessage) {
         Alert.alert(
-          'Kayıt kısmen tamamlandı',
+          t('documentReview.partialSuccess'),
           partialFailureMessage,
           [
             {
-              text: 'Tamam',
+              text: t('documentReview.done'),
               onPress: () => {
                 router.replace('/(tabs)/hareketler');
                 InteractionManager.runAfterInteractions(invalidateAll);
@@ -991,7 +995,7 @@ export default function DocumentReviewScreen() {
         );
       } else {
         showSaveSuccess(
-          'Belge başarıyla onaylandı ve kayıt oluşturuldu.',
+          t('documentReview.confirmed'),
           () => router.replace('/(tabs)/hareketler'),
           invalidateAll
         );
@@ -1005,7 +1009,7 @@ export default function DocumentReviewScreen() {
   const discardMutation = useMutation({
     mutationFn: () => discardDocument(id as string),
     onSuccess: () => {
-      showSaveSuccess('Belge başarıyla silindi.', () => router.back(), () => {
+      showSaveSuccess(t('documentReview.deleted'), () => router.back(), () => {
         if (activeWorkspaceId) {
           queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'financial_documents'] });
         }
@@ -1015,11 +1019,11 @@ export default function DocumentReviewScreen() {
 
   function handleDiscard() {
     Alert.alert(
-      'Belgeyi İptal Et',
-      'Bu belge inceleme kuyruğundan kaldırılacak ve finansal kayda dönüştürülmeyecek. Emin misiniz?',
+      t('documentReview.discardTitle'),
+      t('documentReview.discardBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'İptal Et', style: 'destructive', onPress: () => discardMutation.mutate() },
+        { text: t('documentReview.cancel'), style: 'cancel' },
+        { text: t('documentReview.discard'), style: 'destructive', onPress: () => discardMutation.mutate() },
       ]
     );
   }
@@ -1046,7 +1050,7 @@ export default function DocumentReviewScreen() {
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text variant="body" color="textSecondary">
-            Yükleniyor...
+            {t('documentReview.loading')}
           </Text>
         </Stack>
       </SafeAreaView>
@@ -1090,8 +1094,8 @@ export default function DocumentReviewScreen() {
   const totalInterestMinor = totalRepaymentMinor !== null ? totalRepaymentMinor - principalMinor : null;
 
   // Gezinme çubuğunda 17 pt tek satır: uzun tür adlarında (ör. Kredi Kartı Ekstresi) yalnızca "Kontrol et".
-  const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? 'Belge') : 'Belge';
-  const reviewTitle = typeLabel.length > 10 ? 'Kontrol et' : `${typeLabel} · Kontrol et`;
+  const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? t('documentReview.document')) : t('documentReview.document');
+  const reviewTitle = typeLabel.length > 10 ? t('documentReview.review') : t('documentReview.reviewType', { type: typeLabel });
   const isPdf = document.mime_type === 'application/pdf';
   // Ödeme planı tablosu satırları (OCR taslakları) ve özet değerler.
   const todayIso = localIsoDate();
@@ -1125,25 +1129,25 @@ export default function DocumentReviewScreen() {
       setAccountId(null);
     }
   }
-  const sideLabels = realized ? { out: 'Gider', in: 'Gelir' } : { out: 'Ben ödeyeceğim', in: 'Ben tahsil edeceğim' };
+  const sideLabels = realized ? { out: t('documentReview.expense'), in: t('documentReview.income') } : { out: t('documentReview.willPay'), in: t('documentReview.willCollect') };
   const accountRequired = realized || isCreditCardStatement || splitsCardSpending;
   const accountLabel = isCreditCardStatement
-    ? 'Kredi kartı'
+    ? t('documentReview.creditCard')
     : realized
       ? side === 'out'
-        ? 'Ödendiği hesap'
-        : 'Girdiği hesap'
+        ? t('documentReview.paidFrom')
+        : t('documentReview.receivedInto')
       : side === 'out'
-        ? 'Ödenecek hesap'
-        : 'Tahsil edilecek hesap';
-  const selectedType = DOCUMENT_TYPES.find((t) => t.id === documentType) ?? null;
+        ? t('documentReview.payFrom')
+        : t('documentReview.collectInto');
+  const selectedType = DOCUMENT_TYPES.find((option) => option.id === documentType) ?? null;
   const detectedType = !!document.document_type && document.document_type === documentType;
 
   return (
     <SafeAreaView key={reflowKey} edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={{ paddingHorizontal: theme.screenEdge.standard }}>
-          <ScreenHeader inline title={reviewTitle} leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }} />
+          <ScreenHeader inline title={reviewTitle} leftLabel={{ label: t('documentReview.cancel'), onPress: () => router.back() }} />
         </View>
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -1153,7 +1157,7 @@ export default function DocumentReviewScreen() {
             {/* Belge önizlemesi: hafif dolgulu kutuda kâğıt; sağ altta Büyüt / Aç, sol üstte güven. */}
             <Pressable
               accessibilityRole="imagebutton"
-              accessibilityLabel={isPdf ? 'Belgeyi aç' : 'Belgeyi büyüt'}
+              accessibilityLabel={isPdf ? t('documentReview.openDocument') : t('documentReview.enlargeDocument')}
               disabled={!imageUrl}
               onPress={() => {
                 if (!imageUrl) return;
@@ -1197,14 +1201,14 @@ export default function DocumentReviewScreen() {
                 <View style={[overlayChipStyle, { top: 10, left: 10 }]}>
                   <Ionicons name="scan-outline" size={12} color="#FFFFFF" />
                   <Text style={{ fontSize: 12, fontWeight: '600', color: '#FFFFFF' }}>
-                    Güven %{Math.round((document.overall_confidence ?? 0) * 100)}
+                    {t('documentReview.confidence', { percent: formatPercent(Math.round((document.overall_confidence ?? 0) * 100)) })}
                   </Text>
                 </View>
               ) : null}
               {imageUrl ? (
                 <View style={[overlayChipStyle, { right: 10, bottom: 10 }]}>
                   <Ionicons name={isPdf ? 'open-outline' : 'expand-outline'} size={12} color="#FFFFFF" />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#FFFFFF' }}>{isPdf ? 'PDF’i aç' : 'Büyüt'}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#FFFFFF' }}>{isPdf ? t('documentReview.openPdf') : t('documentReview.enlarge')}</Text>
                 </View>
               ) : null}
             </Pressable>
@@ -1214,10 +1218,10 @@ export default function DocumentReviewScreen() {
               <View style={{ flexDirection: 'row', gap: 10, padding: 12, borderRadius: theme.radius.group, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.13) }}>
                 <Ionicons name="alert-circle" size={20} color={theme.colors.attentionMarker} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600' }}>Kontrol edilmesi gerekenler</Text>
-                  {(warningsQuery.data ?? []).map((warning) => (
-                    <Text key={warning} variant="caption" style={{ color: theme.colors.textPrimary }}>
-                      {warning}
+                  <Text style={{ fontSize: 15, fontWeight: '600' }}>{t('documentReview.warnings')}</Text>
+                  {(warningsQuery.data ?? []).map((warning, index) => (
+                    <Text key={index} variant="caption" style={{ color: theme.colors.textPrimary }}>
+                      {documentWarningText(warning)}
                     </Text>
                   ))}
                 </View>
@@ -1239,14 +1243,14 @@ export default function DocumentReviewScreen() {
                   )}
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontSize: 17, fontWeight: '600' }} numberOfLines={1}>
-                      {selectedType?.name ?? 'Belge türü seçin'}
+                      {selectedType?.name ?? t('documentReview.selectType')}
                     </Text>
                     <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                      {detectedType ? 'Belge türü otomatik algılandı' : selectedType ? 'Belge türü elle seçildi' : 'Belge türü okunamadı'}
+                      {detectedType ? t('documentReview.typeDetected') : selectedType ? t('documentReview.typeSelected') : t('documentReview.typeUnreadable')}
                     </Text>
                   </View>
                   <Pressable accessibilityRole="button" onPress={open} hitSlop={8}>
-                    <Text style={{ fontSize: 15, fontWeight: '500', color: theme.colors.textSecondary }}>Değiştir</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '500', color: theme.colors.textSecondary }}>{t('documentReview.change')}</Text>
                   </Pressable>
                 </View>
               )}
@@ -1264,8 +1268,8 @@ export default function DocumentReviewScreen() {
               {alwaysScheduled ? null : (
                 <SegmentedControl
                   options={[
-                    { key: 'scheduled', label: side === 'out' ? 'Vadeli · ödenecek' : 'Vadeli · tahsil edilecek' },
-                    { key: 'realized', label: side === 'out' ? 'Ödendi · gider' : 'Tahsil edildi · gelir' },
+                    { key: 'scheduled', label: side === 'out' ? t('documentReview.scheduledPayable') : t('documentReview.scheduledReceivable') },
+                    { key: 'realized', label: side === 'out' ? t('documentReview.paidExpense') : t('documentReview.collectedIncome') },
                   ]}
                   value={realized ? 'realized' : 'scheduled'}
                   onChange={(next) =>
@@ -1277,19 +1281,19 @@ export default function DocumentReviewScreen() {
 
             {/* Kaydın kimliği üstte: başlık, belge no, kategori. */}
             <FieldGroup>
-              <TextField label={isLoanDocument ? 'Kredi adı' : 'Başlık'} value={title} onChangeText={setTitle} />
+              <TextField label={isLoanDocument ? t('documentReview.loanName') : t('documentReview.title')} value={title} onChangeText={setTitle} />
               {!realized ? (
-                <TextField label="Belge no" tag={confidenceTag('documentNumber')} value={documentNumber} onChangeText={setDocumentNumber} />
+                <TextField label={t('documentReview.documentNumber')} tag={confidenceTag('documentNumber')} value={documentNumber} onChangeText={setDocumentNumber} />
               ) : null}
               {!splitsCardSpending && (categoriesQuery.data ?? []).length > 0 ? (
-                <CategoryPicker label="Kategori" categories={categoriesQuery.data ?? []} selectedId={categoryId} onSelect={setCategoryId} />
+                <CategoryPicker label={t('documentReview.category')} categories={categoriesQuery.data ?? []} selectedId={categoryId} onSelect={setCategoryId} />
               ) : null}
             </FieldGroup>
 
             {/* Ana alanlar tek gruplu yüzeyde (tuval .grp > .f / .row). */}
             <FieldGroup>
               <AmountField
-                label={isLoanDocument ? 'Kredi tutarı (ana para)' : isCreditCardStatement ? 'Dönem borcu' : 'Tutar'}
+                label={isLoanDocument ? t('documentReview.principal') : isCreditCardStatement ? t('documentReview.statementDebt') : t('documentReview.amount')}
                 tag={confidenceTag('totalAmount')}
                 value={amount}
                 onChangeText={setAmount}
@@ -1297,18 +1301,18 @@ export default function DocumentReviewScreen() {
               />
               {!isLoanDocument ? (
                 <DateField
-                  label={realized ? 'Tarih' : isCreditCardStatement ? 'Son ödeme tarihi' : 'Vade tarihi'}
+                  label={realized ? t('documentReview.date') : isCreditCardStatement ? t('documentReview.paymentDue') : t('documentReview.dueDate')}
                   tag={confidenceTag('dueDate')}
                   value={dueDate}
                   onChangeText={setDueDate}
                 />
               ) : null}
               {documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
-                <BankPicker label="Banka" placeholder="Banka seçin (isteğe bağlı)" selectedId={bankCode} onSelect={setSelectedBankCode} />
+                <BankPicker label={t('documentReview.bank')} placeholder={t('documentReview.optionalBank')} selectedId={bankCode} onSelect={setSelectedBankCode} />
               ) : null}
               {!(documentType && COUNTERPARTY_LESS_DOCUMENT_TYPES.has(documentType)) && activeWorkspaceId ? (
                 <CounterpartyPicker
-                  label={documentType === 'cek' || documentType === 'senet' ? (side === 'out' ? 'Lehtar' : 'Keşideci') : realized ? 'Satıcı / müşteri' : 'Kişi / firma'}
+                  label={documentType === 'cek' || documentType === 'senet' ? (side === 'out' ? t('documentReview.beneficiary') : t('documentReview.drawer')) : realized ? t('documentReview.sellerCustomer') : t('documentReview.party')}
                   workspaceId={activeWorkspaceId}
                   counterparties={counterpartiesQuery.data ?? []}
                   selectedId={counterpartyId}
@@ -1323,13 +1327,13 @@ export default function DocumentReviewScreen() {
                   accounts={accountOptions}
                   selectedId={accountId}
                   onSelect={setAccountId}
-                  label={accountRequired && !accountId ? `${accountLabel} · gerekli` : accountLabel}
-                  placeholder={accountRequired ? 'Hesap seçin' : 'Hesap seçin (isteğe bağlı)'}
+                  label={accountRequired && !accountId ? t('documentReview.requiredAccount', { label: accountLabel }) : accountLabel}
+                  placeholder={accountRequired ? t('documentReview.selectAccount') : t('documentReview.optionalAccount')}
                 />
               ) : (
                 <FormRow
                   label={accountLabel}
-                  value={isCreditCardStatement ? 'Bu ekstreyle eşleşen kayıtlı kredi kartı yok.' : "Önce Hesaplar'dan bir hesap ekleyin."}
+                  value={isCreditCardStatement ? t('documentReview.noMatchingCard') : t('documentReview.addAccount')}
                 />
               )}
             </FieldGroup>
@@ -1337,7 +1341,7 @@ export default function DocumentReviewScreen() {
               <Stack gap="xs">
                 <Row align="center">
                   <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    Para birimi
+                    {t('documentReview.currency')}
                   </Text>
                   {confidenceTag('currency')}
                 </Row>
@@ -1346,17 +1350,17 @@ export default function DocumentReviewScreen() {
             ) : null}
             {!bankCode && extractedBankName && documentType && BANK_DOCUMENT_TYPES.has(documentType) ? (
               <Text variant="caption" color="textSecondary">
-                Belgede “{extractedBankName}” okundu ama listede eşleşen banka bulunamadı — yukarıdan seçin.
+                {t('documentReview.bankUnmatched', { bank: extractedBankName })}
               </Text>
             ) : null}
             {!isLoanDocument && dueDatePeriodMismatch ? (
               <Text variant="caption" color="danger">
-                Bu tarih, {expectedDueDateMonthLabel} dönemi için seçtiğiniz ekstreyle uyuşmuyor gibi görünüyor — doğru olduğundan emin olun.
+                {t('documentReview.periodMismatch', { month: expectedDueDateMonthLabel })}
               </Text>
             ) : null}
             {isCreditCardStatement && !accountId && cardLastFourFromOcr ? (
               <Button
-                label={quickAddCardMutation.isPending ? 'Kart oluşturuluyor…' : `•••• ${cardLastFourFromOcr} kartını oluştur ve devam et`}
+                label={quickAddCardMutation.isPending ? t('documentReview.creatingCard') : t('documentReview.createCard', { lastFour: cardLastFourFromOcr })}
                 variant="secondary"
                 size="compact"
                 icon="add"
@@ -1370,12 +1374,10 @@ export default function DocumentReviewScreen() {
                 <Stack gap="sm">
                   <Stack gap="xxs">
                     <Text variant="cardTitle">
-                      Bu {documentType === 'cek' ? 'çek' : 'senet'} hangi kaydın karşılığı?
+                      {t('documentReview.settlementQuestion', { type: documentType === 'cek' ? t('documentReview.checkLower') : t('documentReview.noteLower') })}
                     </Text>
                     <Text variant="caption" color="textSecondary">
-                      Seçilen kayıtlar bu tutar kadar kapanır; para vadede{' '}
-                      {direction === 'receivable' ? 'tahsil edildiğinde hesaba girer' : 'ödendiğinde hesaptan çıkar'}.
-                      Seçmezseniz bağımsız yeni bir kayıt açılır ve aynı borç iki kez görünebilir.
+                      {t(direction === 'receivable' ? 'documentReview.settlementReceivableHelp' : 'documentReview.settlementPayableHelp')}
                     </Text>
                   </Stack>
                   {settlementTargets.map((target) => {
@@ -1415,23 +1417,23 @@ export default function DocumentReviewScreen() {
             {isLoanDocument ? (
               <FieldGroup>
                 <TextField
-                  label="Faiz oranı % (isteğe bağlı)"
+                  label={t('documentReview.interestLabel')}
                   keyboardType="decimal-pad"
-                  placeholder="Örn. 2,5"
+                  placeholder={t('documentReview.interestPlaceholder', { amount: `2${getInputDecimalSeparator()}5` })}
                   value={interestRatePercent}
                   onChangeText={setInterestRatePercent}
                 />
                 {installmentDrafts.length > 0 ? (
-                  <FormRow label="Taksit sayısı" value={String(installmentDrafts.length)} />
+                  <FormRow label={t('documentReview.installmentCount')} value={String(installmentDrafts.length)} />
                 ) : null}
                 {monthlyInstallmentMinor !== null ? (
-                  <FormRow label="Aylık taksit" value={formatMinorAmount(monthlyInstallmentMinor, valueUnitCode)} />
+                  <FormRow label={t('documentReview.monthlyInstallment')} value={formatMinorAmount(monthlyInstallmentMinor, valueUnitCode)} />
                 ) : null}
                 {totalInterestMinor !== null ? (
-                  <FormRow label="Faiz (toplam)" value={formatMinorAmount(totalInterestMinor, valueUnitCode)} />
+                  <FormRow label={t('documentReview.totalInterest')} value={formatMinorAmount(totalInterestMinor, valueUnitCode)} />
                 ) : null}
                 {totalRepaymentMinor !== null ? (
-                  <FormRow label="Toplam geri ödeme" value={formatMinorAmount(totalRepaymentMinor, valueUnitCode)} />
+                  <FormRow label={t('documentReview.totalRepayment')} value={formatMinorAmount(totalRepaymentMinor, valueUnitCode)} />
                 ) : null}
               </FieldGroup>
             ) : null}
@@ -1440,10 +1442,10 @@ export default function DocumentReviewScreen() {
               <Stack gap="xs">
                 <Row align="center" style={{ paddingHorizontal: 4 }}>
                   <Text variant="label" color="textSecondary" style={{ flex: 1 }}>
-                    TAKSİTLER · {installmentDrafts.length}
+                    {t('documentReview.installments', { count: installmentDrafts.length })}
                   </Text>
                   <Text variant="caption" color="textSecondary">
-                    Düzenlemek için dokunun
+                    {t('documentReview.tapEdit')}
                   </Text>
                 </Row>
                 <InstallmentPlanTable
@@ -1455,8 +1457,7 @@ export default function DocumentReviewScreen() {
                   <View style={{ flexDirection: 'row', gap: 10, padding: 12, borderRadius: theme.radius.group, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.13) }}>
                     <Ionicons name="information-circle" size={18} color={theme.colors.attentionMarker} />
                     <Text variant="caption" style={{ flex: 1, color: theme.colors.textPrimary }}>
-                      Vadesi geçmiş {autoPaidCount} taksit &ldquo;ödendi&rdquo; olarak işaretlenecek ve hiçbir hesabın bakiyesini
-                      etkilemeyecek. İstemiyorsanız taksite dokunup değiştirebilirsiniz.
+                      {t('documentReview.autoPaid', { count: autoPaidCount })}
                     </Text>
                   </View>
                 ) : null}
@@ -1466,12 +1467,12 @@ export default function DocumentReviewScreen() {
             {documentType === 'kredi_karti_ekstresi' && cardTransactionItems.length > 0 ? (
               <Stack gap="sm">
                 <Text variant="label" color="textSecondary">
-                  EKSTRE HARCAMALARI ({cardExpenseItems.length} işlem)
+                  {t('documentReview.statementExpenses', { count: cardExpenseItems.length })}
                 </Text>
                 <SegmentedControl
                   options={[
-                    { key: 'total', label: 'Sadece Toplam Borç' },
-                    { key: 'categorize', label: 'Kategorilere Ayır' },
+                    { key: 'total', label: t('documentReview.totalOnly') },
+                    { key: 'categorize', label: t('documentReview.categorize') },
                   ]}
                   value={categorizeCardSpending ? 'categorize' : 'total'}
                   onChange={(key) => setCategorizeCardSpending(key === 'categorize')}
@@ -1480,14 +1481,14 @@ export default function DocumentReviewScreen() {
                   <Card>
                     <Stack gap="sm">
                       <Text variant="caption" color="textSecondary">
-                        Aynı karttaki mevcut hareketler tutar, tarih ve açıklamaya göre karşılaştırılır.
+                        {t('documentReview.comparisonHelp')}
                       </Text>
                       {statementCandidatesQuery.isFetching ? (
-                        <Text variant="caption" color="textSecondary">Mevcut hareketler karşılaştırılıyor…</Text>
+                        <Text variant="caption" color="textSecondary">{t('documentReview.comparing')}</Text>
                       ) : null}
                       {statementCandidatesQuery.isError ? (
                         <Text variant="caption" color="danger">
-                          Mevcut hareketler karşılaştırılamadı. Kaydetmeden önce tekrar deneyin.
+                          {t('documentReview.comparisonRetry')}
                         </Text>
                       ) : null}
                       {cardExpenseItems.map((item) => {
@@ -1497,9 +1498,9 @@ export default function DocumentReviewScreen() {
                           <Stack key={item.id} gap="xxs">
                             <Row align="center">
                               <Stack gap="xxs" style={{ flex: 1 }}>
-                                <Text variant="body" numberOfLines={1}>{item.description || 'İşlem'}</Text>
+                                <Text variant="body" numberOfLines={1}>{item.description || t('documentReview.transaction')}</Text>
                                 <Text variant="caption" color="textSecondary">
-                                  {item.occurred_at ?? 'Tarih okunamadı'} · {cardLineLabel(item.kind)}
+                                  {item.occurred_at ?? t('documentReview.unreadableDate')} · {cardLineLabel(item.kind)}
                                 </Text>
                               </Stack>
                               <Text variant="body" tabular>
@@ -1508,18 +1509,18 @@ export default function DocumentReviewScreen() {
                             </Row>
                             {match ? (
                               <Text variant="caption" color={skipped ? 'success' : 'accentViolet'}>
-                                {skipped ? 'Mevcut hareketle eşleşti' : 'Olası eşleşme'}: {match.transaction.occurred_at.slice(0, 10)} · {match.transaction.description || 'Açıklamasız'}
+                                {skipped ? t('documentReview.matched') : t('documentReview.possibleMatch')}: {match.transaction.occurred_at.slice(0, 10)} · {match.transaction.description || t('documentReview.noDescription')}
                               </Text>
                             ) : null}
                             {skipped ? (
                               <Button
-                                label="Yine de yeni ekle"
+                                label={t('documentReview.importAnyway')}
                                 variant="secondary"
                                 onPress={() => setCardMatchOverrides((previous) => ({ ...previous, [item.id]: 'import' }))}
                               />
                             ) : match ? (
                               <Button
-                                label="Mevcut hareketle eşleştir"
+                                label={t('documentReview.matchExisting')}
                                 variant="secondary"
                                 onPress={() => setCardMatchOverrides((previous) => ({ ...previous, [item.id]: 'skip' }))}
                               />
@@ -1537,11 +1538,11 @@ export default function DocumentReviewScreen() {
                       })}
                       {cardOtherItems.length > 0 ? (
                         <Stack gap="xs">
-                          <Text variant="label" color="textSecondary">HARCAMA OLARAK EKLENMEYECEK</Text>
+                          <Text variant="label" color="textSecondary">{t('documentReview.notExpense')}</Text>
                           {cardOtherItems.map((item) => (
                             <Row key={item.id} align="center">
                               <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                                {item.description || 'Ekstre işlemi'} · {cardLineLabel(item.kind)}
+                                {item.description || t('documentReview.statementTransaction')} · {cardLineLabel(item.kind)}
                               </Text>
                               <Text variant="body" tabular>
                                 {formatMinorAmount(item.amount_minor, document.currency_code ?? 'TRY')}
@@ -1551,12 +1552,12 @@ export default function DocumentReviewScreen() {
                         </Stack>
                       ) : null}
                       <Text variant="caption" color="textSecondary">
-                        {cardItemsToImport.length} harcama kendi tarihiyle karta ve Hareketler&apos;e işlenecek ·{' '}
-                        {cardExpenseItems.length - cardItemsToImport.length} mükerrer atlanacak
+                        {t('documentReview.expensesToImport', { count: cardItemsToImport.length })} ·{' '}
+                        {t('documentReview.duplicatesSkipped', { count: cardExpenseItems.length - cardItemsToImport.length })}
                       </Text>
                       {splitsCardSpending && !accountId ? (
                         <Text variant="caption" color="danger">
-                          Harcamaların işleneceği kredi kartını aşağıdan seçin.
+                          {t('documentReview.selectSpendingCard')}
                         </Text>
                       ) : null}
                     </Stack>
@@ -1567,12 +1568,12 @@ export default function DocumentReviewScreen() {
 
             {confirmMutation.error ? (
               <Text variant="caption" color="danger">
-                {friendlyErrorMessage(confirmMutation.error, 'Kayıt oluşturulamadı')}
+                {friendlyErrorMessage(confirmMutation.error, t('documentReview.createFailed'))}
               </Text>
             ) : null}
             {discardMutation.error ? (
               <Text variant="caption" color="danger">
-                {friendlyErrorMessage(discardMutation.error, 'Belge iptal edilemedi')}
+                {friendlyErrorMessage(discardMutation.error, t('documentReview.discardFailed'))}
               </Text>
             ) : null}
           </Stack>
@@ -1592,18 +1593,18 @@ export default function DocumentReviewScreen() {
           <Row gap="xxs" align="center" style={{ justifyContent: 'center' }}>
             <Ionicons name="lock-closed" size={12} color={theme.colors.textSecondary} />
             <Text variant="caption" color="textSecondary">
-              Onaylamadan kayıt oluşmaz
+              {t('documentReview.confirmHelp')}
             </Text>
           </Row>
           <Button
-            label="Kontrol Et ve Kaydet"
+            label={t('documentReview.save')}
             onPress={() => confirmMutation.mutate()}
             loading={confirmMutation.isPending}
             disabled={!canSubmit || !statementMatchingReady}
           />
           <Row style={{ justifyContent: 'space-between' }}>
             <Pressable accessibilityRole="button" onPress={() => router.back()} style={{ minHeight: 40, justifyContent: 'center', paddingHorizontal: 8 }}>
-              <Text style={{ fontSize: 15, fontWeight: '500' }}>Taslak olarak bırak</Text>
+              <Text style={{ fontSize: 15, fontWeight: '500' }}>{t('documentReview.leaveDraft')}</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -1612,7 +1613,7 @@ export default function DocumentReviewScreen() {
               style={{ minHeight: 40, justifyContent: 'center', paddingHorizontal: 8 }}
             >
               <Text style={{ fontSize: 15, fontWeight: '500', color: theme.colors.danger }}>
-                {discardMutation.isPending ? 'İptal ediliyor…' : 'Belgeyi iptal et'}
+                {discardMutation.isPending ? t('documentReview.discardPending') : t('documentReview.discardDocument')}
               </Text>
             </Pressable>
           </Row>
@@ -1622,19 +1623,19 @@ export default function DocumentReviewScreen() {
       <BottomSheet
         visible={!!editingDraft}
         onClose={() => setEditingDraftIndex(null)}
-        title={editingDraft ? `${editingDraft.sortOrder}. taksit` : undefined}
+        title={editingDraft ? t('documentReview.nthInstallment', { n: editingDraft.sortOrder }) : undefined}
       >
         {editingDraft ? (
           <Stack gap="md">
             <FieldGroup>
-              <DateField label="Vade" value={editingDraft.dueDate} onChangeText={(value) => updateDraft({ dueDate: value })} />
-              <AmountField label="Taksit tutarı" value={editingDraft.amount} onChangeText={(value) => updateDraft({ amount: value })} />
+              <DateField label={t('documentReview.due')} value={editingDraft.dueDate} onChangeText={(value) => updateDraft({ dueDate: value })} />
+              <AmountField label={t('documentReview.installmentAmount')} value={editingDraft.amount} onChangeText={(value) => updateDraft({ amount: value })} />
             </FieldGroup>
             <Row align="center" style={{ justifyContent: 'space-between', paddingHorizontal: 4 }}>
               <Stack gap="xxs" style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '500' }}>Ödendi</Text>
+                <Text style={{ fontWeight: '500' }}>{t('documentReview.paid')}</Text>
                 <Text variant="caption" color="textSecondary">
-                  Ödenmiş taksit hesap bakiyesini etkilemeden kapalı kaydedilir.
+                  {t('documentReview.paidHelp')}
                 </Text>
               </Stack>
               <Switch
@@ -1643,7 +1644,7 @@ export default function DocumentReviewScreen() {
                 trackColor={{ false: theme.colors.border, true: theme.colors.brandPrimary }}
               />
             </Row>
-            <Button label="Tamam" onPress={() => setEditingDraftIndex(null)} />
+            <Button label={t('documentReview.done')} onPress={() => setEditingDraftIndex(null)} />
           </Stack>
         ) : null}
       </BottomSheet>
@@ -1653,7 +1654,7 @@ export default function DocumentReviewScreen() {
           {imageUrl ? <Image source={{ uri: imageUrl }} style={{ flex: 1 }} resizeMode="contain" /> : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Kapat"
+            accessibilityLabel={t('documentReview.close')}
             onPress={() => setPreviewOpen(false)}
             style={{
               position: 'absolute',

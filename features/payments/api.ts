@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
 import { createObligation, type Obligation } from '@/features/obligations/api';
@@ -77,7 +78,7 @@ async function assertWithinRemaining(
   amountMinor: number,
   releaseMinor = 0
 ): Promise<void> {
-  if (amountMinor <= 0) throw new Error('Tutar sıfırdan büyük olmalı');
+  if (amountMinor <= 0) throw new Error(t('runtime.positiveAmount'));
   const { data: obligation, error } = await supabase
     .from('obligations')
     .select('remaining_amount_minor, currency_code')
@@ -97,7 +98,7 @@ async function assertWithinRemaining(
   const allowedMinor = remainingMinor + releaseMinor;
   if (amountMinor > allowedMinor) {
     throw new Error(
-      `Tutar kalan borcu aşıyor (en fazla ${formatValueUnitAmount(allowedMinor, obligation.currency_code)}). Fazla tutar için Ödeme yap / Tahsilat al ekranını kullanın.`
+      t('runtime.overpayment', { amount: formatValueUnitAmount(allowedMinor, obligation.currency_code) })
     );
   }
 }
@@ -203,7 +204,7 @@ async function recordPaymentsBatch(inputs: RecordPaymentInput[]): Promise<Paymen
 
 export async function recordPayment(input: RecordPaymentInput): Promise<Payment> {
   const created = await recordPaymentsBatch([input]);
-  if (created.length === 0) throw new Error('Ödeme kaydedilemedi');
+  if (created.length === 0) throw new Error(t('runtime.paymentSaveFailed'));
   return created[0];
 }
 
@@ -274,7 +275,7 @@ export interface UpdatePaymentInput {
 // hesap kaldırılırsa eski transaction silinir, hesap yeni eklenirse yeni bir transaction
 // oluşturulur — aksi halde ödeme kaydı ile hesap bakiyesi birbirinden sapar.
 export async function updatePayment(payment: Payment, input: UpdatePaymentInput): Promise<Payment> {
-  if (payment.settled_by_obligation_id) throw new Error('Mahsup/ciro/çek ile kapanış tek ödeme olarak düzenlenemez; bağlı işlem üzerinden yönetilmeli');
+  if (payment.settled_by_obligation_id) throw new Error(t('runtime.linkedEdit'));
   if (payment.obligation_id) {
     await assertWithinRemaining(payment.obligation_id, payment.installment_id, input.amount_minor, payment.amount_minor);
   }
@@ -372,7 +373,7 @@ export async function recordCardPayment(input: RecordCardPaymentInput): Promise<
 // aynı transaction'ı paylaşan tüm ödeme satırları birlikte silinir; aksi halde transfer silinir
 // ama diğer ekstreler "ödendi" kalırdı.
 export async function deletePayment(payment: Payment): Promise<void> {
-  if (payment.settled_by_obligation_id) throw new Error('Mahsup/ciro/çek ile kapanış tek ödeme olarak silinemez; bağlı işlem üzerinden geri alınmalı');
+  if (payment.settled_by_obligation_id) throw new Error(t('runtime.linkedDelete'));
   const { error } = await supabase.rpc('delete_payment_atomic' as never, {
     p_payment_id: payment.id,
     p_expected_amount_minor: payment.amount_minor,
@@ -407,16 +408,16 @@ export function allocateAcrossObligations<T extends SettlementTarget>(
   targets: T[]
 ): { allocations: SettlementAllocation<T>[]; leftoverMinor: number } {
   if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
-    throw new Error('Dağıtılacak tutar geçersiz');
+    throw new Error(t('runtime.invalidAllocation'));
   }
   const ids = new Set<string>();
   // Validate the entire selection, including rows beyond the amount's allocation boundary.
   // A negative balance would otherwise increase the remaining amount and inflate the advance.
   for (const obligation of targets) {
-    if (ids.has(obligation.id)) throw new Error('Aynı kayıt birden fazla seçilemez');
+    if (ids.has(obligation.id)) throw new Error(t('runtime.duplicateRecord'));
     ids.add(obligation.id);
     if (!Number.isSafeInteger(obligation.remaining_amount_minor) || obligation.remaining_amount_minor < 0) {
-      throw new Error('Kayıt kalan tutarı geçersiz; kayıtları yenileyin');
+      throw new Error(t('runtime.invalidRemaining'));
     }
   }
   let remainingMinor = amountMinor;
@@ -484,7 +485,10 @@ export interface SettleObligationsResult {
   transactionIds: string[];
 }
 
-const INSTRUMENT_LABEL: Record<InstrumentMethod, string> = { cek: 'Çek', senet: 'Senet' };
+const INSTRUMENT_LABEL: Record<InstrumentMethod, string> = {
+  get cek() { return t('runtime.check'); },
+  get senet() { return t('runtime.note'); },
+};
 
 // Ödeme Yap / Tahsilat Al. Yönteme göre:
 //
@@ -504,7 +508,7 @@ const INSTRUMENT_LABEL: Record<InstrumentMethod, string> = { cek: 'Çek', senet:
 // bakiyesine girer; sonraki faturadan Mahsup ile düşülür.
 export async function settleObligations(input: SettleObligationsInput): Promise<SettleObligationsResult> {
   if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0) {
-    throw new Error('Ödeme/tahsilat tutarı pozitif ve geçerli olmalı');
+    throw new Error(t('runtime.invalidPaymentAmount'));
   }
   // Preview permits zero; committing does not. All methods share the same preflight,
   // including endorsements which calculate their actual amount from the selected sources.
@@ -520,11 +524,11 @@ export async function settleObligations(input: SettleObligationsInput): Promise<
   // kaldıkça tekrar deneme ikinci bir çek açmaz, ilk sonucu döndürür. Para çek vadesinde hareket
   // eder; çek/senet silinirse avans da silinir (parent_obligation_id).
   if (isInstrumentMethod(input.method)) {
-    if (!input.requestId || !input.actorId) throw new Error('Çek/senet ödemesi işlem kimliğiyle gönderilmeli');
+    if (!input.requestId || !input.actorId) throw new Error(t('runtime.instrumentIdRequired'));
     const instrument = input.instrument;
-    if (!instrument || instrument.dueDates.length === 0) throw new Error('Vade tarihi girin');
+    if (!instrument || instrument.dueDates.length === 0) throw new Error(t('runtime.enterDue'));
     if (instrument.dueDates.reduce((sum, row) => sum + row.amountMinor, 0) !== input.amountMinor) {
-      throw new Error('Vade tutarlarının toplamı, toplam tutara eşit olmalı');
+      throw new Error(t('runtime.dueTotalMismatch'));
     }
     const { data, error } = await supabase.rpc('settle_instrument_atomic' as never, {
       p_expected_actor: input.actorId,
@@ -566,7 +570,7 @@ export async function settleObligations(input: SettleObligationsInput): Promise<
     };
   }
 
-  if (!input.requestId || !input.actorId || !input.cashPayload) throw new Error('Ödeme kalıcı işlem kuyruğundan gönderilmeli');
+  if (!input.requestId || !input.actorId || !input.cashPayload) throw new Error(t('runtime.durablePaymentRequired'));
   validatePreparedCash(input);
   const payload = input.cashPayload;
   const { data, error } = await supabase.rpc('settle_cash_atomic' as never, {
@@ -587,7 +591,7 @@ export async function settleObligations(input: SettleObligationsInput): Promise<
       || advance.workspace_id !== input.workspaceId || advance.counterparty_id !== input.counterpartyId
       || advance.currency_code !== input.currencyCode || advance.total_amount_minor !== leftoverMinor
       || advance.direction !== (input.direction === 'payable' ? 'receivable' : 'payable'))) {
-    throw new Error('Ödeme makbuzu doğrulanamadı; aynı işlem kimliğiyle tekrar kontrol edin');
+    throw new Error(t('runtime.unverifiedPayment'));
   }
   return { allocations, leftoverMinor, instrumentObligation: null, advanceObligation: advance ?? null, transactionIds: receipt.transaction_ids };
 }
@@ -609,12 +613,12 @@ export function validateCashDraft(input: SettleObligationsInput) {
     || [input.workspaceId, input.counterpartyId, input.accountId, input.currencyCode].some((x) => typeof x !== 'string' || !x)
     || typeof input.paidAt !== 'string' || !Number.isFinite(Date.parse(input.paidAt)) || !Array.isArray(input.targets)
     || (input.fxRateTryMinor != null && (!Number.isSafeInteger(input.fxRateTryMinor) || input.fxRateTryMinor <= 0))) {
-    throw new Error('Ödeme hesabı, tutarı, birimi veya tarihi geçersiz');
+    throw new Error(t('runtime.invalidPaymentDetails'));
   }
   allocateAcrossObligations(0, input.targets);
   if (input.targets.some((o) => o.direction !== input.direction || o.currency_code !== input.currencyCode
     || o.counterparty_id !== input.counterpartyId || o.document_type === 'kredi_karti_ekstresi')) {
-    throw new Error('Ödeme seçimlerinin cari, yön veya birimi uyuşmuyor');
+    throw new Error(t('runtime.inconsistentPaymentSelection'));
   }
 }
 export async function prepareCashSettlement(input: SettleObligationsInput): Promise<PreparedCashSettlement> {
@@ -635,20 +639,20 @@ export function validatePreparedCash(input: SettleObligationsInput) {
   const { allocations } = allocateAcrossObligations(input.amountMinor, input.targets);
   if (!payload || JSON.stringify(payload.header) !== JSON.stringify(cashHeader(input)) || !Array.isArray(payload.items)
     || JSON.stringify(payload.expected) !== JSON.stringify(allocations.map((a) => ({ id: a.obligation.id, remaining_amount_minor: a.obligation.remaining_amount_minor })))) {
-    throw new Error('Saklanan ödeme dağılımı geçersiz');
+    throw new Error(t('runtime.invalidStoredAllocation'));
   }
   const sums = new Map<string, number>();
-  for (const { payment: p, transaction: t } of payload.items) {
-    if (!p || !t || !Number.isSafeInteger(p.amount_minor) || p.amount_minor <= 0 || !p.obligation_id
+  for (const { payment: p, transaction: tx } of payload.items) {
+    if (!p || !tx || !Number.isSafeInteger(p.amount_minor) || p.amount_minor <= 0 || !p.obligation_id
       || !allocations.some((a) => a.obligation.id === p.obligation_id) || p.workspace_id !== input.workspaceId
-      || t.workspace_id !== input.workspaceId || p.account_id !== input.accountId || t.account_id !== input.accountId
-      || t.counterparty_id !== input.counterpartyId || t.currency_code !== input.currencyCode || t.payment_method !== input.method
-      || p.paid_at !== input.paidAt || t.direction !== (input.direction === 'payable' ? 'expense' : 'income')
-      || t.amount_minor !== p.amount_minor || p.fx_rate_try_minor !== (input.fxRateTryMinor ?? null)
-      || t.fx_rate_try_minor !== (input.fxRateTryMinor ?? null)) throw new Error('Saklanan ödeme dilimi geçersiz');
+      || tx.workspace_id !== input.workspaceId || p.account_id !== input.accountId || tx.account_id !== input.accountId
+      || tx.counterparty_id !== input.counterpartyId || tx.currency_code !== input.currencyCode || tx.payment_method !== input.method
+      || p.paid_at !== input.paidAt || tx.direction !== (input.direction === 'payable' ? 'expense' : 'income')
+      || tx.amount_minor !== p.amount_minor || p.fx_rate_try_minor !== (input.fxRateTryMinor ?? null)
+      || tx.fx_rate_try_minor !== (input.fxRateTryMinor ?? null)) throw new Error(t('runtime.invalidStoredSlice'));
     sums.set(p.obligation_id, (sums.get(p.obligation_id) ?? 0) + p.amount_minor);
   }
-  if (allocations.some((a) => sums.get(a.obligation.id) !== a.amountMinor)) throw new Error('Saklanan ödeme toplamı uyuşmuyor');
+  if (allocations.some((a) => sums.get(a.obligation.id) !== a.amountMinor)) throw new Error(t('runtime.storedTotalMismatch'));
 }
 
 interface CreateAdvanceObligationInput {
@@ -677,7 +681,7 @@ export async function createAdvanceObligation({
   note,
 }: CreateAdvanceObligationInput): Promise<Obligation> {
   const isPrepayment = settlementDirection === 'payable';
-  const label = isPrepayment ? 'Ön ödeme' : 'Alınan avans';
+  const label = isPrepayment ? t('runtime.prepayment') : t('runtime.advanceReceived');
   return createObligation({
     workspace_id: workspaceId,
     direction: isPrepayment ? 'receivable' : 'payable',
@@ -707,7 +711,7 @@ function pairAllocations(
 ): OffsetPair[] {
   const pairs: OffsetPair[] = [];
   const sourceLeft = sources.map((s) => s.amountMinor);
-  const targetLeft = targets.map((t) => t.amountMinor);
+  const targetLeft = targets.map((target) => target.amountMinor);
   let si = 0;
   let ti = 0;
   while (si < sources.length && ti < targets.length) {
@@ -724,12 +728,12 @@ function pairAllocations(
 // Mahsup: aynı carinin ters yöndeki açık kayıtları (ör. ön ödeme/avans ↔ yeni fatura, ya da hem
 // müşteri hem tedarikçi olan bir firmanın alacağı ↔ borcu) tutar kadar karşılıklı kapanır.
 async function settleByOffset(input: SettleObligationsInput): Promise<SettleObligationsResult> {
-  if (!input.requestId || !input.actorId) throw new Error('Mahsup işlem kimliği ve kullanıcı bilgisi eksik');
+  if (!input.requestId || !input.actorId) throw new Error(t('runtime.missingOffsetIdentity'));
   const sources = input.sources ?? [];
   const sourceTotal = sources.reduce((sum, s) => sum + s.remaining_amount_minor, 0);
   const targetTotal = input.targets.reduce((sum, t) => sum + t.remaining_amount_minor, 0);
   const amountMinor = Math.min(input.amountMinor, sourceTotal, targetTotal);
-  if (amountMinor <= 0) throw new Error('Mahsup edilecek kayıt seçin');
+  if (amountMinor <= 0) throw new Error(t('runtime.selectOffsetRecords'));
 
   const { allocations } = allocateAcrossObligations(amountMinor, input.targets);
   const { allocations: sourceAllocations } = allocateAcrossObligations(amountMinor, sources);
@@ -747,7 +751,7 @@ async function settleByOffset(input: SettleObligationsInput): Promise<SettleObli
   const receipt = data as unknown as { allocations?: { obligation_id: string; amount_minor: number }[] } | null;
   if (!Array.isArray(receipt?.allocations) || receipt.allocations.length !== allocations.length
     || receipt.allocations.some((a, index) => a.obligation_id !== allocations[index].obligation.id || a.amount_minor !== allocations[index].amountMinor)) {
-    throw new Error('Mahsup sonucu doğrulanamadı; aynı işlem kimliğiyle tekrar kontrol edin');
+    throw new Error(t('runtime.unverifiedOffset'));
   }
   return {
     allocations,
@@ -762,18 +766,18 @@ async function settleByOffset(input: SettleObligationsInput): Promise<SettleObli
 // ciro edilir: seçilen faturalar kapanır, çeklerin alacağı kapanır (A'nın borcu tahsil edilmiş sayılır),
 // hiçbir hesaptan para hareket etmez. Çek toplamı faturaları aşarsa fark B'den alacak (avans) olur.
 async function settleByEndorsement(input: SettleObligationsInput): Promise<SettleObligationsResult> {
-  if (input.direction !== 'payable') throw new Error('Çek ciro yalnızca ödemede kullanılır');
-  if (!input.actorId || !input.requestId) throw new Error('Kalıcı ciro işlem kimliği ve sahibi eksik');
+  if (input.direction !== 'payable') throw new Error(t('runtime.endorsementPayableOnly'));
+  if (!input.actorId || !input.requestId) throw new Error(t('runtime.missingEndorsementIdentity'));
   const sources = input.sources ?? [];
   const chequeTotal = sources.reduce((sum, s) => sum + s.remaining_amount_minor, 0);
-  if (chequeTotal <= 0) throw new Error('Ciro edilecek çek/senet seçin');
+  if (chequeTotal <= 0) throw new Error(t('runtime.selectEndorsement'));
 
   const { allocations, leftoverMinor } = allocateAcrossObligations(chequeTotal, input.targets);
   if (!Number.isSafeInteger(chequeTotal) || sources.some((o) => o.direction !== 'receivable'
     || !['cek', 'senet'].includes(o.document_type ?? '') || o.currency_code !== input.currencyCode)
     || input.targets.some((o) => o.direction !== 'payable' || o.currency_code !== input.currencyCode
       || o.counterparty_id !== input.counterpartyId || ['cek', 'senet', 'kredi_karti_ekstresi'].includes(o.document_type ?? ''))) {
-    throw new Error('Ciro kaynağı veya hedef kapsamı geçersiz');
+    throw new Error(t('runtime.invalidEndorsementScope'));
   }
   const { data, error } = await supabase.rpc('settle_endorsement_atomic' as never, {
     p_expected_actor: input.actorId, p_request_id: input.requestId, p_workspace_id: input.workspaceId,
@@ -792,7 +796,7 @@ async function settleByEndorsement(input: SettleObligationsInput): Promise<Settl
       || !sources.some((s) => s.id === o.parent_obligation_id) || !Number.isSafeInteger(o.total_amount_minor) || o.total_amount_minor <= 0)
     || new Set(receipt.advances.map((o) => o.parent_obligation_id)).size !== receipt.advances.length
     || receipt.advances.reduce((sum, o) => sum + o.total_amount_minor, 0) !== leftoverMinor) {
-    throw new Error('Ciro sonucu doğrulanamadı; aynı işlem kimliğiyle tekrar kontrol edin');
+    throw new Error(t('runtime.unverifiedEndorsement'));
   }
   return { allocations, leftoverMinor, instrumentObligation: null, advanceObligation: receipt.advances[0] ?? null,
     advanceObligations: receipt.advances, transactionIds: [] };
@@ -821,9 +825,8 @@ export async function settleWithInstrument({
   allocations,
 }: SettleWithInstrumentInput): Promise<void> {
   const label = INSTRUMENT_LABEL[method];
-  const verb = direction === 'payable' ? 'ödendi' : 'tahsil edildi';
   const trimmedNo = documentNo?.trim() || null;
-  const note = `${label} ile ${verb}${trimmedNo ? ` (No: ${trimmedNo})` : ''}`;
+  const note = t(direction === 'payable' ? 'runtime.instrumentPaid' : 'runtime.instrumentCollected', { type: label, number: trimmedNo ? ` (No: ${trimmedNo})` : '' });
 
   const rows: TablesInsert<'payments'>[] = [];
   for (const allocation of allocations) {

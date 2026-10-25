@@ -4,6 +4,7 @@
 // docs/06-teknik-mimari.md §10.3 — Gemini API anahtarı istemcide bulunmaz,
 // OCR işi bu Edge Function üzerinden yürütülür.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { categoryNameVariants } from '../_shared/categoryNames.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -78,6 +79,7 @@ const RESPONSE_SCHEMA = {
       enum: ['nakit', 'kredi_karti', 'banka_karti', 'havale_eft', 'cek', 'bilinmiyor'],
     },
     warnings: { type: 'ARRAY', items: { type: 'STRING' } },
+    warningsEn: { type: 'ARRAY', items: { type: 'STRING' } },
     missingRequiredFields: { type: 'ARRAY', items: { type: 'STRING' } },
     fields: {
       type: 'ARRAY',
@@ -207,7 +209,7 @@ const RESPONSE_SCHEMA = {
   },
   required: [
     'documentType', 'documentTypeConfidence', 'direction', 'totalAmount',
-    'fields', 'warnings', 'missingRequiredFields',
+    'fields', 'warnings', 'warningsEn', 'missingRequiredFields',
   ],
 };
 
@@ -221,6 +223,7 @@ Genel kurallar:
 - totalAmountRaw alanına, toplam tutarı belgede yazdığı haliyle, hiçbir şey değiştirmeden karakteri karakterine kopyala (ör. "2.000,00 TL"). Sistem bu ham metni kendi ayrıştırıcısıyla çözüp senin verdiğin sayıyla karşılaştırır; bu yüzden ham metnin birebir doğru olması, tahmin edilmemesi gerekir. Belgede net bir toplam yoksa null bırak.
 - Bir tutarı okuyamıyor veya emin olamıyorsan uydurma; ilgili alanı null bırak ve missingRequiredFields'a ekle.
 - Çek veya senet belgesinde rakamla ve yazıyla tutar birbirini tutmuyorsa warnings dizisine "Rakamla ve yazıyla tutar uyuşmuyor" ekle.
+- warnings uyarılarını Türkçe yaz. warningsEn dizisine HER uyarının aynı sıradaki tam İngilizce çevirisini yaz; iki dizi aynı uzunlukta olmalı. Uyarı yoksa ikisi de boş dizi olsun. Ham belge değerlerini çeviride değiştirme.
 - Tarihleri ISO 8601 (YYYY-MM-DD) formatında döndür; belge üzerinde yoksa null bırak.
 - direction alanı için: ödeyecek taraf belirtilmişse veya belge bir borç niteliğindeyse "payable"; tahsil edilecekse "receivable"; belge zaten gerçekleşmiş bir gider ise "expense", gerçekleşmiş bir gelir ise "income"; hesaplar arası transfer ise "transfer".
 - fields dizisine belgeden okuduğun her önemli alanı (banka, çek no, IBAN, hesap, imza notu vb.) fieldName/rawValue/normalizedValue/confidence olarak ekle. confidence 0-1 arası olmalı.
@@ -386,7 +389,8 @@ const normalizeCategoryName = (s: string) => s.trim().toLocaleLowerCase('tr-TR')
 function matchCategoryId(name: unknown, categories: CategoryRef[]): string | null {
   if (typeof name !== 'string' || !name.trim() || categories.length === 0) return null;
   const target = normalizeCategoryName(name);
-  const exact = categories.find((c) => normalizeCategoryName(c.name) === target);
+  const targets = categoryNameVariants(name).map(normalizeCategoryName);
+  const exact = categories.find((c) => targets.includes(normalizeCategoryName(c.name)));
   if (exact) return exact.id;
   const partial = categories.find((c) => {
     const normalizedName = normalizeCategoryName(c.name);
@@ -607,6 +611,9 @@ Deno.serve(async (req: Request) => {
     // görsün diye uyarı düşülür — docs/04-ocr-belge-isleme.md gereği düşük güvenli alan
     // işaretlenir, sessizce yanlış tutar yazılmaz.
     const warnings: string[] = Array.isArray(parsed.warnings) ? [...parsed.warnings] : [];
+    const warningsEn: (string | null)[] = Array.isArray(parsed.warningsEn) && parsed.warningsEn.length === warnings.length
+      ? [...parsed.warningsEn]
+      : warnings.map(() => null);
     const modelTotalMinor = toMinor(parsed.totalAmount);
     const rawTotalMinor = parseAmountTextToMinor(parsed.totalAmountRaw);
     let totalAmountMinor = rawTotalMinor ?? modelTotalMinor ?? 0;
@@ -619,8 +626,13 @@ Deno.serve(async (req: Request) => {
         `Tutar okuması belirsiz: belgede "${parsed.totalAmountRaw}" yazıyor. ` +
           `Kaydedilen tutar ${(rawTotalMinor / 100).toFixed(2)}; lütfen doğrulayın.`
       );
+      warningsEn.push(
+        `Uncertain amount reading: the document says "${parsed.totalAmountRaw}". ` +
+          `The recorded amount is ${(rawTotalMinor / 100).toFixed(2)}; please verify it.`
+      );
     }
     parsed.warnings = warnings;
+    parsed.warningsEn = warningsEn;
 
     await adminClient.from('document_extractions').insert({
       workspace_id: document.workspace_id,

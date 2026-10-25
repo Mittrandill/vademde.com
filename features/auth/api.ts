@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
 import { supabase } from '@/services/supabase';
+import { t } from '@/i18n';
 
 // Web tabanlı OAuth (Google) tarayıcı sekmesi kapandığında sonucu uygulamaya
 // bildirebilmesi için bir kere kayıt edilmesi gerekir (bkz. Expo AuthSession dokümanı).
@@ -70,7 +71,7 @@ export async function signInWithApple() {
     nonce: hashedNonce,
   });
 
-  if (!credential.identityToken) throw new Error('Apple kimlik doğrulaması tamamlanamadı');
+  if (!credential.identityToken) throw new Error(t('runtime.appleIdentityFailed'));
 
   const { error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
@@ -91,7 +92,7 @@ export async function signInWithGoogle() {
     options: { redirectTo, skipBrowserRedirect: true },
   });
   if (error) throw error;
-  if (!data?.url) throw new Error('Google giriş bağlantısı oluşturulamadı');
+  if (!data?.url) throw new Error(t('runtime.googleLinkFailed'));
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success' || !result.url) return;

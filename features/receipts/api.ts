@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
+import { t } from '@/i18n';
+import type { ReceiptMatchReason } from './matchReasons';
 
 import { supabase } from '@/services/supabase';
 import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
@@ -180,8 +182,8 @@ export interface ReceiptMatch {
   obligation: ObligationWithRelations;
   installment: ReceiptMatchInstallment | null;
   score: number;
-  /** "Tutar eşleşti", "Karşı taraf eşleşti" gibi kullanıcıya gösterilen gerekçeler. */
-  reasons: string[];
+  /** Sabit kodlar; metinler çizim anında receiptMatchReasonLabel ile çözülür. */
+  reasons: ReceiptMatchReason[];
   /** Bu eşleşmeye ödeme olarak yazılacak tutar (taksit/kayıt kalanını aşmaz). */
   payMinor: number;
 }
@@ -248,11 +250,11 @@ export async function findReceiptMatches({
     const score = (counterpartyHit ? 4 : nameHit) + (amountHit ? 3 : 0);
     if (score < 3) continue;
 
-    const reasons: string[] = [];
-    if (amountHit) reasons.push(exactInstallment ? 'Taksit tutarı eşleşti' : 'Kalan tutar eşleşti');
-    if (counterpartyHit) reasons.push('Bu kişiyle açık kaydınız var');
-    else if (nameHit >= 2) reasons.push('Karşı taraf eşleşti');
-    else if (nameHit === 1) reasons.push('Karşı taraf benziyor');
+    const reasons: ReceiptMatchReason[] = [];
+    if (amountHit) reasons.push(exactInstallment ? 'installmentAmount' : 'remainingAmount');
+    if (counterpartyHit) reasons.push('openCounterparty');
+    else if (nameHit >= 2) reasons.push('counterpartyMatch');
+    else if (nameHit === 1) reasons.push('counterpartySimilar');
 
     const nextInstallment = (installments ?? []).find((installment) => installment.obligation_id === obligation.id);
     const installment = exactInstallment ?? (nextInstallment && !amountHit ? nextInstallment : null);
@@ -402,7 +404,7 @@ export async function listReceiptArchive({
         documentId: doc.id,
         fileName: doc.file_name,
         mimeType: doc.mime_type,
-        title: transaction.description?.trim() || 'Banka dekontu',
+        title: transaction.description?.trim() || t('receiptReview.bankReceipt'),
         counterpartyId: transaction.counterparty_id,
         counterpartyName: transaction.counterparty?.name ?? null,
         amountMinor: transaction.amount_minor,
@@ -415,7 +417,7 @@ export async function listReceiptArchive({
       documentId: doc.id,
       fileName: doc.file_name,
       mimeType: doc.mime_type,
-      title: doc.counterparty_name ?? 'Banka dekontu',
+      title: doc.counterparty_name ?? t('receiptReview.bankReceipt'),
       counterpartyId: null,
       counterpartyName: doc.counterparty_name,
       amountMinor: doc.total_amount_minor,

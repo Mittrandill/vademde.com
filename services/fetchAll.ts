@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 // Supabase tek istekte en fazla 1.000 satır döndürür; sınırsız okunan toplam/bakiye sorguları bu
@@ -18,5 +19,5 @@ export async function fetchAll<T>(
     all.push(...rows);
     if (rows.length < PAGE_SIZE) return all;
   }
-  throw new Error('Veri hacmi güvenli okuma sınırını aştı; eksik toplam gösterilmedi.');
+  throw new Error(t('runtime.safeReadLimit'));
 }

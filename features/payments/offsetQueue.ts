@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import { supabase } from '@/services/supabase';
@@ -22,7 +23,7 @@ function serialize<T>(key: string, operation: () => Promise<T>): Promise<T> {
 async function assertOwner(userId: string) {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
-  if (!userId || data.session?.user.id !== userId) throw new Error('Mahsup kuyruğunun sahibiyle giriş yapın');
+  if (!userId || data.session?.user.id !== userId) throw new Error(t('runtime.offsetQueueOwner'));
 }
 function validate(input: SettleObligationsInput) {
   if (!input || !['mahsup', 'ciro'].includes(input.method) || !['payable', 'receivable'].includes(input.direction)
@@ -34,14 +35,14 @@ function validate(input: SettleObligationsInput) {
     || [...input.targets, ...input.sources].some((x) => !x || typeof x.id !== 'string' || !x.id
       || !Number.isSafeInteger(x.remaining_amount_minor) || x.remaining_amount_minor <= 0)
     || new Set([...input.targets, ...input.sources].map((x) => x.id)).size !== input.targets.length + input.sources.length) {
-    throw new Error('Mahsup bilgileri geçersiz; kayıtları kontrol edin');
+    throw new Error(t('runtime.invalidOffsetDetails'));
   }
   if (input.method === 'ciro' && (!Number.isSafeInteger(input.sources.reduce((sum, o) => sum + o.remaining_amount_minor, 0))
     || input.sources.some((o) => o.direction !== 'receivable' || !['cek', 'senet'].includes(o.document_type ?? '')
       || o.currency_code !== input.currencyCode)
     || input.targets.some((o) => o.direction !== 'payable' || o.counterparty_id !== input.counterpartyId
       || o.currency_code !== input.currencyCode || ['cek', 'senet', 'kredi_karti_ekstresi'].includes(o.document_type ?? '')))) {
-    throw new Error('Ciro kaynak veya hedef kapsamı geçersiz');
+    throw new Error(t('runtime.invalidOffsetScope'));
   }
 }
 function fingerprint(input: SettleObligationsInput) {
@@ -63,7 +64,7 @@ async function read(userId: string, workspaceId: string): Promise<StoredOffset |
       || (['confirmed', 'reversing'].includes(record.state) && !Array.isArray(record.result?.allocations))) throw new Error();
     if (record.input.method === 'ciro' && ['reversing', 'reversed'].includes(record.state)) throw new Error();
     return record;
-  } catch { throw new Error('Saklanan mahsup okunamadı. Yeni işlem yapmadan kayıt geçmişini kontrol edin.'); }
+  } catch { throw new Error(t('runtime.storedOffsetUnreadable')); }
 }
 export async function loadStoredOffset(userId: string, workspaceId: string) {
   await assertOwner(userId);
@@ -75,10 +76,10 @@ export function submitDurableOffset(userId: string, draft: SettleObligationsInpu
     await assertOwner(userId);
     validate(draft);
     let record = await read(userId, draft.workspaceId);
-    if (record && fingerprint(record.input) !== fingerprint(draft)) throw new Error('Önce önceki mahsup sonucunu kontrol edin');
-    if (record?.state === 'cancelled') throw new Error('Mahsup iptal edildi. Yeni işlem başlat seçeneğini kullanın.');
-    if (record?.state === 'reversed') throw new Error('Mahsup geri alındı. Yeni işlem başlat seçeneğini kullanın.');
-    if (record?.state === 'reversing') throw new Error('Önce bekleyen mahsup geri alma sonucunu kontrol edin');
+    if (record && fingerprint(record.input) !== fingerprint(draft)) throw new Error(t('runtime.checkPreviousOffset'));
+    if (record?.state === 'cancelled') throw new Error(t('runtime.offsetCancelled'));
+    if (record?.state === 'reversed') throw new Error(t('runtime.offsetReversed'));
+    if (record?.state === 'reversing') throw new Error(t('runtime.checkPendingReversal'));
     if (record?.state === 'confirmed') return record.result!;
     if (!record) {
       record = { version: 1, userId, state: 'pending', input: { ...draft, actorId: userId, requestId: randomUUID() } };
@@ -96,7 +97,7 @@ export function acknowledgeOffset(userId: string, workspaceId: string): Promise<
   return serialize(key, async () => {
     await assertOwner(userId);
     const record = await read(userId, workspaceId);
-    if (!record || record.state === 'pending' || record.state === 'reversing') throw new Error('Sonucu belirsiz mahsup silinemez');
+    if (!record || record.state === 'pending' || record.state === 'reversing') throw new Error(t('runtime.uncertainOffset'));
     await AsyncStorage.removeItem(key);
   });
 }
@@ -106,7 +107,7 @@ export function cancelStoredOffset(userId: string, workspaceId: string): Promise
   return serialize(key, async () => {
     await assertOwner(userId);
     const record = await read(userId, workspaceId);
-    if (!record) throw new Error('Saklanan mahsup yok');
+    if (!record) throw new Error(t('runtime.noStoredOffset'));
     if (record.state !== 'pending') return record;
     const { data, error } = await supabase.rpc((record.input.method === 'ciro' ? 'cancel_endorsement_request' : 'cancel_offset_request') as never, {
       p_expected_actor: userId, p_workspace_id: workspaceId, p_request_id: record.input.requestId,
@@ -120,7 +121,7 @@ export function cancelStoredOffset(userId: string, workspaceId: string): Promise
       // Recover the original receipt; never undo a committed financial operation here.
       const result = await settleObligations(record.input);
       finalRecord = { ...record, state: 'confirmed', result };
-    } else throw new Error('Mahsup iptal sonucu doğrulanamadı; aynı işlemi tekrar kontrol edin');
+    } else throw new Error(t('runtime.unverifiedCancelOffset'));
     await AsyncStorage.setItem(key, JSON.stringify(finalRecord));
     return finalRecord;
   });
@@ -131,8 +132,8 @@ export function reverseStoredOffset(userId: string, workspaceId: string): Promis
   return serialize(key, async () => {
     await assertOwner(userId);
     const record = await read(userId, workspaceId);
-    if (!record || record.state === 'pending' || record.state === 'cancelled') throw new Error('Önce mahsup sonucunu doğrulayın');
-    if (record.input.method !== 'mahsup') throw new Error('Ciro iadesi tek mahsup geri alma değildir; kaynak çek/senet akışından yönetilmelidir');
+    if (!record || record.state === 'pending' || record.state === 'cancelled') throw new Error(t('runtime.verifyOffsetFirst'));
+    if (record.input.method !== 'mahsup') throw new Error(t('runtime.endorsementReversal'));
     if (record.state === 'reversed') return record;
     if (record.state === 'confirmed') {
       // Persist reversal intent before the network call; lost responses cannot unlock a new operation.
@@ -143,7 +144,7 @@ export function reverseStoredOffset(userId: string, workspaceId: string): Promis
       p_expected_actor: userId, p_workspace_id: workspaceId, p_request_id: record.input.requestId,
     } as never);
     if (error) throw error;
-    if ((data as unknown as { state?: string } | null)?.state !== 'reversed') throw new Error('Mahsup geri alma sonucu doğrulanamadı');
+    if ((data as unknown as { state?: string } | null)?.state !== 'reversed') throw new Error(t('runtime.unverifiedReversal'));
     const reversed: StoredOffset = { ...record, state: 'reversed' };
     await AsyncStorage.setItem(key, JSON.stringify(reversed));
     return reversed;

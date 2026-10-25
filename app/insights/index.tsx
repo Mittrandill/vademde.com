@@ -22,7 +22,7 @@ import { aiDisclaimer, useAiAccess } from '@/features/insights/useAiAccess';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { zeroFractionPattern } from '@/i18n/format';
-import { t } from '@/i18n';
+import { getLanguage, t } from '@/i18n';
 
 type TabKey = 'all' | InsightKind;
 
@@ -58,7 +58,7 @@ function InsightsContent() {
   const [tab, setTab] = useState<TabKey>('all');
 
   const insightsQuery = useQuery({
-    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'ai-insights'] : ['ai-insights', 'disabled'],
+    queryKey: activeWorkspaceId ? [activeWorkspaceId, 'ai-insights', getLanguage()] : ['ai-insights', 'disabled'],
     queryFn: () => listInsights(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
   });

@@ -6,6 +6,8 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const ts = require('typescript');
+const i18next = require('i18next').createInstance();
+const i18nBridge = {t:(...args)=>i18next.t(...args),getLanguage:()=>i18next.language,getLocaleTag:()=>i18next.language==='en'?'en-US':'tr-TR'};
 let tables = {}, rpcCalls = [], insertCalls = [], rpcError = null, storageRemovals = 0, authUserId = 'alice', storageFailOnWrite = 0, storageWrites = 0, uuidSequence = 0, cancelState='cancelled', reverseState='reversed', malformedCash=false;
 const cashReceipts=new Map();
 const endorsementReceipts=new Map();
@@ -73,6 +75,8 @@ function load(relative){
  const filename=path.join(root,relative);if(modules.has(filename))return modules.get(filename).exports;
  const module={exports:{}};modules.set(filename,module);
  const customRequire=name=>{
+  if(name==='@/i18n'||(name==='./index'&&relative==='i18n/format.ts'))return i18nBridge;
+  if(name==='expo-localization')return {getLocales:()=>[{languageCode:'tr',decimalSeparator:','}]};
   if(name==='@/services/supabase')return {supabase};
   if(name==='expo-sharing'||name==='expo-file-system')return {};
   if(name==='expo-crypto')return {randomUUID:()=>`00000000-0000-4000-8000-${String(++uuidSequence).padStart(12,'0')}`};
@@ -80,8 +84,9 @@ function load(relative){
   if(name==='@tanstack/query-async-storage-persister')return {createAsyncStoragePersister:()=>({removeClient:async()=>{storageRemovals++;}})};
   if(name==='@react-native-community/netinfo')return {__esModule:true,default:{addEventListener:()=>()=>{}}};
   if(name==='react-native')return {AppState:{addEventListener:()=>({remove(){}})}};
-  if(name.startsWith('@/'))return load(name.slice(2)+'.ts');
-  if(name.startsWith('.'))return load(path.relative(root,path.resolve(path.dirname(filename),name))+'.ts');
+  const loadLocal=base=>load(fs.existsSync(path.join(root,base+'.ts'))?base+'.ts':path.join(base,'index.ts'));
+  if(name.startsWith('@/'))return loadLocal(name.slice(2));
+  if(name.startsWith('.'))return loadLocal(path.relative(root,path.resolve(path.dirname(filename),name)));
   return require(name);
  };
  const code=ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -91,6 +96,7 @@ function load(relative){
 let passed=0;
 async function check(name,run){await run();passed++;console.log(`PASS ${name}`);}
 (async()=>{
+ await i18next.init({resources:{tr:{translation:load('i18n/locales/tr/index.ts').tr}},lng:'tr',fallbackLng:'tr',interpolation:{escapeValue:false}});
  const reports=load('features/reports/api.ts'),dashboard=load('features/dashboard/api.ts');
  const payments=load('features/payments/api.ts'),values=load('features/valueUnits/api.ts');
  const cards=load('features/cardInstallments/api.ts'),obligations=load('features/obligations/api.ts');

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import { supabase } from '@/services/supabase';
@@ -24,7 +25,7 @@ function serialize<T>(key: string, run: () => Promise<T>): Promise<T> {
 async function assertOwner(userId: string) {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
-  if (!userId || data.session?.user.id !== userId) throw new Error('Ödeme kuyruğunun sahibiyle giriş yapın');
+  if (!userId || data.session?.user.id !== userId) throw new Error(t('runtime.paymentQueueOwner'));
 }
 function fingerprint(input: SettleObligationsInput) {
   return JSON.stringify([input.workspaceId, input.counterpartyId, input.direction, input.method,
@@ -46,7 +47,7 @@ async function read(userId: string, workspaceId: string): Promise<StoredCashSett
       throw new Error();
     }
     return record;
-  } catch { throw new Error('Saklanan ödeme okunamadı. Yeni işlem yapmadan özgün ödeme sonucunu kontrol edin.'); }
+  } catch { throw new Error(t('runtime.storedPaymentUnreadable')); }
 }
 export async function loadStoredCashSettlement(userId: string, workspaceId: string) {
   await assertOwner(userId);
@@ -57,8 +58,8 @@ export function submitDurableCashSettlement(userId: string, draft: SettleObligat
     await assertOwner(userId);
     validateCashDraft(draft);
     let record = await read(userId, draft.workspaceId);
-    if (record && fingerprint(record.input) !== fingerprint(draft)) throw new Error('Önce önceki ödeme sonucunu kontrol edin; bekleyen işlem değiştirilmez');
-    if (record?.state === 'cancelled') throw new Error('Ödeme isteği iptal edildi; yeni işlem başlat seçeneğini kullanın');
+    if (record && fingerprint(record.input) !== fingerprint(draft)) throw new Error(t('runtime.pendingPaymentImmutable'));
+    if (record?.state === 'cancelled') throw new Error(t('runtime.paymentCancelled'));
     if (record?.state === 'confirmed') return record.result!;
     if (!record) {
       // Discard caller-supplied identity/payload. Allocate once, then save the COMPLETE payload.
@@ -79,7 +80,7 @@ export function acknowledgeCashSettlement(userId: string, workspaceId: string) {
   return serialize(keyFor(userId, workspaceId), async () => {
     await assertOwner(userId);
     const record = await read(userId, workspaceId);
-    if (!record || record.state === 'pending') throw new Error('Sonucu belirsiz ödeme silinemez');
+    if (!record || record.state === 'pending') throw new Error(t('runtime.uncertainPayment'));
     await AsyncStorage.removeItem(keyFor(userId, workspaceId));
   });
 }
@@ -87,7 +88,7 @@ export function cancelStoredCashSettlement(userId: string, workspaceId: string):
   return serialize(keyFor(userId, workspaceId), async () => {
     await assertOwner(userId);
     const record = await read(userId, workspaceId);
-    if (!record) throw new Error('Saklanan ödeme yok');
+    if (!record) throw new Error(t('runtime.noStoredPayment'));
     if (record.state !== 'pending') return record;
     const { data, error } = await supabase.rpc('cancel_cash_settlement_request' as never, {
       p_expected_actor: userId, p_workspace_id: workspaceId, p_request_id: record.input.requestId,
@@ -99,7 +100,7 @@ export function cancelStoredCashSettlement(userId: string, workspaceId: string):
     else if (state === 'confirmed') {
       await assertOwner(userId);
       final = { ...record, state: 'confirmed', result: await settleObligations(record.input) };
-    } else throw new Error('Ödeme iptal sonucu doğrulanamadı; aynı işlemi tekrar kontrol edin');
+    } else throw new Error(t('runtime.unverifiedCancelPayment'));
     await AsyncStorage.setItem(keyFor(userId, workspaceId), JSON.stringify(final));
     return final;
   });

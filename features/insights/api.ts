@@ -1,5 +1,6 @@
 import { supabase } from '@/services/supabase';
-import { t } from '@/i18n';
+import { getLanguage, t } from '@/i18n';
+import { syncCurrentProfileLocale } from '@/services/profileLocale';
 import { localizedRecord } from '@/i18n/localized';
 
 // ai_insights tablosu (migration 20261005120000_ai_insights.sql) henüz db/database.types.ts'te
@@ -8,6 +9,7 @@ export type InsightKind = 'abonelik' | 'tasarruf' | 'nakit' | 'aliskanlik' | 'ku
 export type InsightStatus = 'new' | 'dismissed' | 'applied';
 
 export interface AiInsight {
+  locale: 'tr' | 'en';
   id: string;
   workspace_id: string;
   kind: InsightKind;
@@ -28,7 +30,7 @@ export const INSIGHT_KIND_LABEL: Record<InsightKind, string> = localizedRecord(
 // Plus planı gerektiren işlevlerde sunucu 403 {error:'plus_required'} döner.
 export class PlusRequiredError extends Error {
   constructor() {
-    super('Akıllı öneriler Plus planına dahildir.');
+    super(t('runtime.insightsPlus'));
   }
 }
 
@@ -49,6 +51,7 @@ export async function listInsights(workspaceId: string): Promise<AiInsight[]> {
     .from('ai_insights' as never)
     .select('*')
     .eq('workspace_id', workspaceId)
+    .eq('locale', getLanguage())
     .eq('status', 'new')
     .order('generated_at', { ascending: false })
     .limit(50);
@@ -65,6 +68,7 @@ export async function dismissInsight(id: string): Promise<void> {
 }
 
 export async function generateInsights(workspaceId: string): Promise<number> {
+  await syncCurrentProfileLocale();
   const { data, error } = await supabase.functions.invoke('generate-insights', { body: { workspaceId } });
   if (error) {
     if ((await readFunctionError(error)) === 'plus_required') throw new PlusRequiredError();
@@ -79,12 +83,13 @@ export interface AiAnswer {
 }
 
 export async function askAi(workspaceId: string, question: string): Promise<AiAnswer> {
+  await syncCurrentProfileLocale();
   const { data, error } = await supabase.functions.invoke('ai-ask', { body: { workspaceId, question } });
   if (error) {
     const code = await readFunctionError(error);
     if (code === 'plus_required') throw new PlusRequiredError();
-    if (code === 'question_too_long') throw new Error('Sorun çok uzun; biraz kısaltır mısın?');
-    throw new Error('Şu an yanıt veremiyorum. Biraz sonra tekrar dene.');
+    if (code === 'question_too_long') throw new Error(t('runtime.questionTooLong'));
+    throw new Error(t('runtime.answerUnavailable'));
   }
   return data as AiAnswer;
 }

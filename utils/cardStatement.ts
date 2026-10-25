@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 export type CardStatementLineKind =
   | 'card_transaction'
   | 'card_purchase'
@@ -60,19 +61,19 @@ export function isCardExpenseLine(line: Pick<StatementLine, 'kind'>): boolean {
 export function cardLineLabel(kind: string): string {
   switch (kind) {
     case 'card_payment':
-      return 'Kart ödemesi';
+      return t('runtime.cardPayment');
     case 'card_refund':
-      return 'İade';
+      return t('runtime.refund');
     case 'card_fee':
-      return 'Ücret / komisyon';
+      return t('runtime.fee');
     case 'card_interest':
-      return 'Faiz';
+      return t('runtime.interest');
     case 'card_cash_advance':
-      return 'Nakit avans';
+      return t('runtime.cashAdvance');
     case 'card_unknown':
-      return 'Kontrol gerekli';
+      return t('runtime.reviewRequired');
     default:
-      return 'Harcama';
+      return t('runtime.expense');
   }
 }
 

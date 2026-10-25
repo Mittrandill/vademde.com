@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import { fetchAll } from '@/services/fetchAll';
 import { computeCardDebt, type CardDebtStatement, type CardDebtTransaction, type CardStatementAnchor } from '@/utils/cardDebt';
@@ -454,9 +455,9 @@ export interface CashFlowBucket {
 }
 
 const CASH_FLOW_BUCKET_DEFS: Array<Pick<CashFlowBucket, 'label' | 'fromDay' | 'toDay'>> = [
-  { label: '0-7 Gün', fromDay: 0, toDay: 7 },
-  { label: '8-14 Gün', fromDay: 8, toDay: 14 },
-  { label: '15-30 Gün', fromDay: 15, toDay: 30 },
+  { get label() { return t('runtime.cashflowWeek1'); }, fromDay: 0, toDay: 7 },
+  { get label() { return t('runtime.cashflowWeek2'); }, fromDay: 8, toDay: 14 },
+  { get label() { return t('runtime.cashflowMonth'); }, fromDay: 15, toDay: 30 },
 ];
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Beklenen nakit akışı: önümüzdeki 30 günün

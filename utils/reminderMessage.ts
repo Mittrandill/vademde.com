@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { BANKS } from '@/features/banks/banks';
 import { SERVICES } from '@/features/services/services';
 import { VALUE_UNIT_BY_CODE } from '@/features/valueUnits/units';
@@ -8,36 +9,35 @@ import { localeNumberFormatter } from '@/i18n/format';
 // birini değiştirirsen diğerini de güncelle.
 
 const STAGE_WHEN: Record<string, string> = {
-  '7_days_before': '7 Gün Sonra',
-  '3_days_before': '3 Gün Sonra',
-  due_day: 'Bugün',
-  overdue_1_day: '1 Gün Gecikti',
+  get '7_days_before'() { return t('reminderMessages.stages.7_days_before'); },
+  get '3_days_before'() { return t('reminderMessages.stages.3_days_before'); },
+  get due_day() { return t('reminderMessages.stages.due_day'); },
+  get overdue_1_day() { return t('reminderMessages.stages.overdue_1_day'); },
 };
 
 const PAYABLE_NOUN: Record<string, string> = {
-  kredi: 'Kredi Ödemeniz',
-  kredi_karti_ekstresi: 'Kredi Kartı Ödemeniz',
-  nakit_avans: 'Nakit Avans Ödemeniz',
-  cek: 'Çek Ödemeniz',
-  senet: 'Senet Ödemeniz',
-  fatura: 'Fatura Ödemeniz',
-  abonelik: 'Abonelik Ödemeniz',
-  kira: 'Kira Ödemeniz',
-  maas: 'Maaş Ödemeniz',
-  vergi_sgk: 'Vergi / SGK Ödemeniz',
-  tedarikci_borcu: 'Tedarikçi Ödemeniz',
-  sozlesme_odeme_plani: 'Sözleşme Ödemeniz',
+  get kredi() { return t('reminderMessages.payable.kredi'); },
+  get kredi_karti_ekstresi() { return t('reminderMessages.payable.kredi_karti_ekstresi'); },
+  get nakit_avans() { return t('reminderMessages.payable.nakit_avans'); },
+  get cek() { return t('reminderMessages.payable.cek'); },
+  get senet() { return t('reminderMessages.payable.senet'); },
+  get fatura() { return t('reminderMessages.payable.fatura'); },
+  get abonelik() { return t('reminderMessages.payable.abonelik'); },
+  get kira() { return t('reminderMessages.payable.kira'); },
+  get maas() { return t('reminderMessages.payable.maas'); },
+  get vergi_sgk() { return t('reminderMessages.payable.vergi_sgk'); },
+  get tedarikci_borcu() { return t('reminderMessages.payable.tedarikci_borcu'); },
+  get sozlesme_odeme_plani() { return t('reminderMessages.payable.sozlesme_odeme_plani'); },
 };
 
 const RECEIVABLE_NOUN: Record<string, string> = {
-  cek: 'Çek Tahsilatınız',
-  senet: 'Senet Tahsilatınız',
-  borc_verme: 'Borç Tahsilatınız',
-  musteri_alacagi: 'Müşteri Tahsilatınız',
-  kira: 'Kira Tahsilatınız',
+  get cek() { return t('reminderMessages.receivable.cek'); },
+  get senet() { return t('reminderMessages.receivable.senet'); },
+  get borc_verme() { return t('reminderMessages.receivable.borc_verme'); },
+  get musteri_alacagi() { return t('reminderMessages.receivable.musteri_alacagi'); },
+  get kira() { return t('reminderMessages.receivable.kira'); },
 };
 
-const BANK_NAME = new Map(BANKS.map((b) => [b.code, b.name]));
 const SERVICE_NAME = new Map(SERVICES.map((s) => [s.code, s.name]));
 
 // "10.000 TL", "10.000,50 TL", "2 Çeyrek Altın". Kuruşsuz tutarda ondalık yazılmaz.
@@ -71,16 +71,16 @@ export function buildObligationReminderMessage(
   const type = obligation.document_type ?? '';
   const noun =
     obligation.direction === 'payable'
-      ? (PAYABLE_NOUN[type] ?? 'Ödemeniz')
-      : (RECEIVABLE_NOUN[type] ?? 'Tahsilatınız');
+      ? (PAYABLE_NOUN[type] ?? t('reminderMessages.payment'))
+      : (RECEIVABLE_NOUN[type] ?? t('reminderMessages.collection'));
   const subject =
-    (obligation.bank_code && BANK_NAME.get(obligation.bank_code)) ||
+    (obligation.bank_code && BANKS.find((bank) => bank.code === obligation.bank_code)?.name) ||
     (obligation.service_code && SERVICE_NAME.get(obligation.service_code)) ||
     obligation.counterparty?.name ||
     obligation.title;
   const when = STAGE_WHEN[stage] ?? '';
   return {
-    title: obligation.direction === 'payable' ? 'Ödeme Hatırlatması' : 'Tahsilat Hatırlatması',
-    body: `${subject} ${formatReminderAmount(amountMinor, obligation.currency_code)} Tutarındaki ${noun} ${when}`.trim(),
+    title: obligation.direction === 'payable' ? t('reminderMessages.paymentTitle') : t('reminderMessages.collectionTitle'),
+    body: t('reminderMessages.body', { subject, amount: formatReminderAmount(amountMinor, obligation.currency_code), noun, when }).trim(),
   };
 }

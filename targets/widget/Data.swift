@@ -16,6 +16,8 @@ struct DueItem: Codable {
 }
 
 struct Snapshot: Codable {
+    // Optional to keep snapshots written by previous app builds decodable.
+    let language: String?
     let workspaceName: String
     let balance: String
     let receivable: String
@@ -33,11 +35,13 @@ struct VademdeEntry: TimelineEntry {
     let date: Date
     let snapshot: Snapshot?
     let hideAmounts: Bool
+    let language: WidgetLanguage
 }
 
 struct VademdeProvider: TimelineProvider {
     func placeholder(in context: Context) -> VademdeEntry {
-        VademdeEntry(date: Date(), snapshot: Snapshot.sample, hideAmounts: false)
+        let language = WidgetLanguage.current
+        return VademdeEntry(date: Date(), snapshot: Snapshot.sample(for: language), hideAmounts: false, language: language)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (VademdeEntry) -> Void) {
@@ -53,12 +57,14 @@ struct VademdeProvider: TimelineProvider {
 
     private func load() -> VademdeEntry {
         let defaults = UserDefaults(suiteName: vademdeAppGroup)
+        let language = WidgetLanguage.current
         var snapshot: Snapshot? = nil
         if let json = defaults?.string(forKey: "snapshot"), let data = json.data(using: .utf8) {
             snapshot = try? JSONDecoder().decode(Snapshot.self, from: data)
         }
+        if let saved = snapshot, (saved.language ?? "tr") != language.rawValue { snapshot = nil }
         let hide = defaults?.string(forKey: "hideAmounts") == "1"
-        return VademdeEntry(date: Date(), snapshot: snapshot, hideAmounts: hide)
+        return VademdeEntry(date: Date(), snapshot: snapshot, hideAmounts: hide, language: language)
     }
 }
 
@@ -70,16 +76,20 @@ private func sampleDay(_ offset: Int) -> String {
 }
 
 extension Snapshot {
-    static var sample = Snapshot(
-        workspaceName: "Kaya Mobilya", balance: "₺99.521", receivable: "₺18.000", payable: "₺101.590",
-        monthNet: "₺35.200", monthNetShort: "+35K", weekPayable: "₺48.250", weekReceivable: "₺18.000",
+    static func sample(for language: WidgetLanguage) -> Snapshot {
+        let english = language == .en
+        return Snapshot(
+        language: language.rawValue,
+        workspaceName: english ? "Kaya Furniture" : "Kaya Mobilya", balance: english ? "₺99,521" : "₺99.521", receivable: english ? "₺18,000" : "₺18.000", payable: english ? "₺101,590" : "₺101.590",
+        monthNet: english ? "₺35,200" : "₺35.200", monthNetShort: "+35K", weekPayable: english ? "₺48,250" : "₺48.250", weekReceivable: english ? "₺18,000" : "₺18.000",
         weekPayableMinor: 4_825_000, weekReceivableMinor: 1_800_000,
         items: [
-            DueItem(title: "Enerjisa", kind: "Fatura", date: sampleDay(-3), amount: "₺2.184,60", receivable: false, overdue: true, bank: nil),
-            DueItem(title: "Kuzey Lojistik", kind: "Çek", date: sampleDay(1), amount: "₺48.250", receivable: false, overdue: false, bank: "akbank"),
-            DueItem(title: "Anadolu Ambalaj", kind: "Senet", date: sampleDay(4), amount: "₺18.000", receivable: true, overdue: false, bank: nil),
-            DueItem(title: "Konut kredisi", kind: "Kredi", date: sampleDay(7), amount: "₺14.872", receivable: false, overdue: false, bank: "turkiye-garanti-bankasi"),
+            DueItem(title: "Enerjisa", kind: english ? "Invoice" : "Fatura", date: sampleDay(-3), amount: english ? "₺2,184.60" : "₺2.184,60", receivable: false, overdue: true, bank: nil),
+            DueItem(title: english ? "North Logistics" : "Kuzey Lojistik", kind: english ? "Cheque" : "Çek", date: sampleDay(1), amount: english ? "₺48,250" : "₺48.250", receivable: false, overdue: false, bank: "akbank"),
+            DueItem(title: english ? "Anatolia Packaging" : "Anadolu Ambalaj", kind: english ? "Promissory Note" : "Senet", date: sampleDay(4), amount: english ? "₺18,000" : "₺18.000", receivable: true, overdue: false, bank: nil),
+            DueItem(title: english ? "Home loan" : "Konut kredisi", kind: english ? "Loan" : "Kredi", date: sampleDay(7), amount: english ? "₺14,872" : "₺14.872", receivable: false, overdue: false, bank: "turkiye-garanti-bankasi"),
         ])
+    }
 }
 
 // MARK: - Tarih yardımcıları
@@ -92,12 +102,12 @@ private let dayKeyFormatter: DateFormatter = {
     return f
 }()
 
-private let shortDateFormatter: DateFormatter = {
+private func shortDateFormatter(language: WidgetLanguage) -> DateFormatter {
     let f = DateFormatter()
-    f.locale = Locale(identifier: "tr_TR")
-    f.dateFormat = "d MMM"
+    f.locale = language.locale
+    f.dateFormat = language == .en ? "MMM d" : "d MMM"
     return f
-}()
+}
 
 extension DueItem {
     /// Bugüne göre gün farkı (negatif = gecikmiş). Örnek veride bugüne göre kaydırılır.
@@ -107,25 +117,25 @@ extension DueItem {
         return cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: due)).day ?? 0
     }
 
-    func shortDate() -> String {
+    func shortDate(language: WidgetLanguage) -> String {
         guard let due = dayKeyFormatter.date(from: date) else { return "" }
-        return shortDateFormatter.string(from: due)
+        return shortDateFormatter(language: language).string(from: due)
     }
 
     /// "Bugün" / "Yarın" / "N gün" / "N gün gecikti"
-    func relative(from now: Date) -> String {
+    func relative(from now: Date, language: WidgetLanguage) -> String {
         let d = days(from: now)
-        if overdue || d < 0 { return "\(max(1, abs(d))) gün gecikti" }
-        if d == 0 { return "Bugün" }
-        if d == 1 { return "Yarın" }
-        return "\(d) gün"
+        if overdue || d < 0 { return language.daysOverdue(max(1, abs(d))) }
+        if d == 0 { return language.text(.today) }
+        if d == 1 { return language.text(.tomorrow) }
+        return language.daysRemaining(d)
     }
 
     /// Satırın sol sütunu: gecikmişte/yakında "Yarın", aksi halde "9 Eki".
-    func dateLabel(from now: Date) -> String {
+    func dateLabel(from now: Date, language: WidgetLanguage) -> String {
         let d = days(from: now)
-        if d == 0 && !overdue { return "Bugün" }
-        if d == 1 { return "Yarın" }
-        return shortDate()
+        if d == 0 && !overdue { return language.text(.today) }
+        if d == 1 { return language.text(.tomorrow) }
+        return shortDate(language: language)
     }
 }
