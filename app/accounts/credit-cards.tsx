@@ -30,6 +30,8 @@ import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { computeStatementPeriod, periodKeyForDueDate } from '@/utils/creditCardPeriod';
 import { formatMinorAmount } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
 const PAGE_SIZE = 10;
 
@@ -38,10 +40,10 @@ const PAGE_SIZE = 10;
 // hesaplanan "bu döneme ait ekstre yüklendi mi" bilgisi aynı rolü oynuyor.
 type CardStatusKey = 'all' | 'awaiting' | 'uploaded';
 
-const CARD_STATUS_OPTIONS: { key: CardStatusKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'awaiting', label: 'Ekstre Bekleyen' },
-  { key: 'uploaded', label: 'Ekstre Yüklendi' },
+const CARD_STATUS_OPTIONS: { key: CardStatusKey; readonly label: string }[] = [
+  { key: 'all', get label() { return t('common.all'); } },
+  { key: 'awaiting', get label() { return t('accounts.cards.statusAwaiting'); } },
+  { key: 'uploaded', get label() { return t('accounts.cards.statusUploaded'); } },
 ];
 
 // Ekran web'de doğrudan bu URL'e gidilerek (sayfa yenileme, deep link) açılırsa stack'te
@@ -177,8 +179,12 @@ export default function CreditCardsScreen() {
   const isFiltered = searchInput.trim().length > 0 || statusKey !== 'all';
   const openNewCard = () => router.push({ pathname: '/accounts/new', params: { type: 'credit_card' } });
   const footerLabel = cards.length
-    ? `${effectivePage * PAGE_SIZE + 1}–${Math.min((effectivePage + 1) * PAGE_SIZE, cards.length)} / ${cards.length} kart`
-    : '0 kart gösteriliyor';
+    ? t('accounts.cards.footer', {
+        from: effectivePage * PAGE_SIZE + 1,
+        to: Math.min((effectivePage + 1) * PAGE_SIZE, cards.length),
+        count: cards.length,
+      })
+    : t('accounts.cards.noneShown');
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -192,27 +198,27 @@ export default function CreditCardsScreen() {
       >
         <Stack gap="lg">
           <ScreenHeader
-            title="Kredi Kartlarım"
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: closeScreen }}
-            right={{ icon: 'add', accessibilityLabel: 'Yeni kredi kartı', variant: 'accent', onPress: openNewCard }}
+            title={t('accounts.cards.title')}
+            left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: closeScreen }}
+            right={{ icon: 'add', accessibilityLabel: t('accounts.cards.newCard'), variant: 'accent', onPress: openNewCard }}
           />
 
           <FinanceListHero
-            label="TOPLAM KART BORCU"
-            description="Kredi kartlarınızın güncel toplam borcu"
+            label={t('accounts.cards.totalDebtUpper')}
+            description={t('accounts.cards.totalDebtHint')}
             amountText={formatMinorAmount(totalDebtMinor)}
             amountColor="textPrimary"
             metrics={[
-              { label: 'TOPLAM KART', value: allCards.length, caption: 'Tüm kartlar' },
-              { label: 'EKSTRE BEKLEYEN', value: cardsAwaitingStatement, caption: 'Yüklenmesi gereken', valueColor: cardsAwaitingStatement > 0 ? 'attentionMarker' : undefined },
-              { label: 'EKSTRE YÜKLENDİ', value: allCards.length - cardsAwaitingStatement, caption: 'Bu dönem', valueColor: 'success' },
-              { label: 'BORÇLU KART', value: allCards.filter((account) => (balanceByAccountId.get(account.id) ?? account.opening_balance_minor) > 0).length, caption: 'Bakiye taşıyan' },
+              { label: t('accounts.cards.totalCardsUpper'), value: allCards.length, caption: t('accounts.cards.allCards') },
+              { label: t('accounts.cards.awaitingUpper'), value: cardsAwaitingStatement, caption: t('accounts.cards.awaitingHint'), valueColor: cardsAwaitingStatement > 0 ? 'attentionMarker' : undefined },
+              { label: t('accounts.cards.uploadedUpper'), value: allCards.length - cardsAwaitingStatement, caption: t('accounts.cards.thisCycle'), valueColor: 'success' },
+              { label: t('accounts.cards.indebtedUpper'), value: allCards.filter((account) => (balanceByAccountId.get(account.id) ?? account.opening_balance_minor) > 0).length, caption: t('accounts.cards.indebtedHint') },
             ]}
           />
 
           <FinanceFilterCard
-            title="EKSTRE DURUMU"
-            description="Listede görmek istediğiniz ekstre durumunu seçin."
+            title={t('accounts.cards.statusUpper')}
+            description={t('accounts.cards.statusHint')}
             options={CARD_STATUS_OPTIONS}
             value={statusKey}
             onChange={setStatusKey}
@@ -220,17 +226,17 @@ export default function CreditCardsScreen() {
 
           <FinanceListSurface
             plain
-            searchPlaceholder="Kredi kartlarımda ara..."
+            searchPlaceholder={t('accounts.cards.searchPlaceholder')}
             searchValue={searchInput}
             onSearchChange={setSearchInput}
             sortAction={{
-              label: 'Tarih',
-              accessibilityLabel: 'Tarihe göre sırala',
+              label: t('accounts.cards.sortDate'),
+              accessibilityLabel: t('accounts.cards.sortByDate'),
               icon: sortAscending ? 'arrow-up' : 'arrow-down',
               onPress: () => setSortAscending((value) => !value),
             }}
             footerLabel={pagedCards.length > 0 ? footerLabel : undefined}
-            actionLabel={pagedCards.length > 0 ? 'Yeni kredi kartı' : undefined}
+            actionLabel={pagedCards.length > 0 ? t('accounts.cards.newCard') : undefined}
             onActionPress={pagedCards.length > 0 ? openNewCard : undefined}
             page={effectivePage}
             totalPages={totalPages}
@@ -238,7 +244,7 @@ export default function CreditCardsScreen() {
           >
             {accountsQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {friendlyErrorMessage(accountsQuery.error, 'Kredi kartları yüklenemedi')}
+                {friendlyErrorMessage(accountsQuery.error, t('accounts.cards.loadFailed'))}
               </Text>
             ) : !accountsQuery.isSuccess ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
@@ -248,9 +254,9 @@ export default function CreditCardsScreen() {
             ) : pagedCards.length === 0 ? (
               <FinanceListEmptyState
                 icon={isFiltered ? 'search-outline' : 'card-outline'}
-                title={isFiltered ? 'Sonuç bulunamadı' : 'Henüz kredi kartı yok'}
-                message={isFiltered ? 'Arama terimini veya filtreleri değiştirin.' : 'Kredi kartı ekleyerek borcunuzu ve ekstrelerinizi takip etmeye başlayın.'}
-                actionLabel={isFiltered ? undefined : 'Yeni kredi kartı'}
+                title={isFiltered ? t('accounts.cards.noResults') : t('accounts.cards.emptyTitle')}
+                message={isFiltered ? t('accounts.cards.noResultsBody') : t('accounts.cards.emptyBody')}
+                actionLabel={isFiltered ? undefined : t('accounts.cards.newCard')}
                 onActionPress={isFiltered ? undefined : openNewCard}
               />
             ) : (
@@ -281,7 +287,7 @@ interface CreditCardRowCardProps {
   nextDueDate: Date | null;
 }
 
-const dueDayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+const dueDayFormatter = localeDateFormatter({ day: 'numeric', month: 'short' });
 
 // Tuval KrediKartlari: kart başına .card — banka logosu + ad/•••• son4 + kalan gün etiketi,
 // dönem borcu / son ödeme, limit kullanım çubuğu ve Ödeme yap / Ekstreyi tara butonları.
@@ -304,7 +310,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, n
     <Card style={{ padding: 18, gap: 16 }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${account.name} kart detayını aç`}
+        accessibilityLabel={t('accounts.cards.openDetailA11y', { name: account.name })}
         onPress={open}
         style={{ gap: 16 }}
       >
@@ -315,23 +321,23 @@ function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, n
               {account.name}
             </Text>
             <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {account.card_last_four ? `•••• ${account.card_last_four}` : 'Kredi Kartı'}
+              {account.card_last_four ? `•••• ${account.card_last_four}` : t('domain.accountTypes.credit_card')}
             </Text>
           </Stack>
           {daysLeft !== null ? (
-            <Tag label={daysLeft < 0 ? 'Gecikti' : `${daysLeft} gün`} tone={daysLeft < 0 ? 'danger' : daysLeft <= 10 ? 'brand' : 'neutral'} />
+            <Tag label={daysLeft < 0 ? t('accounts.cards.overdue') : t('common.days', { count: daysLeft })} tone={daysLeft < 0 ? 'danger' : daysLeft <= 10 ? 'brand' : 'neutral'} />
           ) : null}
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
           <Stack gap="xxs" style={{ flex: 1 }}>
-            <Text variant="caption" color="textSecondary">Dönem borcu</Text>
+            <Text variant="caption" color="textSecondary">{t('accounts.cards.periodDebt')}</Text>
             <Text style={{ fontSize: 22, fontWeight: '700' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
               {formatMinorAmount(Math.abs(periodDebtMinor), account.currency_code)}
             </Text>
           </Stack>
           <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
-            <Text variant="caption" color="textSecondary">Son ödeme</Text>
+            <Text variant="caption" color="textSecondary">{t('accounts.cards.dueDate')}</Text>
             <Text style={{ fontSize: 15, fontWeight: '600' }}>{nextDueDate ? dueDayFormatter.format(nextDueDate) : '—'}</Text>
           </Stack>
         </View>
@@ -343,10 +349,10 @@ function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, n
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="caption" color="textSecondary">
-                Güncel borç {formatMinorAmount(balanceMinor, account.currency_code)}
+                {t('accounts.cards.currentDebt', { amount: formatMinorAmount(balanceMinor, account.currency_code) })}
               </Text>
               <Text variant="caption" color="textSecondary">
-                Limit {formatMinorAmount(limitMinor, account.currency_code)}
+                {t('accounts.cards.limit', { amount: formatMinorAmount(limitMinor, account.currency_code) })}
               </Text>
             </View>
           </Stack>
@@ -356,7 +362,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, n
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}>
           <Button
-            label="Ödeme yap"
+            label={t('accounts.cards.pay')}
             size="compact"
             // Kart borcu kişi/firmaya ödeme ekranından değil, kartın kendi "Kart borcunu öde" akışından
             // (kaynak hesaptan karta transfer) ödenir; kart sayfası formu açık açar.
@@ -365,7 +371,7 @@ function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, n
         </View>
         <View style={{ flex: 1 }}>
           <Button
-            label="Ekstreyi tara"
+            label={t('accounts.cards.scan')}
             variant="secondary"
             size="compact"
             onPress={() =>

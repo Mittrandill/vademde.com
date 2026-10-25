@@ -1,0 +1,16 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Vademde",
+    "NSPhotoLibraryUsageDescription": "Photo access is needed to scan your documents or choose a profile photo.",
+    "NSCameraUsageDescription": "Camera access is needed to scan your documents directly.",
+    "NSCalendarsUsageDescription": "Calendar access is needed to add your payable and receivable due dates to your calendar.",
+    "NSCalendarsFullAccessUsageDescription": "Calendar access is needed to add your payable and receivable due dates to your calendar.",
+    "NSRemindersUsageDescription": "Reminders access is needed to create items for your payable and receivable due dates.",
+    "NSRemindersFullAccessUsageDescription": "Reminders access is needed to create items for your payable and receivable due dates.",
+    "NSFaceIDUsageDescription": "Face ID is used to protect your financial data when opening Vademde.",
+    "NSUserTrackingUsageDescription": "This permission lets us show you more relevant ads and measure ad performance."
+  },
+  "android": {
+    "app_name": "Vademde"
+  }
+}

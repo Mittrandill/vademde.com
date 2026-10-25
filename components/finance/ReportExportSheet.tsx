@@ -5,15 +5,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { BottomSheet, Button, Pressable, ScrollableTabs, Stack, Text } from '@/components/primitives';
 import type { ReportPdfSections } from '@/features/reports/pdf';
+import { t } from '@/i18n';
 
 export type ExportFormat = 'pdf' | 'csv';
 
-const SECTION_LABELS: { key: keyof ReportPdfSections; label: string }[] = [
-  { key: 'summary', label: 'Özet ve öne çıkanlar' },
-  { key: 'categories', label: 'Kategoriler' },
-  { key: 'counterparties', label: 'Kişi ve firmalar' },
-  { key: 'obligations', label: 'Borç, alacak ve nakit akışı' },
-  { key: 'accounts', label: 'Hesap bakiyeleri' },
+const SECTION_LABELS: { key: keyof ReportPdfSections; readonly label: string }[] = [
+  { key: 'summary', get label() { return t('finance.export.sectionSummary'); } },
+  { key: 'categories', get label() { return t('finance.export.sectionCategories'); } },
+  { key: 'counterparties', get label() { return t('finance.export.sectionCounterparties'); } },
+  { key: 'obligations', get label() { return t('finance.export.sectionObligations'); } },
+  { key: 'accounts', get label() { return t('finance.export.sectionAccounts'); } },
 ];
 
 export interface ReportExportSheetProps {
@@ -41,10 +42,10 @@ export function ReportExportSheet({ visible, onClose, periodLabel, allowed, busy
   const noneSelected = format === 'pdf' && !Object.values(sections).some(Boolean);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Raporu dışa aktar">
+    <BottomSheet visible={visible} onClose={onClose} title={t('finance.export.title')}>
       <Stack gap="md">
         <Text variant="body" color="textSecondary">
-          Seçtiğin bölümler tek bir belgede birleşir.
+          {t('finance.export.body')}
         </Text>
 
         <View
@@ -56,14 +57,14 @@ export function ReportExportSheet({ visible, onClose, periodLabel, allowed, busy
           }}
         >
           <Text variant="label" color="textSecondary">
-            Dönem
+            {t('finance.export.period')}
           </Text>
           <Text variant="cardTitle">{periodLabel}</Text>
         </View>
 
         <Stack gap="xs">
           <Text variant="label" color="textSecondary">
-            Biçim
+            {t('finance.export.format')}
           </Text>
           <ScrollableTabs
             tabs={[
@@ -78,7 +79,7 @@ export function ReportExportSheet({ visible, onClose, periodLabel, allowed, busy
         {format === 'pdf' ? (
           <Stack gap="xxs">
             <Text variant="label" color="textSecondary">
-              Bölümler
+              {t('finance.export.sections')}
             </Text>
             {SECTION_LABELS.map((s) => {
               const checked = sections[s.key];
@@ -104,7 +105,7 @@ export function ReportExportSheet({ visible, onClose, periodLabel, allowed, busy
           </Stack>
         ) : (
           <Text variant="caption" color="textSecondary">
-            CSV, bu dönemdeki tüm hareketleri satır satır içerir.
+            {t('finance.export.csvHint')}
           </Text>
         )}
 
@@ -118,13 +119,13 @@ export function ReportExportSheet({ visible, onClose, periodLabel, allowed, busy
               Plus
             </Text>
             <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
-              Ücretsiz planda yalnızca bu ay dışa aktarılabilir. Planları gör →
+              {t('finance.export.freeLimit')}
             </Text>
           </Pressable>
         ) : null}
 
         <Button
-          label={format === 'pdf' ? 'PDF oluştur' : 'CSV oluştur'}
+          label={format === 'pdf' ? t('finance.export.createPdf') : t('finance.export.createCsv')}
           icon="document-outline"
           onPress={() => onExport(format, sections)}
           loading={busy}

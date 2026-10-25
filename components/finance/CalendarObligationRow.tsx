@@ -8,6 +8,7 @@ import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
 import type { ObligationDueItem } from '@/features/obligations/api';
 import type { ValueUnitType } from '@/features/valueUnits/units';
+import { t } from '@/i18n';
 
 export interface CalendarObligationRowProps {
   workspaceId: string;
@@ -75,7 +76,7 @@ export function CalendarObligationRow({ obligation }: CalendarObligationRowProps
               <Row gap="xs">
                 {cardDueAccountId ? (
                   <Text variant="caption" color="textSecondary">
-                    Güncel kart borcu
+                    {t('calendar.currentCardDebt')}
                   </Text>
                 ) : null}
                 {obligation.counterparty?.name ? (
@@ -102,7 +103,7 @@ export function CalendarObligationRow({ obligation }: CalendarObligationRowProps
               <Row gap="xxs" align="center">
                 <Ionicons name="checkmark-circle-outline" size={14} color={theme.colors.success} />
                 <Text variant="caption" style={{ color: theme.colors.success }}>
-                  {isPayable ? 'Öde' : 'Tahsil Et'}
+                  {isPayable ? t('calendar.pay') : t('calendar.collect')}
                 </Text>
               </Row>
             </Pressable>

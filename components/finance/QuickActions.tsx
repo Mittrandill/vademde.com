@@ -7,11 +7,12 @@ import { router, type Href } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Pressable, Row, Stack, Text } from '@/components/primitives';
 import { useQuickActionsStore } from '@/store/quickActionsStore';
+import { t } from '@/i18n';
 
 interface QuickActionDef {
   id: string;
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
+  readonly label: string;
   href: Href;
 }
 
@@ -22,16 +23,16 @@ interface QuickActionDef {
 // kendi rengini taşımaz (bkz. render: tek, tutarlı bir marka rengi kullanılır) —
 // kullanıcı geri bildirimi: renk renk rozetler "hazır AI şablonu" gibi duruyordu.
 const QUICK_ACTION_POOL: QuickActionDef[] = [
-  { id: 'yeni-hareket', icon: 'add', label: 'Yeni hareket', href: '/transactions/new' },
-  { id: 'odeme', icon: 'checkmark', label: 'Ödeme', href: '/payments/new' },
-  { id: 'transfer', icon: 'swap-horizontal', label: 'Transfer', href: '/transactions/new?direction=transfer' },
-  { id: 'yeni-borc-alacak', icon: 'document-text-outline', label: 'Yeni Borç/Alacak', href: '/obligations/new' },
-  { id: 'raporlar', icon: 'bar-chart', label: 'Raporlar', href: '/reports' },
-  { id: 'hesaplar', icon: 'wallet-outline', label: 'Hesaplar', href: '/accounts' },
-  { id: 'kredi-kartlarim', icon: 'card-outline', label: 'Kredi Kartlarım', href: '/accounts/credit-cards' },
-  { id: 'tara', icon: 'scan-outline', label: 'Tara', href: '/(tabs)/tara' },
-  { id: 'kisiler', icon: 'people-outline', label: 'Kişiler', href: '/counterparties' },
-  { id: 'kategoriler', icon: 'pricetags-outline', label: 'Kategoriler', href: '/categories' },
+  { id: 'yeni-hareket', icon: 'add', get label() { return t('home.quickActions.newTransaction'); }, href: '/transactions/new' },
+  { id: 'odeme', icon: 'checkmark', get label() { return t('home.quickActions.payment'); }, href: '/payments/new' },
+  { id: 'transfer', icon: 'swap-horizontal', get label() { return t('home.quickActions.transfer'); }, href: '/transactions/new?direction=transfer' },
+  { id: 'yeni-borc-alacak', icon: 'document-text-outline', get label() { return t('home.quickActions.newObligation'); }, href: '/obligations/new' },
+  { id: 'raporlar', icon: 'bar-chart', get label() { return t('home.quickActions.reports'); }, href: '/reports' },
+  { id: 'hesaplar', icon: 'wallet-outline', get label() { return t('home.quickActions.accounts'); }, href: '/accounts' },
+  { id: 'kredi-kartlarim', icon: 'card-outline', get label() { return t('home.quickActions.creditCards'); }, href: '/accounts/credit-cards' },
+  { id: 'tara', icon: 'scan-outline', get label() { return t('home.quickActions.scan'); }, href: '/(tabs)/tara' },
+  { id: 'kisiler', icon: 'people-outline', get label() { return t('home.quickActions.contacts'); }, href: '/counterparties' },
+  { id: 'kategoriler', icon: 'pricetags-outline', get label() { return t('home.quickActions.categories'); }, href: '/categories' },
 ];
 
 const POOL_BY_ID = new Map(QUICK_ACTION_POOL.map((action) => [action.id, action]));
@@ -57,7 +58,7 @@ export function QuickActions() {
             style={{ padding: theme.spacing.md, borderRadius: theme.radius.widget, backgroundColor: theme.colors.fill }}
           >
             <Ionicons name="add-circle-outline" size={22} color={theme.colors.textSecondary} />
-            <Text color="textSecondary">Hızlı işlem eklemek için dokunun</Text>
+            <Text color="textSecondary">{t('home.quickActions.addHint')}</Text>
           </Row>
         </Pressable>
       ) : (
@@ -67,7 +68,7 @@ export function QuickActions() {
               key={action.id}
               accessibilityRole="button"
               accessibilityLabel={action.label}
-              accessibilityHint="Uzun basarak hızlı işlemleri düzenle"
+              accessibilityHint={t('home.quickActions.editHint')}
               onPress={() => router.push(action.href)}
               onLongPress={() => setEditOpen(true)}
               style={{ width: '25%', alignItems: 'center', gap: 6 }}
@@ -142,7 +143,7 @@ function QuickActionsEditSheet({ visible, onClose }: QuickActionsEditSheetProps)
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
-          accessibilityLabel="Kapat"
+          accessibilityLabel={t('ui.close')}
           onPress={onClose}
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.overlay }]}
         />
@@ -158,7 +159,7 @@ function QuickActionsEditSheet({ visible, onClose }: QuickActionsEditSheetProps)
         >
           <Row align="center" style={{ marginBottom: theme.spacing.md }}>
             <Text variant="pageTitle" style={{ flex: 1 }}>
-              Hızlı İşlemleri Düzenle
+              {t('home.quickActions.editTitle')}
             </Text>
             <Pressable onPress={onClose} hitSlop={12}>
               <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
@@ -169,11 +170,11 @@ function QuickActionsEditSheet({ visible, onClose }: QuickActionsEditSheetProps)
             <Stack gap="lg">
               <Stack gap="sm">
                 <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                  SEÇİLİ ({selected.length})
+                  {t('home.quickActions.selected', { count: selected.length })}
                 </Text>
                 {selected.length === 0 ? (
                   <Text variant="body" color="textSecondary">
-                    Henüz hızlı işlem seçilmedi.
+                    {t('home.quickActions.noneSelected')}
                   </Text>
                 ) : (
                   <Stack gap="xs">
@@ -196,18 +197,18 @@ function QuickActionsEditSheet({ visible, onClose }: QuickActionsEditSheetProps)
                           icon="chevron-up"
                           disabled={index === 0}
                           onPress={() => move(index, -1)}
-                          accessibilityLabel={`${action.label} yukarı taşı`}
+                          accessibilityLabel={t('home.quickActions.moveUp', { label: action.label })}
                         />
                         <EditIconButton
                           icon="chevron-down"
                           disabled={index === selected.length - 1}
                           onPress={() => move(index, 1)}
-                          accessibilityLabel={`${action.label} aşağı taşı`}
+                          accessibilityLabel={t('home.quickActions.moveDown', { label: action.label })}
                         />
                         <EditIconButton
                           icon="close"
                           onPress={() => remove(action.id)}
-                          accessibilityLabel={`${action.label} kaldır`}
+                          accessibilityLabel={t('home.quickActions.remove', { label: action.label })}
                           danger
                         />
                       </Row>
@@ -219,7 +220,7 @@ function QuickActionsEditSheet({ visible, onClose }: QuickActionsEditSheetProps)
               {available.length > 0 ? (
                 <Stack gap="sm">
                   <Text variant="caption" color="textSecondary" style={{ letterSpacing: 0.6 }}>
-                    DİĞER SEÇENEKLER
+                    {t('home.quickActions.otherOptions')}
                   </Text>
                   <Stack gap="xs">
                     {available.map((action) => (
@@ -240,7 +241,7 @@ function QuickActionsEditSheet({ visible, onClose }: QuickActionsEditSheetProps)
                         <EditIconButton
                           icon="add"
                           onPress={() => add(action.id)}
-                          accessibilityLabel={`${action.label} ekle`}
+                          accessibilityLabel={t('home.quickActions.add', { label: action.label })}
                           accent
                         />
                       </Row>

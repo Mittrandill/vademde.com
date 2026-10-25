@@ -3,6 +3,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 
 import { DatePickerSheet } from './DateSheets';
 import { TextField } from './TextField';
+import { t } from '@/i18n';
 
 export interface DateFieldProps {
   label?: string;
@@ -40,7 +41,7 @@ export function DateField({ label, value, onChangeText, placeholder = 'YYYY-AA-G
           onClose={() => setOpen(false)}
           value={isValid ? value.trim() : null}
           onChange={onChangeText}
-          title={label ?? 'Tarih seç'}
+          title={label ?? t('ui.date.pick')}
         />
       ) : null}
     </>

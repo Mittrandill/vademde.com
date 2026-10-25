@@ -31,6 +31,8 @@ import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { formatMinorAmount } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
+import { ACCOUNT_TYPE_LABEL } from '@/features/accounts/accountTypes';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
@@ -40,25 +42,19 @@ const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   pos: 'storefront-outline',
 };
 
-const TYPE_LABEL: Record<Account['type'], string> = {
-  cash: 'Kasa',
-  bank: 'Banka',
-  wallet: 'Cüzdan',
-  credit_card: 'Kredi Kartı',
-  pos: 'POS',
-};
 
 const PAGE_SIZE = 10;
 
 type TypeFilterKey = 'all' | Account['type'];
 
-const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'cash', label: 'Kasa' },
-  { key: 'bank', label: 'Banka' },
-  { key: 'wallet', label: 'Cüzdan' },
-  { key: 'credit_card', label: 'Kredi Kartı' },
-  { key: 'pos', label: 'POS' },
+const TYPE_FILTERS: { key: TypeFilterKey; readonly label: string }[] = [
+  { key: 'all', get label() { return t('common.all'); } },
+  ...(['cash', 'bank', 'wallet', 'credit_card', 'pos'] as const).map((key) => ({
+    key,
+    get label() {
+      return ACCOUNT_TYPE_LABEL[key];
+    },
+  })),
 ];
 
 export default function AccountsScreen() {
@@ -129,8 +125,12 @@ export default function AccountsScreen() {
 
   const openNewAccount = () => router.push('/accounts/new');
   const footerLabel = accounts.length
-    ? `${effectivePage * PAGE_SIZE + 1}–${Math.min((effectivePage + 1) * PAGE_SIZE, accounts.length)} / ${accounts.length} hesap`
-    : '0 hesap gösteriliyor';
+    ? t('accounts.list.footer', {
+        from: effectivePage * PAGE_SIZE + 1,
+        to: Math.min((effectivePage + 1) * PAGE_SIZE, accounts.length),
+        count: accounts.length,
+      })
+    : t('accounts.list.noneShown');
   const isFiltered = search.trim().length > 0 || typeFilter !== 'all';
   const cashCount = allAccounts.filter((account) => account.type === 'cash').length;
   const bankCount = allAccounts.filter((account) => account.type === 'bank').length;
@@ -148,38 +148,38 @@ export default function AccountsScreen() {
       >
         <Stack gap="lg">
           <ScreenHeader
-            title="Hesaplar"
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-            right={{ icon: 'add', accessibilityLabel: 'Yeni hesap', variant: 'accent', onPress: openNewAccount }}
+            title={t('accounts.list.title')}
+            left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: () => router.back() }}
+            right={{ icon: 'add', accessibilityLabel: t('accounts.list.newAccount'), variant: 'accent', onPress: openNewAccount }}
           />
 
           <FinanceListHero
-            label="TOPLAM BAKİYE"
-            description="Kredi kartları hariç hesap bakiyelerinizin TL karşılığı"
+            label={t('accounts.list.totalBalanceUpper')}
+            description={t('accounts.list.totalBalanceHint')}
             amountText={formatMinorAmount(totalBalanceMinor)}
             amountColor={totalBalanceMinor < 0 ? 'textPrimary' : 'success'}
             metrics={[
-              { label: 'TOPLAM HESAP', value: allAccounts.length, caption: 'Tüm kayıtlar' },
-              { label: 'KASA', value: cashCount, caption: 'Nakit hesap' },
-              { label: 'BANKA', value: bankCount, caption: 'Banka hesabı' },
-              { label: 'DİĞER', value: otherCount, caption: 'Cüzdan, kart ve POS' },
+              { label: t('accounts.list.totalAccountsUpper'), value: allAccounts.length, caption: t('accounts.list.allRecords') },
+              { label: t('accounts.list.cashUpper'), value: cashCount, caption: t('accounts.list.cashHint') },
+              { label: t('accounts.list.bankUpper'), value: bankCount, caption: t('accounts.list.bankHint') },
+              { label: t('accounts.list.otherUpper'), value: otherCount, caption: t('accounts.list.otherHint') },
             ]}
           />
 
           <FinanceFilterCard
-            title="HESAP TÜRÜ"
-            description="Listede görmek istediğiniz hesap türünü seçin."
+            title={t('accounts.list.typeUpper')}
+            description={t('accounts.list.typeHint')}
             options={TYPE_FILTERS}
             value={typeFilter}
             onChange={setTypeFilter}
           />
 
           <FinanceListSurface
-            searchPlaceholder="Hesap adı veya IBAN'da ara"
+            searchPlaceholder={t('accounts.list.searchPlaceholder')}
             searchValue={search}
             onSearchChange={setSearch}
             footerLabel={pagedAccounts.length > 0 ? footerLabel : undefined}
-            actionLabel={pagedAccounts.length > 0 ? 'Yeni hesap' : undefined}
+            actionLabel={pagedAccounts.length > 0 ? t('accounts.list.newAccount') : undefined}
             onActionPress={pagedAccounts.length > 0 ? openNewAccount : undefined}
             page={effectivePage}
             totalPages={totalPages}
@@ -187,7 +187,7 @@ export default function AccountsScreen() {
           >
             {accountsQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {friendlyErrorMessage(accountsQuery.error, 'Hesaplar yüklenemedi')}
+                {friendlyErrorMessage(accountsQuery.error, t('accounts.list.loadFailed'))}
               </Text>
             ) : !accountsQuery.isSuccess ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
@@ -198,9 +198,9 @@ export default function AccountsScreen() {
             ) : pagedAccounts.length === 0 ? (
               <FinanceListEmptyState
                 icon={isFiltered ? 'search-outline' : 'wallet-outline'}
-                title={allAccounts.length === 0 ? 'Henüz hesap yok' : 'Sonuç bulunamadı'}
-                message={allAccounts.length === 0 ? 'Kasa, banka veya cüzdan hesabı ekleyerek başlayın.' : 'Arama terimini veya filtreyi değiştirin.'}
-                actionLabel={isFiltered ? undefined : 'Yeni hesap'}
+                title={allAccounts.length === 0 ? t('accounts.list.emptyTitle') : t('accounts.list.noResults')}
+                message={allAccounts.length === 0 ? t('accounts.list.emptyBody') : t('accounts.list.noResultsBody')}
+                actionLabel={isFiltered ? undefined : t('accounts.list.newAccount')}
                 onActionPress={isFiltered ? undefined : openNewAccount}
               />
             ) : (
@@ -230,12 +230,12 @@ function AccountRow({
 }) {
   const theme = useTheme();
   const type = account.type as Account['type'];
-  const detail = account.iban ? `${TYPE_LABEL[type]} · ${maskIban(account.iban)}` : TYPE_LABEL[type];
+  const detail = account.iban ? `${ACCOUNT_TYPE_LABEL[type]} · ${maskIban(account.iban)}` : ACCOUNT_TYPE_LABEL[type];
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${account.name} hesap detayını aç`}
+      accessibilityLabel={t('accounts.list.openDetailA11y', { name: account.name })}
       onPress={() => router.push(`/accounts/${account.id}`)}
       style={{
         minHeight: 60,

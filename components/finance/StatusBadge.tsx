@@ -4,6 +4,8 @@ import { useTheme } from '@/theme';
 import { Text } from '@/components/primitives';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '@/theme/colors';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
 // docs/01-finansal-kayit-modeli.md §3.4 — kayıt durumları.
 export type ObligationStatus =
@@ -17,17 +19,20 @@ export type ObligationStatus =
   | 'gecikti'
   | 'iptal_edildi';
 
-export const OBLIGATION_STATUS_LABEL: Record<ObligationStatus, string> = {
-  taslak: 'Taslak',
-  inceleme_gerekli: 'İnceleme Gerekli',
-  bekliyor: 'Bekliyor',
-  kismen_odendi: 'Kısmen Ödendi',
-  odendi: 'Ödendi',
-  kismen_tahsil_edildi: 'Kısmen Tahsil Edildi',
-  tahsil_edildi: 'Tahsil Edildi',
-  gecikti: 'Gecikti',
-  iptal_edildi: 'İptal Edildi',
-};
+export const OBLIGATION_STATUS_LABEL: Record<ObligationStatus, string> = localizedRecord(
+  [
+    'taslak',
+    'inceleme_gerekli',
+    'bekliyor',
+    'kismen_odendi',
+    'odendi',
+    'kismen_tahsil_edildi',
+    'tahsil_edildi',
+    'gecikti',
+    'iptal_edildi',
+  ] as const,
+  (status) => t(`domain.statuses.${status}`)
+);
 
 // Yeni tasarım: durum, renkli dolgu yerine renkli metin (+ ödenmişlerde onay ikonu). Ödeme
 // bekleyen = payable, gerçekleşen = receivable, gecikme = danger, kontrol gerektiren = attention.

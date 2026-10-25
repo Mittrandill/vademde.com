@@ -17,13 +17,8 @@ import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/fea
 import { useSession } from '@/features/auth/useSession';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
-
-// docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad (Ayarlar ile aynı eşleme).
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Ücretsiz',
-  plus: 'Vademde Plus',
-  isletme: 'Vademde İşletme',
-};
+import { t } from '@/i18n';
+import { PLAN_LABELS } from '@/features/subscriptions/planLabels';
 
 function initialsFrom(name: string | null | undefined, email: string | null | undefined): string {
   const source = name?.trim() || email?.trim() || '';
@@ -109,7 +104,7 @@ export default function MoreScreen() {
           paddingBottom: theme.layout.tabBarClearance,
         }}
       >
-        <Text variant="pageTitle">Daha fazla</Text>
+        <Text variant="pageTitle">{t('nav.more.title')}</Text>
 
         {/* Profil: dokununca kendi Profil ekranına gider; ücretsiz planda yükseltme satırı altında. */}
         <View style={{ marginTop: theme.spacing.md }}>
@@ -135,7 +130,7 @@ export default function MoreScreen() {
               </View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Text numberOfLines={1} style={{ fontWeight: '600' }}>
-                  {fullName || 'Profilini tamamla'}
+                  {fullName || t('nav.more.completeProfile')}
                 </Text>
                 <Text variant="caption" color="textSecondary" numberOfLines={1}>
                   {email ?? '—'}
@@ -145,17 +140,17 @@ export default function MoreScreen() {
               <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
             </Pressable>
             {isFree ? (
-              <MenuRow icon="star" tone="brand" label="Vademde Plus’ı deneyin" href="/paywall" />
+              <MenuRow icon="star" tone="brand" label={t('nav.more.tryPlus')} href="/paywall" />
             ) : ocrUsage ? (
-              <MenuRow icon="scan" label="Kalan tarama hakkı" detail={`${ocrUsage.remaining} / ${ocrUsage.quota}`} href="/subscription" />
+              <MenuRow icon="scan" label={t('nav.more.scansLeft')} detail={`${ocrUsage.remaining} / ${ocrUsage.quota}`} href="/subscription" />
             ) : null}
           </Group>
         </View>
 
-        <MenuGroup title="Kayıt türleri">
+        <MenuGroup title={t('nav.more.recordTypes')}>
           <MenuRow
             icon={DOCUMENT_TYPE_ICON.cek ?? 'document-text'}
-            label="Çek ve senetler"
+            label={t('nav.more.instruments')}
             detail={countText(
               instrumentTotalsQuery.data
                 ? (instrumentTotalsQuery.data.cek?.count ?? 0) + (instrumentTotalsQuery.data.senet?.count ?? 0)
@@ -165,48 +160,48 @@ export default function MoreScreen() {
           />
           <MenuRow
             icon="cash"
-            label="Kredilerim"
+            label={t('nav.more.loans')}
             detail={countText(totalsByType?.kredi?.count)}
             href={{ pathname: '/obligations', params: { type: 'kredi' } }}
           />
-          <MenuRow icon="card" label="Kredi kartlarım" detail={countText(creditCardAccounts.length)} href="/accounts/credit-cards" />
+          <MenuRow icon="card" label={t('nav.more.creditCards')} detail={countText(creditCardAccounts.length)} href="/accounts/credit-cards" />
           <MenuRow
             icon="repeat"
-            label="Aboneliklerim"
+            label={t('nav.more.subscriptions')}
             detail={countText(totalsByType?.abonelik?.count)}
             href="/aboneliklerim"
           />
           <MenuRow
             icon="people"
-            label="Kişiler / Cariler"
+            label={t('nav.more.counterparties')}
             detail={countText(counterpartiesQuery.data?.length)}
             href="/counterparties"
           />
         </MenuGroup>
 
-        <MenuGroup title="Yönetim">
-          <MenuRow icon="wallet" label="Hesaplar" detail={countText(accounts.length)} href="/accounts" />
-          <MenuRow icon="business" label="Bankalar" href="/banks" />
-          <MenuRow icon="logo-usd" label="Döviz ve altın" href="/accounts/value-units" />
-          <MenuRow icon="bar-chart" label="Raporlar" href="/reports" />
-          <MenuRow icon="sparkles" label="Akıllı öneriler" detail="Plus" href="/insights" />
-          <MenuRow icon="folder-open" label="Belge arşivi" href="/documents/archive" />
-          <MenuRow icon="briefcase" label="Çalışma alanları" href="/workspace" />
+        <MenuGroup title={t('nav.more.management')}>
+          <MenuRow icon="wallet" label={t('nav.more.accounts')} detail={countText(accounts.length)} href="/accounts" />
+          <MenuRow icon="business" label={t('nav.more.banks')} href="/banks" />
+          <MenuRow icon="logo-usd" label={t('nav.more.valueUnits')} href="/accounts/value-units" />
+          <MenuRow icon="bar-chart" label={t('nav.more.reports')} href="/reports" />
+          <MenuRow icon="sparkles" label={t('nav.more.insights')} detail="Plus" href="/insights" />
+          <MenuRow icon="folder-open" label={t('nav.more.archive')} href="/documents/archive" />
+          <MenuRow icon="briefcase" label={t('nav.more.workspaces')} href="/workspace" />
           {activeWorkspaceId ? (
             <MenuRow
               icon="people-circle"
-              label="Çalışma alanı üyeleri"
+              label={t('nav.more.members')}
               href={{ pathname: '/workspace/[id]/members', params: { id: activeWorkspaceId } }}
             />
           ) : null}
         </MenuGroup>
 
-        <MenuGroup title="Uygulama">
-          <MenuRow icon="settings" label="Ayarlar" href="/settings" />
-          <MenuRow icon="pricetags" label="Kategoriler" href="/categories" />
-          <MenuRow icon="contrast" label="Görünüm" href="/settings/appearance" />
-          <MenuRow icon="notifications" label="Bildirimler" href="/notifications" />
-          <MenuRow icon="ribbon" label="Abonelik ayarları" detail={planLabel} href="/subscription" />
+        <MenuGroup title={t('nav.more.app')}>
+          <MenuRow icon="settings" label={t('nav.more.settings')} href="/settings" />
+          <MenuRow icon="pricetags" label={t('nav.more.categories')} href="/categories" />
+          <MenuRow icon="contrast" label={t('nav.more.appearance')} href="/settings/appearance" />
+          <MenuRow icon="notifications" label={t('nav.more.notifications')} href="/notifications" />
+          <MenuRow icon="ribbon" label={t('nav.more.subscriptionSettings')} detail={planLabel} href="/subscription" />
         </MenuGroup>
       </ScrollView>
     </SafeAreaView>

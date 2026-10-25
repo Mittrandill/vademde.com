@@ -1,5 +1,6 @@
 import { Stack, Text } from '@/components/primitives';
 import { VademdeMark } from './VademdeMark';
+import { t } from '@/i18n';
 
 export interface AuthHeaderProps {
   markSize?: number;
@@ -18,7 +19,7 @@ export function AuthHeader({ markSize = 56 }: AuthHeaderProps) {
         color="accentViolet"
         style={{ letterSpacing: 1.2, fontWeight: '600' }}
       >
-        BİLGİN. DENGEN. GELECEĞİN.
+        {t('ui.brandTagline')}
       </Text>
     </Stack>
   );

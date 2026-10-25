@@ -5,6 +5,8 @@ import { useTheme } from '@/theme';
 import { Card, Divider, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { getMonthGridWeeks, isSameDay, isSameMonth, toDateKey } from '@/utils/calendar';
 import type { ObligationDueItem } from '@/features/obligations/api';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
 export interface CalendarMonthGridProps {
   monthDate: Date;
@@ -15,8 +17,7 @@ export interface CalendarMonthGridProps {
   onNextMonth: () => void;
 }
 
-const WEEKDAY_LABELS = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'];
-const monthLabelFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+const monthLabelFormatter = localeDateFormatter({ month: 'long', year: 'numeric' });
 const STRONG_DOCUMENT_TYPES = new Set(['cek', 'senet']);
 // Seçili gün sarı dolu; sarı (kredi) noktası da kaybolmasın diye noktalar ince koyu halkayla çizilir.
 const selectedDotRing = { borderWidth: 1, borderColor: 'rgba(0,0,0,0.55)' } as const;
@@ -72,7 +73,7 @@ export function CalendarMonthGrid({
         </Row>
 
         <Row>
-          {WEEKDAY_LABELS.map((label) => (
+          {t('ui.weekdaysShort').split(',').map((label) => (
             <Text
               key={label}
               variant="caption"
@@ -189,10 +190,10 @@ export function CalendarMonthGrid({
 
         <Row align="center" style={{ justifyContent: 'space-between' }}>
           {[
-            { label: 'Ödenecek', color: theme.colors.danger },
-            { label: 'Tahsil Edilecek', color: theme.colors.success },
-            { label: 'Çek / Senet', color: theme.colors.accentViolet },
-            { label: 'Kredi', color: theme.colors.attentionMarker },
+            { label: t('calendar.legendPayable'), color: theme.colors.danger },
+            { label: t('calendar.legendReceivable'), color: theme.colors.success },
+            { label: t('calendar.legendInstruments'), color: theme.colors.accentViolet },
+            { label: t('calendar.legendLoan'), color: theme.colors.attentionMarker },
           ].map((item) => (
             <Row key={item.label} gap="xxs" align="center">
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: item.color }} />

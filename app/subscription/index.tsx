@@ -19,21 +19,16 @@ import {
 import { restorePurchases } from '@/services/purchases';
 import { queryKeys } from '@/services/queryKeys';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { getLocaleTag, t } from '@/i18n';
+import { PLAN_LABELS } from '@/features/subscriptions/planLabels';
 
-// docs/10-abonelik-gelir-modeli.md — plan kodu -> görünen ad (Ayarlar/paywall ile aynı eşleme).
-const PLAN_LABELS: Record<PlanCode, string> = {
-  free: 'Ücretsiz',
-  plus: 'Vademde Plus',
-  isletme: 'Vademde İşletme',
-};
-
-const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
-  grace_period: 'Ödeme sorunu — ödeme yönteminizi güncelleyin',
-  expired: 'Süresi doldu',
+const SUBSCRIPTION_STATUS_LABEL_KEYS: Record<string, 'subscription.statusGrace' | 'subscription.statusExpired'> = {
+  grace_period: 'subscription.statusGrace',
+  expired: 'subscription.statusExpired',
 };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('tr-TR');
+  return new Date(iso).toLocaleDateString(getLocaleTag());
 }
 
 // docs/10-abonelik-gelir-modeli.md — mevcut plandaki özellik listesi paywall.tsx'teki
@@ -43,16 +38,16 @@ function buildFeatures(limits: { advanced_reports: boolean; document_archive: bo
   const features: string[] = [];
   features.push(
     limits.max_personal_workspaces > 1
-      ? `${limits.max_personal_workspaces} çalışma alanı`
-      : '1 kişisel çalışma alanı'
+      ? t('subscription.workspaceCount', { count: limits.max_personal_workspaces })
+      : t('subscription.onePersonalWorkspace')
   );
-  if (limits.max_team_members) features.push(`${limits.max_team_members} ekip üyesi`);
-  if (limits.advanced_reports) features.push('Gelişmiş raporlar');
-  if (limits.document_archive) features.push('Belge arşivi');
-  if (limits.recurring_transactions) features.push('Düzenli işlemler');
-  if (limits.unlimited_export) features.push('Sınırsız dışa aktarma');
-  if (limits.face_id) features.push('Face ID kilidi');
-  if (limits.audit_log) features.push('Değişiklik günlüğü');
+  if (limits.max_team_members) features.push(t('subscription.teamMembers', { count: limits.max_team_members }));
+  if (limits.advanced_reports) features.push(t('subscription.advancedReports'));
+  if (limits.document_archive) features.push(t('subscription.documentArchive'));
+  if (limits.recurring_transactions) features.push(t('subscription.recurring'));
+  if (limits.unlimited_export) features.push(t('subscription.unlimitedExport'));
+  if (limits.face_id) features.push(t('subscription.faceId'));
+  if (limits.audit_log) features.push(t('subscription.auditLog'));
   return features;
 }
 
@@ -87,11 +82,15 @@ export default function SubscriptionScreen() {
   const isFree = planCode === 'free';
   const renewalLine =
     subscription && !isFree
-      ? SUBSCRIPTION_STATUS_LABEL[subscription.status] ??
+      ? (SUBSCRIPTION_STATUS_LABEL_KEYS[subscription.status] ? t(SUBSCRIPTION_STATUS_LABEL_KEYS[subscription.status]) : null) ??
         (subscription.current_period_end
-          ? `${subscription.will_renew ? 'Sonraki yenileme' : 'Yenilenmeyecek — sona erme'}: ${formatDate(subscription.current_period_end)}${
-              subscription.billing_period ? ` (${subscription.billing_period === 'yearly' ? 'yıllık' : 'aylık'})` : ''
-            }`
+          ? t('subscription.renewalLine', {
+              label: subscription.will_renew ? t('subscription.nextRenewal') : t('subscription.wontRenew'),
+              date: formatDate(subscription.current_period_end),
+              period: subscription.billing_period
+                ? ` (${subscription.billing_period === 'yearly' ? t('subscription.yearly') : t('subscription.monthly')})`
+                : '',
+            })
           : null)
       : null;
 
@@ -106,9 +105,9 @@ export default function SubscriptionScreen() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
       // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
       await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
-      Alert.alert('Satın alımlar geri yüklendi');
+      Alert.alert(t('subscription.restored'));
     } catch (err) {
-      Alert.alert('Geri yükleme başarısız', friendlyErrorMessage(err, 'Bir hata oluştu'));
+      Alert.alert(t('subscription.restoreFailed'), friendlyErrorMessage(err, t('subscription.genericError')));
     } finally {
       setIsRestoring(false);
     }
@@ -117,7 +116,7 @@ export default function SubscriptionScreen() {
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
-        <ScreenHeader title="Abonelik" left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }} />
+        <ScreenHeader title={t('subscription.title')} left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: () => router.back() }} />
       </View>
 
       <ScrollView
@@ -131,18 +130,18 @@ export default function SubscriptionScreen() {
           <Row align="center" style={{ justifyContent: 'space-between' }}>
             <Stack gap="xxs" style={{ flex: 1 }}>
               <Text variant="caption" color="textSecondary">
-                Mevcut plan
+                {t('subscription.currentPlan')}
               </Text>
               <Text variant="sectionTitle" numberOfLines={1}>
                 {planLabel}
               </Text>
             </Stack>
-            <Button label={isFree ? 'Planları gör' : 'Planı değiştir'} size="sm" onPress={() => router.push('/paywall')} />
+            <Button label={isFree ? t('subscription.seePlans') : t('subscription.changePlan')} size="sm" onPress={() => router.push('/paywall')} />
           </Row>
           <View style={{ height: 1, backgroundColor: theme.colors.separator }} />
           <Stack gap="xs">
             <Row align="center" style={{ justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 15 }}>Bu ayki belge tarama</Text>
+              <Text style={{ fontSize: 15 }}>{t('subscription.monthScans')}</Text>
               <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
                 {usage ? `${usage.usedCount} / ${usage.quota}` : '—'}
               </Text>
@@ -163,36 +162,36 @@ export default function SubscriptionScreen() {
               />
             </View>
             <Text variant="caption" color="textSecondary">
-              {renewalLine ?? (isFree ? "Kota her ayın 1'inde yenilenir. Okunamayan belgeler kotadan düşmez." : 'Aktif üyelik')}
+              {renewalLine ?? (isFree ? t('subscription.freeQuotaHint') : t('subscription.activeMembership'))}
             </Text>
           </Stack>
         </Card>
 
         {features.length > 0 ? (
-          <GroupedSection title={`${planLabel} planında`}>
+          <GroupedSection title={t('subscription.inPlan', { plan: planLabel })}>
             {features.map((feature) => (
               <GroupedRow key={feature} title={feature} chevron={false} trailing={<Ionicons name="checkmark" size={18} color={theme.colors.success} />} />
             ))}
           </GroupedSection>
         ) : null}
 
-        <GroupedSection title="Satın alma">
+        <GroupedSection title={t('subscription.purchase')}>
           <GroupedRow
-            title="Satın alımları geri yükle"
+            title={t('subscription.restore')}
             chevron={false}
             trailing={isRestoring ? <ActivityIndicator size="small" color={theme.colors.textSecondary} /> : undefined}
             onPress={handleRestore}
             disabled={isRestoring}
           />
           <GroupedRow
-            title="Aboneliği mağazada yönet"
+            title={t('subscription.manageInStore')}
             value="App Store"
             onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {})}
           />
         </GroupedSection>
 
         <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.xxs }}>
-          Ödemeler App Store veya Google Play üzerinden alınır; iptal de oradan yapılır.
+          {t('subscription.storeFooter')}
         </Text>
       </ScrollView>
     </SafeAreaView>

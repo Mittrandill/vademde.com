@@ -29,14 +29,20 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { formatMinorAmount } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
 
 const PAGE_SIZE = 10;
 
 type TypeFilterKey = 'all' | CounterpartyType;
 
-const TYPE_FILTERS: { key: TypeFilterKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  ...COUNTERPARTY_TYPES.map((key) => ({ key, label: COUNTERPARTY_TYPE_LABEL_PLURAL[key] })),
+const TYPE_FILTERS: { key: TypeFilterKey; readonly label: string }[] = [
+  { key: 'all', get label() { return t('common.all'); } },
+  ...COUNTERPARTY_TYPES.map((key) => ({
+    key,
+    get label() {
+      return COUNTERPARTY_TYPE_LABEL_PLURAL[key];
+    },
+  })),
 ];
 
 export default function CounterpartiesScreen() {
@@ -114,8 +120,8 @@ export default function CounterpartiesScreen() {
 
   const visibleRangeLabel =
     filtered.length > PAGE_SIZE
-      ? `${pageStart + 1}–${pageStart + pagedCounterparties.length} / ${filtered.length} cari`
-      : `${pagedCounterparties.length} / ${filtered.length} cari gösteriliyor`;
+      ? t('counterparties.list.range', { from: pageStart + 1, to: pageStart + pagedCounterparties.length, count: filtered.length })
+      : t('counterparties.list.showing', { shown: pagedCounterparties.length, count: filtered.length });
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -129,42 +135,42 @@ export default function CounterpartiesScreen() {
       >
         <Stack gap="lg">
           <ScreenHeader
-            title="Cariler"
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+            title={t('counterparties.list.title')}
+            left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: () => router.back() }}
             right={{
               icon: 'add',
-              accessibilityLabel: 'Yeni cari ekle',
+              accessibilityLabel: t('counterparties.list.add'),
               variant: 'accent',
               onPress: openNewCounterparty,
             }}
           />
 
           <FinanceListHero
-            label="NET CARİ DURUM"
-            description="Alacaklarınızdan borçlarınız çıkarılarak hesaplanır"
+            label={t('counterparties.list.netTitle')}
+            description={t('counterparties.list.netBody')}
             amountText={`${totals.netMinor > 0 ? '+' : totals.netMinor < 0 ? '−' : ''}${formatMinorAmount(Math.abs(totals.netMinor))}`}
             amountColor={totals.netMinor > 0 ? 'receivable' : 'textPrimary'}
             metrics={[
-              { label: 'TOPLAM CARİ', value: String(counterparties.length), caption: 'Tüm kayıtlar' },
-              { label: 'ALACAĞINIZ', value: formatMinorAmount(totals.receivableMinor), caption: 'Tahsil edilecek', valueColor: 'receivable' },
-              { label: 'BORCUNUZ', value: formatMinorAmount(totals.payableMinor), caption: 'Ödenecek', valueColor: 'payable' },
+              { label: t('counterparties.list.totalLabel'), value: String(counterparties.length), caption: t('counterparties.list.totalCaption') },
+              { label: t('counterparties.list.receivableLabel'), value: formatMinorAmount(totals.receivableMinor), caption: t('counterparties.list.receivableCaption'), valueColor: 'receivable' },
+              { label: t('counterparties.list.payableLabel'), value: formatMinorAmount(totals.payableMinor), caption: t('counterparties.list.payableCaption'), valueColor: 'payable' },
             ]}
           />
 
           <FinanceFilterCard
-            title="CARİ TÜRÜ"
-            description="Listede görmek istediğiniz cari türünü seçin."
+            title={t('counterparties.list.typeTitle')}
+            description={t('counterparties.list.typeBody')}
             options={TYPE_FILTERS}
             value={typeFilter}
             onChange={setTypeFilter}
           />
 
           <FinanceListSurface
-            searchPlaceholder="İsim, e-posta veya telefon"
+            searchPlaceholder={t('counterparties.list.search')}
             searchValue={search}
             onSearchChange={setSearch}
             footerLabel={pagedCounterparties.length > 0 ? visibleRangeLabel : undefined}
-            actionLabel={pagedCounterparties.length > 0 ? 'Yeni cari' : undefined}
+            actionLabel={pagedCounterparties.length > 0 ? t('counterparties.list.newShort') : undefined}
             onActionPress={openNewCounterparty}
             page={effectivePage}
             totalPages={totalPages}
@@ -188,7 +194,7 @@ export default function CounterpartiesScreen() {
             )}
             {counterpartiesQuery.error ? (
               <Text color="danger" style={{ padding: theme.spacing.lg }}>
-                {friendlyErrorMessage(counterpartiesQuery.error, 'Cariler yüklenemedi')}
+                {friendlyErrorMessage(counterpartiesQuery.error, t('counterparties.list.loadFailed'))}
               </Text>
             ) : null}
           </FinanceListSurface>
@@ -200,14 +206,14 @@ export default function CounterpartiesScreen() {
 
 function CounterpartyRow({ counterparty, netMinor }: { counterparty: Counterparty; netMinor: number }) {
   const theme = useTheme();
-  const detail = counterparty.phone || counterparty.email || 'Bilgi eklenmedi';
+  const detail = counterparty.phone || counterparty.email || t('counterparties.list.noInfo');
   const amountPrefix = netMinor > 0 ? '+' : netMinor < 0 ? '−' : '';
   const amountColor = netMinor > 0 ? theme.colors.receivable : netMinor < 0 ? theme.colors.textPrimary : theme.colors.textSecondary;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${counterparty.name} cari detayını aç`}
+      accessibilityLabel={t('counterparties.list.openA11y', { name: counterparty.name })}
       onPress={() => router.push(`/counterparties/${counterparty.id}`)}
       style={{ minHeight: 60, paddingHorizontal: theme.spacing.md, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}
     >
@@ -224,10 +230,10 @@ function CounterpartyRow({ counterparty, netMinor }: { counterparty: Counterpart
 
       <View style={{ alignItems: 'flex-end', gap: 2, maxWidth: '38%' }}>
         <Text tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68} style={{ fontWeight: '600', color: amountColor }}>
-          {netMinor === 0 ? '₺0,00' : `${amountPrefix}${formatMinorAmount(Math.abs(netMinor))}`}
+          {netMinor === 0 ? formatMinorAmount(0) : `${amountPrefix}${formatMinorAmount(Math.abs(netMinor))}`}
         </Text>
         <Text variant="caption" color="textSecondary">
-          {netMinor > 0 ? 'Alacaklısınız' : netMinor < 0 ? 'Borçlusunuz' : 'Kapalı'}
+          {netMinor > 0 ? t('counterparties.list.youAreOwed') : netMinor < 0 ? t('counterparties.list.youOwe') : t('counterparties.list.closed')}
         </Text>
       </View>
     </Pressable>
@@ -251,20 +257,20 @@ function EmptyCounterparties({ hasAny, onAdd }: { hasAny: boolean; onAdd: () => 
       >
         <Ionicons name="people-outline" size={24} color={theme.colors.textPrimary} />
       </View>
-      <Text variant="cardTitle">{hasAny ? 'Sonuç bulunamadı' : 'Henüz cari yok'}</Text>
+      <Text variant="cardTitle">{hasAny ? t('counterparties.list.noResults') : t('counterparties.list.empty')}</Text>
       <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-        {hasAny ? 'Arama terimini veya cari türünü değiştirin.' : 'İlk kişi veya firmanızı ekleyerek başlayın.'}
+        {hasAny ? t('counterparties.list.noResultsBody') : t('counterparties.list.emptyBody')}
       </Text>
       {!hasAny ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Yeni cari ekle"
+          accessibilityLabel={t('counterparties.list.add')}
           onPress={onAdd}
           style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}
         >
           <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
           <Text variant="body" color="textPrimary" style={{ fontWeight: '600' }}>
-            Yeni cari ekle
+            {t('counterparties.list.add')}
           </Text>
         </Pressable>
       ) : null}

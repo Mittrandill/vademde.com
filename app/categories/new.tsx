@@ -23,14 +23,15 @@ import { CATEGORY_ICON_CHOICES, CATEGORY_COLOR_PALETTE, getSuggestedColorForIcon
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
+import { t } from '@/i18n';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 type Kind = 'income' | 'expense';
 
-const KINDS: Array<{ value: Kind; label: string }> = [
-  { value: 'expense', label: 'Gider' },
-  { value: 'income', label: 'Gelir' },
+const KINDS: Array<{ value: Kind; readonly label: string }> = [
+  { value: 'expense', get label() { return t('categories.form.expense'); } },
+  { value: 'income', get label() { return t('categories.form.income'); } },
 ];
 
 export default function NewCategoryScreen() {
@@ -51,7 +52,7 @@ export default function NewCategoryScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {friendlyErrorMessage(existingQuery.error, 'Kategori yüklenemedi')}
+              {friendlyErrorMessage(existingQuery.error, t('categories.form.loadFailed'))}
             </Text>
           ) : null}
         </Stack>
@@ -86,7 +87,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
     setHexInput(next);
   }
 
-  const hexError = hexInput && !HEX_COLOR_PATTERN.test(hexInput) ? 'Geçerli bir hex renk kodu girin (ör. #3FB27F)' : undefined;
+  const hexError = hexInput && !HEX_COLOR_PATTERN.test(hexInput) ? t('categories.form.hexError') : undefined;
 
   function invalidate() {
     if (activeWorkspaceId) {
@@ -96,7 +97,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId || !name.trim()) throw new Error('Kategori adı zorunlu');
+      if (!activeWorkspaceId || !name.trim()) throw new Error(t('categories.form.nameRequired'));
       if (isEditing) {
         return updateCategory(id, { name: name.trim(), kind, icon, color });
       }
@@ -105,7 +106,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
     onSuccess: () => {
       allowExit();
       showSaveSuccess(
-        isEditing ? 'Kategori başarıyla güncellendi.' : 'Kategori başarıyla oluşturuldu.',
+        isEditing ? t('categories.form.updated') : t('categories.form.created'),
         () => router.back(),
         invalidate
       );
@@ -116,20 +117,20 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
   const deleteMutation = useMutation({
     mutationFn: () => deleteCategory(id as string),
     onSuccess: () => {
-      showSaveSuccess('Kategori başarıyla silindi.', () => router.back(), invalidate);
+      showSaveSuccess(t('categories.form.deleted'), () => router.back(), invalidate);
     },
     onError: () => {
       Alert.alert(
-        'Silinemedi',
-        'Bu kategori işlem veya borç/alacak kayıtlarında kullanılıyor. Önce ilişkili kayıtları güncelleyin.'
+        t('categories.form.deleteFailedTitle'),
+        t('categories.form.deleteFailedBody')
       );
     },
   });
 
   function confirmDelete() {
-    Alert.alert('Kategoriyi Sil', 'Bu kategori kalıcı olarak silinecek. Emin misiniz?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
+    Alert.alert(t('categories.form.deleteTitle'), t('categories.form.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteMutation.mutate() },
     ]);
   }
 
@@ -139,10 +140,10 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
         <Stack gap="lg">
           <ScreenHeader
             inline
-            title={isEditing ? 'Kategoriyi düzenle' : 'Yeni kategori'}
-            leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+            title={isEditing ? t('categories.form.editTitle') : t('categories.form.newTitle')}
+            leftLabel={{ label: t('common.cancel'), onPress: () => router.back() }}
             rightLabel={{
-              label: isEditing ? 'Güncelle' : 'Kaydet',
+              label: isEditing ? t('categories.form.update') : t('common.save'),
               bold: true,
               disabled: !name.trim() || saveMutation.isPending,
               onPress: () => saveMutation.mutate(),
@@ -157,25 +158,25 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
           />
 
           <FieldGroup>
-            <TextField label="Ad" placeholder="Örn. Ulaşım" value={name} onChangeText={setName} />
+            <TextField label={t('categories.form.name')} placeholder={t('categories.form.namePlaceholder')} value={name} onChangeText={setName} />
           </FieldGroup>
 
           <Row gap="sm" align="center">
             <CategoryIcon icon={icon} color={color} size={56} />
             <Stack gap="xxs" style={{ flex: 1 }}>
-              <Text variant="cardTitle">{CATEGORY_ICON_CHOICES.find((o) => o.icon === icon)?.label ?? 'Simge'}</Text>
+              <Text variant="cardTitle">{CATEGORY_ICON_CHOICES.find((o) => o.icon === icon)?.label ?? t('categories.form.icon')}</Text>
               <Text variant="caption" color="textSecondary">
-                Aşağıdan simge ve rengi bağımsız olarak seçebilirsiniz.
+                {t('categories.form.iconHint')}
               </Text>
             </Stack>
           </Row>
 
           <Stack gap="sm">
             <Text variant="label" color="textSecondary">
-              SİMGE ({CATEGORY_ICON_CHOICES.length})
+              {t('categories.form.iconsUpper', { count: CATEGORY_ICON_CHOICES.length })}
             </Text>
             <TextField
-              placeholder="Simge ara (ör. market, spor, ev)"
+              placeholder={t('categories.form.iconSearch')}
               value={iconSearch}
               onChangeText={setIconSearch}
               autoCorrect={false}
@@ -204,7 +205,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
               })}
               {filteredIcons.length === 0 ? (
                 <Text variant="caption" color="textSecondary">
-                  Eşleşen simge bulunamadı.
+                  {t('categories.form.noIcon')}
                 </Text>
               ) : null}
             </Row>
@@ -212,7 +213,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
 
           <Stack gap="sm">
             <Text variant="label" color="textSecondary">
-              RENK
+              {t('categories.form.colorUpper')}
             </Text>
             <Row gap="sm" style={{ flexWrap: 'wrap' }}>
               {CATEGORY_COLOR_PALETTE.map((swatch) => {
@@ -239,7 +240,7 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
               })}
             </Row>
             <TextField
-              label="Özel renk (hex)"
+              label={t('categories.form.customColor')}
               placeholder="#3FB27F"
               value={hexInput}
               onChangeText={(value) => {
@@ -255,13 +256,13 @@ function CategoryForm({ id, initial }: { id: string | null; initial: Category | 
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">
-              {friendlyErrorMessage(saveMutation.error, 'Kategori kaydedilemedi')}
+              {friendlyErrorMessage(saveMutation.error, t('categories.form.saveFailed'))}
             </Text>
           ) : null}
 
           {isEditing ? (
             <Button
-              label="Kategoriyi sil"
+              label={t('categories.form.delete')}
               variant="dangerText"
               onPress={confirmDelete}
               loading={deleteMutation.isPending}

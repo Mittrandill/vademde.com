@@ -1,4 +1,5 @@
-const dayFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+import { localeDateFormatter } from '@/i18n/format';
+const dayFormatter = localeDateFormatter({ day: '2-digit', month: 'long', year: 'numeric' });
 
 export interface DaySection<T> {
   title: string;

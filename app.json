@@ -7,6 +7,10 @@
     "icon": "./assets/icon.png",
     "scheme": "vademde",
     "userInterfaceStyle": "automatic",
+    "locales": {
+      "tr": "./i18n/native/tr.json",
+      "en": "./i18n/native/en.json"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.akintkaya.vademde",
@@ -19,10 +23,13 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["whatsapp"],
+        "LSApplicationQueriesSchemes": [
+          "whatsapp"
+        ],
         "CFBundleDevelopmentRegion": "tr",
         "CFBundleLocalizations": [
-          "tr"
+          "tr",
+          "en"
         ],
         "SKAdNetworkItems": [
           {
@@ -156,7 +163,8 @@
         }
       ],
       "expo-font",
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-localization"
     ],
     "extra": {
       "router": {},

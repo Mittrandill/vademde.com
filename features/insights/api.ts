@@ -1,4 +1,6 @@
 import { supabase } from '@/services/supabase';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
 // ai_insights tablosu (migration 20261005120000_ai_insights.sql) henüz db/database.types.ts'te
 // yok; tipler burada elle tanımlıdır. Tipler yeniden üretilince bu arayüz Tables<'ai_insights'> ile değişir.
@@ -18,13 +20,10 @@ export interface AiInsight {
   generated_at: string;
 }
 
-export const INSIGHT_KIND_LABEL: Record<InsightKind, string> = {
-  abonelik: 'Abonelik',
-  tasarruf: 'Tasarruf',
-  nakit: 'Nakit',
-  aliskanlik: 'Alışkanlık',
-  kur: 'Kur etkisi',
-};
+export const INSIGHT_KIND_LABEL: Record<InsightKind, string> = localizedRecord(
+  ['abonelik', 'tasarruf', 'nakit', 'aliskanlik', 'kur'] as const,
+  (kind) => t(`domain.insightKinds.${kind}`)
+);
 
 // Plus planı gerektiren işlevlerde sunucu 403 {error:'plus_required'} döner.
 export class PlusRequiredError extends Error {

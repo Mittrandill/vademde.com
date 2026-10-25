@@ -14,10 +14,12 @@ import {
 } from '@/features/documents/api';
 import { getCurrentOcrUsage, currentPeriodMonth } from '@/features/subscriptions/api';
 import { queryKeys } from '@/services/queryKeys';
-import { OCR_CONSENT_KEY, OCR_CONSENT_TEXT } from '@/utils/storageKeys';
+import { OCR_CONSENT_KEY } from '@/utils/storageKeys';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+const dayMonth = localeDateFormatter({ day: 'numeric', month: 'long' });
 
 // Kota doluyken "taslak olarak saklanan" belgeler (financial_documents.is_draft). Kota yenilenince
 // buradan tek dokunuşla işlenir; sonuç yine kullanıcı onayına (Kontrol bekliyor) düşer.
@@ -50,15 +52,15 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
   async function process(id: string) {
     if (busyId) return;
     if (usageQuery.data && usageQuery.data.remaining <= 0) {
-      Alert.alert('Aylık tarama kotan dolu', 'Kotan yenilenince bu belgeyi işleyebilirsin.');
+      Alert.alert(t('scan.quotaFullTitle'), t('scan.quotaFullBody'));
       return;
     }
     const consented = (await AsyncStorage.getItem(OCR_CONSENT_KEY)) === 'true';
     if (!consented) {
-      Alert.alert('Belge analizi izni', OCR_CONSENT_TEXT, [
-        { text: 'Vazgeç', style: 'cancel' },
+      Alert.alert(t('scan.consentTitle'), t('scan.consentText'), [
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'İzin ver ve işle',
+          text: t('scan.allowAndProcess'),
           onPress: async () => {
             await AsyncStorage.setItem(OCR_CONSENT_KEY, 'true');
             void run(id);
@@ -77,12 +79,12 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
       // İşleme sunucuda arka planda sürer; bittiğinde belge "Kontrol bekliyor"a düşer.
       refresh();
       setTimeout(refresh, 8000);
-      Alert.alert('İşleniyor', 'Belge okunuyor; bitince "Kontrol bekliyor" listesinde görünecek.');
+      Alert.alert(t('scan.processingTitle'), t('scan.processingBody'));
     } catch (err) {
       if (err instanceof QuotaExceededError) {
-        Alert.alert('Aylık tarama kotan dolu', 'Kotan yenilenince bu belgeyi işleyebilirsin.');
+        Alert.alert(t('scan.quotaFullTitle'), t('scan.quotaFullBody'));
       } else {
-        Alert.alert('İşlenemedi', friendlyErrorMessage(err, 'Belge işlenemedi'));
+        Alert.alert(t('scan.failedTitle'), friendlyErrorMessage(err, t('scan.failed')));
       }
     } finally {
       setBusyId(null);
@@ -94,7 +96,7 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
 
   return (
     <View style={{ gap: theme.spacing.xs }}>
-      <Text variant="sectionTitle">İşlenmeyi bekliyor</Text>
+      <Text variant="sectionTitle">{t('scan.drafts.title')}</Text>
       <View style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, overflow: 'hidden' }}>
         {drafts.map((doc, index) => (
           <View
@@ -116,16 +118,16 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
                 {doc.file_name}
               </Text>
               <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                Taslak · {dayMonth.format(new Date(doc.created_at))}
+                {t('scan.drafts.draft', { date: dayMonth.format(new Date(doc.created_at)) })}
               </Text>
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Taslağı sil"
+              accessibilityLabel={t('scan.drafts.delete')}
               onPress={() =>
-                Alert.alert('Taslağı sil', 'Bu belge silinecek ve işlenmeyecek.', [
-                  { text: 'Vazgeç', style: 'cancel' },
-                  { text: 'Sil', style: 'destructive', onPress: () => discardMutation.mutate(doc.id) },
+                Alert.alert(t('scan.drafts.delete'), t('scan.drafts.deleteBody'), [
+                  { text: t('common.cancel'), style: 'cancel' },
+                  { text: t('common.delete'), style: 'destructive', onPress: () => discardMutation.mutate(doc.id) },
                 ])
               }
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -134,7 +136,7 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Belgeyi işle"
+              accessibilityLabel={t('scan.drafts.process')}
               disabled={busyId !== null}
               onPress={() => process(doc.id)}
               style={{
@@ -148,7 +150,7 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
               }}
             >
               <Text variant="body" style={{ color: theme.colors.onAction, fontWeight: '600' }}>
-                {busyId === doc.id ? 'İşleniyor…' : 'İşle'}
+                {busyId === doc.id ? t('scan.drafts.processing') : t('scan.drafts.processShort')}
               </Text>
             </Pressable>
           </View>

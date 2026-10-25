@@ -79,12 +79,15 @@ import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys
 import { syncObligationReminder } from '@/services/notifications';
 import { InstrumentLifecycle } from '@/components/finance/InstrumentLifecycle';
 import { showSuccessAlert, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
+import { getLocaleTag } from '@/i18n';
+import { t } from '@/i18n';
+import { formatPercent, getInputDecimalSeparator, localeDateFormatter, lowerUi, unitAccusative, unitForCount } from '@/i18n/format';
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
-const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
+const dateFormatter = localeDateFormatter({ day: '2-digit', month: 'short', year: 'numeric' });
+const shortDateFormatter = localeDateFormatter({ day: '2-digit', month: 'short' });
 
 const TAB_PAGE_SIZE = 10;
-const monthYearFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'short', year: 'numeric' });
+const monthYearFormatter = localeDateFormatter({ month: 'short', year: 'numeric' });
 type DetailTab = 'genel' | 'plan' | 'gecmis';
 
 export default function ObligationDetailScreen() {
@@ -178,7 +181,7 @@ export default function ObligationDetailScreen() {
   const deletePaymentMutation = useMutation({
     mutationFn: (payment: Payment) => deletePayment(payment),
     onSuccess: () => {
-      showSuccessAlert('Ödeme kaydı silindi.', afterPaymentChange);
+      showSuccessAlert(t('obligations.detail.paymentDeleted'), afterPaymentChange);
     },
     onError: (error) => showErrorAlert(error),
   });
@@ -187,7 +190,7 @@ export default function ObligationDetailScreen() {
     mutationFn: () => deleteObligation(id as string),
     onSuccess: () => {
       const documentType = detailQuery.data?.obligation.document_type;
-      showSuccessAlert('Kayıt başarıyla silindi.', () => {
+      showSuccessAlert(t('obligations.list.deleted'), () => {
         if (documentType) {
           router.replace({ pathname: '/obligations', params: { type: documentType } });
         } else {
@@ -206,22 +209,25 @@ export default function ObligationDetailScreen() {
   });
 
   function confirmDeletePayment(payment: Payment) {
-    Alert.alert('Ödemeyi Sil', 'Bu ödeme kaydı kalıcı olarak silinecek. Emin misiniz?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => deletePaymentMutation.mutate(payment) },
+    Alert.alert(t('obligations.detail.deletePaymentTitle'), t('obligations.detail.deletePaymentBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deletePaymentMutation.mutate(payment) },
     ]);
   }
 
   function confirmDeleteObligation() {
     const settledCount = settledQuery.data?.length ?? 0;
     Alert.alert(
-      'Kaydı Sil',
+      t('obligations.list.deleteTitle'),
       settledCount > 0
-        ? `Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Bu ${DOCUMENT_TYPE_LABEL[detailQuery.data?.obligation.document_type ?? ''] ?? 'kayıt'} ile kapatılan ${settledCount} kayıt yeniden açılacak. Emin misiniz?`
-        : 'Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?',
+        ? t('obligations.detail.deleteBodySettled', {
+            type: lowerUi(DOCUMENT_TYPE_LABEL[detailQuery.data?.obligation.document_type ?? ''] ?? t('obligations.detail.recordLower')),
+            count: settledCount,
+          })
+        : t('obligations.list.deleteBodyInstallments'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Sil', style: 'destructive', onPress: () => deleteObligationMutation.mutate() },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => deleteObligationMutation.mutate() },
       ]
     );
   }
@@ -233,7 +239,7 @@ export default function ObligationDetailScreen() {
         isLoading
         loadingIndicator={<ActivityIndicator color={theme.colors.textPrimary} />}
         error={detailQuery.error}
-        errorFallbackMessage="Kayıt yüklenemedi"
+        errorFallbackMessage={t('obligations.detail.loadFailed')}
       >
         {null}
       </DetailScaffold>
@@ -263,9 +269,9 @@ export default function ObligationDetailScreen() {
   // Taksitli kayıtlarda Taksitler/Ödemeler/Bilgiler sekmeleri; diğer türlerde (çek, senet, fatura…)
   // tuval Senet/Fatura detayı gibi sekmesiz: Bilgiler grubu + Ödeme geçmişi tek akışta.
   const tabOptions: { key: DetailTab; label: string }[] = [
-    { key: 'plan', label: showsPlanTab ? 'Taksitler' : 'Plan' },
-    { key: 'gecmis', label: 'Ödemeler' },
-    { key: 'genel', label: 'Bilgiler' },
+    { key: 'plan', label: showsPlanTab ? t('obligations.detail.installmentsTab') : t('obligations.detail.planTab') },
+    { key: 'gecmis', label: t('obligations.detail.paymentsTab') },
+    { key: 'genel', label: t('obligations.detail.infoTab') },
   ];
   const activeTab: DetailTab = showsPlanTab ? tab : 'genel';
 
@@ -297,10 +303,10 @@ export default function ObligationDetailScreen() {
     isClosed || daysToDue === null
       ? statusLabel
       : daysToDue < 0
-        ? `${statusLabel} · ${-daysToDue} gün`
+        ? t('obligations.detail.statusOverdue', { status: statusLabel, count: -daysToDue })
         : daysToDue === 0
-          ? `${statusLabel} · bugün`
-          : `${statusLabel} · ${daysToDue} gün`;
+          ? t('obligations.detail.statusToday', { status: statusLabel })
+          : t('obligations.detail.statusInDays', { status: statusLabel, count: daysToDue });
 
   // Ödeme planı tablosu (ortak InstallmentPlanTable): ödenmişler başta özetlenir, sıradaki vurgulanır.
   const todayIso = localIsoDate();
@@ -329,54 +335,54 @@ export default function ObligationDetailScreen() {
   const remainingInstallmentCount = Math.max(0, installments.length - paidInstallments);
 
   const infoRows: { label: string; value: string; onPress?: () => void }[] = [
-    { label: 'Vade', value: dueDateValue ? dateFormatter.format(dueDateValue) : '—' },
-    ...(bankName ? [{ label: 'Banka', value: bankName }] : []),
-    ...(serviceName ? [{ label: 'Servis', value: serviceName }] : []),
-    { label: 'Hesap', value: obligation.account?.name ?? '—' },
-    { label: 'Kategori', value: obligation.category?.name ?? '—' },
+    { label: t('obligations.detail.due'), value: dueDateValue ? dateFormatter.format(dueDateValue) : '—' },
+    ...(bankName ? [{ label: t('obligations.detail.bank'), value: bankName }] : []),
+    ...(serviceName ? [{ label: t('obligations.detail.service'), value: serviceName }] : []),
+    { label: t('obligations.detail.account'), value: obligation.account?.name ?? '—' },
+    { label: t('obligations.detail.category'), value: obligation.category?.name ?? '—' },
     ...(obligation.counterparty?.name
       ? [
           {
-            label: 'Taraf',
+            label: t('obligations.detail.party'),
             value: obligation.counterparty.name,
             onPress: obligation.counterparty_id ? () => router.push(`/counterparties/${obligation.counterparty_id}`) : undefined,
           },
         ]
       : []),
-    ...(obligation.notes ? [{ label: 'Not', value: obligation.notes }] : []),
+    ...(obligation.notes ? [{ label: t('obligations.detail.note'), value: obligation.notes }] : []),
     ...(settledQuery.data ?? []).map((settled) => ({
-      label: 'Karşılığı',
+      label: t('obligations.detail.settles'),
       value: `${settled.title} · ${formatValueUnitAmount(settled.amountMinor, obligation.currency_code)}`,
     })),
     {
-      label: isInterestBearing ? 'Başlangıç tutarı' : 'Toplam tutar',
+      label: isInterestBearing ? t('obligations.detail.initialAmount') : t('obligations.detail.totalAmount'),
       value: formatValueUnitAmount(obligation.total_amount_minor, obligation.currency_code),
     },
     ...(effectiveRatio !== null
-      ? [{ label: 'Faiz oranı', value: `%${effectiveRatio.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}` }]
+      ? [{ label: t('obligations.detail.interestRate'), value: formatPercent(effectiveRatio.toLocaleString(getLocaleTag(), { maximumFractionDigits: 2 })) }]
       : []),
-    ...(hasInstallments ? [{ label: `Toplam ${unitLabel.toLocaleLowerCase('tr-TR')}`, value: String(installments.length) }] : []),
-    { label: 'Durum', value: statusLabel },
+    ...(hasInstallments ? [{ label: t('obligations.detail.totalUnits', { unit: unitForCount(lowerUi(unitLabel), 2) }), value: String(installments.length) }] : []),
+    { label: t('obligations.detail.status'), value: statusLabel },
   ];
 
   const linkedDocument = documentQuery.data ?? null;
   // Tuval çek detayındaki "Geçmiş": en yeni olay üstte — oluşturulma, ödeme/tahsilat ve bekleyen vade.
-  const shortDay = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+  const shortDay = localeDateFormatter({ day: 'numeric', month: 'short' });
   const historyEvents: { key: string; title: string; date: string; color: string }[] = [
     ...(isClosed
       ? []
       : dueDateValue
-        ? [{ key: 'due', title: 'Vade bekleniyor', date: shortDay.format(dueDateValue), color: theme.colors.brandPrimary }]
+        ? [{ key: 'due', title: t('obligations.detail.awaitingDue'), date: shortDay.format(dueDateValue), color: theme.colors.brandPrimary }]
         : []),
     ...payments.map((payment) => ({
       key: payment.id,
-      title: isPayable ? 'Ödendi' : 'Tahsil edildi',
+      title: isPayable ? t('obligations.detail.paid') : t('obligations.detail.collected'),
       date: shortDay.format(new Date(payment.paid_at)),
       color: theme.colors.success,
     })),
     {
       key: 'created',
-      title: linkedDocument ? 'Belgeden oluşturuldu' : 'Kayıt oluşturuldu',
+      title: linkedDocument ? t('obligations.detail.createdFromDocument') : t('obligations.detail.created'),
       date: obligation.created_at ? shortDay.format(new Date(obligation.created_at)) : '—',
       color: theme.colors.textSecondary,
     },
@@ -389,7 +395,7 @@ export default function ObligationDetailScreen() {
           title: heroPrimaryName,
           right: {
             icon: 'ellipsis-horizontal',
-            accessibilityLabel: 'Kayıt işlemleri',
+            accessibilityLabel: t('obligations.detail.actionsA11y'),
             onPress: () => setMenuOpen(true),
           },
         }}
@@ -418,7 +424,7 @@ export default function ObligationDetailScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="caption" color="textSecondary">
-                    {isPayable ? 'Kalan geri ödeme' : 'Kalan alacak'}
+                    {isPayable ? t('obligations.detail.remainingRepayment') : t('obligations.detail.remainingReceivable')}
                   </Text>
                   <Text
                     tabular
@@ -447,7 +453,7 @@ export default function ObligationDetailScreen() {
               <View style={{ flexDirection: 'row' }}>
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="caption" color="textSecondary">
-                    Ödenen
+                    {t('obligations.detail.paidSoFar')}
                   </Text>
                   <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
                     {formatValueUnitAmount(paidAmountMinor, obligation.currency_code)}
@@ -455,7 +461,7 @@ export default function ObligationDetailScreen() {
                 </Stack>
                 <Stack gap="xxs" style={{ flex: 1 }}>
                   <Text variant="caption" color="textSecondary">
-                    Toplam
+                    {t('obligations.detail.total')}
                   </Text>
                   <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
                     {formatValueUnitAmount(obligation.total_amount_minor, obligation.currency_code)}
@@ -463,7 +469,7 @@ export default function ObligationDetailScreen() {
                 </Stack>
                 <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
                   <Text variant="caption" color="textSecondary">
-                    Bitiş
+                    {t('obligations.detail.ends')}
                   </Text>
                   <Text style={{ fontSize: 15, fontWeight: '600' }}>
                     {installments.length > 0
@@ -511,13 +517,22 @@ export default function ObligationDetailScreen() {
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}>
               <Button
-                label={nextInstallment && showsPlanTab ? `${nextInstallment.installment_number}. ${unitLabel.toLocaleLowerCase('tr-TR')}i ${isPayable ? 'öde' : 'tahsil et'}` : isPayable ? 'Ödendi' : 'Tahsil Et'}
+                label={
+                  nextInstallment && showsPlanTab
+                    ? t(isPayable ? 'obligations.detail.payNth' : 'obligations.detail.collectNth', {
+                        n: nextInstallment.installment_number,
+                        unit: unitAccusative(lowerUi(unitLabel), 1),
+                      })
+                    : isPayable
+                      ? t('obligations.detail.paid')
+                      : t('obligations.detail.collect')
+                }
                 size="compact"
                 onPress={() => setPayingInstallment(showsPlanTab && nextInstallment ? nextInstallment : 'obligation')}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Button label="İşlemler" variant="secondary" size="compact" onPress={() => setMenuOpen(true)} />
+              <Button label={t('obligations.detail.actions')} variant="secondary" size="compact" onPress={() => setMenuOpen(true)} />
             </View>
           </View>
         ) : null}
@@ -551,13 +566,13 @@ export default function ObligationDetailScreen() {
             {linkedDocument ? (
               <Stack gap="xs">
                 <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                  BELGE
+                  {t('obligations.detail.document')}
                 </Text>
                 <Group inset={16}>
                   <GroupedRow
                     leading={<GroupedRowIcon name="document-text" tone="brandSoft" />}
                     title={linkedDocument.fileName}
-                    subtitle={linkedDocument.fieldCount > 0 ? `Belgeden ${linkedDocument.fieldCount} alan okundu` : 'Belgeden oluşturuldu'}
+                    subtitle={linkedDocument.fieldCount > 0 ? t('obligations.detail.fieldsRead', { count: linkedDocument.fieldCount }) : t('obligations.detail.createdFromDocument')}
                     chevron={false}
                   />
                 </Group>
@@ -566,7 +581,7 @@ export default function ObligationDetailScreen() {
             {isInstrumentRecord ? (
               <Stack gap="xs">
                 <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                  GEÇMİŞ
+                  {t('obligations.detail.history')}
                 </Text>
                 <Group inset={16}>
                   {historyEvents.map((event) => (
@@ -583,9 +598,9 @@ export default function ObligationDetailScreen() {
             ) : null}
             {!showsPlanTab ? (
               <Stack gap="xs">
-                <Text variant="sectionTitle">Ödeme geçmişi</Text>
+                <Text variant="sectionTitle">{t('obligations.detail.paymentHistory')}</Text>
                 {visiblePayments.length === 0 ? (
-                  <EmptyState icon="receipt-outline" message="Henüz ödeme kaydı yok." />
+                  <EmptyState icon="receipt-outline" message={t('obligations.detail.noPayments')} />
                 ) : (
                   <Stack gap="xs">
                     {visiblePayments.map((payment) => (
@@ -609,13 +624,13 @@ export default function ObligationDetailScreen() {
         ) : activeTab === 'plan' ? (
           <Stack gap="md">
             {planRows.length === 0 ? (
-              <EmptyState icon="calendar-outline" message="Henüz ödeme planı yok." />
+              <EmptyState icon="calendar-outline" message={t('obligations.detail.noPlan')} />
             ) : (
               <InstallmentPlanTable
                 rows={planRows}
                 currencyCode={obligation.currency_code}
-                unitLabel={unitLabel.toLocaleLowerCase('tr-TR')}
-                rowActionLabel={isClosed ? undefined : isPayable ? 'Öde' : 'Tahsil et'}
+                unitLabel={lowerUi(unitLabel)}
+                rowActionLabel={isClosed ? undefined : isPayable ? t('obligations.detail.pay') : t('obligations.detail.collectLower')}
                 onRowPress={
                   isClosed
                     ? undefined
@@ -630,7 +645,7 @@ export default function ObligationDetailScreen() {
         ) : (
           <Stack gap="md">
             {visiblePayments.length === 0 ? (
-              <EmptyState icon="receipt-outline" message="Henüz ödeme kaydı yok." />
+              <EmptyState icon="receipt-outline" message={t('obligations.detail.noPayments')} />
             ) : (
               <Stack gap="xs">
                 {visiblePayments.map((payment) => (
@@ -652,7 +667,7 @@ export default function ObligationDetailScreen() {
 
       <ActionSheet
         visible={menuOpen}
-        title={`${DOCUMENT_TYPE_LABEL[obligation.document_type] ?? 'Kayıt'} İşlemleri`}
+        title={t('obligations.detail.menuTitle', { type: DOCUMENT_TYPE_LABEL[obligation.document_type] ?? t('obligations.list.record') })}
         onClose={() => setMenuOpen(false)}
         options={[
           // Kredi kartı ekstresi kendi başına ödenmez: ödeme kart hesabından tek bir
@@ -665,8 +680,8 @@ export default function ObligationDetailScreen() {
               ? [
                   {
                     key: 'go-to-card',
-                    label: 'Karta Git',
-                    description: 'Ödeme, kart sayfasından işlenir.',
+                    label: t('obligations.detail.goToCard'),
+                    description: t('obligations.detail.goToCardBody'),
                     icon: 'card-outline' as const,
                     onPress: () => router.push(`/accounts/${obligation.account_id}`),
                   },
@@ -676,10 +691,8 @@ export default function ObligationDetailScreen() {
               ? [
                   {
                     key: 'payment',
-                    label: isPayable ? 'Ödeme Ekle' : 'Tahsilat Ekle',
-                    description: isPayable
-                      ? 'Nakit, havale veya kartla ödeme işle'
-                      : 'Nakit, havale veya kartla tahsilat işle',
+                    label: isPayable ? t('obligations.detail.addPayment') : t('obligations.detail.addCollection'),
+                    description: isPayable ? t('obligations.detail.addPaymentBody') : t('obligations.detail.addCollectionBody'),
                     icon: 'cash-outline' as const,
                     onPress: () => setPayingInstallment('obligation'),
                   },
@@ -691,8 +704,8 @@ export default function ObligationDetailScreen() {
                     ? [
                         {
                           key: 'endorse',
-                          label: 'Ciro Et',
-                          description: 'Bu çek/senedi bir tedarikçiye vererek borcunu kapat',
+                          label: t('obligations.detail.endorse'),
+                          description: t('obligations.detail.endorseBody'),
                           icon: 'swap-horizontal-outline' as const,
                           onPress: () =>
                             router.push({ pathname: '/payments/new', params: { endorseId: obligation.id } }),
@@ -704,8 +717,8 @@ export default function ObligationDetailScreen() {
                     ? [
                         {
                           key: 'offset',
-                          label: 'Faturadan Mahsup Et',
-                          description: 'Bu avansı cariyle açık fatura/borçtan düş',
+                          label: t('obligations.detail.offset'),
+                          description: t('obligations.detail.offsetBody'),
                           icon: 'git-compare-outline' as const,
                           onPress: () =>
                             router.push({
@@ -719,8 +732,8 @@ export default function ObligationDetailScreen() {
                     ? [
                         {
                           key: 'instrument',
-                          label: isPayable ? 'Çek / Senet ile Öde' : 'Çek / Senet ile Tahsil Et',
-                          description: 'Kayıt tutar kadar kapanır, vadeli çek/senet açılır',
+                          label: isPayable ? t('obligations.detail.payWithInstrument') : t('obligations.detail.collectWithInstrument'),
+                          description: t('obligations.detail.instrumentBody'),
                           icon: 'document-text-outline' as const,
                           onPress: () =>
                             router.push({
@@ -734,15 +747,15 @@ export default function ObligationDetailScreen() {
               : []),
           {
             key: 'edit',
-            label: 'Düzenle',
-            description: 'Kayıt bilgilerini güncelle',
+            label: t('common.edit'),
+            description: t('obligations.detail.editBody'),
             icon: 'create-outline',
             onPress: () => router.push({ pathname: '/obligations/new', params: { id: obligation.id } }),
           },
           {
             key: 'delete',
-            label: deleteObligationMutation.isPending ? 'Siliniyor…' : 'Sil',
-            description: 'Kaydı ve bağlı ödeme geçmişini kaldır',
+            label: deleteObligationMutation.isPending ? t('obligations.detail.deleting') : t('common.delete'),
+            description: t('obligations.detail.deleteBody'),
             icon: 'trash-outline',
             danger: true,
             onPress: () => {
@@ -788,7 +801,7 @@ export default function ObligationDetailScreen() {
               // ertelenir — aksi halde Fabric, modal dismiss animasyonuyla aynı anda arkadaki
               // listeyi (taksitler vb.) yeniden mount etmeye çalışıp çöküyor (bkz.
               // review.tsx'teki InteractionManager.runAfterInteractions ile aynı düzeltme).
-              showSuccessAlert(editingPayment ? 'Ödeme başarıyla güncellendi.' : 'Ödeme başarıyla kaydedildi.', () => {
+              showSuccessAlert(editingPayment ? t('obligations.detail.paymentUpdated') : t('obligations.detail.paymentSaved'), () => {
                 setPayingInstallment(null);
                 setPayParamDismissed(true);
                 setEditingPayment(null);
@@ -842,7 +855,7 @@ function PaymentRow({
                 {dateFormatter.format(new Date(payment.paid_at))}
               </Text>
               <Text variant="caption" color="textSecondary" numberOfLines={1}>
-                {payment.notes ?? 'Çek/senet ile kapatıldı'}
+                {payment.notes ?? t('obligations.detail.closedByInstrument')}
               </Text>
             </Stack>
             <Amount amountMinor={payment.amount_minor} currencyCode={currencyCode} variant="body" />
@@ -875,12 +888,12 @@ function PaymentRow({
         {payment.receipt_document_id ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Dekontu aç"
+            accessibilityLabel={t('obligations.detail.openReceipt')}
             onPress={async () => {
               try {
                 await openReceipt(payment.receipt_document_id as string);
               } catch {
-                Alert.alert('Dekont açılamadı', 'Dosya bulunamadı ya da bağlantı kurulamadı.');
+                Alert.alert(t('obligations.detail.receiptOpenFailed'), t('obligations.detail.receiptOpenFailedBody'));
               }
             }}
             hitSlop={8}
@@ -891,11 +904,11 @@ function PaymentRow({
         {/* Kart ödemesi transferinden dağıtılan satırlar (hesapsız ama transaction'lı) tek başına
             düzenlenmez: transfer birden çok ekstreyi kapsar. Silme ise hepsini birlikte kaldırır. */}
         {payment.transaction_id && !payment.account_id ? null : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi düzenle" onPress={onEdit} hitSlop={8}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('obligations.detail.editPayment')} onPress={onEdit} hitSlop={8}>
             <Ionicons name="create-outline" size={18} color={theme.colors.textSecondary} />
           </Pressable>
         )}
-        <Pressable accessibilityRole="button" accessibilityLabel="Ödemeyi sil" onPress={onDelete} hitSlop={8}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('obligations.detail.deletePayment')} onPress={onDelete} hitSlop={8}>
           <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />
         </Pressable>
       </Row>
@@ -933,7 +946,7 @@ function PaymentForm({
   const valueUnit = getValueUnit(obligation.currency_code);
   const [amount, setAmount] = useState(
     formatAmountInput(
-      (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+      (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', getInputDecimalSeparator()),
       valueUnit.precision
     )
   );
@@ -981,11 +994,11 @@ function PaymentForm({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!workspaceId || !amount) throw new Error('Eksik alan var');
+      if (!workspaceId || !amount) throw new Error(t('obligations.detail.missingField'));
       const amountMinor = parseValueUnitAmountToMinor(amount, obligation.currency_code);
-      if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
+      if (amountMinor === null) throw new Error(t('obligations.detail.amountUnreadable'));
       const parsedDate = new Date(dateStr);
-      if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
+      if (Number.isNaN(parsedDate.getTime())) throw new Error(t('obligations.detail.dateUnreadable'));
       const paidAt = parsedDate.toISOString();
 
       // Dekont önce yüklenir ki ödeme satırı tek insert/update'te ona bağlanabilsin; ödeme
@@ -1046,9 +1059,15 @@ function PaymentForm({
   });
 
   const isPayable = obligation.direction === 'payable';
-  const title = isEditing ? (isPayable ? 'Ödemeyi düzenle' : 'Tahsilatı düzenle') : isPayable ? 'Ödeme kaydet' : 'Tahsilat kaydet';
+  const title = isEditing
+    ? isPayable
+      ? t('obligations.detail.editPayment')
+      : t('obligations.detail.editCollection')
+    : isPayable
+      ? t('obligations.detail.recordPayment')
+      : t('obligations.detail.recordCollection');
   const fullAmountInput = formatAmountInput(
-    (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+    (defaultAmountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', getInputDecimalSeparator()),
     valueUnit.precision
   );
   const isFullAmount = amount === fullAmountInput;
@@ -1056,7 +1075,7 @@ function PaymentForm({
   const contextLine = [
     counterpartyName,
     installment
-      ? `${installment.installment_number}. taksit · ${shortDateFormatter.format(new Date(installment.due_date))}`
+      ? t('obligations.detail.nthInstallment', { n: installment.installment_number, date: shortDateFormatter.format(new Date(installment.due_date)) })
       : obligation.title,
   ]
     .filter(Boolean)
@@ -1072,7 +1091,7 @@ function PaymentForm({
           {/* Tuval OdemeKaydet: Vazgeç · ortada başlık */}
           <View style={{ height: 44, flexDirection: 'row', alignItems: 'center' }}>
             <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12} style={{ minWidth: 70, height: 44, justifyContent: 'center' }}>
-              <Text style={{ fontSize: 17 }}>Vazgeç</Text>
+              <Text style={{ fontSize: 17 }}>{t('common.cancel')}</Text>
             </Pressable>
             <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600' }}>
               {title}
@@ -1095,8 +1114,8 @@ function PaymentForm({
             </View>
             {!isEditing && defaultAmountMinor > 0 ? (
               <Row gap="xs" style={{ justifyContent: 'center' }}>
-                <Pill label="Tamamı" selected={isFullAmount} onPress={() => setAmount(fullAmountInput)} />
-                <Pill label="Kısmi tutar" selected={!isFullAmount} onPress={() => setAmount('')} />
+                <Pill label={t('obligations.detail.fullAmount')} selected={isFullAmount} onPress={() => setAmount(fullAmountInput)} />
+                <Pill label={t('obligations.detail.partialAmount')} selected={!isFullAmount} onPress={() => setAmount('')} />
               </Row>
             ) : null}
           </Stack>
@@ -1114,13 +1133,13 @@ function PaymentForm({
                   accounts={payableAccounts}
                   selectedId={accountId}
                   onSelect={setAccountId}
-                  title="Hesap seç"
+                  title={t('obligations.detail.selectAccountTitle')}
                   renderTrigger={(selected, open) => {
                     const balance = selected ? balanceByAccount.get(selected.id) : undefined;
                     return (
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={selected ? `Hesap: ${selected.name}` : 'Hesap seçin'}
+                        accessibilityLabel={selected ? t('obligations.detail.accountA11y', { name: selected.name }) : t('obligations.detail.selectAccount')}
                         onPress={open}
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: theme.spacing.md, paddingVertical: 10, minHeight: 60 }}
                       >
@@ -1131,11 +1150,11 @@ function PaymentForm({
                         )}
                         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                           <Text numberOfLines={1} style={{ fontWeight: '500', color: selected ? theme.colors.textPrimary : theme.colors.mutedControl }}>
-                            {selected ? selected.name : isPayable ? 'Ödemenin çıktığı hesap' : 'Tahsilatın girdiği hesap'}
+                            {selected ? selected.name : isPayable ? t('obligations.detail.paymentAccount') : t('obligations.detail.collectionAccount')}
                           </Text>
                           {balance ? (
                             <Text variant="caption" color="textSecondary" tabular numberOfLines={1}>
-                              Bakiye {formatMinorAmount(balance.balanceMinor, balance.currencyCode)}
+                              {t('obligations.detail.balance', { amount: formatMinorAmount(balance.balanceMinor, balance.currencyCode) })}
                             </Text>
                           ) : null}
                         </View>
@@ -1145,7 +1164,7 @@ function PaymentForm({
                   }}
                 />
               ) : null}
-              <DateField label={isPayable ? 'Ödeme tarihi' : 'Tahsilat tarihi'} value={dateStr} onChangeText={setDateStr} />
+              <DateField label={isPayable ? t('obligations.detail.paymentDate') : t('obligations.detail.collectionDate')} value={dateStr} onChangeText={setDateStr} />
             </FieldGroup>
 
             <ReceiptAttachField
@@ -1162,12 +1181,12 @@ function PaymentForm({
 
             {mutation.error ? (
               <Text variant="caption" color="danger">
-                {friendlyErrorMessage(mutation.error, 'Ödeme kaydedilemedi')}
+                {friendlyErrorMessage(mutation.error, t('obligations.detail.paymentSaveFailed'))}
               </Text>
             ) : null}
 
             <Button
-              label={isEditing ? 'Güncelle' : isPayable ? 'Ödemeyi kaydet' : 'Tahsilatı kaydet'}
+              label={isEditing ? t('obligations.detail.update') : isPayable ? t('obligations.detail.savePayment') : t('obligations.detail.saveCollection')}
               onPress={() => mutation.mutate()}
               loading={mutation.isPending}
               disabled={!amount || (payableAccounts.length > 0 && !accountId)}

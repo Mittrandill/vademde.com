@@ -6,6 +6,7 @@ import { Pressable, Text } from '@/components/primitives';
 import { formatMinorAmount } from '@/utils/money';
 import type { Account } from '@/features/accounts/api';
 import { AccountAvatar, AccountPicker } from './AccountPicker';
+import { t } from '@/i18n';
 
 const ROW_HEIGHT = 64;
 
@@ -42,9 +43,9 @@ export function TransferAccounts({
           accounts={sourceAccounts}
           selectedId={fromId}
           onSelect={onFromChange}
-          title="Gönderen hesap seç"
+          title={t('finance.transfer.fromTitle')}
           renderTrigger={(selected, open) => (
-            <TransferRow label="Gönderen" placeholder="Gönderen hesap seçin" account={selected} balances={balances} onPress={open} />
+            <TransferRow label={t('finance.transfer.from')} placeholder={t('finance.transfer.fromPlaceholder')} account={selected} balances={balances} onPress={open} />
           )}
         />
         <View style={{ height: 1, marginLeft: 62, backgroundColor: theme.colors.separator }} />
@@ -52,15 +53,15 @@ export function TransferAccounts({
           accounts={targetAccounts}
           selectedId={toId}
           onSelect={onToChange}
-          title="Hedef hesap seç"
+          title={t('finance.transfer.toTitle')}
           renderTrigger={(selected, open) => (
-            <TransferRow label="Alan" placeholder="Hedef hesap seçin" account={selected} balances={balances} onPress={open} />
+            <TransferRow label={t('finance.transfer.to')} placeholder={t('finance.transfer.toPlaceholder')} account={selected} balances={balances} onPress={open} />
           )}
         />
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Yönü değiştir"
+        accessibilityLabel={t('finance.transfer.swap')}
         disabled={!canSwap}
         onPress={onSwap}
         style={{

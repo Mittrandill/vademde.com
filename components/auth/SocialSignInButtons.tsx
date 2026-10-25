@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { Pressable, Row, Stack, Text } from '@/components/primitives';
 import { GoogleGlyph } from './GoogleGlyph';
+import { t } from '@/i18n';
 
 export interface SocialSignInButtonsProps {
   onApplePress: () => void;
@@ -46,7 +47,7 @@ export function SocialSignInButtons({
             <Row gap="xs" align="center">
               <Ionicons name="logo-apple" size={20} color={theme.colors.backgroundPrimary} />
               <Text variant="cardTitle" style={{ color: theme.colors.backgroundPrimary }}>
-                Apple ile devam et
+                {t('ui.social.apple')}
               </Text>
             </Row>
           )}
@@ -71,7 +72,7 @@ export function SocialSignInButtons({
           <Row gap="xs" align="center">
             <GoogleGlyph size={18} />
             <Text variant="cardTitle" color="textPrimary">
-              Google ile devam et
+              {t('ui.social.google')}
             </Text>
           </Row>
         )}

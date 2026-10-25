@@ -11,11 +11,12 @@ import { Group, GroupedRow, Pressable, Stack, Text } from '@/components/primitiv
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { AiGate } from '@/components/finance/AiGate';
 import { askAi, type AiAnswer } from '@/features/insights/api';
-import { AI_DISCLAIMER } from '@/features/insights/useAiAccess';
+import { aiDisclaimer } from '@/features/insights/useAiAccess';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
 
-const SUGGESTIONS = ['Bu ay nereye harcadım?', 'Geçen ayla karşılaştır', 'En çok hangi kategoride harcıyorum?'];
+const SUGGESTION_KEYS = ['insights.suggestion1', 'insights.suggestion2', 'insights.suggestion3'] as const;
 
 interface Message {
   id: number;
@@ -34,7 +35,7 @@ export default function AskScreen() {
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={{ padding: theme.screenEdge.standard, paddingBottom: 0 }}>
-          <ScreenHeader title="Sor" />
+          <ScreenHeader title={t('insights.askTitle')} />
         </View>
         <View style={{ flex: 1, padding: theme.screenEdge.standard }}>
           <AiGate>
@@ -61,7 +62,7 @@ function Chat() {
     onError: (error) =>
       setMessages((m) => [
         ...m,
-        { id: ++idRef.current, role: 'assistant', text: friendlyErrorMessage(error, 'Yanıt alınamadı.') },
+        { id: ++idRef.current, role: 'assistant', text: friendlyErrorMessage(error, t('insights.noAnswer')) },
       ]),
   });
 
@@ -85,11 +86,11 @@ function Chat() {
         {messages.length === 0 ? (
           <Stack gap="sm">
             <Text variant="body" color="textSecondary">
-              Kayıtlarına dayanarak sorularını yanıtlarım.
+              {t('insights.askIntro')}
             </Text>
             <Group inset={16}>
-              {SUGGESTIONS.map((s) => (
-                <GroupedRow key={s} title={s} onPress={() => send(s)} />
+              {SUGGESTION_KEYS.map((key) => (
+                <GroupedRow key={key} title={t(key)} onPress={() => send(t(key))} />
               ))}
             </Group>
           </Stack>
@@ -121,7 +122,7 @@ function Chat() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="document-text-outline" size={theme.iconSize.md} color={theme.colors.textSecondary} />
                   <Text variant="caption" color="textSecondary">
-                    Kaynak: {m.source.count} hareket · {m.source.from} – {m.source.to}
+                    {t('insights.source', { count: m.source.count, from: m.source.from, to: m.source.to })}
                   </Text>
                 </View>
               ) : null}
@@ -130,13 +131,13 @@ function Chat() {
         )}
         {mutation.isPending ? (
           <Text variant="caption" color="textSecondary">
-            Kayıtların inceleniyor…
+            {t('insights.analyzingDots')}
           </Text>
         ) : null}
       </ScrollView>
 
       <Text variant="caption" color="textSecondary" style={{ marginBottom: theme.spacing.xs }}>
-        {AI_DISCLAIMER} Yanıtlar kayıtlarına dayanır; önemli kararlarda kontrol et.
+        {aiDisclaimer()} {t('insights.answerDisclaimer')}
       </Text>
       <View
         style={{
@@ -151,7 +152,7 @@ function Chat() {
         <TextInput
           value={input}
           onChangeText={setInput}
-          placeholder="Sorunu yaz"
+          placeholder={t('insights.placeholder')}
           placeholderTextColor={theme.colors.mutedControl}
           maxLength={400}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -161,7 +162,7 @@ function Chat() {
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Gönder"
+          accessibilityLabel={t('insights.send')}
           onPress={() => send(input)}
           disabled={mutation.isPending || !input.trim()}
           style={{

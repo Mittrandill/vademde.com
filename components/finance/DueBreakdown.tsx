@@ -4,6 +4,7 @@ import { useTheme } from '@/theme';
 import { Row, Stack, Text } from '@/components/primitives';
 import { formatMinorAmount } from '@/utils/money';
 import type { DueBreakdown as DueBreakdownData } from '@/features/obligations/api';
+import { t } from '@/i18n';
 
 // docs/01-finansal-kayit-modeli.md §3.2.1 — tek bir "toplam borç" rakamı, tekrarlayan
 // kayıtlarda (maaş, kira, vergi/SGK) yanıltıcıdır: 4 aylık maaş girer girmez dört ayın
@@ -35,29 +36,29 @@ export function DueBreakdown({
     >
       <Row align="stretch">
         <Metric
-          label="GECİKMİŞ"
+          label={t('finance.due.overdueUpper')}
           value={formatMinorAmount(data.overdueMinor)}
           caption={
             hasOverdue
-              ? `${data.overdueCount} vade`
+              ? t('finance.due.dueCount', { count: data.overdueCount })
               : isPayable
-                ? 'Geciken yok'
-                : 'Geciken tahsilat yok'
+                ? t('finance.due.noOverduePayable')
+                : t('finance.due.noOverdueReceivable')
           }
           valueColor={hasOverdue ? theme.colors.danger : theme.colors.textPrimary}
         />
         <Divider />
         <Metric
-          label="BU AY"
+          label={t('finance.due.thisMonthUpper')}
           value={formatMinorAmount(data.dueThisMonthMinor)}
-          caption={isPayable ? 'Ödenecek' : 'Tahsil edilecek'}
+          caption={isPayable ? t('finance.due.toPay') : t('finance.due.toCollect')}
           valueColor={theme.colors.textPrimary}
         />
         <Divider />
         <Metric
-          label="TOPLAM KALAN"
+          label={t('finance.due.remainingUpper')}
           value={formatMinorAmount(data.remainingTotalMinor)}
-          caption="Tüm vadeler"
+          caption={t('finance.due.allDues')}
           valueColor={theme.colors.textSecondary}
         />
       </Row>

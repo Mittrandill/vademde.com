@@ -14,8 +14,10 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { maskIban } from '@/utils/iban';
 import { queryKeys } from '@/services/queryKeys';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
+const shortDateFormatter = localeDateFormatter({ day: '2-digit', month: 'short' });
 
 // Tuval BankaDetay: ortalı banka başlığı, Varlık / Kart borcu / Net kartı ve gruplu bölümler
 // (Hesaplar, Kredi kartları, Krediler, Çek ve senetler). Toplamlar yalnızca TRY hesapları kapsar —
@@ -77,10 +79,10 @@ export default function BankDetailScreen() {
   const cardDebtMinor = cards.filter((a) => a.currency_code === 'TRY').reduce((sum, a) => sum + Math.abs(balanceOf(a)), 0);
 
   const counts = [
-    plainAccounts.length ? `${plainAccounts.length} hesap` : null,
-    cards.length ? `${cards.length} kart` : null,
-    loans.length ? `${loans.length} kredi` : null,
-    cheques.length ? `${cheques.length} çek` : null,
+    plainAccounts.length ? t('banks.accountCount', { count: plainAccounts.length }) : null,
+    cards.length ? t('banks.cardCount', { count: cards.length }) : null,
+    loans.length ? t('banks.loanCount', { count: loans.length }) : null,
+    cheques.length ? t('banks.chequeCount', { count: cheques.length }) : null,
   ].filter(Boolean);
 
   return (
@@ -91,18 +93,18 @@ export default function BankDetailScreen() {
           {bankName}
         </Text>
         <Text variant="caption" color="textSecondary">
-          {counts.length ? counts.join(' · ') : 'Henüz kayıt yok'}
+          {counts.length ? counts.join(' · ') : t('banks.noRecordsYet')}
         </Text>
       </Stack>
 
       <Card style={{ flexDirection: 'row' }}>
-        <StatCell label="Varlık" value={formatMinorAmount(assetMinor)} />
-        <StatCell label="Kart borcu" value={formatMinorAmount(cardDebtMinor)} />
-        <StatCell label="Net" value={formatMinorAmount(assetMinor - cardDebtMinor)} align="flex-end" />
+        <StatCell label={t('banks.assets')} value={formatMinorAmount(assetMinor)} />
+        <StatCell label={t('banks.cardDebt')} value={formatMinorAmount(cardDebtMinor)} />
+        <StatCell label={t('banks.net')} value={formatMinorAmount(assetMinor - cardDebtMinor)} align="flex-end" />
       </Card>
 
       {plainAccounts.length > 0 ? (
-        <GroupedSection title="Hesaplar">
+        <GroupedSection title={t('banks.sectionAccounts')}>
           {plainAccounts.map((a) => (
             <GroupedRow
               key={a.id}
@@ -117,7 +119,7 @@ export default function BankDetailScreen() {
       ) : null}
 
       {cards.length > 0 ? (
-        <GroupedSection title="Kredi kartları">
+        <GroupedSection title={t('banks.sectionCards')}>
           {cards.map((a) => (
             <GroupedRow
               key={a.id}
@@ -131,13 +133,13 @@ export default function BankDetailScreen() {
       ) : null}
 
       {loans.length > 0 ? (
-        <GroupedSection title="Krediler">
+        <GroupedSection title={t('banks.sectionLoans')}>
           {loans.map((o) => (
             <GroupedRow
               key={o.id}
               leading={<ObligationIcon documentType={o.document_type} bankCode={o.bank_code} size={34} />}
               title={o.title}
-              subtitle={o.due_date ? `Vade ${shortDateFormatter.format(new Date(o.due_date))}` : undefined}
+              subtitle={o.due_date ? t('banks.dueOn', { date: shortDateFormatter.format(new Date(o.due_date)) }) : undefined}
               value={formatMinorAmount(o.remaining_amount_minor, o.currency_code)}
               onPress={() => router.push(`/obligations/${o.id}`)}
             />
@@ -146,7 +148,7 @@ export default function BankDetailScreen() {
       ) : null}
 
       {cheques.length > 0 ? (
-        <GroupedSection title="Çek ve senetler">
+        <GroupedSection title={t('banks.sectionInstruments')}>
           {cheques.map((o) => (
             <GroupedRow
               key={o.id}
@@ -161,7 +163,7 @@ export default function BankDetailScreen() {
       ) : null}
 
       {accountsQuery.isSuccess && bankAccounts.length === 0 && loans.length === 0 && cheques.length === 0 ? (
-        <EmptyState icon="business-outline" message="Bu bankaya bağlı kayıt yok." />
+        <EmptyState icon="business-outline" message={t('banks.noLinked')} />
       ) : null}
     </DetailScaffold>
   );

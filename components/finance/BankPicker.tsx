@@ -1,6 +1,7 @@
 import { SearchablePicker } from '@/components/primitives';
 import { BANKS } from '@/features/banks/banks';
 import { BankLogo } from './BankLogo';
+import { t } from '@/i18n';
 
 const BANK_ITEMS = BANKS.map((bank) => ({ id: bank.code, name: bank.name }));
 
@@ -21,9 +22,9 @@ export function BankPicker({ selectedId, onSelect, placeholder, title, label }: 
       selectedId={selectedId}
       onSelect={onSelect}
       renderLeading={(item) => <BankLogo bankCode={item.id} size={36} />}
-      placeholder={placeholder ?? 'Banka seçin'}
-      title={title ?? 'Banka Seç'}
-      emptyLabel="Eşleşen banka bulunamadı."
+      placeholder={placeholder ?? t('ui.pickers.bank.placeholder')}
+      title={title ?? t('ui.pickers.bank.title')}
+      emptyLabel={t('ui.pickers.bank.empty')}
     />
   );
 }

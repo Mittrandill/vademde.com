@@ -20,8 +20,10 @@ import { convertToReferenceMinor, isRateStale, listValueUnitRates } from '@/feat
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { formatMinorAmount } from '@/utils/money';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+const dayMonth = localeDateFormatter({ day: 'numeric', month: 'short' });
 
 // Döviz ve altın görünümü: yeni veri yok, yalnızca mevcut kaynakların birleşimi.
 // Kod gerçeği: TRY dışı birim yalnızca nakit/kasa hesaplarında ve vadeli kayıtlarda bulunur.
@@ -106,10 +108,10 @@ export default function ValueUnitsScreen() {
         }}
       >
         <ScreenHeader
-          title="Döviz ve altın"
+          title={t('accounts.valueUnits.title')}
           right={{
             icon: 'add',
-            accessibilityLabel: 'Yeni kasa',
+            accessibilityLabel: t('accounts.valueUnits.newVault'),
             variant: 'accent',
             onPress: () => router.push('/accounts/new'),
           }}
@@ -131,11 +133,11 @@ export default function ValueUnitsScreen() {
               }}
             >
               <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
-                Kasalardaki TL karşılığı
+                {t('accounts.valueUnits.vaultsTotal')}
               </Text>
               <HeroAmount amountMinor={totalReferenceMinor} baseSize={48} />
               <Text variant="caption" color="textSecondary">
-                Kalıcı saklanmaz; her açılışta güncel kurdan hesaplanır.
+                {t('accounts.valueUnits.vaultsHint')}
               </Text>
             </View>
 
@@ -147,21 +149,21 @@ export default function ValueUnitsScreen() {
                   color={staleCount > 0 ? theme.colors.attentionMarker : theme.colors.receivable}
                 />
                 <Text variant="caption" style={{ flex: 1 }}>
-                  Kurlar {formatCacheAge(newestCache)} güncellendi
-                  {staleCount > 0 ? ` · ${staleCount} kur eski` : ''}
+                  {t('accounts.valueUnits.ratesUpdated', { age: formatCacheAge(newestCache) })}
+                  {staleCount > 0 ? t('accounts.valueUnits.staleRates', { count: staleCount }) : ''}
                 </Text>
               </View>
             ) : null}
 
             <Stack gap="xs">
               <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                Kasalar · {vaults.length} nakit hesap
+                {t('accounts.valueUnits.vaults', { count: vaults.length })}
               </Text>
               {vaults.length === 0 ? (
                 <EmptyState
                   icon="wallet-outline"
-                  title="Döviz veya altın kasası yok"
-                  message="Nakit hesap eklerken Amerikan Doları, Euro veya altın gibi bir birim seçebilirsin."
+                  title={t('accounts.valueUnits.noVaultTitle')}
+                  message={t('accounts.valueUnits.noVaultBody')}
                 />
               ) : (
                 <Group inset={72}>
@@ -171,7 +173,7 @@ export default function ValueUnitsScreen() {
                     onPress={() => router.push(`/accounts/${v.account.id}`)}
                     unitCode={v.account.currency_code}
                     title={v.account.name}
-                    subtitle={`Nakit · ${getValueUnit(v.account.currency_code).name}`}
+                    subtitle={t('accounts.valueUnits.cashUnit', { unit: getValueUnit(v.account.currency_code).name })}
                     amount={formatMinorAmount(v.amountMinor, v.account.currency_code)}
                     reference={v.reference?.amountMinor ?? null}
                     stale={v.reference?.isStale ? formatCacheAge(v.reference.cachedAt) : null}
@@ -184,7 +186,7 @@ export default function ValueUnitsScreen() {
             {foreignObligations.length > 0 ? (
               <Stack gap="xs">
                 <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                  Altın ve döviz borç / alacak · {foreignObligations.length}
+                  {t('accounts.valueUnits.foreignObligations', { count: foreignObligations.length })}
                 </Text>
                 <Group inset={72}>
                 {foreignObligations.map(({ obligation: o, reference }) => (
@@ -193,7 +195,7 @@ export default function ValueUnitsScreen() {
                     onPress={() => router.push(`/obligations/${o.id}`)}
                     unitCode={o.currency_code}
                     title={o.counterparty?.name ?? o.title}
-                    subtitle={o.direction === 'payable' ? 'Borç' : 'Alacak'}
+                    subtitle={o.direction === 'payable' ? t('accounts.valueUnits.payable') : t('accounts.valueUnits.receivable')}
                     amount={formatMinorAmount(o.remaining_amount_minor, o.currency_code)}
                     reference={reference?.amountMinor ?? null}
                     stale={reference?.isStale ? formatCacheAge(reference.cachedAt) : null}
@@ -206,7 +208,7 @@ export default function ValueUnitsScreen() {
 
             <Stack gap="xs">
               <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                Güncel kurlar TL karşılığı
+                {t('accounts.valueUnits.currentRates')}
               </Text>
               <Group inset={64}>
                 {sortedRates.map(({ unit, rate }) => (
@@ -221,7 +223,7 @@ export default function ValueUnitsScreen() {
                         </Text>
                       ) : (
                         <Text variant="caption" color="textSecondary">
-                          kur yok
+                          {t('accounts.valueUnits.noRate')}
                         </Text>
                       )
                     }
@@ -229,7 +231,7 @@ export default function ValueUnitsScreen() {
                 ))}
               </Group>
               <Text variant="caption" color="textSecondary" style={{ paddingTop: theme.spacing.xxs, paddingLeft: theme.spacing.xxs }}>
-                Kuru olmayan birimlerde TL karşılığı gösterilmez; kayıt kendi biriminde tutulur.
+                {t('accounts.valueUnits.noRateHint')}
               </Text>
             </Stack>
           </>
@@ -271,7 +273,7 @@ function Row({ onPress, unitCode, title, subtitle, amount, reference, stale, tra
             </Text>
           ) : (
             <Text variant="caption" color="textSecondary">
-              kur yok
+              {t('accounts.valueUnits.noRate')}
             </Text>
           )}
           {stale ? (

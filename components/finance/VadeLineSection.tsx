@@ -6,13 +6,14 @@ import { Pressable, Text } from '@/components/primitives';
 import { sumToReferenceMinor } from '@/features/valueUnits/api';
 import type { ObligationDueItem } from '@/features/obligations/api';
 import { VadeLine, type VadeLineDay } from './VadeLine';
+import { t } from '@/i18n';
 
 type Rates = Parameters<typeof sumToReferenceMinor>[1];
 
 const RANGES = [
-  { key: 7, label: '7G' },
-  { key: 30, label: '30G' },
-  { key: 90, label: '90G' },
+  { key: 7, get label() { return t('finance.vadeLine.rangeShort', { count: 7 }); } },
+  { key: 30, get label() { return t('finance.vadeLine.rangeShort', { count: 30 }); } },
+  { key: 90, get label() { return t('finance.vadeLine.rangeShort', { count: 90 }); } },
 ] as const;
 
 // Çok sütunda barlar ince kalır; 90 günde 3'er günlük kovalar kullanılır.
@@ -71,7 +72,7 @@ export function VadeLineSection({ obligations, rates }: VadeLineSectionProps) {
   return (
     <View style={{ gap: theme.spacing.md, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.md }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="sectionTitle">Vade hattı</Text>
+        <Text variant="sectionTitle">{t('finance.vadeLine.title')}</Text>
         <View style={{ flexDirection: 'row', gap: 2 }}>
           {RANGES.map((r) => {
             const active = r.key === range;
@@ -80,7 +81,7 @@ export function VadeLineSection({ obligations, rates }: VadeLineSectionProps) {
                 key={r.key}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={`${r.key} gün`}
+                accessibilityLabel={t('finance.vadeLine.rangeA11y', { count: r.key })}
                 onPress={() => setRange(r.key)}
                 style={{
                   minWidth: theme.touchTarget.minimum,

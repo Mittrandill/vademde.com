@@ -10,6 +10,7 @@ import {
   type ObligationDueItem,
 } from '@/features/obligations/api';
 import { listValueUnitRates, sumToReferenceMinor, transactionToReferenceMinor } from '@/features/valueUnits/api';
+import { localeDateFormatter } from '@/i18n/format';
 
 // Kart ekstresinin tek satırlık toplam borç hareketi ("Kredi Kartı Ekstresi — Banka") bir
 // harcama değildir: harcamalar kendi kategorileri ve tarihleriyle ayrı satırlar olarak zaten
@@ -82,7 +83,7 @@ export interface MonthlyTotal {
   expenseMinor: number;
 }
 
-const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat('tr-TR', { month: 'short' });
+const MONTH_LABEL_FORMATTER = localeDateFormatter({ month: 'short' });
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Aylık karşılaştırma: son N ayın gelir/gider toplamı.
 export async function getMonthlyComparison(workspaceId: string, monthsBack = 6): Promise<MonthlyTotal[]> {

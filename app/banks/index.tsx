@@ -21,17 +21,18 @@ import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
 import { formatMinorAmount } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
 
 const PAGE_SIZE = 10;
 
 type BankFilterKey = 'all' | 'account' | 'card' | 'loan' | 'overdue';
 
-const BANK_FILTERS: { key: BankFilterKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'account', label: 'Hesabı Olan' },
-  { key: 'card', label: 'Kartı Olan' },
-  { key: 'loan', label: 'Kredisi Olan' },
-  { key: 'overdue', label: 'Gecikmiş' },
+const BANK_FILTERS: { key: BankFilterKey; readonly label: string }[] = [
+  { key: 'all', get label() { return t('common.all'); } },
+  { key: 'account', get label() { return t('banks.filterAccount'); } },
+  { key: 'card', get label() { return t('banks.filterCard'); } },
+  { key: 'loan', get label() { return t('banks.filterLoan'); } },
+  { key: 'overdue', get label() { return t('banks.filterOverdue'); } },
 ];
 
 // Bankalar kullanıcı tarafından doğrudan oluşturulmaz; hesap, kredi kartı ve kredi
@@ -100,8 +101,12 @@ export default function BanksScreen() {
   const pagedBanks = banks.slice(effectivePage * PAGE_SIZE, effectivePage * PAGE_SIZE + PAGE_SIZE);
   const isFiltered = search.trim().length > 0 || filter !== 'all';
   const footerLabel = banks.length
-    ? `${effectivePage * PAGE_SIZE + 1}–${Math.min((effectivePage + 1) * PAGE_SIZE, banks.length)} / ${banks.length} banka`
-    : '0 banka gösteriliyor';
+    ? t('banks.footer', {
+        from: effectivePage * PAGE_SIZE + 1,
+        to: Math.min((effectivePage + 1) * PAGE_SIZE, banks.length),
+        count: banks.length,
+      })
+    : t('banks.noneShown');
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -115,44 +120,44 @@ export default function BanksScreen() {
       >
         <Stack gap="lg">
           <ScreenHeader
-            title="Bankalar"
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
+            title={t('banks.title')}
+            left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: () => router.back() }}
           />
 
           <FinanceListHero
-            label="TOPLAM KREDİ BORCU"
-            description="Bankalarınıza bağlı açık kredilerin kalan toplamı"
+            label={t('banks.totalLoanUpper')}
+            description={t('banks.totalLoanHint')}
             amountText={formatMinorAmount(totals.loanDebtMinor)}
             // Kırmızı yalnızca gecikme içindir (HANDOFF §1); borç tutarı nötr kalır.
             amountColor={totals.overdueLoanCount > 0 ? 'danger' : 'textPrimary'}
             metrics={[
-              { label: 'TOPLAM BANKA', value: allBanks.length, caption: 'Bağlı kurumlar' },
-              { label: 'HESAP', value: totals.accountCount, caption: 'Banka hesapları' },
-              { label: 'KREDİ KARTI', value: totals.cardCount, caption: 'Bağlı kartlar' },
+              { label: t('banks.totalBanksUpper'), value: allBanks.length, caption: t('banks.linkedInstitutions') },
+              { label: t('banks.accountsUpper'), value: totals.accountCount, caption: t('banks.bankAccounts') },
+              { label: t('banks.cardsUpper'), value: totals.cardCount, caption: t('banks.linkedCards') },
               {
-                label: 'AÇIK KREDİ',
+                label: t('banks.openLoansUpper'),
                 value: totals.loanCount,
-                caption: totals.overdueLoanCount > 0 ? `${totals.overdueLoanCount} gecikmiş` : 'Aktif krediler',
+                caption: totals.overdueLoanCount > 0 ? t('banks.overdueCount', { count: totals.overdueLoanCount }) : t('banks.activeLoans'),
                 valueColor: totals.overdueLoanCount > 0 ? 'danger' : undefined,
               },
             ]}
           />
 
           <FinanceFilterCard
-            title="BANKA DURUMU"
-            description="Listede görmek istediğiniz banka bağlantısını seçin."
+            title={t('banks.statusUpper')}
+            description={t('banks.statusHint')}
             options={BANK_FILTERS}
             value={filter}
             onChange={setFilter}
           />
 
           <FinanceListSurface
-            searchPlaceholder="Banka adında ara"
+            searchPlaceholder={t('banks.searchPlaceholder')}
             searchValue={search}
             onSearchChange={setSearch}
             sortAction={{
-              label: 'Banka',
-              accessibilityLabel: 'Banka adına göre sırala',
+              label: t('banks.sortBank'),
+              accessibilityLabel: t('banks.sortByName'),
               icon: sortAscending ? 'arrow-up' : 'arrow-down',
               onPress: () => setSortAscending((value) => !value),
             }}
@@ -163,7 +168,7 @@ export default function BanksScreen() {
           >
             {banksQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {friendlyErrorMessage(banksQuery.error, 'Bankalar yüklenemedi')}
+                {friendlyErrorMessage(banksQuery.error, t('banks.loadFailed'))}
               </Text>
             ) : !banksQuery.isSuccess ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
@@ -174,12 +179,8 @@ export default function BanksScreen() {
             ) : pagedBanks.length === 0 ? (
               <FinanceListEmptyState
                 icon={isFiltered ? 'search-outline' : 'business-outline'}
-                title={allBanks.length === 0 ? 'Henüz banka yok' : 'Sonuç bulunamadı'}
-                message={
-                  allBanks.length === 0
-                    ? 'Bir hesap, kredi kartı veya krediye banka bağladığınızda burada görünür.'
-                    : 'Arama terimini veya filtreyi değiştirin.'
-                }
+                title={allBanks.length === 0 ? t('banks.emptyTitle') : t('banks.noResults')}
+                message={allBanks.length === 0 ? t('banks.emptyBody') : t('banks.noResultsBody')}
               />
             ) : (
               pagedBanks.map((bank, index) => (
@@ -200,17 +201,19 @@ function BankRow({ bank }: { bank: BankSummary }) {
   const theme = useTheme();
   const bankName = BANK_NAME[bank.bankCode] ?? bank.bankCode;
   const detailParts = [
-    bank.accountCount > 0 ? `${bank.accountCount} hesap` : null,
-    bank.cardCount > 0 ? `${bank.cardCount} kart` : null,
+    bank.accountCount > 0 ? t('banks.accountCount', { count: bank.accountCount }) : null,
+    bank.cardCount > 0 ? t('banks.cardCount', { count: bank.cardCount }) : null,
     bank.loanCount > 0
-      ? `${bank.loanCount} kredi${bank.overdueLoanCount > 0 ? ` · ${bank.overdueLoanCount} gecikmiş` : ''}`
+      ? `${t('banks.loanCount', { count: bank.loanCount })}${
+          bank.overdueLoanCount > 0 ? ` · ${t('banks.overdueCount', { count: bank.overdueLoanCount })}` : ''
+        }`
       : null,
   ].filter(Boolean);
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${bankName} detayını aç`}
+      accessibilityLabel={t('banks.openDetailA11y', { name: bankName })}
       onPress={() => router.push(`/banks/${bank.bankCode}`)}
       style={{
         minHeight: 60,
@@ -227,7 +230,7 @@ function BankRow({ bank }: { bank: BankSummary }) {
           {bankName}
         </Text>
         <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {detailParts.length > 0 ? detailParts.join(' · ') : 'Kayıt yok'}
+          {detailParts.length > 0 ? detailParts.join(' · ') : t('banks.noRecords')}
         </Text>
       </Stack>
       <Amount

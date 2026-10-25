@@ -5,7 +5,8 @@ import { router } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { Button, Skeleton, Stack, Text } from '@/components/primitives';
-import { AI_CONSENT_TEXT, AI_DISCLAIMER, useAiAccess } from '@/features/insights/useAiAccess';
+import { aiConsentText, aiDisclaimer, useAiAccess } from '@/features/insights/useAiAccess';
+import { t } from '@/i18n';
 
 // Akıllı öneriler / soru-cevap ekranlarının ortak kapısı: önce Plus planı, sonra KVKK onayı.
 export function AiGate({ children }: { children: ReactNode }) {
@@ -18,12 +19,11 @@ export function AiGate({ children }: { children: ReactNode }) {
     return (
       <Stack gap="md">
         <Ionicons name="sparkles-outline" size={32} color={theme.colors.textPrimary} />
-        <Text variant="sectionTitle">Plus ile açılır</Text>
+        <Text variant="sectionTitle">{t('finance.aiGate.plusTitle')}</Text>
         <Text variant="body" color="textSecondary">
-          Akıllı öneriler ve soru-cevap Vademde Plus planına dahildir. Ücretsiz planda tüm kayıt ve OCR özellikleri
-          eskisi gibi çalışır.
+          {t('finance.aiGate.plusBody')}
         </Text>
-        <Button label="Planları gör" onPress={() => router.push('/paywall')} />
+        <Button label={t('finance.aiGate.seePlans')} onPress={() => router.push('/paywall')} />
       </Stack>
     );
   }
@@ -32,15 +32,15 @@ export function AiGate({ children }: { children: ReactNode }) {
     return (
       <Stack gap="md">
         <Ionicons name="shield-checkmark-outline" size={32} color={theme.colors.textPrimary} />
-        <Text variant="sectionTitle">Akıllı analiz izni</Text>
+        <Text variant="sectionTitle">{t('finance.aiGate.consentTitle')}</Text>
         <Text variant="body" color="textSecondary">
-          {AI_CONSENT_TEXT}
+          {aiConsentText()}
         </Text>
         <Text variant="caption" color="textSecondary">
-          {AI_DISCLAIMER}
+          {aiDisclaimer()}
         </Text>
-        <Button label="İzin ver" onPress={access.grantConsent} />
-        <Button label="Vazgeç" variant="secondary" onPress={() => router.back()} />
+        <Button label={t('finance.aiGate.allow')} onPress={access.grantConsent} />
+        <Button label={t('common.cancel')} variant="secondary" onPress={() => router.back()} />
       </Stack>
     );
   }

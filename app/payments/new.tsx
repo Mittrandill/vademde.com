@@ -61,6 +61,7 @@ import { listValueUnitRates } from '@/features/valueUnits/api';
 import { friendlyErrorMessage, isNetworkError, showErrorAlert, showSaveSuccess } from '@/utils/alerts';
 import { invalidatePaymentRelatedQueries, queryKeys } from '@/services/queryKeys';
 import { syncObligationReminder } from '@/services/notifications';
+import { amountPlaceholder, getInputDecimalSeparator, localeDateFormatter } from '@/i18n/format';
 
 type SettlementDirection = 'payable' | 'receivable';
 
@@ -79,7 +80,7 @@ const METHODS: { key: SettlementMethod; label: string }[] = [
 const handledKey = (requestId: string | undefined, state: string) => `${requestId ?? ''}:${state}`;
 
 // Kısa tarih etiketi — kayıt satırlarında vade gösterimi için.
-const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+const shortDateFormatter = localeDateFormatter({ day: '2-digit', month: 'short', year: 'numeric' });
 
 function todayIso(): string {
   return localIsoDate();
@@ -87,7 +88,7 @@ function todayIso(): string {
 
 function minorToInput(amountMinor: number, unitCode: string): string {
   const precision = getValueUnit(unitCode).precision;
-  return formatAmountInput((amountMinor / 10 ** precision).toFixed(precision).replace('.', ','), precision);
+  return formatAmountInput((amountMinor / 10 ** precision).toFixed(precision).replace('.', getInputDecimalSeparator()), precision);
 }
 
 // Ödeme Yap / Tahsilat Al — bkz. features/payments/api.ts settleObligations.
@@ -192,7 +193,7 @@ function SettlementForm({
   const ratesQuery = useQuery({ queryKey: queryKeys.valueUnitRates(), queryFn: listValueUnitRates, enabled: currencyCode !== 'TRY' });
   const currentRateMinor = ratesQuery.data?.find((r) => r.unit_code === currencyCode)?.try_equivalent_minor ?? null;
   const [fxRateInput, setFxRateInput] = useState<string | null>(null);
-  const fxRateText = fxRateInput ?? (currentRateMinor !== null ? (currentRateMinor / 100).toFixed(2).replace('.', ',') : '');
+  const fxRateText = fxRateInput ?? (currentRateMinor !== null ? (currentRateMinor / 100).toFixed(2).replace('.', getInputDecimalSeparator()) : '');
 
   const [counterpartyId, setCounterpartyId] = useState<string | null>(initialCounterpartyId);
   const [method, setMethod] = useState<SettlementMethod>(initialMethod ?? 'havale');
@@ -1039,7 +1040,7 @@ function SettlementForm({
                 {currencyCode !== 'TRY' ? (
                   <TextField
                     label={`Kur (1 ${getValueUnit(currencyCode).quantityLabel} = ₺)`}
-                    placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : '0,00'}
+                    placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : amountPlaceholder()}
                     keyboardType="decimal-pad"
                     value={fxRateText}
                     onChangeText={setFxRateInput}

@@ -2,6 +2,8 @@ import { supabase } from '@/services/supabase';
 import type { ObligationWithRelations } from '@/features/obligations/api';
 import { fetchAll } from '@/services/fetchAll';
 import { sumToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
 // Çek/senet portföyü yaşam döngüsü (migration 20261005130000_instrument_status.sql).
 export type InstrumentStatus =
@@ -12,14 +14,10 @@ export type InstrumentStatus =
   | 'karsiliksiz'
   | 'odendi';
 
-export const INSTRUMENT_STATUS_LABEL: Record<InstrumentStatus, string> = {
-  portfoy: 'Portföyde',
-  ciro_edildi: 'Ciro edildi',
-  tahsile_verildi: 'Tahsilde',
-  tahsil_edildi: 'Tahsil edildi',
-  karsiliksiz: 'Karşılıksız',
-  odendi: 'Ödendi',
-};
+export const INSTRUMENT_STATUS_LABEL: Record<InstrumentStatus, string> = localizedRecord(
+  ['portfoy', 'ciro_edildi', 'tahsile_verildi', 'tahsil_edildi', 'karsiliksiz', 'odendi'] as const,
+  (status) => t(`domain.instrumentStatuses.${status}`)
+);
 
 export function instrumentStatusOf(o: { instrument_status: string | null }): InstrumentStatus | null {
   return o.instrument_status && o.instrument_status in INSTRUMENT_STATUS_LABEL

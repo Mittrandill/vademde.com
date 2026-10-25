@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { MAX_FONT_SCALE } from '@/theme/typography';
 import { BottomSheet, Button, Group, GroupedRow, Pill, Pressable, Text } from '@/components/primitives';
+import { t } from '@/i18n';
 
 export type TypeFilter = 'all' | 'income' | 'expense' | 'payable' | 'receivable' | 'transfer';
 export type RangeFilter = 'month' | 'last3';
@@ -41,13 +42,13 @@ export function countActiveFilters(f: HareketFilters): number {
   );
 }
 
-const TYPES: { key: TypeFilter; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'expense', label: 'Gider' },
-  { key: 'income', label: 'Gelir' },
-  { key: 'payable', label: 'Borç' },
-  { key: 'receivable', label: 'Alacak' },
-  { key: 'transfer', label: 'Transfer' },
+const TYPES: { key: TypeFilter; readonly label: string }[] = [
+  { key: 'all', get label() { return t('transactions.filterAll'); } },
+  { key: 'expense', get label() { return t('transactions.filterExpense'); } },
+  { key: 'income', get label() { return t('transactions.filterIncome'); } },
+  { key: 'payable', get label() { return t('transactions.filterPayable'); } },
+  { key: 'receivable', get label() { return t('transactions.filterReceivable'); } },
+  { key: 'transfer', get label() { return t('common.transfer'); } },
 ];
 
 type Section = 'accounts' | 'categories' | 'counterparties';
@@ -88,38 +89,38 @@ function FilterSheetBody({ visible, onClose, value, onApply, options, countFor }
   };
 
   const rows: { key: Section; label: string; empty: string }[] = [
-    { key: 'accounts', label: 'Hesap', empty: 'Tümü' },
-    { key: 'categories', label: 'Kategori', empty: 'Tümü' },
-    { key: 'counterparties', label: 'Kişi / cari', empty: 'Tümü' },
+    { key: 'accounts', label: t('transactions.filterSheet.account'), empty: t('common.all') },
+    { key: 'categories', label: t('transactions.filterSheet.category'), empty: t('common.all') },
+    { key: 'counterparties', label: t('transactions.filterSheet.counterparty'), empty: t('common.all') },
   ];
 
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 36, marginBottom: theme.spacing.xs }}>
         <Pressable accessibilityRole="button" onPress={() => setDraft({ ...EMPTY_FILTERS })} hitSlop={8}>
-          <Text style={{ fontSize: 17 }}>Sıfırla</Text>
+          <Text style={{ fontSize: 17 }}>{t('transactions.filterSheet.reset')}</Text>
         </Pressable>
-        <Text style={{ fontSize: 17, fontWeight: '600' }}>Filtrele</Text>
+        <Text style={{ fontSize: 17, fontWeight: '600' }}>{t('transactions.filterSheet.title')}</Text>
         <Pressable accessibilityRole="button" onPress={apply} hitSlop={8}>
-          <Text style={{ fontSize: 17, fontWeight: '600' }}>Bitti</Text>
+          <Text style={{ fontSize: 17, fontWeight: '600' }}>{t('transactions.filterSheet.done')}</Text>
         </Pressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
-        <SectionLabel>Tarih</SectionLabel>
+        <SectionLabel>{t('transactions.filterSheet.date')}</SectionLabel>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pill label="Bu ay" selected={draft.range === 'month'} onPress={() => setDraft((d) => ({ ...d, range: 'month' }))} />
-          <Pill label="Son 3 ay" selected={draft.range === 'last3'} onPress={() => setDraft((d) => ({ ...d, range: 'last3' }))} />
+          <Pill label={t('transactions.filterSheet.thisMonth')} selected={draft.range === 'month'} onPress={() => setDraft((d) => ({ ...d, range: 'month' }))} />
+          <Pill label={t('transactions.last3Months')} selected={draft.range === 'last3'} onPress={() => setDraft((d) => ({ ...d, range: 'last3' }))} />
         </View>
 
-        <SectionLabel>Tür</SectionLabel>
+        <SectionLabel>{t('transactions.filterSheet.type')}</SectionLabel>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {TYPES.map((t) => (
-            <Pill key={t.key} label={t.label} selected={draft.type === t.key} onPress={() => setDraft((d) => ({ ...d, type: t.key }))} />
+          {TYPES.map((type) => (
+            <Pill key={type.key} label={type.label} selected={draft.type === type.key} onPress={() => setDraft((d) => ({ ...d, type: type.key }))} />
           ))}
         </View>
 
-        <SectionLabel>Daralt</SectionLabel>
+        <SectionLabel>{t('transactions.filterSheet.narrow')}</SectionLabel>
         <Group inset={16} style={{ backgroundColor: theme.colors.backgroundPrimary }}>
           {rows.map((row) => {
             const selected = draft[row.key];
@@ -128,13 +129,13 @@ function FilterSheetBody({ visible, onClose, value, onApply, options, countFor }
               <View key={row.key}>
                 <GroupedRow
                   title={row.label}
-                  value={selected.length === 0 ? row.empty : selected.length === 1 ? selected[0] : `${selected.length} seçili`}
+                  value={selected.length === 0 ? row.empty : selected.length === 1 ? selected[0] : t('transactions.filterSheet.selectedCount', { count: selected.length })}
                   onPress={() => setOpen(open === row.key ? null : row.key)}
                   chevron={false}
                   trailing={
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '60%' }}>
                       <Text color="textSecondary" numberOfLines={1} style={{ flexShrink: 1, fontSize: 15 }}>
-                        {selected.length === 0 ? row.empty : selected.length === 1 ? selected[0] : `${selected.length} seçili`}
+                        {selected.length === 0 ? row.empty : selected.length === 1 ? selected[0] : t('transactions.filterSheet.selectedCount', { count: selected.length })}
                       </Text>
                       <Ionicons name={open === row.key ? 'chevron-up' : 'chevron-down'} size={14} color={theme.colors.mutedControl} />
                     </View>
@@ -144,7 +145,7 @@ function FilterSheetBody({ visible, onClose, value, onApply, options, countFor }
                   <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
                     {list.length === 0 ? (
                       <Text color="textSecondary" style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-                        Seçilecek kayıt yok.
+                        {t('transactions.filterSheet.nothingToSelect')}
                       </Text>
                     ) : (
                       list.map((name) => (
@@ -169,16 +170,16 @@ function FilterSheetBody({ visible, onClose, value, onApply, options, countFor }
           })}
         </Group>
 
-        <SectionLabel>Tutar</SectionLabel>
+        <SectionLabel>{t('transactions.filterSheet.amount')}</SectionLabel>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <AmountBox placeholder="En az ₺" value={draft.minAmount} onChangeText={(v) => setDraft((d) => ({ ...d, minAmount: v }))} />
+          <AmountBox placeholder={t('transactions.filterSheet.min')} value={draft.minAmount} onChangeText={(v) => setDraft((d) => ({ ...d, minAmount: v }))} />
           <Text color="textSecondary">–</Text>
-          <AmountBox placeholder="En çok ₺" value={draft.maxAmount} onChangeText={(v) => setDraft((d) => ({ ...d, maxAmount: v }))} />
+          <AmountBox placeholder={t('transactions.filterSheet.max')} value={draft.maxAmount} onChangeText={(v) => setDraft((d) => ({ ...d, maxAmount: v }))} />
         </View>
       </ScrollView>
 
       <View style={{ paddingTop: theme.spacing.md }}>
-        <Button label={count === null ? 'Hareketleri göster' : `${count} hareketi göster`} onPress={apply} />
+        <Button label={count === null ? t('transactions.filterSheet.show') : t('transactions.filterSheet.showCount', { count })} onPress={apply} />
       </View>
     </BottomSheet>
   );

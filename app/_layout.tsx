@@ -1,3 +1,4 @@
+import '@/i18n';
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +22,7 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { Splash } from '@/components/brand/Splash';
 import { clearWidgetSnapshot } from '@/services/widgetSync';
 import { AppLockGate } from '@/components/auth/AppLockGate';
+import { useLanguage } from '@/i18n';
 
 function AppStatusBar() {
   const theme = useTheme();
@@ -85,9 +87,13 @@ function AppNavigatorStack() {
   const { session } = useSession();
   const theme = useTheme();
   const hasSeenWelcome = useOnboardingStore((s) => s.hasSeenWelcome);
+  const language = useLanguage();
 
+  // Dil değişince gezinme ağacı baştan kurulur: hook kullanmadan biçimlendirilen metinler
+  // (getLocaleTag, i18n.t) ve açık ekranlar da yeni dilde çizilsin (docs/20-ingilizce-dil-destegi.md).
   return (
     <Stack
+      key={language}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.backgroundPrimary },

@@ -5,13 +5,14 @@ import { getAppIcon, setAppIcon, type IconName } from '@howincodes/expo-dynamic-
 
 import { useTheme } from '@/theme';
 import { Pressable, Row, Text } from '@/components/primitives';
+import { t } from '@/i18n';
 
 type IconOptionKey = 'DEFAULT' | IconName;
 
-const ICON_OPTIONS: { key: IconOptionKey; label: string; source: number }[] = [
-  { key: 'DEFAULT', label: 'Varsayılan', source: require('../../assets/app-icons/varsayilan.png') },
-  { key: 'koyu', label: 'Koyu', source: require('../../assets/app-icons/koyu.png') },
-  { key: 'monokrom', label: 'Monokrom', source: require('../../assets/app-icons/monokrom.png') },
+const ICON_OPTIONS: { key: IconOptionKey; readonly label: string; source: number }[] = [
+  { key: 'DEFAULT', get label() { return t('ui.appIcon.default'); }, source: require('../../assets/app-icons/varsayilan.png') },
+  { key: 'koyu', get label() { return t('ui.appIcon.dark'); }, source: require('../../assets/app-icons/koyu.png') },
+  { key: 'monokrom', get label() { return t('ui.appIcon.mono'); }, source: require('../../assets/app-icons/monokrom.png') },
 ];
 
 // Ayarlar'daki "UYGULAMA İKONU" bölümü: kullanıcı, Vademde_Tam_Logo_Paketi_v2.0'daki hazır
@@ -47,7 +48,7 @@ export function AppIconPicker() {
             key={option.key}
             onPress={() => select(option.key)}
             accessibilityRole="button"
-            accessibilityLabel={`${option.label} uygulama ikonu`}
+            accessibilityLabel={t('ui.appIcon.a11y', { label: option.label })}
             disabled={pending !== null}
             style={{ alignItems: 'center', width: 72, opacity: pending && !isActive ? 0.5 : 1 }}
           >

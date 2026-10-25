@@ -10,6 +10,7 @@ import type {
   MonthlyTotal,
 } from '@/features/reports/api';
 import type { ObligationWithRelations } from '@/features/obligations/api';
+import { localeDateFormatter } from '@/i18n/format';
 
 export interface ReportPdfInput {
   periodLabel: string;
@@ -159,7 +160,7 @@ function esc(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const dateFmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+const dateFmt = localeDateFormatter({ day: 'numeric', month: 'short', year: 'numeric' });
 
 function daysOverdue(due: string | null): number | null {
   if (!due) return null;
@@ -235,7 +236,7 @@ function categoryTable(items: CategoryBreakdownItem[], barColor: string): string
 
 export function buildReportHtml(input: ReportPdfInput): string {
   const sec = input.sections ?? ALL_SECTIONS;
-  const generatedAt = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date());
+  const generatedAt = localeDateFormatter({ dateStyle: 'long', timeStyle: 'short' }).format(new Date());
   const net = input.incomeMinor - input.expenseMinor;
   const savings = input.incomeMinor > 0 ? Math.round((net / input.incomeMinor) * 100) : null;
   // Gider geliri aşınca "−%106 tasarruf" anlamsız; bunun yerine aşım oranı yazılır.

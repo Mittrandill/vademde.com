@@ -24,17 +24,19 @@ import { useCardDueItems } from '@/features/accounts/cardDues';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { addDays, addMonths, getMonthGridWeeks, getWeekDays, isSameMonth, toDateKey } from '@/utils/calendar';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
 type ViewMode = 'month' | 'week' | 'liste';
 
-const VIEW_MODES: { key: ViewMode; label: string }[] = [
-  { key: 'month', label: 'Ay' },
-  { key: 'week', label: 'Hafta' },
-  { key: 'liste', label: 'Liste' },
+const VIEW_MODES: { key: ViewMode; readonly label: string }[] = [
+  { key: 'month', get label() { return t('calendar.month'); } },
+  { key: 'week', get label() { return t('calendar.week'); } },
+  { key: 'liste', get label() { return t('calendar.list'); } },
 ];
 
-const dayTitleFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
-const monthLabelFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+const dayTitleFormatter = localeDateFormatter({ day: 'numeric', month: 'long', weekday: 'long' });
+const monthLabelFormatter = localeDateFormatter({ month: 'long', year: 'numeric' });
 
 export default function TakvimScreen() {
   const theme = useTheme();
@@ -175,7 +177,7 @@ export default function TakvimScreen() {
       >
         <Row align="center">
           <Text variant="pageTitle" style={{ flex: 1 }}>
-            Takvim
+            {t('calendar.title')}
           </Text>
         </Row>
 
@@ -185,7 +187,7 @@ export default function TakvimScreen() {
           <Text variant="body" color="danger">
             {(obligationsQuery.error ?? installmentsQuery.error) instanceof Error
               ? ((obligationsQuery.error ?? installmentsQuery.error) as Error).message
-              : 'Takvim yüklenemedi'}
+              : t('calendar.loadFailed')}
           </Text>
         ) : null}
 
@@ -241,7 +243,7 @@ export default function TakvimScreen() {
                   onPress={handlePrevMonth}
                   hitSlop={12}
                   accessibilityRole="button"
-                  accessibilityLabel="Önceki ay"
+                  accessibilityLabel={t('ui.previousMonth')}
                   style={{
                     width: 34,
                     height: 34,
@@ -260,7 +262,7 @@ export default function TakvimScreen() {
                   onPress={handleNextMonth}
                   hitSlop={12}
                   accessibilityRole="button"
-                  accessibilityLabel="Sonraki ay"
+                  accessibilityLabel={t('ui.nextMonth')}
                   style={{
                     width: 34,
                     height: 34,
@@ -311,7 +313,7 @@ function DaySelectionDetail({
       {selectedDayItems.length === 0 ? (
         <Card>
           <Text variant="body" color="textSecondary">
-            Bu tarihte vadesi gelen kayıt yok.
+            {t('calendar.emptyDay')}
           </Text>
         </Card>
       ) : (
@@ -352,7 +354,7 @@ function DaySummaryCard({ payableMinor, receivableMinor, netMinor }: DaySummaryC
     <Card>
       <Row align="stretch">
         <DayMetricColumn
-          label="ÖDENECEK"
+          label={t('calendar.payableUpper')}
           amountMinor={payableMinor}
           direction="payable"
           progress={share(payableMinor)}
@@ -361,7 +363,7 @@ function DaySummaryCard({ payableMinor, receivableMinor, netMinor }: DaySummaryC
         />
         <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.xs }} />
         <DayMetricColumn
-          label="TAHSİL EDİLECEK"
+          label={t('calendar.receivableUpper')}
           amountMinor={receivableMinor}
           direction="receivable"
           progress={share(receivableMinor)}
@@ -370,7 +372,7 @@ function DaySummaryCard({ payableMinor, receivableMinor, netMinor }: DaySummaryC
         />
         <Divider orientation="vertical" style={{ marginHorizontal: theme.spacing.xs }} />
         <DayMetricColumn
-          label="NET"
+          label={t('calendar.netUpper')}
           amountMinor={Math.abs(netMinor)}
           direction={netMinor >= 0 ? 'receivable' : 'payable'}
           progress={share(netMinor)}

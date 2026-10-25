@@ -18,25 +18,32 @@ import { BANK_NAME } from '@/features/banks/banks';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
 type Side = 'receivable' | 'payable';
 type StatusTab = 'all' | 'portfoy' | 'ciro_edildi' | 'tahsile_verildi' | 'karsiliksiz';
 type GivenTab = 'all' | 'open' | 'overdue' | 'paid' | 'bounced';
 
-const STATUS_TABS: { key: StatusTab; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'portfoy', label: 'Portföyde' },
-  { key: 'ciro_edildi', label: 'Ciro edildi' },
-  { key: 'tahsile_verildi', label: 'Tahsilde' },
-  { key: 'karsiliksiz', label: 'Karşılıksız' },
+const STATUS_TABS: { key: StatusTab; readonly label: string }[] = [
+  { key: 'all', get label() { return t('common.all'); } },
+  ...(['portfoy', 'ciro_edildi', 'tahsile_verildi', 'karsiliksiz'] as const).map((key) => ({
+    key,
+    get label() {
+      return INSTRUMENT_STATUS_LABEL[key];
+    },
+  })),
 ];
 
-const GIVEN_TABS: { key: GivenTab; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'open', label: 'Bekleyen' },
-  { key: 'overdue', label: 'Gecikmiş' },
-  { key: 'paid', label: 'Ödenen' },
-  { key: 'bounced', label: 'Karşılıksız' },
+const GIVEN_TABS: { key: GivenTab; readonly label: string }[] = [
+  { key: 'all', get label() { return t('common.all'); } },
+  ...(['open', 'overdue', 'paid', 'bounced'] as const).map((key) => ({
+    key,
+    get label() {
+      return t(`instruments.${key}`);
+    },
+  })),
 ];
 
 // Verilen çek/senetlerin yaşam döngüsü yok; durum doğrudan ödeme durumundan gelir.
@@ -46,14 +53,12 @@ function givenGroupOf(o: ObligationWithRelations): Exclude<GivenTab, 'all'> {
   if (o.remaining_amount_minor <= 0 || o.status === 'odendi') return 'paid';
   return 'open';
 }
-const GIVEN_GROUP_TITLE: Record<Exclude<GivenTab, 'all'>, string> = {
-  open: 'Bekleyen',
-  overdue: 'Gecikmiş',
-  paid: 'Ödenen',
-  bounced: 'Karşılıksız',
-};
+const GIVEN_GROUP_TITLE: Record<Exclude<GivenTab, 'all'>, string> = localizedRecord(
+  ['open', 'overdue', 'paid', 'bounced'] as const,
+  (key) => t(`instruments.${key}`)
+);
 
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+const dayMonth = localeDateFormatter({ day: 'numeric', month: 'short' });
 
 // design CekPortfoyu.html: alınan / verilen çek ve senetler; alınanlar yaşam döngüsü durumuna göre gruplanır.
 // Verilen çek/senetlerin yaşam döngüsü yoktur; onlarda filtre ödeme durumuna göredir (Bekleyen/Gecikmiş/Ödenen).
@@ -87,13 +92,13 @@ export default function InstrumentsScreen() {
     .filter((o) => o.due_date)
     .sort((a, b) => (a.due_date as string).localeCompare(b.due_date as string))[0];
 
-  const summaryLabel = side === 'receivable' ? 'Portföydeki toplam' : 'Ödenecek toplam';
+  const summaryLabel = side === 'receivable' ? t('instruments.portfolioTotal') : t('instruments.payableTotal');
   const summaryCount = side === 'receivable' ? inPortfolio.length : givenOpen.length;
   let summaryTotal: number | null = null;
-  let totalError: string | null = ratesQuery.isError || query.isError ? 'Toplam güncellenemedi.' : null;
+  let totalError: string | null = ratesQuery.isError || query.isError ? t('instruments.totalFailed') : null;
   if (ratesQuery.data && query.data) {
     try { summaryTotal = instrumentPortfolioTotal(all, side, ratesQuery.data); }
-    catch (error) { totalError = friendlyErrorMessage(error, 'Eksik toplam hesaplanmadı.'); }
+    catch (error) { totalError = friendlyErrorMessage(error, t('instruments.totalMissing')); }
   }
   const summaryNearest = side === 'receivable' ? nearest : givenNearest;
 
@@ -129,10 +134,10 @@ export default function InstrumentsScreen() {
         contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg, paddingBottom: theme.spacing.massive }}
       >
         <ScreenHeader
-          title="Çek ve senetler"
+          title={t('instruments.title')}
           right={{
             icon: 'add',
-            accessibilityLabel: 'Yeni çek veya senet',
+            accessibilityLabel: t('instruments.newInstrument'),
             variant: 'accent',
             onPress: () => router.push('/obligations/new?type=cek'),
           }}
@@ -140,8 +145,8 @@ export default function InstrumentsScreen() {
 
         <SegmentedControl
           options={[
-            { key: 'payable', label: `Verdiğim · ${given.length}` },
-            { key: 'receivable', label: `Aldığım · ${received.length}` },
+            { key: 'payable', label: t('instruments.given', { count: given.length }) },
+            { key: 'receivable', label: t('instruments.received', { count: received.length }) },
           ]}
           value={side}
           onChange={(k) => setSide(k as Side)}
@@ -150,14 +155,14 @@ export default function InstrumentsScreen() {
 
         <Card style={{ gap: 2 }}>
           <Text variant="caption" color="textSecondary">
-            {summaryLabel} · {summaryCount} kayıt
+            {t('instruments.summary', { label: summaryLabel, count: summaryCount })}
           </Text>
           {summaryTotal !== null ? <HeroAmount amountMinor={summaryTotal} baseSize={32} />
-            : <Text>{totalError ?? 'TL karşılığı hesaplanıyor…'}</Text>}
-          <Text variant="caption" color="textSecondary">Güncel kurla TL karşılığı; karşılıksız kayıtlar dahil değildir.</Text>
+            : <Text>{totalError ?? t('instruments.calculating')}</Text>}
+          <Text variant="caption" color="textSecondary">{t('instruments.summaryHint')}</Text>
           {summaryNearest?.due_date ? (
             <Text variant="caption" color="textSecondary">
-              En yakın vade {dayMonth.format(new Date(summaryNearest.due_date))}
+              {t('instruments.nearestDue', { date: dayMonth.format(new Date(summaryNearest.due_date)) })}
             </Text>
           ) : null}
         </Card>
@@ -176,9 +181,9 @@ export default function InstrumentsScreen() {
         ) : groups.length === 0 ? (
           <EmptyState
             icon="document-text-outline"
-            title={side === 'receivable' ? 'Alınan çek veya senet yok' : 'Verilen çek veya senet yok'}
-            message="Çek veya senet taratabilir ya da elle ekleyebilirsin."
-            actionLabel="Çek / senet ekle"
+            title={side === 'receivable' ? t('instruments.noReceived') : t('instruments.noGiven')}
+            message={t('instruments.emptyBody')}
+            actionLabel={t('instruments.add')}
             onActionPress={() => router.push('/obligations/new?type=cek')}
           />
         ) : (
@@ -218,7 +223,7 @@ function InstrumentRow({ item }: { item: ObligationWithRelations; last: boolean 
           {item.counterparty?.name || item.title}
         </Text>
         <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {item.document_type === 'senet' ? 'Senet' : 'Çek'}
+          {item.document_type === 'senet' ? t('instruments.note') : t('instruments.cheque')}
           {subtitle ? ` · ${subtitle}` : ''}
           {item.due_date ? ` · ${dayMonth.format(new Date(item.due_date))}` : ''}
         </Text>

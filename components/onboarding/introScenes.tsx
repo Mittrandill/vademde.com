@@ -7,6 +7,7 @@ import { useTheme, withAlpha } from '@/theme';
 import { Text } from '@/components/primitives';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { VademdeMark } from '@/components/brand/VademdeMark';
+import { t } from '@/i18n';
 
 // Tanışma sahneleri: örnek veriyle çizilen sabit illüstrasyonlardır (gerçek veri okunmaz).
 // App Store v3 setiyle (assets/appstore/v3) aynı görsel dil: çerçevesiz, marka ışığı üzerinde yüzen öğeler.
@@ -145,7 +146,7 @@ export function ScanIntroScene({ active, height }: IntroSceneProps) {
   const corner = { position: 'absolute' as const, width: 30, height: 30, borderColor: theme.colors.brandPrimary };
 
   return (
-    <View accessible accessibilityLabel="Çek fotoğrafından Kuzey İnşaat için 120 bin liralık alacak kaydı oluşur" style={{ height }}>
+    <View accessible accessibilityLabel={t('onboarding.scenes.scanA11y')} style={{ height }}>
       <SceneGlow height={height} />
 
       <View style={{ position: 'absolute', left: 36, right: 36, top: finderTop, height: finderHeight }}>
@@ -185,15 +186,15 @@ export function ScanIntroScene({ active, height }: IntroSceneProps) {
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <View style={{ paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.brandPrimary, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16) }}>
-              <FieldTag label="Vade ✓" />
+              <FieldTag label={t('onboarding.scenes.dueTag')} />
               <Text mono style={{ fontSize: 10, color: PAPER_INK }}>
-                27.10.2026
+                {t('onboarding.scenes.sampleDate')}
               </Text>
             </View>
             <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.brandPrimary, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16) }}>
-              <FieldTag label="Tutar ✓" />
+              <FieldTag label={t('onboarding.scenes.amountTag')} />
               <Text mono style={{ fontSize: 13, fontWeight: '700', color: PAPER_INK }}>
-                ₺120.000,00
+                {t('onboarding.scenes.sampleAmount')}
               </Text>
             </View>
           </View>
@@ -230,13 +231,13 @@ export function ScanIntroScene({ active, height }: IntroSceneProps) {
         <FloatingCard style={{ minHeight: 64, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <BankLogo bankCode="turkiye-garanti-bankasi" size={38} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontWeight: '600' }}>Alınan çek</Text>
+            <Text style={{ fontWeight: '600' }}>{t('onboarding.scenes.receivedCheque')}</Text>
             <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              Kuzey İnşaat · 27 Eki
+              {t('onboarding.scenes.sampleParty')}
             </Text>
           </View>
           <Text tabular color="receivable" style={{ fontWeight: '700' }}>
-            +₺120.000,00
+            +{t('onboarding.scenes.sampleAmount')}
           </Text>
         </FloatingCard>
       </Animated.View>
@@ -267,9 +268,9 @@ export function ConfirmIntroScene({ active, height }: IntroSceneProps) {
   }, [active, reduce, pulse]);
 
   const rows: { label: string; value: string; tag: string; warn?: boolean; big?: boolean }[] = [
-    { label: 'Tutar', value: '₺120.000,00', tag: 'belgeden', big: true },
-    { label: 'Vade tarihi', value: '27 Ekim 2026', tag: 'kontrol edin', warn: true },
-    { label: 'Keşideci', value: 'Kuzey İnşaat Ltd.', tag: 'belgeden' },
+    { label: t('onboarding.scenes.amount'), value: t('onboarding.scenes.sampleAmount'), tag: t('onboarding.scenes.fromDocument'), big: true },
+    { label: t('onboarding.scenes.dueDate'), value: t('onboarding.scenes.sampleDueLong'), tag: t('onboarding.scenes.checkThis'), warn: true },
+    { label: t('onboarding.scenes.drawer'), value: 'Kuzey İnşaat Ltd.', tag: t('onboarding.scenes.fromDocument') },
   ];
   const warnBg = pulse.interpolate({
     inputRange: [0, 1],
@@ -277,7 +278,7 @@ export function ConfirmIntroScene({ active, height }: IntroSceneProps) {
   });
 
   return (
-    <View accessible accessibilityLabel="Okunan alanlar önce size gösterilir; emin olunmayan vade tarihi işaretlenir" style={{ height, justifyContent: 'center', paddingHorizontal: 20 }}>
+    <View accessible accessibilityLabel={t('onboarding.scenes.confirmA11y')} style={{ height, justifyContent: 'center', paddingHorizontal: 20 }}>
       <SceneGlow height={height} />
 
       <FloatingCard style={{ overflow: 'hidden' }}>
@@ -324,7 +325,7 @@ export function ConfirmIntroScene({ active, height }: IntroSceneProps) {
         <View style={{ padding: 12, paddingTop: 4 }}>
           <View style={{ height: 46, borderRadius: 13, backgroundColor: theme.colors.action, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}>
             <Ionicons name="checkmark" size={18} color={theme.colors.onAction} />
-            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.onAction }}>Onayla ve kaydet</Text>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.onAction }}>{t('onboarding.scenes.confirmAndSave')}</Text>
           </View>
         </View>
       </FloatingCard>
@@ -340,19 +341,19 @@ export function ConfirmIntroScene({ active, height }: IntroSceneProps) {
       >
         <FloatingCard style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 2, borderColor: theme.colors.brandPrimary }}>
           <Ionicons name="scan-outline" size={16} color={theme.colors.textPrimary} />
-          <Text style={{ fontSize: 15, fontWeight: '700' }}>Güven %99</Text>
+          <Text style={{ fontSize: 15, fontWeight: '700' }}>{t('onboarding.scenes.confidence')}</Text>
         </FloatingCard>
       </Animated.View>
     </View>
   );
 }
 
-const WEEKDAYS = ['P', 'S', 'Ç', 'P', 'C', 'C', 'P'];
 
 // 3 · Hiçbir vade sessizce geçmez: mini takvim + yukarıdan kayan bildirim.
 export function DueIntroScene({ active, height }: IntroSceneProps) {
   const theme = useTheme();
   const banner = useEntrance(active, 450);
+  const weekdays = t('onboarding.scenes.weekdays').split(',');
   const days = [...Array<null>(3).fill(null), ...Array.from({ length: 31 }, (_, i) => i + 1)];
   const dots: Record<number, string[]> = {
     2: [theme.colors.danger],
@@ -366,18 +367,18 @@ export function DueIntroScene({ active, height }: IntroSceneProps) {
   const today = 26;
 
   return (
-    <View accessible accessibilityLabel="Ekim takviminde vade günleri ve 'Çek vadesi yarın' bildirimi" style={{ height, paddingHorizontal: 20, justifyContent: 'flex-end', paddingBottom: height * 0.04 }}>
+    <View accessible accessibilityLabel={t('onboarding.scenes.dueA11y')} style={{ height, paddingHorizontal: 20, justifyContent: 'flex-end', paddingBottom: height * 0.04 }}>
       <SceneGlow height={height} />
 
       <FloatingCard style={{ paddingVertical: 12, paddingHorizontal: 12 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
-          <Text style={{ fontWeight: '700', fontSize: 17 }}>Ekim 2026</Text>
+          <Text style={{ fontWeight: '700', fontSize: 17 }}>{t('onboarding.scenes.month')}</Text>
           <Text variant="caption" color="textSecondary">
-            7 vade
+            {t('onboarding.scenes.dueCount')}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, rowGap: 2 }}>
-          {WEEKDAYS.map((d, i) => (
+          {weekdays.map((d, i) => (
             <Text key={`w${i}`} variant="caption" color="textSecondary" style={{ width: '14.28%', textAlign: 'center' }}>
               {d}
             </Text>
@@ -431,13 +432,13 @@ export function DueIntroScene({ active, height }: IntroSceneProps) {
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 15, fontWeight: '600' }}>Çek vadesi yarın</Text>
+              <Text style={{ fontSize: 15, fontWeight: '600' }}>{t('onboarding.scenes.chequeDueTomorrow')}</Text>
               <Text variant="caption" color="textSecondary">
-                şimdi
+                {t('onboarding.scenes.now')}
               </Text>
             </View>
             <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              Kuzey İnşaat · ₺120.000,00 · Garanti BBVA
+              {t('onboarding.scenes.notificationBody')}
             </Text>
           </View>
         </FloatingCard>

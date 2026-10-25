@@ -11,10 +11,12 @@ import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { SocialSignInButtons } from '@/components/auth/SocialSignInButtons';
 import { signInWithApple, signInWithGoogle, signUpWithPassword } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
+import { useTranslation } from '@/i18n';
 
 export default function SignUpScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [email, setEmail] = useState('');
@@ -29,7 +31,7 @@ export default function SignUpScreen() {
   async function handleSubmit() {
     setError(null);
     if (!accepted) {
-      setError('Devam etmek için Kullanım Koşulları ve Gizlilik Politikası’nı kabul etmelisin.');
+      setError(t('auth.signUp.mustAccept'));
       return;
     }
     setLoading(true);
@@ -37,7 +39,7 @@ export default function SignUpScreen() {
       await signUpWithPassword(email.trim(), password, fullName);
       setConfirmationSent(true);
     } catch (err) {
-      setError(translateAuthError(err, 'Kayıt oluşturulamadı'));
+      setError(translateAuthError(err, t('auth.signUp.failed')));
     } finally {
       setLoading(false);
     }
@@ -51,7 +53,7 @@ export default function SignUpScreen() {
     } catch (err) {
       const code = (err as { code?: string })?.code;
       if (code !== 'ERR_REQUEST_CANCELED') {
-        setError(translateAuthError(err, 'Apple ile kayıt olunamadı'));
+        setError(translateAuthError(err, t('auth.signUp.appleFailed')));
       }
     } finally {
       setAppleLoading(false);
@@ -64,7 +66,7 @@ export default function SignUpScreen() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      setError(translateAuthError(err, 'Google ile kayıt olunamadı'));
+      setError(translateAuthError(err, t('auth.signUp.googleFailed')));
     } finally {
       setGoogleLoading(false);
     }
@@ -77,7 +79,7 @@ export default function SignUpScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1, paddingHorizontal: theme.screenEdge.standard, paddingBottom: theme.spacing.lg }}
         >
-          <ScreenHeader title="Hesap oluştur" inline />
+          <ScreenHeader title={t('auth.signUp.title')} inline />
 
           {confirmationSent ? (
             <View style={{ alignItems: 'center', marginTop: theme.spacing.huge, gap: theme.spacing.sm }}>
@@ -94,10 +96,10 @@ export default function SignUpScreen() {
                 <Ionicons name="mail" size={34} color={theme.colors.attentionMarker} />
               </View>
               <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, marginTop: theme.spacing.sm, textAlign: 'center' }}>
-                E-postanızı doğrulayın
+                {t('auth.signUp.verifyTitle')}
               </Text>
               <Text color="textSecondary" style={{ textAlign: 'center', maxWidth: 300 }}>
-                Bu e-posta adresi sistemde kayıtlı değilse, doğrulama bağlantısı gönderildi. Gelen kutunuzu kontrol edin.
+                {t('auth.signUp.verifyBody')}
               </Text>
             </View>
           ) : (
@@ -105,24 +107,24 @@ export default function SignUpScreen() {
               <View style={{ marginTop: theme.spacing.md }}>
                 <FieldGroup>
                   <TextField
-                    label="Ad soyad (isteğe bağlı)"
-                    placeholder="Adın ve soyadın"
+                    label={t('auth.signUp.fullName')}
+                    placeholder={t('auth.signUp.fullNamePlaceholder')}
                     autoCapitalize="words"
                     textContentType="name"
                     value={fullName}
                     onChangeText={setFullName}
                   />
                   <TextField
-                    label="E-posta"
-                    placeholder="ornek@eposta.com"
+                    label={t('auth.email')}
+                    placeholder={t('auth.emailPlaceholder')}
                     autoCapitalize="none"
                     keyboardType="email-address"
                     value={email}
                     onChangeText={setEmail}
                   />
                   <TextField
-                    label="Şifre"
-                    placeholder="En az 8 karakter"
+                    label={t('auth.password')}
+                    placeholder={t('auth.signUp.passwordPlaceholder')}
                     secureTextEntry={!passwordVisible}
                     value={password}
                     onChangeText={setPassword}
@@ -131,7 +133,7 @@ export default function SignUpScreen() {
                   />
                 </FieldGroup>
                 <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-                  Kayıt sonrası e-postanıza bir doğrulama bağlantısı gönderilir.
+                  {t('auth.signUp.verifyHint')}
                 </Text>
               </View>
 
@@ -147,14 +149,15 @@ export default function SignUpScreen() {
                   color={accepted ? theme.colors.textPrimary : theme.colors.mutedControl}
                 />
                 <Text variant="caption" color="textSecondary" style={{ flex: 1 }}>
+                  {t('auth.signUp.acceptPrefix')}
                   <Link href="/legal/terms-of-service">
-                    <Text variant="caption" style={{ textDecorationLine: 'underline' }}>Kullanım Koşulları</Text>
+                    <Text variant="caption" style={{ textDecorationLine: 'underline' }}>{t('auth.signUp.terms')}</Text>
                   </Link>
-                  {' ve '}
+                  {t('auth.signUp.and')}
                   <Link href="/legal/privacy-policy">
-                    <Text variant="caption" style={{ textDecorationLine: 'underline' }}>Gizlilik Politikası</Text>
+                    <Text variant="caption" style={{ textDecorationLine: 'underline' }}>{t('auth.signUp.privacy')}</Text>
                   </Link>
-                  ’nı okudum, kabul ediyorum.
+                  {t('auth.signUp.acceptSuffix')}
                 </Text>
               </Pressable>
 
@@ -175,13 +178,13 @@ export default function SignUpScreen() {
               </View>
 
               <View style={{ flex: 1, minHeight: theme.spacing.lg }} />
-              <Button label="Devam" onPress={handleSubmit} loading={loading} />
+              <Button label={t('auth.signUp.submit')} onPress={handleSubmit} loading={loading} />
             </>
           )}
 
           <Link href="/(auth)/sign-in" style={{ alignSelf: 'center', paddingVertical: 12 }}>
             <Text color="textSecondary">
-              Zaten hesabın var mı? <Text style={{ fontWeight: '600' }}>Giriş yap</Text>
+              {t('auth.signUp.haveAccount')}<Text style={{ fontWeight: '600' }}>{t('auth.signUp.signInLink')}</Text>
             </Text>
           </Link>
         </ScrollView>

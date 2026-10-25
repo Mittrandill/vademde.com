@@ -27,50 +27,48 @@ import {
 } from '@/services/purchases';
 import { queryKeys } from '@/services/queryKeys';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { formatPercent, localeNumberFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
 type BillingPeriod = 'monthly' | 'yearly';
 
-const PLAN_SHORT_LABELS: Record<PlanCode, string> = {
-  free: 'Ücretsiz',
-  plus: 'Plus',
-  isletme: 'İşletme',
-};
+const PLAN_CODES = ['free', 'plus', 'isletme'] as const;
+const planKey = (plan: PlanCode) => (plan === 'free' ? 'Free' : plan === 'plus' ? 'Plus' : 'Isletme');
 
-// Türkçe ek uyumu kod içinde türetilemez; plan başına sabit yazılır.
-const PLAN_STATUS_LABELS: Record<PlanCode, string> = {
-  free: 'Ücretsiz plandasınız',
-  plus: 'Plus planındasınız',
-  isletme: 'İşletme planındasınız',
-};
+const PLAN_SHORT_LABELS: Record<PlanCode, string> = localizedRecord(PLAN_CODES, (plan) =>
+  t(`subscription.paywall.planShort${planKey(plan)}`)
+);
 
-const PLAN_CTA_LABELS: Record<PlanCode, string> = {
-  free: 'Ücretsiz planda kal',
-  plus: "Plus'a geç",
-  isletme: "İşletme'ye geç",
-};
+// Türkçe ek uyumu kod içinde türetilemez; plan başına sabit yazılır (i18n subscription.paywall).
+const PLAN_STATUS_LABELS: Record<PlanCode, string> = localizedRecord(PLAN_CODES, (plan) =>
+  t(`subscription.paywall.status${planKey(plan)}`)
+);
 
-const PLAN_TAGLINES: Record<PlanCode, string> = {
-  free: '',
-  plus: 'Kişisel ve küçük işler için',
-  isletme: 'Ekipler ve işletmeler için',
-};
+const PLAN_CTA_LABELS: Record<PlanCode, string> = localizedRecord(PLAN_CODES, (plan) =>
+  t(`subscription.paywall.cta${planKey(plan)}`)
+);
+
+const PLAN_TAGLINES: Record<PlanCode, string> = localizedRecord(PLAN_CODES, (plan) =>
+  plan === 'free' ? '' : t(`subscription.paywall.tagline${planKey(plan) as 'Plus' | 'Isletme'}`)
+);
 
 const TABLE_LABEL_WIDTH_FLEX = 1.5;
 const TABLE_COLUMN_FLEX = 1;
 
 // Karşılaştırma tablosu plan_limits alanlarından türetilir (docs/10-abonelik-gelir-modeli.md);
 // etiketler kullanıcının tanıdığı adlarla yazılır (ör. "audit log" değil).
-const COMPARISON_ROWS: { label: string; value: (limits: PlanLimits) => string }[] = [
-  { label: 'Belge tarama / ay', value: (l) => String(l.monthly_ocr_quota) },
-  { label: 'Çalışma alanı', value: (l) => String(l.max_personal_workspaces) },
-  { label: 'Ekip üyesi', value: (l) => (l.max_team_members ? String(l.max_team_members) : '—') },
-  { label: 'Gelişmiş raporlar', value: (l) => (l.advanced_reports ? 'Var' : '—') },
-  { label: 'Belge arşivi', value: (l) => (l.document_archive ? 'Var' : '—') },
-  { label: 'Manuel giriş', value: () => 'Var' },
+const COMPARISON_ROWS: { readonly label: string; value: (limits: PlanLimits) => string }[] = [
+  { get label() { return t('subscription.paywall.rowScans'); }, value: (l) => String(l.monthly_ocr_quota) },
+  { get label() { return t('subscription.paywall.rowWorkspaces'); }, value: (l) => String(l.max_personal_workspaces) },
+  { get label() { return t('subscription.paywall.rowTeam'); }, value: (l) => (l.max_team_members ? String(l.max_team_members) : '—') },
+  { get label() { return t('subscription.paywall.rowReports'); }, value: (l) => (l.advanced_reports ? t('subscription.paywall.yes') : '—') },
+  { get label() { return t('subscription.paywall.rowArchive'); }, value: (l) => (l.document_archive ? t('subscription.paywall.yes') : '—') },
+  { get label() { return t('subscription.paywall.rowManual'); }, value: () => t('subscription.paywall.yes') },
 ];
 
 function formatPrice(value: number, currencyCode: string): string {
-  return new Intl.NumberFormat('tr-TR', {
+  return localeNumberFormatter({
     style: 'currency',
     currency: currencyCode,
     maximumFractionDigits: 2,
@@ -165,7 +163,7 @@ export default function PaywallScreen() {
 
   async function handlePurchase() {
     if (!selectedPlan || !selectedPackage) {
-      Alert.alert('Plan şu anda satın alınamıyor', 'Mağaza fiyatları alınamadı, lütfen daha sonra tekrar deneyin.');
+      Alert.alert(t('subscription.paywall.unavailableTitle'), t('subscription.paywall.unavailableBody'));
       return;
     }
     setPurchasingPlan(selectedPlan);
@@ -178,9 +176,9 @@ export default function PaywallScreen() {
       await queryClient.invalidateQueries({ queryKey: ['document-archive-access'] });
       router.back();
     } catch (err) {
-      const message = friendlyErrorMessage(err, 'Satın alma tamamlanamadı');
+      const message = friendlyErrorMessage(err, t('subscription.paywall.purchaseIncomplete'));
       if (!message.toLowerCase().includes('cancel')) {
-        Alert.alert('Satın alma başarısız', message);
+        Alert.alert(t('subscription.paywall.purchaseFailed'), message);
       }
     } finally {
       setPurchasingPlan(null);
@@ -195,10 +193,10 @@ export default function PaywallScreen() {
       // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
       await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
       await queryClient.invalidateQueries({ queryKey: ['document-archive-access'] });
-      Alert.alert('Satın alımlar geri yüklendi');
+      Alert.alert(t('subscription.restored'));
       router.back();
     } catch (err) {
-      Alert.alert('Geri yükleme başarısız', friendlyErrorMessage(err, 'Bir hata oluştu'));
+      Alert.alert(t('subscription.restoreFailed'), friendlyErrorMessage(err, t('subscription.genericError')));
     } finally {
       setIsRestoring(false);
     }
@@ -219,7 +217,7 @@ export default function PaywallScreen() {
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Satın alımları geri yükle"
+          accessibilityLabel={t('subscription.restore')}
           onPress={handleRestore}
           disabled={isRestoring}
           hitSlop={8}
@@ -228,12 +226,12 @@ export default function PaywallScreen() {
           {isRestoring ? (
             <ActivityIndicator size="small" color={theme.colors.textSecondary} />
           ) : (
-            <Text style={{ fontSize: 17, fontWeight: '500', color: theme.colors.textSecondary }}>Geri yükle</Text>
+            <Text style={{ fontSize: 17, fontWeight: '500', color: theme.colors.textSecondary }}>{t('subscription.paywall.restoreShort')}</Text>
           )}
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Kapat"
+          accessibilityLabel={t('common.close')}
           onPress={() => router.back()}
           style={{
             width: 44,
@@ -258,11 +256,11 @@ export default function PaywallScreen() {
           align="center"
           style={{ flex: 1, justifyContent: 'center', padding: theme.screenEdge.standard }}
         >
-          <Text variant="cardTitle">Planlar yüklenemedi</Text>
+          <Text variant="cardTitle">{t('subscription.paywall.loadFailed')}</Text>
           <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-            Bağlantınızı kontrol edip tekrar deneyin.
+            {t('subscription.paywall.checkConnection')}
           </Text>
-          <Button label="Tekrar dene" variant="secondary" onPress={() => planLimitsQuery.refetch()} />
+          <Button label={t('common.retry')} variant="secondary" onPress={() => planLimitsQuery.refetch()} />
         </Stack>
       ) : (
         <>
@@ -276,11 +274,11 @@ export default function PaywallScreen() {
             }}
           >
             <Stack gap="xs">
-              <Text variant="pageTitle">İşinize uygun planı seçin</Text>
+              <Text variant="pageTitle">{t('subscription.paywall.title')}</Text>
               <Text variant="body" color="textSecondary">
                 {PLAN_STATUS_LABELS[currentPlan] ?? PLAN_STATUS_LABELS.free}
                 {ocrUsageQuery.data
-                  ? ` · bu ay ${ocrUsageQuery.data.usedCount}/${ocrUsageQuery.data.quota} belge okundu`
+                  ? t('subscription.paywall.usage', { used: ocrUsageQuery.data.usedCount, quota: ocrUsageQuery.data.quota })
                   : ''}
               </Text>
             </Stack>
@@ -288,8 +286,13 @@ export default function PaywallScreen() {
             <SegmentedControl
               stretch
               options={[
-                { key: 'monthly', label: 'Aylık' },
-                { key: 'yearly', label: savingPercent ? `Yıllık · -%${savingPercent}` : 'Yıllık' },
+                { key: 'monthly', label: t('subscription.paywall.monthly') },
+                {
+                  key: 'yearly',
+                  label: savingPercent
+                    ? t('subscription.paywall.yearlySaving', { percent: formatPercent(savingPercent) })
+                    : t('subscription.paywall.yearly'),
+                },
               ]}
               value={billingPeriod}
               onChange={setBillingPeriod}
@@ -326,9 +329,9 @@ export default function PaywallScreen() {
                         <Row gap="xs" align="center">
                           <Text variant="sectionTitle">{PLAN_SHORT_LABELS[plan] ?? plan}</Text>
                           {planTrialDays ? (
-                            <Tag label={`${planTrialDays} gün ücretsiz`} tone="brand" />
+                            <Tag label={t('subscription.paywall.trialDays', { count: planTrialDays })} tone="brand" />
                           ) : plan === 'plus' ? (
-                            <Tag label="Önerilen" tone="brand" />
+                            <Tag label={t('subscription.paywall.recommended')} tone="brand" />
                           ) : null}
                         </Row>
                         <Text variant="caption" color="textSecondary">
@@ -337,7 +340,7 @@ export default function PaywallScreen() {
                       </Stack>
                       <Row gap="sm" align="center">
                         <Text variant="cardTitle" tabular>
-                          {pkg ? `${pkg.product.priceString}${billingPeriod === 'yearly' ? '/yıl' : '/ay'}` : '—'}
+                          {pkg ? `${pkg.product.priceString}${billingPeriod === 'yearly' ? t('subscription.paywall.perYear') : t('subscription.paywall.perMonth')}` : '—'}
                         </Text>
                         <View
                           style={{
@@ -357,7 +360,7 @@ export default function PaywallScreen() {
                     </Row>
                     {selected && billingPeriod === 'yearly' && pkg ? (
                       <Text variant="caption" color="textSecondary" tabular>
-                        {`ayda ${formatPrice(pkg.product.price / 12, pkg.product.currencyCode)}`}
+                        {t('subscription.paywall.perMonthPrice', { price: formatPrice(pkg.product.price / 12, pkg.product.currencyCode) })}
                       </Text>
                     ) : null}
                   </View>
@@ -367,7 +370,7 @@ export default function PaywallScreen() {
 
             <Stack gap="xs">
               <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                KARŞILAŞTIR
+                {t('subscription.paywall.compare')}
               </Text>
               <View
                 style={{
@@ -394,12 +397,12 @@ export default function PaywallScreen() {
             <Button
               label={
                 isCurrentSelected
-                  ? 'Mevcut planınız'
+                  ? t('subscription.paywall.currentPlan')
                   : selectedPackage
                     ? trialDays
-                      ? `${trialDays} gün ücretsiz başlat`
+                      ? t('subscription.paywall.startTrial', { count: trialDays })
                       : `${PLAN_CTA_LABELS[selectedPlan as PlanCode]} · ${selectedPackage.product.priceString}`
-                    : PLAN_CTA_LABELS[selectedPlan as PlanCode] ?? 'Planı seçin'
+                    : PLAN_CTA_LABELS[selectedPlan as PlanCode] ?? t('subscription.paywall.choosePlan')
               }
               onPress={handlePurchase}
               loading={purchasingPlan !== null}
@@ -407,22 +410,27 @@ export default function PaywallScreen() {
             />
             <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
               {!selectedPackage && !isCurrentSelected
-                ? 'Mağaza fiyatları şu anda alınamıyor.'
+                ? t('subscription.paywall.pricesUnavailable')
                 : trialDays && product
-                  ? `${trialDays} gün ücretsiz, sonra ${product.priceString}${billingPeriod === 'yearly' ? ' / yıl' : ' / ay'}. İstediğiniz zaman iptal edebilirsiniz. ${storeName} üzerinden faturalanır.`
-                  : `${storeName} üzerinden faturalanır. İstediğiniz zaman iptal edebilirsiniz.`}
+                  ? t('subscription.paywall.trialFooter', {
+                      count: trialDays,
+                      price: product.priceString,
+                      period: billingPeriod === 'yearly' ? t('subscription.paywall.periodYear') : t('subscription.paywall.periodMonth'),
+                      store: storeName,
+                    })
+                  : t('subscription.paywall.footer', { store: storeName })}
             </Text>
             {/* App Store Review Guideline 3.1.2 — otomatik yenilenen abonelik satan ekranda
                 Gizlilik Politikası ve Kullanım Koşulları'na işlevsel bağlantı zorunludur. */}
             <Row gap="md" style={{ justifyContent: 'center' }}>
               <Pressable onPress={() => router.push('/legal/terms-of-service')} hitSlop={8}>
                 <Text variant="caption" style={{ textDecorationLine: 'underline' }} color="textSecondary">
-                  Kullanım Koşulları
+                  {t('subscription.paywall.terms')}
                 </Text>
               </Pressable>
               <Pressable onPress={() => router.push('/legal/privacy-policy')} hitSlop={8}>
                 <Text variant="caption" style={{ textDecorationLine: 'underline' }} color="textSecondary">
-                  Gizlilik Politikası
+                  {t('subscription.paywall.privacy')}
                 </Text>
               </Pressable>
             </Row>

@@ -5,6 +5,7 @@ import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { sumToReferenceMinor, type ValueUnitRate } from '@/features/valueUnits/api';
 import { formatMinorAmount } from '@/utils/money';
 import { writeWidgetSnapshot, type WidgetDueItem } from '@/services/widgetSync';
+import { getDisplayDecimalSeparator, zeroFractionPattern } from '@/i18n/format';
 
 const DAY_MS = 86_400_000;
 const WEEK_DAYS = 7;
@@ -22,13 +23,13 @@ function dayKey(date: Date): string {
 
 // Widget'larda kuruşsuz kısa gösterim ("₺48.250"); "₺1.234,50" gibi kuruşlu tutar korunur.
 function trimZeroDecimals(text: string): string {
-  return text.replace(/,00(?=\D*$)/, '');
+  return text.replace(zeroFractionPattern(), '');
 }
 
 function compactNet(minor: number): string {
   const value = Math.abs(minor) / 100;
   const sign = minor < 0 ? '−' : '+';
-  if (value >= 1_000_000) return `${sign}${(value / 1_000_000).toFixed(1).replace('.', ',').replace(/,0$/, '')}M`;
+  if (value >= 1_000_000) return `${sign}${(value / 1_000_000).toFixed(1).replace(/\.0$/, '').replace('.', getDisplayDecimalSeparator())}M`;
   if (value >= 1_000) return `${sign}${Math.round(value / 1_000)}K`;
   return `${sign}${Math.round(value)}`;
 }

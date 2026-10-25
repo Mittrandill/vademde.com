@@ -18,12 +18,14 @@ import { queryKeys } from '@/services/queryKeys';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
 type Scope = 'all' | 'counterparties' | 'transactions' | 'obligations';
 
 const RESULT_LIMIT = 30;
 const PREVIEW_COUNT = 3;
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+const dayMonth = localeDateFormatter({ day: 'numeric', month: 'short' });
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -77,10 +79,10 @@ export default function SearchScreen() {
   const limit = (list: unknown[]) => (scope === 'all' ? PREVIEW_COUNT : list.length);
 
   const pills: { key: Scope; label: string }[] = [
-    { key: 'all', label: `Tümü · ${total}` },
-    { key: 'counterparties', label: `Cariler · ${counterparties.length}` },
-    { key: 'transactions', label: `Hareketler · ${transactions.length}` },
-    { key: 'obligations', label: `Kayıtlar · ${obligations.length}` },
+    { key: 'all', label: t('search.all', { count: total }) },
+    { key: 'counterparties', label: t('search.counterparties', { count: counterparties.length }) },
+    { key: 'transactions', label: t('search.transactions', { count: transactions.length }) },
+    { key: 'obligations', label: t('search.obligations', { count: obligations.length }) },
   ];
 
   return (
@@ -101,7 +103,7 @@ export default function SearchScreen() {
           <Ionicons name="search" size={17} color={theme.colors.textSecondary} />
           <TextInput
             autoFocus
-            placeholder="Cari, hareket veya kayıt ara"
+            placeholder={t('search.placeholder')}
             placeholderTextColor={theme.colors.textSecondary}
             value={input}
             onChangeText={setInput}
@@ -112,13 +114,13 @@ export default function SearchScreen() {
             style={{ flex: 1, fontSize: 17, color: theme.colors.textPrimary, padding: 0 }}
           />
           {input.length > 0 ? (
-            <Pressable accessibilityLabel="Aramayı temizle" onPress={() => setInput('')} hitSlop={8}>
+            <Pressable accessibilityLabel={t('search.clear')} onPress={() => setInput('')} hitSlop={8}>
               <Ionicons name="close-circle" size={17} color={theme.colors.mutedControl} />
             </Pressable>
           ) : null}
         </View>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8}>
-          <Text style={{ fontSize: 17 }}>Vazgeç</Text>
+          <Text style={{ fontSize: 17 }}>{t('common.cancel')}</Text>
         </Pressable>
       </View>
 
@@ -130,8 +132,8 @@ export default function SearchScreen() {
         {!active ? (
           <EmptyState
             icon="search-outline"
-            title="Ara"
-            message="Cari adı, hareket açıklaması veya kayıt başlığı yazın. En az 2 harf gerekir."
+            title={t('search.title')}
+            message={t('search.hint')}
           />
         ) : loading ? (
           <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.lg, gap: theme.spacing.sm }}>
@@ -139,7 +141,7 @@ export default function SearchScreen() {
             <Skeleton height={56} borderRadius={theme.radius.group} />
           </View>
         ) : total === 0 ? (
-          <EmptyState icon="search-outline" title="Sonuç bulunamadı" message={`“${query}” için eşleşen bir şey yok.`} />
+          <EmptyState icon="search-outline" title={t('search.noResults')} message={t('search.noMatch', { query })} />
         ) : (
           <>
             <ScrollView
@@ -154,7 +156,7 @@ export default function SearchScreen() {
             </ScrollView>
 
             {show('counterparties') && counterparties.length > 0 ? (
-              <Section title="Cari" more={scope === 'all' && counterparties.length > PREVIEW_COUNT ? `${counterparties.length} sonucun tümü` : undefined} onMore={() => setScope('counterparties')}>
+              <Section title={t('search.sectionCounterparties')} more={scope === 'all' && counterparties.length > PREVIEW_COUNT ? t('search.seeAll', { count: counterparties.length }) : undefined} onMore={() => setScope('counterparties')}>
                 <Group>
                   {counterparties.slice(0, limit(counterparties)).map((c) => (
                     <GroupedRow
@@ -170,22 +172,22 @@ export default function SearchScreen() {
             ) : null}
 
             {show('transactions') && transactions.length > 0 ? (
-              <Section title="Hareketler" more={scope === 'all' && transactions.length > PREVIEW_COUNT ? `${transactions.length} sonucun tümü` : undefined} onMore={() => setScope('transactions')}>
+              <Section title={t('search.sectionTransactions')} more={scope === 'all' && transactions.length > PREVIEW_COUNT ? t('search.seeAll', { count: transactions.length }) : undefined} onMore={() => setScope('transactions')}>
                 <Group inset={16}>
-                  {transactions.slice(0, limit(transactions)).map((t) => {
-                    const title = t.description?.trim() || t.counterparty?.name || t.category?.name || 'Hareket';
-                    const sign = t.direction === 'income' ? '+' : t.direction === 'expense' ? '−' : '';
+                  {transactions.slice(0, limit(transactions)).map((tx) => {
+                    const title = tx.description?.trim() || tx.counterparty?.name || tx.category?.name || t('search.transactionFallback');
+                    const sign = tx.direction === 'income' ? '+' : tx.direction === 'expense' ? '−' : '';
                     return (
                       <GroupedRow
-                        key={t.id}
+                        key={tx.id}
                         title={title}
-                        subtitle={[t.counterparty?.name, t.account?.name, dayMonth.format(new Date(t.occurred_at))].filter(Boolean).join(' · ')}
-                        onPress={() => router.push(`/transactions/${t.id}`)}
+                        subtitle={[tx.counterparty?.name, tx.account?.name, dayMonth.format(new Date(tx.occurred_at))].filter(Boolean).join(' · ')}
+                        onPress={() => router.push(`/transactions/${tx.id}`)}
                         chevron={false}
                         trailing={
-                          <Text tabular style={{ fontWeight: '600', color: t.direction === 'income' ? theme.colors.receivable : theme.colors.textPrimary }}>
+                          <Text tabular style={{ fontWeight: '600', color: tx.direction === 'income' ? theme.colors.receivable : theme.colors.textPrimary }}>
                             {sign}
-                            {formatMinorAmount(t.amount_minor, t.currency_code)}
+                            {formatMinorAmount(tx.amount_minor, tx.currency_code)}
                           </Text>
                         }
                       />
@@ -196,7 +198,7 @@ export default function SearchScreen() {
             ) : null}
 
             {show('obligations') && obligations.length > 0 ? (
-              <Section title="Kayıtlar" more={scope === 'all' && obligations.length > PREVIEW_COUNT ? `${obligations.length} sonucun tümü` : undefined} onMore={() => setScope('obligations')}>
+              <Section title={t('search.sectionObligations')} more={scope === 'all' && obligations.length > PREVIEW_COUNT ? t('search.seeAll', { count: obligations.length }) : undefined} onMore={() => setScope('obligations')}>
                 <Group>
                   {obligations.slice(0, limit(obligations)).map((o) => (
                     <GroupedRow
@@ -211,7 +213,7 @@ export default function SearchScreen() {
                         />
                       }
                       title={o.title}
-                      subtitle={[DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt', o.counterparty?.name, o.due_date ? dayMonth.format(new Date(o.due_date)) : null]
+                      subtitle={[DOCUMENT_TYPE_LABEL[o.document_type] ?? t('common.record'), o.counterparty?.name, o.due_date ? dayMonth.format(new Date(o.due_date)) : null]
                         .filter(Boolean)
                         .join(' · ')}
                       onPress={() => router.push(`/obligations/${o.id}`)}

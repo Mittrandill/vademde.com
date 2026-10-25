@@ -7,6 +7,7 @@ import { withAlpha } from '@/theme/colors';
 import { Pressable } from './Pressable';
 import { Row, Stack } from './Stack';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 export interface ActionSheetOption {
   key: string;
@@ -40,7 +41,7 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
-          accessibilityLabel="Kapat"
+          accessibilityLabel={t('ui.close')}
           onPress={onClose}
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.overlay }]}
         />
@@ -95,7 +96,7 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="İşlem menüsünü kapat"
+            accessibilityLabel={t('ui.closeMenu')}
             onPress={onClose}
             style={{
               minHeight: 50,
@@ -114,7 +115,7 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
               color={theme.scheme === 'dark' ? 'textPrimary' : 'textSecondary'}
               style={{ fontWeight: '600' }}
             >
-              Vazgeç
+              {t('ui.cancel')}
             </Text>
           </Pressable>
         </View>

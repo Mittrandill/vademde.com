@@ -13,6 +13,7 @@ import { redeemWorkspaceInvite } from '@/features/workspaces/members';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { showErrorAlert, showSaveSuccess } from '@/utils/alerts';
+import { t } from '@/i18n';
 
 // Davet kodları 8 karakterdir (workspace_invites.code).
 const CODE_LENGTH = 8;
@@ -32,7 +33,7 @@ export default function JoinWorkspaceScreen() {
   const joinMutation = useMutation({
     mutationFn: () => redeemWorkspaceInvite(code),
     onSuccess: (workspaceId) => {
-      showSaveSuccess('Çalışma alanına katıldınız.', () => router.replace('/(tabs)'), () => {
+      showSaveSuccess(t('workspace.join.joined'), () => router.replace('/(tabs)'), () => {
         setActiveWorkspaceId(workspaceId);
         queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
       });
@@ -45,7 +46,7 @@ export default function JoinWorkspaceScreen() {
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
-        <ScreenHeader title="Çalışma alanına katıl" />
+        <ScreenHeader title={t('workspace.join.title')} />
       </View>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
@@ -53,11 +54,10 @@ export default function JoinWorkspaceScreen() {
           contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg }}
         >
           <Text variant="body" color="textSecondary">
-            Size gönderilen davet kodunu girin. Katıldığınızda çalışma alanının tüm verilerini rolünüze göre görür
-            (veya düzenlersiniz).
+            {t('workspace.join.body')}
           </Text>
 
-          <Pressable accessibilityRole="button" accessibilityLabel="Davet kodu" onPress={() => inputRef.current?.focus()}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('workspace.join.code')} onPress={() => inputRef.current?.focus()}>
             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
               {Array.from({ length: CODE_LENGTH }, (_, i) => {
                 const active = i === Math.min(code.length, CODE_LENGTH - 1) && focused;
@@ -91,12 +91,12 @@ export default function JoinWorkspaceScreen() {
             autoCorrect={false}
             autoFocus
             maxLength={CODE_LENGTH}
-            accessibilityLabel="Davet kodu"
+            accessibilityLabel={t('workspace.join.code')}
             style={{ position: 'absolute', opacity: 0, height: 1, width: 1 }}
           />
 
           <Button
-            label="Katıl"
+            label={t('workspace.join.submit')}
             onPress={() => {
               if (!joinMutation.isPending) joinMutation.mutate();
             }}

@@ -20,10 +20,12 @@ import type {
   CounterpartyBreakdownItem,
   MonthlyTotal,
 } from '@/features/reports/api';
+import { formatPercent, getDisplayDecimalSeparator, zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
 // Raporlar (görsel referans: koyu tema finans raporları): her blok kendi kartında, kart başlığı
 // solda, sağda açıklama/segment ve ayrıntıyı açan daire ok düğmesi. Satır arası ince ayırıcı.
-const wholeAmount = (minor: number, currency = 'TRY') => formatMinorAmount(minor, currency).replace(/,00(?=\D*$)/, '');
+const wholeAmount = (minor: number, currency = 'TRY') => formatMinorAmount(minor, currency).replace(zeroFractionPattern(), '');
 
 /** Önceki döneme göre yüzde değişim; önceki değer yoksa ya da sıfırsa null. */
 export function percentChange(current: number, previous: number | null): number | null {
@@ -83,7 +85,7 @@ export function ReportCard({
             {title}
           </Text>
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>{right}</View>
-          {onMore ? <MoreButton onPress={onMore} label={moreLabel ?? `${title} ayrıntısı`} /> : null}
+          {onMore ? <MoreButton onPress={onMore} label={moreLabel ?? t('reports.sections.detailsA11y', { title })} /> : null}
         </View>
       ) : null}
       {children}
@@ -104,7 +106,7 @@ export function SmartSummary({ text, onPress }: { text: string; onPress?: () => 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Akıllı özet. ${text}`}
+      accessibilityLabel={t('reports.sections.smartSummaryA11y', { text })}
       onPress={onPress}
       disabled={!onPress}
       style={{
@@ -120,11 +122,11 @@ export function SmartSummary({ text, onPress }: { text: string; onPress?: () => 
       <FadedArt id="r-summary-art" source={require('@/assets/reports/summary.png')} width={230} height={230} right={-46} bottom={-56} />
       <View style={{ padding: 20, gap: 4, flex: 1, maxWidth: '68%' }}>
         <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>
-          Akıllı özet
+          {t('reports.sections.smartSummary')}
         </Text>
         <Text style={{ fontSize: 18, fontWeight: '700', lineHeight: 23 }}>
-          {headline.split(/(%\d+)/).map((part, i) =>
-            /^%\d+$/.test(part) ? (
+          {headline.split(/(%\d+|\d+%)/).map((part, i) =>
+            /^(%\d+|\d+%)$/.test(part) ? (
               <Text key={i} style={{ fontSize: 18, fontWeight: '700', color: tone }}>
                 {part}
               </Text>
@@ -141,7 +143,7 @@ export function SmartSummary({ text, onPress }: { text: string; onPress?: () => 
         <View style={{ flex: 1 }} />
         {onPress ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-            <Text style={{ color: tone, fontWeight: '600', fontSize: 15 }}>Önerileri gör</Text>
+            <Text style={{ color: tone, fontWeight: '600', fontSize: 15 }}>{t('reports.sections.seeInsights')}</Text>
             <Ionicons name="arrow-forward" size={15} color={tone} />
           </View>
         ) : null}
@@ -161,7 +163,7 @@ export function NetCard({ net, onPress }: { net: number; onPress?: () => void })
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Net ${net < 0 ? 'eksi ' : ''}${formatMinorAmount(Math.abs(net))}`}
+      accessibilityLabel={t('reports.sections.netA11y', { sign: net < 0 ? t('reports.sections.minus') : '', amount: formatMinorAmount(Math.abs(net)) })}
       onPress={onPress}
       disabled={!onPress}
       style={{
@@ -179,7 +181,7 @@ export function NetCard({ net, onPress }: { net: number; onPress?: () => void })
       </View>
       <View style={{ padding: 20, gap: 4, flex: 1, maxWidth: '78%' }}>
         <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>
-          Net
+          {t('reports.sections.net')}
         </Text>
         <Text
           variant="displayAmount"
@@ -193,12 +195,12 @@ export function NetCard({ net, onPress }: { net: number; onPress?: () => void })
           {formatMinorAmount(Math.abs(net))}
         </Text>
         <Text variant="caption" color="textSecondary">
-          {net === 0 ? 'Gelir ve gider denk.' : positive ? 'Bu dönemde gelir gideri aştı.' : 'Bu dönemde gider geliri aştı.'}
+          {net === 0 ? t('reports.sections.netEven') : positive ? t('reports.sections.netPositive') : t('reports.sections.netNegative')}
         </Text>
         <View style={{ flex: 1 }} />
         {onPress ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-            <Text style={{ color: theme.colors.textPrimary, fontWeight: '600', fontSize: 15 }}>Aylık tabloyu gör</Text>
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: '600', fontSize: 15 }}>{t('reports.sections.seeMonthlyTable')}</Text>
             <Ionicons name="arrow-forward" size={15} color={theme.colors.textPrimary} />
           </View>
         ) : null}
@@ -271,12 +273,12 @@ export function ChartLegend({ items }: { items: { label: string; color: string }
   );
 }
 
-// Eksen etiketi: 60B (bin), 1,5Mn (milyon).
+// Eksen etiketi: 60B (bin), 1,5Mn (milyon); İngilizcede 60K, 1.5M.
 function compactAxis(valueTl: number): string {
   if (valueTl === 0) return '0';
-  const trim = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
-  if (valueTl >= 1_000_000) return `${trim(valueTl / 1_000_000)}Mn`;
-  if (valueTl >= 1000) return `${trim(valueTl / 1000)}B`;
+  const trim = (n: number) => String(Math.round(n * 10) / 10).replace('.', getDisplayDecimalSeparator());
+  if (valueTl >= 1_000_000) return t('reports.sections.axisMillion', { value: trim(valueTl / 1_000_000) });
+  if (valueTl >= 1000) return t('reports.sections.axisThousand', { value: trim(valueTl / 1000) });
   return trim(valueTl);
 }
 
@@ -296,7 +298,9 @@ export function MonthBars({ data, expenseColor, incomeColor }: { data: MonthlyTo
     <View>
       <View
         accessible
-        accessibilityLabel={data.map((m) => `${m.label}: gelir ${wholeAmount(m.incomeMinor)}, gider ${wholeAmount(m.expenseMinor)}`).join('. ')}
+        accessibilityLabel={data
+          .map((m) => t('reports.sections.monthA11y', { month: m.label, income: wholeAmount(m.incomeMinor), expense: wholeAmount(m.expenseMinor) }))
+          .join('. ')}
         style={{ height: barHeight + 8, paddingTop: 4 }}
       >
         {ticks.map((tick, i) => (
@@ -349,16 +353,16 @@ export function MonthTable({ data }: { data: MonthlyTotal[] }) {
     <View style={{ backgroundColor: theme.colors.backgroundPrimary, borderRadius: theme.radius.group, paddingHorizontal: theme.spacing.md }}>
       <View style={{ flexDirection: 'row', paddingVertical: 10 }}>
         <Text variant="caption" color="textSecondary" style={{ flex: 1, fontWeight: '600' }}>
-          Ay
+          {t('reports.sections.month')}
         </Text>
         <Text variant="caption" color="textSecondary" style={{ ...cell, fontSize: 12, fontWeight: '600' }}>
-          Gelir
+          {t('reports.sections.income')}
         </Text>
         <Text variant="caption" color="textSecondary" style={{ ...cell, fontSize: 12, fontWeight: '600' }}>
-          Gider
+          {t('reports.sections.expense')}
         </Text>
         <Text variant="caption" color="textSecondary" style={{ ...cell, fontSize: 12, fontWeight: '600' }}>
-          Net
+          {t('reports.sections.net')}
         </Text>
       </View>
       {rows.map((m) => {
@@ -417,7 +421,12 @@ export function CategoryRows({
           <View
             key={item.categoryId ?? 'uncategorized'}
             accessible
-            accessibilityLabel={`${item.name}: ${wholeAmount(item.amountMinor)}, toplamın yüzde ${Math.round(item.percentage * 100)}${pct !== null ? `, önceki döneme göre yüzde ${pct}` : ''}`}
+            accessibilityLabel={t('reports.sections.categoryA11y', {
+              name: item.name,
+              amount: wholeAmount(item.amountMinor),
+              share: Math.round(item.percentage * 100),
+              change: pct !== null ? t('reports.sections.categoryChangeA11y', { pct }) : '',
+            })}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -442,7 +451,8 @@ export function CategoryRows({
                       color: (goodWhenDown ? pct < 0 : pct > 0) ? theme.colors.receivable : theme.colors.textSecondary,
                     }}
                   >
-                    {pct > 0 ? '+' : '−'}%{Math.abs(pct)}
+                    {pct > 0 ? '+' : '−'}
+                    {formatPercent(Math.abs(pct))}
                   </Text>
                 ) : null}
                 <Text tabular style={{ fontWeight: '600' }}>
@@ -480,11 +490,11 @@ export function DebtRows({
 }) {
   const theme = useTheme();
   const rows: { key: 'payable' | 'receivable' | 'overdue'; label: string; count: number; value: number; icon: keyof typeof Ionicons.glyphMap; tone: string }[] = [
-    { key: 'payable', label: 'Ödenecek', count: payableCount, value: payableMinor, icon: 'arrow-up', tone: theme.colors.danger },
-    { key: 'receivable', label: 'Tahsil edilecek', count: receivableCount, value: receivableMinor, icon: 'arrow-down', tone: theme.colors.receivable },
+    { key: 'payable', label: t('reports.sections.payable'), count: payableCount, value: payableMinor, icon: 'arrow-up', tone: theme.colors.danger },
+    { key: 'receivable', label: t('reports.sections.receivable'), count: receivableCount, value: receivableMinor, icon: 'arrow-down', tone: theme.colors.receivable },
   ];
   if (overdueCount > 0) {
-    rows.push({ key: 'overdue', label: 'Gecikmiş', count: overdueCount, value: overdueMinor, icon: 'time', tone: theme.colors.danger });
+    rows.push({ key: 'overdue', label: t('reports.sections.overdue'), count: overdueCount, value: overdueMinor, icon: 'time', tone: theme.colors.danger });
   }
   return (
     <View>
@@ -492,7 +502,7 @@ export function DebtRows({
         <Pressable
           key={r.key}
           accessibilityRole="button"
-          accessibilityLabel={`${r.label}: ${formatMinorAmount(r.value)}, ${r.count} kayıt`}
+          accessibilityLabel={t('reports.sections.debtA11y', { label: r.label, amount: formatMinorAmount(r.value), count: r.count })}
           onPress={() => onPress(r.key)}
           style={{
             flexDirection: 'row',
@@ -511,7 +521,7 @@ export function DebtRows({
               {r.label}
             </Text>
             <Text variant="caption" color="textSecondary">
-              {r.count} kayıt
+              {t('reports.sections.recordCount', { count: r.count })}
             </Text>
           </View>
           <Text tabular style={{ fontSize: 17, fontWeight: '700', color: r.tone }} numberOfLines={1}>
@@ -533,7 +543,7 @@ function EmptyText({ text }: { text: string }) {
 
 export function CounterpartyRows({ items }: { items: CounterpartyBreakdownItem[] }) {
   const theme = useTheme();
-  if (items.length === 0) return <EmptyText text="Bu dönemde kişi veya firma hareketi yok." />;
+  if (items.length === 0) return <EmptyText text={t('reports.sections.noCounterparties')} />;
   return (
     <View>
       {items.map((item, index) => (
@@ -547,7 +557,7 @@ export function CounterpartyRows({ items }: { items: CounterpartyBreakdownItem[]
               {item.name}
             </Text>
             <Text variant="caption" color="textSecondary">
-              {item.count} hareket
+              {t('reports.sections.transactionCount', { count: item.count })}
             </Text>
           </View>
           <Text tabular style={{ fontWeight: '600' }}>
@@ -562,7 +572,7 @@ export function CounterpartyRows({ items }: { items: CounterpartyBreakdownItem[]
 export function CashFlowRows({ buckets }: { buckets: CashFlowBucket[] }) {
   const theme = useTheme();
   const hasData = buckets.some((b) => b.payableMinor > 0 || b.receivableMinor > 0);
-  if (!hasData) return <EmptyText text="Önümüzdeki 30 günde vadesi gelen kayıt yok." />;
+  if (!hasData) return <EmptyText text={t('reports.sections.noCashFlow')} />;
   const max = Math.max(1, ...buckets.flatMap((b) => [b.payableMinor, b.receivableMinor]));
   return (
     <View>
@@ -572,7 +582,7 @@ export function CashFlowRows({ buckets }: { buckets: CashFlowBucket[] }) {
           <View
             key={b.label}
             accessible
-            accessibilityLabel={`${b.label}: çıkış ${wholeAmount(b.payableMinor)}, giriş ${wholeAmount(b.receivableMinor)}`}
+            accessibilityLabel={t('reports.sections.cashFlowA11y', { label: b.label, out: wholeAmount(b.payableMinor), in: wholeAmount(b.receivableMinor) })}
             style={{ gap: 6, paddingVertical: 10, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: theme.colors.separator }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -596,8 +606,8 @@ export function CashFlowRows({ buckets }: { buckets: CashFlowBucket[] }) {
       <View style={{ paddingTop: 10 }}>
         <ChartLegend
           items={[
-            { label: 'Çıkış', color: theme.colors.danger },
-            { label: 'Giriş', color: theme.colors.receivable },
+            { label: t('reports.sections.outflow'), color: theme.colors.danger },
+            { label: t('reports.sections.inflow'), color: theme.colors.receivable },
           ]}
         />
       </View>
@@ -607,7 +617,7 @@ export function CashFlowRows({ buckets }: { buckets: CashFlowBucket[] }) {
 
 export function AccountRows({ items }: { items: AccountBalanceReportItem[] }) {
   const theme = useTheme();
-  if (items.length === 0) return <EmptyText text="Henüz hesap yok." />;
+  if (items.length === 0) return <EmptyText text={t('reports.sections.noAccounts')} />;
   return (
     <View>
       {items.map((item, index) => (
@@ -630,7 +640,7 @@ export function AccountRows({ items }: { items: AccountBalanceReportItem[] }) {
 
 export function RateRows({ rates, ageText, limit }: { rates: ValueUnitRate[]; ageText: string | null; limit?: number }) {
   const theme = useTheme();
-  if (rates.length === 0) return <EmptyText text="Kur bilgisi bulunamadı." />;
+  if (rates.length === 0) return <EmptyText text={t('reports.sections.noRates')} />;
   const shown = limit ? rates.slice(0, limit) : rates;
   return (
     <View>
@@ -645,7 +655,7 @@ export function RateRows({ rates, ageText, limit }: { rates: ValueUnitRate[]; ag
             <Text numberOfLines={1} style={{ flex: 1, fontSize: 15 }}>
               {getValueUnit(rate.unit_code).name}
             </Text>
-            {stale ? <Tag label="eski" tone="brand" /> : null}
+            {stale ? <Tag label={t('reports.sections.staleRate')} tone="brand" /> : null}
             <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
               {formatMinorAmount(rate.try_equivalent_minor)}
             </Text>

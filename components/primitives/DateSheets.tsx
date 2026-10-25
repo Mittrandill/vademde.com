@@ -7,12 +7,12 @@ import { Button } from './Button';
 import { MONTH_NAMES, MonthStepper } from './MonthStepper';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 // HANDOFF §3 — DatePickerSheet, DateRangeSheet, MonthYearSheet, DayOfMonthSheet.
 // Tarihler yerel ISO (YYYY-MM-DD) metni; saat dilimi kayması olmasın diye Date yalnızca
 // takvim hesabı için kullanılır. Vade noktaları `dueDates` ile payable renginde işaretlenir.
 
-const WEEKDAYS = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'];
 
 export function toIso(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -53,7 +53,7 @@ function MonthGrid({ year, month, onPickDay, isSelected, isInRange, dueDates }: 
   return (
     <View>
       <View style={{ flexDirection: 'row' }}>
-        {WEEKDAYS.map((d) => (
+        {t('ui.weekdaysShort').split(',').map((d) => (
           <Text key={d} variant="label" color="textSecondary" style={{ flex: 1, textAlign: 'center' }}>
             {d}
           </Text>
@@ -69,7 +69,7 @@ function MonthGrid({ year, month, onPickDay, isSelected, isInRange, dueDates }: 
             <View key={iso} style={{ width: `${100 / 7}%`, minHeight: 46, alignItems: 'center' }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${day} ${MONTH_NAMES[month]} ${year}${due.has(iso) ? ', vade var' : ''}`}
+                accessibilityLabel={`${day} ${MONTH_NAMES[month]} ${year}${due.has(iso) ? t('ui.date.hasDue') : ''}`}
                 accessibilityState={{ selected }}
                 onPress={() => onPickDay(iso)}
                 style={{
@@ -132,7 +132,7 @@ export interface DatePickerSheetProps {
   dueDates?: readonly string[];
 }
 
-export function DatePickerSheet({ visible, onClose, value, onChange, title = 'Tarih seç', dueDates }: DatePickerSheetProps) {
+export function DatePickerSheet({ visible, onClose, value, onChange, title = t('ui.date.pick'), dueDates }: DatePickerSheetProps) {
   const [cursor, setCursor] = useCursor(value);
 
   return (
@@ -164,12 +164,12 @@ export interface DateRangeSheetProps {
 
 function formatIso(iso: string | null): string {
   const m = iso ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso) : null;
-  return m ? `${Number(m[3])} ${MONTH_NAMES[Number(m[2]) - 1]} ${m[1]}` : 'Seçin';
+  return m ? `${Number(m[3])} ${MONTH_NAMES[Number(m[2]) - 1]} ${m[1]}` : t('ui.select');
 }
 
 // Başlangıç ve Bitiş kutuları: aktif kutu doldurulur, ardından otomatik diğerine geçilir.
 // Başlangıçtan önce bir bitiş seçilirse iki tarih yer değiştirir. İki tarih de seçilmeden uygulanamaz.
-export function DateRangeSheet({ visible, onClose, start, end, onApply, title = 'Tarih aralığı' }: DateRangeSheetProps) {
+export function DateRangeSheet({ visible, onClose, start, end, onApply, title = t('ui.date.range') }: DateRangeSheetProps) {
   const theme = useTheme();
   const [cursor, setCursor] = useCursor(start);
   const [draftStart, setDraftStart] = useState<string | null>(start);
@@ -190,8 +190,8 @@ export function DateRangeSheet({ visible, onClose, start, end, onApply, title = 
   };
 
   const fields: { key: 'start' | 'end'; label: string; value: string | null }[] = [
-    { key: 'start', label: 'Başlangıç', value: draftStart },
-    { key: 'end', label: 'Bitiş', value: draftEnd },
+    { key: 'start', label: t('ui.date.start'), value: draftStart },
+    { key: 'end', label: t('ui.date.end'), value: draftEnd },
   ];
 
   return (
@@ -262,13 +262,13 @@ export function MonthYearSheet({ visible, onClose, year, month, onChange }: Mont
   const [shownYear, setShownYear] = useState(year);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Ay ve yıl">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.date.monthYear')}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         {([-1, 1] as const).map((delta) => (
           <Pressable
             key={delta}
             accessibilityRole="button"
-            accessibilityLabel={delta < 0 ? 'Önceki yıl' : 'Sonraki yıl'}
+            accessibilityLabel={delta < 0 ? t('ui.previousYear') : t('ui.nextYear')}
             onPress={() => setShownYear((y) => y + delta)}
             style={{
               width: theme.touchTarget.minimum,
@@ -330,7 +330,7 @@ export interface DayOfMonthSheetProps {
   title?: string;
 }
 
-export function DayOfMonthSheet({ visible, onClose, value, onChange, title = 'Ayın günü' }: DayOfMonthSheetProps) {
+export function DayOfMonthSheet({ visible, onClose, value, onChange, title = t('ui.date.dayOfMonth') }: DayOfMonthSheetProps) {
   const theme = useTheme();
 
   return (
@@ -342,7 +342,7 @@ export function DayOfMonthSheet({ visible, onClose, value, onChange, title = 'Ay
             <View key={day} style={{ width: `${100 / 7}%`, padding: 2, alignItems: 'center' }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Ayın ${day}. günü`}
+                accessibilityLabel={t('ui.date.dayOfMonthA11y', { day })}
                 accessibilityState={{ selected: active }}
                 onPress={() => {
                   onChange(day);

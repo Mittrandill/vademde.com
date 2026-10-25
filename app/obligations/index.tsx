@@ -43,8 +43,11 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { formatMinorAmount } from '@/utils/money';
+import { localeDateFormatter } from '@/i18n/format';
+import { getLanguage, t } from '@/i18n';
+import { lowerUi } from '@/i18n/format';
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+const dateFormatter = localeDateFormatter({ day: '2-digit', month: 'short', year: 'numeric' });
 
 // Bu ekranda tek filtre boyutu var: durum. Borç/alacak yön filtresi kaldırıldı — iki ayrı
 // filtre satırı kullanıcı için gereksiz karmaşıklık yaratıyordu (bkz. tasarım geri bildirimi).
@@ -55,11 +58,11 @@ type StatusKey = 'active' | 'overdue' | 'closed' | 'all';
 // bir sayfalama çubuğuyla öngörülebilir şekilde gezilmesi için.
 const LIST_PAGE_SIZE = 10;
 
-const STATUS_OPTIONS: { key: StatusKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'active', label: 'Aktif' },
-  { key: 'overdue', label: 'Gecikmiş' },
-  { key: 'closed', label: 'Kapalı' },
+const STATUS_OPTIONS: { key: StatusKey; readonly label: string }[] = [
+  { key: 'all', get label() { return t('common.all'); } },
+  { key: 'active', get label() { return t('obligations.list.active'); } },
+  { key: 'overdue', get label() { return t('obligations.list.overdue'); } },
+  { key: 'closed', get label() { return t('obligations.list.closed'); } },
 ];
 
 const STATUSES_BY_KEY: Record<StatusKey, Obligation['status'][] | undefined> = {
@@ -83,8 +86,8 @@ export default function ObligationsByTypeScreen() {
   const { type, status } = useLocalSearchParams<{ type?: string; status?: string }>();
   const documentType = typeof type === 'string' ? type : undefined;
   const title = documentType
-    ? (DOCUMENT_TYPE_LABEL_PLURAL[documentType] ?? DOCUMENT_TYPE_LABEL[documentType] ?? 'Kayıtlar')
-    : 'Tüm Kayıtlar';
+    ? (DOCUMENT_TYPE_LABEL_PLURAL[documentType] ?? DOCUMENT_TYPE_LABEL[documentType] ?? t('obligations.list.records'))
+    : t('obligations.list.allRecords');
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -215,7 +218,7 @@ export default function ObligationsByTypeScreen() {
       // new.tsx'teki aynı Fabric çakışması düzeltmesi: Alert'in kapanma animasyonu,
       // listeden bir satırın kaldırılmasıyla aynı ana denk gelirse çöküyor — önbellek
       // geçersizleştirme, kullanıcı başarı Alert'ini kapatana kadar ertelenir.
-      showSuccessAlert('Kayıt başarıyla silindi.', () => {
+      showSuccessAlert(t('obligations.list.deleted'), () => {
         InteractionManager.runAfterInteractions(() => {
           if (activeWorkspaceId) {
             invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
@@ -228,13 +231,11 @@ export default function ObligationsByTypeScreen() {
 
   function confirmDelete(item: ObligationWithRelations, hasInstallments: boolean) {
     Alert.alert(
-      'Kaydı Sil',
-      hasInstallments
-        ? 'Bu kayıt, taksitleri, ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?'
-        : 'Bu kayıt, varsa ödeme geçmişi ve ödemelerin hesap hareketleri kalıcı olarak silinecek. Emin misiniz?',
+      t('obligations.list.deleteTitle'),
+      hasInstallments ? t('obligations.list.deleteBodyInstallments') : t('obligations.list.deleteBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate(item.id) },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => deleteMutation.mutate(item.id) },
       ]
     );
   }
@@ -245,15 +246,19 @@ export default function ObligationsByTypeScreen() {
   const heroPayableMinor = overview?.active.payableMinor ?? 0;
   const heroReceivableMinor = overview?.active.receivableMinor ?? 0;
   const showsPayable = heroPayableMinor > 0 || heroReceivableMinor === 0;
-  const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? documentType) : 'Kayıt';
+  const typeLabel = documentType ? (DOCUMENT_TYPE_LABEL[documentType] ?? documentType) : t('obligations.list.record');
   const isInitialLoading = obligationsQuery.isLoading && rows.length === 0;
 
   const openNewRecord = () =>
     router.push({ pathname: '/obligations/new', params: documentType ? { type: documentType } : {} });
 
   const footerLabel = totalCount
-    ? `${effectivePage * LIST_PAGE_SIZE + 1}–${Math.min((effectivePage + 1) * LIST_PAGE_SIZE, totalCount)} / ${totalCount} kayıt`
-    : '0 kayıt gösteriliyor';
+    ? t('obligations.list.range', {
+        from: effectivePage * LIST_PAGE_SIZE + 1,
+        to: Math.min((effectivePage + 1) * LIST_PAGE_SIZE, totalCount),
+        count: totalCount,
+      })
+    : t('obligations.list.showingNone');
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -268,43 +273,43 @@ export default function ObligationsByTypeScreen() {
         <Stack gap="lg">
           <ScreenHeader
             title={title}
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-            right={{ icon: 'add', accessibilityLabel: `Yeni ${typeLabel}`, variant: 'accent', onPress: openNewRecord }}
+            left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: () => router.back() }}
+            right={{ icon: 'add', accessibilityLabel: t('obligations.list.newRecord', { type: typeLabel }), variant: 'accent', onPress: openNewRecord }}
           />
 
           <FinanceListHero
-            label={showsPayable ? 'TOPLAM BORÇ' : 'TOPLAM ALACAK'}
-            description={`${title} için aktif kayıtların kalan toplamı`}
+            label={showsPayable ? t('obligations.list.totalPayable') : t('obligations.list.totalReceivable')}
+            description={t('obligations.list.heroBody', { title: getLanguage() === 'tr' ? title : lowerUi(title) })}
             amountText={formatMinorAmount(showsPayable ? heroPayableMinor : heroReceivableMinor)}
             amountColor={showsPayable ? 'textPrimary' : 'receivable'}
             metrics={[
-              { label: 'TOPLAM KAYIT', value: totalTypeCount, caption: `Tüm ${typeLabel.toLocaleLowerCase('tr-TR')} kayıtları` },
-              { label: 'ALACAĞINIZ', value: formatMinorAmount(heroReceivableMinor), caption: 'Tahsil edilecek', valueColor: 'receivable' },
-              { label: 'BORCUNUZ', value: formatMinorAmount(heroPayableMinor), caption: 'Ödenecek' },
-              { label: 'GECİKMİŞ', value: overdueCount, caption: 'Vadesi geçen', valueColor: overdueCount > 0 ? 'danger' : undefined },
+              { label: t('obligations.list.totalLabel'), value: totalTypeCount, caption: t('obligations.list.totalCaption', { type: lowerUi(typeLabel) }) },
+              { label: t('obligations.list.receivableLabel'), value: formatMinorAmount(heroReceivableMinor), caption: t('obligations.list.receivableCaption'), valueColor: 'receivable' },
+              { label: t('obligations.list.payableLabel'), value: formatMinorAmount(heroPayableMinor), caption: t('obligations.list.payableCaption') },
+              { label: t('obligations.list.overdueLabel'), value: overdueCount, caption: t('obligations.list.overdueCaption'), valueColor: overdueCount > 0 ? 'danger' : undefined },
             ]}
           />
 
           <FinanceFilterCard
-            title="KAYIT DURUMU"
-            description="Listede görmek istediğiniz kayıt durumunu seçin."
+            title={t('obligations.list.statusTitle')}
+            description={t('obligations.list.statusBody')}
             options={STATUS_OPTIONS}
             value={statusKey}
             onChange={setStatusKey}
           />
 
           <FinanceListSurface
-            searchPlaceholder={`${title} ara...`}
+            searchPlaceholder={t('obligations.list.search', { title: getLanguage() === 'tr' ? title : lowerUi(title) })}
             searchValue={searchInput}
             onSearchChange={setSearchInput}
             sortAction={{
-              label: 'Tarih',
-              accessibilityLabel: 'Tarihe göre sırala',
+              label: t('obligations.list.date'),
+              accessibilityLabel: t('obligations.list.sortByDate'),
               icon: sortAscending ? 'arrow-up' : 'arrow-down',
               onPress: () => setSortAscending((value) => !value),
             }}
             footerLabel={rows.length > 0 ? footerLabel : undefined}
-            actionLabel={rows.length > 0 ? `Yeni ${typeLabel}` : undefined}
+            actionLabel={rows.length > 0 ? t('obligations.list.newRecord', { type: typeLabel }) : undefined}
             onActionPress={rows.length > 0 ? openNewRecord : undefined}
             page={effectivePage}
             totalPages={totalPages}
@@ -313,7 +318,7 @@ export default function ObligationsByTypeScreen() {
           >
             {obligationsQuery.error ? (
               <Text variant="body" color="danger" style={{ padding: theme.spacing.lg }}>
-                {friendlyErrorMessage(obligationsQuery.error, 'Kayıtlar yüklenemedi')}
+                {friendlyErrorMessage(obligationsQuery.error, t('obligations.list.loadFailed'))}
               </Text>
             ) : isInitialLoading ? (
               <Stack gap="sm" style={{ padding: theme.spacing.lg }}>
@@ -324,9 +329,9 @@ export default function ObligationsByTypeScreen() {
             ) : rows.length === 0 ? (
               <FinanceListEmptyState
                 icon={isFiltered ? 'search-outline' : (documentType && DOCUMENT_TYPE_ICON[documentType]) || 'apps-outline'}
-                title={isFiltered ? 'Sonuç bulunamadı' : `Henüz ${title.toLocaleLowerCase('tr-TR')} kaydı yok`}
-                message={isFiltered ? 'Arama terimini veya filtreleri değiştirin.' : 'Belge tarayarak veya manuel giriş yaparak ekleyebilirsiniz.'}
-                actionLabel={isFiltered ? undefined : `Yeni ${typeLabel}`}
+                title={isFiltered ? t('obligations.list.noResults') : t('obligations.list.empty', { title: lowerUi(title) })}
+                message={isFiltered ? t('obligations.list.noResultsBody') : t('obligations.list.emptyBody')}
+                actionLabel={isFiltered ? undefined : t('obligations.list.newRecord', { type: typeLabel })}
                 onActionPress={isFiltered ? undefined : openNewRecord}
               />
             ) : (
@@ -389,20 +394,20 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
   const tag: { label: string; tone: 'danger' | 'brand' | 'success' | 'neutral' } | null = isClosed
     ? { label: statusLabel, tone: 'success' }
     : item.status === 'gecikti' || (daysLeft !== null && daysLeft < 0)
-      ? { label: daysLeft !== null && daysLeft < 0 ? `${-daysLeft} gün gecikti` : 'Gecikti', tone: 'danger' }
+      ? { label: daysLeft !== null && daysLeft < 0 ? t('common.daysOverdue', { count: -daysLeft }) : OBLIGATION_STATUS_LABEL.gecikti, tone: 'danger' }
       : daysLeft === null
         ? null
         : daysLeft <= 1
-          ? { label: daysLeft <= 0 ? 'Bugün' : 'Yarın', tone: 'brand' }
+          ? { label: daysLeft <= 0 ? t('common.today') : t('common.tomorrow'), tone: 'brand' }
           : daysLeft <= 10
-            ? { label: `${daysLeft} gün`, tone: 'brand' }
-            : { label: `${daysLeft} gün`, tone: 'neutral' };
+            ? { label: t('common.inDays', { count: daysLeft }), tone: 'brand' }
+            : { label: t('common.inDays', { count: daysLeft }), tone: 'neutral' };
 
   return (
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${bankName ?? serviceName ?? item.title} detayını aç`}
+        accessibilityLabel={t('obligations.list.openA11y', { name: bankName ?? serviceName ?? item.title })}
         onPress={() => router.push(`/obligations/${item.id}`)}
         onLongPress={() => setSheetOpen(true)}
         disabled={deleting}
@@ -459,19 +464,19 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
         options={[
           {
             key: 'detail',
-            label: 'Detay',
+            label: t('obligations.list.detail'),
             icon: 'eye-outline',
             onPress: () => router.push(`/obligations/${item.id}`),
           },
           {
             key: 'edit',
-            label: 'Düzenle',
+            label: t('common.edit'),
             icon: 'pencil-outline',
             onPress: () => router.push({ pathname: '/obligations/new', params: { id: item.id } }),
           },
           {
             key: 'delete',
-            label: 'Sil',
+            label: t('common.delete'),
             icon: 'trash-outline',
             danger: true,
             onPress: () => onDelete(item, hasInstallments),

@@ -5,6 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { darkColors, withAlpha } from '@/theme/colors';
 import { Text } from '@/components/primitives';
 import { BANK_LOGOS } from '@/features/banks/banks';
+import { formatMinorAmount } from '@/utils/money';
+import { zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
 export type WidgetKind =
   | 'next'
@@ -22,12 +25,17 @@ const c = darkColors;
 const LOCK_INK = '#FFFFFF';
 const LOCK_SURFACE = 'rgba(255,255,255,0.18)';
 
-const SAMPLE = [
-  { date: 'Yarın', title: 'Kuzey Lojistik', kind: 'çek', when: 'yarın', amount: '₺48.250', bank: 'akbank', tint: c.brandPrimary },
-  { date: '9 Eki', title: 'Anadolu Ambalaj', kind: 'senet', when: '4 gün', amount: '+₺18.000', receivable: true, tint: c.textSecondary },
-  { date: '12 Eki', title: 'Konut kredisi', kind: 'kredi', when: '7 gün', amount: '₺14.872', bank: 'turkiye-garanti-bankasi', tint: c.textSecondary },
-  { date: '15 Eki', title: 'Bonus ekstresi', kind: 'ekstre', when: '10 gün', amount: '₺23.419', bank: 'turkiye-garanti-bankasi', tint: c.textSecondary },
-];
+// Örnek tutarlar uygulama dilinde biçimlenir (₺48.250 / ₺48,250); kuruşsuz gösterilir.
+const amount = (minor: number) => formatMinorAmount(minor).replace(zeroFractionPattern(), '');
+
+function sampleRows() {
+  return [
+    { date: t('widgets.preview.tomorrow'), title: 'Kuzey Lojistik', kind: t('widgets.preview.cheque'), when: t('widgets.preview.tomorrowLower'), amount: amount(4825000), bank: 'akbank', tint: c.brandPrimary },
+    { date: t('widgets.preview.date9'), title: 'Anadolu Ambalaj', kind: t('widgets.preview.note'), when: t('widgets.preview.in4'), amount: `+${amount(1800000)}`, receivable: true, tint: c.textSecondary },
+    { date: t('widgets.preview.date12'), title: t('widgets.preview.homeLoan'), kind: t('widgets.preview.loan'), when: t('widgets.preview.in7'), amount: amount(1487200), bank: 'turkiye-garanti-bankasi', tint: c.textSecondary },
+    { date: t('widgets.preview.date15'), title: t('widgets.preview.cardStatement'), kind: t('widgets.preview.statement'), when: t('widgets.preview.in10'), amount: amount(2341900), bank: 'turkiye-garanti-bankasi', tint: c.textSecondary },
+  ];
+}
 
 function Card({ width, height, children }: { width: number; height: number; children: ReactNode }) {
   return (
@@ -81,6 +89,7 @@ function Lock({ width, height, round, children }: { width: number; height: numbe
 }
 
 export function WidgetPreview({ kind }: { kind: WidgetKind }) {
+  const SAMPLE = sampleRows();
   const first = SAMPLE[0];
   switch (kind) {
     case 'next':
@@ -89,11 +98,11 @@ export function WidgetPreview({ kind }: { kind: WidgetKind }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Mark bank={first.bank} />
             <View style={{ height: 20, paddingHorizontal: 7, borderRadius: 6, justifyContent: 'center', backgroundColor: withAlpha(c.brandPrimary, 0.14) }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: c.brandPrimary }}>Yarın</Text>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: c.brandPrimary }}>{t('widgets.preview.tomorrow')}</Text>
             </View>
           </View>
           <View style={{ flex: 1 }} />
-          <Label>Sıradaki vade</Label>
+          <Label>{t('widgets.preview.nextDue')}</Label>
           <Text tabular style={{ fontSize: 22, fontWeight: '700', color: c.textPrimary, marginTop: 2 }}>
             {first.amount}
           </Text>
@@ -105,14 +114,14 @@ export function WidgetPreview({ kind }: { kind: WidgetKind }) {
     case 'week':
       return (
         <Card width={158} height={158}>
-          <Label>Bu hafta</Label>
+          <Label>{t('widgets.preview.thisWeek')}</Label>
           <View style={{ marginTop: 8, gap: 2 }}>
-            <Text style={{ fontSize: 12, color: c.textSecondary }}>Ödenecek</Text>
-            <Text tabular style={{ fontSize: 17, fontWeight: '700', color: c.textPrimary }}>₺48.250</Text>
+            <Text style={{ fontSize: 12, color: c.textSecondary }}>{t('widgets.preview.toPay')}</Text>
+            <Text tabular style={{ fontSize: 17, fontWeight: '700', color: c.textPrimary }}>{amount(4825000)}</Text>
           </View>
           <View style={{ marginTop: 8, gap: 2 }}>
-            <Text style={{ fontSize: 12, color: c.textSecondary }}>Tahsil edilecek</Text>
-            <Text tabular style={{ fontSize: 17, fontWeight: '700', color: c.receivable }}>₺18.000</Text>
+            <Text style={{ fontSize: 12, color: c.textSecondary }}>{t('widgets.preview.toCollect')}</Text>
+            <Text tabular style={{ fontSize: 17, fontWeight: '700', color: c.receivable }}>{amount(1800000)}</Text>
           </View>
           <View style={{ flex: 1 }} />
           <View style={{ flexDirection: 'row', height: 5, borderRadius: 3, overflow: 'hidden' }}>
@@ -125,7 +134,7 @@ export function WidgetPreview({ kind }: { kind: WidgetKind }) {
       return (
         <Card width={338} height={158}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Label>Yaklaşan vadeler</Label>
+            <Label>{t('widgets.preview.upcoming')}</Label>
             <Image source={require('@/assets/icon.png')} style={{ width: 18, height: 18, borderRadius: 5 }} />
           </View>
           <View style={{ marginTop: 12, gap: 8 }}>
@@ -149,17 +158,20 @@ export function WidgetPreview({ kind }: { kind: WidgetKind }) {
       return (
         <Card width={338} height={330}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Label>Çalışma alanınız</Label>
+            <Label>{t('widgets.preview.yourWorkspace')}</Label>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: c.brandPrimary }}>
               <Ionicons name="scan-outline" size={13} color={c.brandPrimaryText} />
-              <Text style={{ fontSize: 12, fontWeight: '600', color: c.brandPrimaryText }}>Tara</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: c.brandPrimaryText }}>{t('widgets.preview.scan')}</Text>
             </View>
           </View>
-          <Text style={{ fontSize: 12, color: c.textSecondary, marginTop: 8 }}>Toplam bakiye</Text>
-          <Text tabular style={{ fontSize: 30, fontWeight: '700', color: c.textPrimary }}>₺99.521,05</Text>
+          <Text style={{ fontSize: 12, color: c.textSecondary, marginTop: 8 }}>{t('widgets.preview.totalBalance')}</Text>
+          <Text tabular style={{ fontSize: 30, fontWeight: '700', color: c.textPrimary }}>{formatMinorAmount(9952105)}</Text>
           <Text style={{ fontSize: 12, color: c.textSecondary, marginTop: 8 }}>
-            Alacak <Text style={{ fontSize: 12, fontWeight: '600', color: c.receivable }}>₺18.000</Text>
-            {'    '}Borç <Text style={{ fontSize: 12, fontWeight: '600', color: c.textPrimary }}>₺101.590</Text>
+            {t('widgets.preview.receivable')}
+            <Text style={{ fontSize: 12, fontWeight: '600', color: c.receivable }}>{amount(1800000)}</Text>
+            {'    '}
+            {t('widgets.preview.payable')}
+            <Text style={{ fontSize: 12, fontWeight: '600', color: c.textPrimary }}>{amount(10159000)}</Text>
           </Text>
           <View style={{ height: 1, backgroundColor: c.separator, marginTop: 12 }} />
           <View style={{ marginTop: 12, gap: 10 }}>
@@ -182,7 +194,7 @@ export function WidgetPreview({ kind }: { kind: WidgetKind }) {
         <Lock width={72} height={72} round>
           <View style={{ position: 'absolute', top: 6, left: 6, right: 6, bottom: 6, borderRadius: 30, borderWidth: 5, borderColor: withAlpha(LOCK_INK, 0.9) }} />
           <Text style={{ fontSize: 20, fontWeight: '700', color: LOCK_INK, lineHeight: 22 }}>1</Text>
-          <Text style={{ fontSize: 9, fontWeight: '600', color: LOCK_INK }}>GÜN</Text>
+          <Text style={{ fontSize: 9, fontWeight: '600', color: LOCK_INK }}>{t('widgets.preview.daysUpper')}</Text>
         </Lock>
       );
     case 'lockNext':
@@ -190,11 +202,11 @@ export function WidgetPreview({ kind }: { kind: WidgetKind }) {
         <Lock width={170} height={72}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.8 }}>
             <Ionicons name="calendar" size={11} color={LOCK_INK} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: LOCK_INK }}>SIRADAKİ VADE</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: LOCK_INK }}>{t('widgets.preview.nextDueUpper')}</Text>
           </View>
-          <Text tabular style={{ fontSize: 16, fontWeight: '700', color: LOCK_INK }}>₺48.250,00</Text>
+          <Text tabular style={{ fontSize: 16, fontWeight: '700', color: LOCK_INK }}>{formatMinorAmount(4825000)}</Text>
           <Text numberOfLines={1} style={{ fontSize: 12, color: LOCK_INK, opacity: 0.85 }}>
-            Kuzey Lojistik · yarın
+            Kuzey Lojistik · {t('widgets.preview.tomorrowLower')}
           </Text>
         </Lock>
       );
@@ -202,15 +214,15 @@ export function WidgetPreview({ kind }: { kind: WidgetKind }) {
       return (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Ionicons name="document-text" size={15} color={LOCK_INK} />
-          <Text style={{ fontSize: 15, fontWeight: '600', color: LOCK_INK }}>Çek yarın ₺48.250</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: LOCK_INK }}>{t('widgets.preview.inline', { amount: amount(4825000) })}</Text>
         </View>
       );
     case 'lockNet':
       return (
         <Lock width={72} height={72} round>
-          <Text style={{ fontSize: 9, fontWeight: '700', color: LOCK_INK, opacity: 0.8 }}>BU AY</Text>
+          <Text style={{ fontSize: 9, fontWeight: '700', color: LOCK_INK, opacity: 0.8 }}>{t('widgets.preview.thisMonthUpper')}</Text>
           <Text style={{ fontSize: 15, fontWeight: '700', color: LOCK_INK }}>+35K</Text>
-          <Text style={{ fontSize: 9, fontWeight: '600', color: LOCK_INK, opacity: 0.8 }}>NET</Text>
+          <Text style={{ fontSize: 9, fontWeight: '600', color: LOCK_INK, opacity: 0.8 }}>{t('widgets.preview.netUpper')}</Text>
         </Lock>
       );
   }

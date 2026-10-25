@@ -40,16 +40,16 @@ import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement'
 import { queryKeys } from '@/services/queryKeys';
 import { showErrorAlert } from '@/utils/alerts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
-const ROLE_LABEL: Record<WorkspaceRole, string> = {
-  owner: 'Sahip',
-  editor: 'Düzenleyici',
-  viewer: 'Görüntüleyici',
-};
+const ROLE_LABEL: Record<WorkspaceRole, string> = localizedRecord(['owner', 'editor', 'viewer'] as const, (role) =>
+  t(`workspace.roles.${role}`)
+);
 
 const INVITE_ROLE_OPTIONS = [
-  { key: 'editor' as const, label: 'Düzenleyici' },
-  { key: 'viewer' as const, label: 'Görüntüleyici' },
+  { key: 'editor' as const, get label() { return t('workspace.roles.editor'); } },
+  { key: 'viewer' as const, get label() { return t('workspace.roles.viewer'); } },
 ];
 
 function initials(name: string | null, email: string | null): string {
@@ -141,7 +141,7 @@ export default function WorkspaceDetailScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
       setIsEditingName(false);
     },
-    onError: (error) => showErrorAlert(error, 'Çalışma alanı adı güncellenemedi.'),
+    onError: (error) => showErrorAlert(error, t('workspace.renameFailed')),
   });
 
   const deleteWorkspaceMutation = useMutation({
@@ -151,7 +151,7 @@ export default function WorkspaceDetailScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
       router.back();
     },
-    onError: (error) => showErrorAlert(error, 'Çalışma alanı silinemedi.'),
+    onError: (error) => showErrorAlert(error, t('workspace.deleteFailed')),
   });
 
   const createInviteMutation = useMutation({
@@ -194,13 +194,13 @@ export default function WorkspaceDetailScreen() {
   function shareInvite(code: string) {
     const link = buildInviteLink(code);
     Share.share({
-      message: `Vademde çalışma alanıma katıl. Davet kodu: ${code}\n${link}`,
+      message: t('workspace.inviteMessage', { code, link }),
     }).catch(() => {});
   }
 
   async function copyInvite(code: string) {
     const link = buildInviteLink(code);
-    await Clipboard.setStringAsync(`Vademde çalışma alanıma katıl. Davet kodu: ${code}\n${link}`);
+    await Clipboard.setStringAsync(t('workspace.inviteMessage', { code, link }));
     setCopiedInviteId(code);
     setTimeout(() => setCopiedInviteId((current) => (current === code ? null : current)), 1800);
   }
@@ -208,17 +208,17 @@ export default function WorkspaceDetailScreen() {
   function confirmDeleteWorkspace() {
     if (!workspace) return;
     Alert.alert(
-      `"${workspace.name}" çalışma alanını sil`,
-      'Bu işlem geri alınamaz. Bu çalışma alanındaki tüm hesaplar, işlemler, borç/alacak kayıtları ve belgeler kalıcı olarak silinecek.',
+      t('workspace.deleteTitle', { name: workspace.name }),
+      t('workspace.deleteBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Sil',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
-            Alert.alert('Emin misin?', 'Bu son bir uyarıdır. Bu veriler kurtarılamaz.', [
-              { text: 'Vazgeç', style: 'cancel' },
-              { text: 'Kalıcı Olarak Sil', style: 'destructive', onPress: () => deleteWorkspaceMutation.mutate() },
+            Alert.alert(t('workspace.deleteSureTitle'), t('workspace.deleteSureBody'), [
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: t('workspace.deletePermanent'), style: 'destructive', onPress: () => deleteWorkspaceMutation.mutate() },
             ]);
           },
         },
@@ -228,29 +228,29 @@ export default function WorkspaceDetailScreen() {
 
   function onMemberPress(member: WorkspaceMember) {
     if (!isOwner || member.role === 'owner' || member.user_id === myUserId) return;
-    const name = member.full_name || member.email || 'Üye';
-    Alert.alert(name, `Rol: ${ROLE_LABEL[member.role]}`, [
+    const name = member.full_name || member.email || t('workspace.memberFallback');
+    Alert.alert(name, t('workspace.roleLine', { role: ROLE_LABEL[member.role] }), [
       member.role === 'viewer'
-        ? { text: 'Düzenleyici yap', onPress: () => roleMutation.mutate({ userId: member.user_id, role: 'editor' }) }
-        : { text: 'Görüntüleyici yap', onPress: () => roleMutation.mutate({ userId: member.user_id, role: 'viewer' }) },
+        ? { text: t('workspace.makeEditor'), onPress: () => roleMutation.mutate({ userId: member.user_id, role: 'editor' }) }
+        : { text: t('workspace.makeViewer'), onPress: () => roleMutation.mutate({ userId: member.user_id, role: 'viewer' }) },
       {
-        text: 'Çalışma alanından çıkar',
+        text: t('workspace.removeFromWorkspace'),
         style: 'destructive',
         onPress: () =>
-          Alert.alert('Üyeyi çıkar', `${name} bu çalışma alanından çıkarılsın mı?`, [
-            { text: 'Vazgeç', style: 'cancel' },
-            { text: 'Çıkar', style: 'destructive', onPress: () => removeMutation.mutate(member.user_id) },
+          Alert.alert(t('workspace.removeTitle'), t('workspace.removeBody', { name }), [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('workspace.remove'), style: 'destructive', onPress: () => removeMutation.mutate(member.user_id) },
           ]),
       },
-      { text: 'Vazgeç', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   }
 
   function onLeave() {
     if (!myUserId || !workspace) return;
-    Alert.alert('Ayrıl', 'Bu çalışma alanından ayrılmak istediğinize emin misiniz? Erişiminiz kaldırılır.', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Ayrıl', style: 'destructive', onPress: () => removeMutation.mutate(myUserId) },
+    Alert.alert(t('workspace.leaveTitle'), t('workspace.leaveBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('workspace.leave'), style: 'destructive', onPress: () => removeMutation.mutate(myUserId) },
     ]);
   }
 
@@ -261,7 +261,7 @@ export default function WorkspaceDetailScreen() {
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
-        <ScreenHeader title={workspace?.name ?? 'Çalışma Alanı'} />
+        <ScreenHeader title={workspace?.name ?? t('workspace.defaultName')} />
       </View>
 
       <ScrollView
@@ -276,27 +276,27 @@ export default function WorkspaceDetailScreen() {
             <Stack gap="md">
               <Row align="center" style={{ justifyContent: 'space-between' }}>
                 <Text variant="caption" color="textSecondary">
-                  {workspace.type === 'business' ? 'İŞLETME' : 'KİŞİSEL'}
+                  {workspace.type === 'business' ? t('workspace.businessUpper') : t('workspace.personalUpper')}
                 </Text>
                 <Text variant="caption" color={isActive ? 'textPrimary' : 'textSecondary'}>
-                  {isActive ? 'AKTİF' : 'PASİF'}
+                  {isActive ? t('workspace.activeUpper') : t('workspace.passiveUpper')}
                 </Text>
               </Row>
 
               {isEditingName ? (
                 <Stack gap="sm">
-                  <TextField placeholder="Çalışma alanı adı" value={nameDraft} onChangeText={setNameDraft} autoFocus />
+                  <TextField placeholder={t('workspace.namePlaceholder')} value={nameDraft} onChangeText={setNameDraft} autoFocus />
                   <Row gap="sm">
                     <View style={{ flex: 1 }}>
                       <Button
-                        label="Kaydet"
+                        label={t('common.save')}
                         onPress={() => nameDraft.trim() && renameMutation.mutate(nameDraft.trim())}
                         loading={renameMutation.isPending}
                         disabled={!nameDraft.trim()}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Button label="Vazgeç" variant="secondary" onPress={() => setIsEditingName(false)} />
+                      <Button label={t('common.cancel')} variant="secondary" onPress={() => setIsEditingName(false)} />
                     </View>
                   </Row>
                 </Stack>
@@ -315,9 +315,9 @@ export default function WorkspaceDetailScreen() {
 
               <StatColumns
                 columns={[
-                  { label: 'ÜYE', value: members.length },
-                  { label: 'ROLÜNÜZ', value: roleQuery.data ? ROLE_LABEL[roleQuery.data] : '—' },
-                  ...(isOwner ? [{ label: 'AKTİF DAVET', value: invites.length }] : []),
+                  { label: t('workspace.statMembers'), value: members.length },
+                  { label: t('workspace.statRole'), value: roleQuery.data ? ROLE_LABEL[roleQuery.data] : '—' },
+                  ...(isOwner ? [{ label: t('workspace.statInvites'), value: invites.length }] : []),
                 ]}
               />
             </Stack>
@@ -325,14 +325,13 @@ export default function WorkspaceDetailScreen() {
         ) : null}
 
         <Text variant="caption" color="textSecondary">
-          Bu çalışma alanının tüm verileri üyeler arasında canlı olarak paylaşılır. Düzenleyiciler
-          kayıt ekleyip değiştirebilir; görüntüleyiciler yalnızca görür.
+          {t('workspace.sharingNote')}
         </Text>
 
         {/* ÜYELER */}
         <Stack gap="sm">
           <Text variant="label" color="textSecondary">
-            ÜYELER
+            {t('workspace.membersUpper')}
           </Text>
           <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
             <Stack gap="xxs">
@@ -364,8 +363,8 @@ export default function WorkspaceDetailScreen() {
                       </View>
                       <Stack gap="xxs" style={{ flex: 1 }}>
                         <Text variant="cardTitle" numberOfLines={1}>
-                          {member.full_name || member.email || 'Üye'}
-                          {member.user_id === myUserId ? ' (siz)' : ''}
+                          {member.full_name || member.email || t('workspace.memberFallback')}
+                          {member.user_id === myUserId ? t('workspace.you') : ''}
                         </Text>
                         <Text variant="caption" color="textSecondary" numberOfLines={1}>
                           {member.email ?? '—'}
@@ -393,7 +392,7 @@ export default function WorkspaceDetailScreen() {
               })}
               {members.length === 0 ? (
                 <Text variant="caption" color="textSecondary" style={{ padding: theme.spacing.md }}>
-                  {membersQuery.isLoading ? 'Yükleniyor…' : 'Üye bulunamadı.'}
+                  {membersQuery.isLoading ? t('workspace.loading') : t('workspace.noMembers')}
                 </Text>
               ) : null}
             </Stack>
@@ -404,38 +403,38 @@ export default function WorkspaceDetailScreen() {
         {isOwner ? (
           <Stack gap="sm">
             <Text variant="label" color="textSecondary">
-              YENİ ÜYE DAVET ET
+              {t('workspace.inviteUpper')}
             </Text>
             <Card>
               {teamLocked ? (
                 <Stack gap="sm">
                   <Text variant="body">
-                    Ekip üyesi davet etmek Plus ve İşletme planlarında kullanılabilir.
+                    {t('workspace.teamLocked')}
                   </Text>
                   <Text variant="caption" color="textSecondary">
                     {plusTeamLimit && isletmeTeamLimit
-                      ? `Çalışma alanınızı Plus planında ${plusTeamLimit}, İşletme planında ${isletmeTeamLimit} kişiye kadar paylaşabilir, üyelere düzenleyici veya görüntüleyici rolü verebilirsiniz.`
-                      : 'Çalışma alanınızı ekibinizle paylaşabilir, üyelere düzenleyici veya görüntüleyici rolü verebilirsiniz.'}
+                      ? t('workspace.teamLockedLimits', { plus: plusTeamLimit, isletme: isletmeTeamLimit })
+                      : t('workspace.teamLockedGeneric')}
                   </Text>
-                  <Button label="Planları gör" icon="people-outline" onPress={() => router.push('/paywall')} />
+                  <Button label={t('workspace.seePlans')} icon="people-outline" onPress={() => router.push('/paywall')} />
                 </Stack>
               ) : (
                 <Stack gap="md">
                   <TextField
-                    placeholder="Davet etiketi (isteğe bağlı, ör. Muhasebe ekibi)"
+                    placeholder={t('workspace.inviteLabelPlaceholder')}
                     value={inviteLabel}
                     onChangeText={setInviteLabel}
                   />
                   <SegmentedControl options={INVITE_ROLE_OPTIONS} value={inviteRole} onChange={setInviteRole} stretch />
                   <Button
-                    label="Davet kodu oluştur ve paylaş"
+                    label={t('workspace.createInvite')}
                     icon="person-add-outline"
                     onPress={() => createInviteMutation.mutate()}
                     loading={createInviteMutation.isPending}
                   />
                   {teamLimit !== null ? (
                     <Text variant="caption" color="textSecondary">
-                      Planınızda sahip dışında {teamLimit} üyeye kadar davet edebilirsiniz.
+                      {t('workspace.inviteLimit', { count: teamLimit })}
                     </Text>
                   ) : null}
                 </Stack>
@@ -451,7 +450,7 @@ export default function WorkspaceDetailScreen() {
                         <Text variant="cardTitle">{invite.label || invite.code}</Text>
                         <Text variant="caption" color="textSecondary">
                           {invite.label ? `${invite.code} · ` : ''}
-                          {ROLE_LABEL[(invite.role as WorkspaceRole)] ?? invite.role} · {invite.used_count} kullanım
+                          {ROLE_LABEL[(invite.role as WorkspaceRole)] ?? invite.role} · {t('workspace.usageCount', { count: invite.used_count })}
                         </Text>
                       </Stack>
                       <Pressable onPress={() => copyInvite(invite.code)} hitSlop={8}>
@@ -477,17 +476,17 @@ export default function WorkspaceDetailScreen() {
 
         {/* Sahip olmayan üye ayrılabilir */}
         {roleQuery.isSuccess && !isOwner ? (
-          <Button label="Çalışma alanından ayrıl" variant="danger" onPress={onLeave} loading={removeMutation.isPending} />
+          <Button label={t('workspace.leaveWorkspace')} variant="danger" onPress={onLeave} loading={removeMutation.isPending} />
         ) : null}
 
         {/* Tehlikeli bölge — yalnızca sahip */}
         {isOwner ? (
           <Stack gap="sm" style={{ marginTop: theme.spacing.lg }}>
             <Text variant="label" color="textSecondary">
-              TEHLİKELİ BÖLGE
+              {t('workspace.dangerZone')}
             </Text>
             <Button
-              label="Çalışma Alanını Sil"
+              label={t('workspace.deleteWorkspace')}
               variant="danger"
               onPress={confirmDeleteWorkspace}
               loading={deleteWorkspaceMutation.isPending}

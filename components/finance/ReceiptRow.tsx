@@ -7,8 +7,10 @@ import { withAlpha } from '@/theme/colors';
 import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { Amount } from '@/components/finance/Amount';
 import { openReceipt, type ReceiptArchiveItem } from '@/features/receipts/api';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+const dateFormatter = localeDateFormatter({ day: '2-digit', month: 'short', year: 'numeric' });
 
 interface ReceiptRowProps {
   item: ReceiptArchiveItem;
@@ -26,7 +28,7 @@ export function ReceiptRow({ item, hideCounterparty }: ReceiptRowProps) {
     try {
       await openReceipt(item.documentId);
     } catch {
-      Alert.alert('Dekont açılamadı', 'Dosya bulunamadı ya da bağlantı kurulamadı.');
+      Alert.alert(t('finance.receipt.openFailedTitle'), t('finance.receipt.openFailedBody'));
     }
   }
 
@@ -38,7 +40,7 @@ export function ReceiptRow({ item, hideCounterparty }: ReceiptRowProps) {
     .join(' · ');
 
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${item.title} dekontunu aç`} onPress={open}>
+    <Pressable accessibilityRole="button" accessibilityLabel={t('finance.receipt.openA11y', { title: item.title })} onPress={open}>
       <Card>
         <Row gap="sm" align="center">
           <View
@@ -71,7 +73,7 @@ export function ReceiptRow({ item, hideCounterparty }: ReceiptRowProps) {
           {item.obligationId ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Ödemenin bağlı olduğu kayda git"
+              accessibilityLabel={t('finance.receipt.goToRecord')}
               hitSlop={10}
               onPress={() => router.push({ pathname: '/obligations/[id]', params: { id: item.obligationId as string } })}
             >

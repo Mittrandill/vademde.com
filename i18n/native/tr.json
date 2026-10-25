@@ -1,0 +1,16 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Vademde",
+    "NSPhotoLibraryUsageDescription": "Belgelerinizi taramak veya profil fotoğrafı seçmek için fotoğraflarınıza erişim gerekir.",
+    "NSCameraUsageDescription": "Belgelerinizi doğrudan kamerayla taramak için kameraya erişim gerekir.",
+    "NSCalendarsUsageDescription": "Borç/alacak vadelerinizi takviminize ekleyebilmek için takvime erişim gerekir.",
+    "NSCalendarsFullAccessUsageDescription": "Borç/alacak vadelerinizi takviminize ekleyebilmek için takvime erişim gerekir.",
+    "NSRemindersUsageDescription": "Borç/alacak vadeleriniz için Hatırlatıcılar'da bir madde oluşturabilmek için erişim gerekir.",
+    "NSRemindersFullAccessUsageDescription": "Borç/alacak vadeleriniz için Hatırlatıcılar'da bir madde oluşturabilmek için erişim gerekir.",
+    "NSFaceIDUsageDescription": "Vademde'yi açarken finansal verilerinizi korumak için Face ID kullanılır.",
+    "NSUserTrackingUsageDescription": "Size daha uygun reklamlar gösterebilmemiz ve reklam performansını ölçebilmemiz için bu izne ihtiyacımız var."
+  },
+  "android": {
+    "app_name": "Vademde"
+  }
+}

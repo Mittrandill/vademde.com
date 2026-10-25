@@ -7,6 +7,7 @@ import { useTheme } from '@/theme';
 import { Pressable } from './Pressable';
 import { FieldShell } from './FormRow';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 // docs/08-tasarim-sistemi.md §12.16 — büyüyebilecek liste alanları (hesap, kategori,
 // kişi/firma vb.) yazarak arama + ikonlu seçici ile sunulur.
@@ -49,10 +50,10 @@ export function SearchablePicker<T extends { id: string; name: string }>({
   onSelect,
   getIcon,
   renderLeading,
-  placeholder = 'Seçin',
+  placeholder = t('ui.select'),
   label,
-  title = 'Seçin',
-  emptyLabel = 'Eşleşen sonuç bulunamadı.',
+  title = t('ui.select'),
+  emptyLabel = t('ui.noMatches'),
   onCreateNew,
   renderTrigger,
 }: SearchablePickerProps<T>) {
@@ -139,7 +140,7 @@ export function SearchablePicker<T extends { id: string; name: string }>({
               <Text style={{ flex: 1, fontSize: 20, fontWeight: '700', letterSpacing: -0.3 }}>{title}</Text>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Kapat"
+                accessibilityLabel={t('ui.close')}
                 onPress={() => setOpen(false)}
                 style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.fill }}
               >

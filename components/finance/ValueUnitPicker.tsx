@@ -3,8 +3,15 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { SearchablePicker } from '@/components/primitives';
 import { VALUE_UNITS, getValueUnit } from '@/features/valueUnits/units';
+import { t } from '@/i18n';
 
-const VALUE_UNIT_ITEMS = VALUE_UNITS.map((unit) => ({ id: unit.code, name: unit.name }));
+// `name` okunduğu anda çözülür (dil değişince seçici yeni dilde listelenir).
+const VALUE_UNIT_ITEMS = VALUE_UNITS.map((unit) => ({
+  id: unit.code,
+  get name() {
+    return unit.name;
+  },
+}));
 
 export interface ValueUnitPickerProps {
   /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
@@ -26,9 +33,9 @@ export function ValueUnitPicker({ selectedId, onSelect, placeholder, title, labe
       selectedId={selectedId}
       onSelect={onSelect}
       renderLeading={(item) => <ValueUnitBadge unitCode={item.id} size={36} />}
-      placeholder={placeholder ?? 'Değer birimi seçin'}
-      title={title ?? 'Değer Birimi Seç'}
-      emptyLabel="Eşleşen değer birimi bulunamadı."
+      placeholder={placeholder ?? t('ui.pickers.valueUnit.placeholder')}
+      title={title ?? t('ui.pickers.valueUnit.title')}
+      emptyLabel={t('ui.pickers.valueUnit.empty')}
     />
   );
 }

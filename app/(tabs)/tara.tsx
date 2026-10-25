@@ -29,8 +29,9 @@ import { useMyWorkspaceRole } from '@/features/workspaces/useMyWorkspaceRole';
 import { queryKeys } from '@/services/queryKeys';
 import { hashArrayBuffer } from '@/utils/hash';
 import { parseGibInvoiceQr } from '@/utils/gibQr';
-import { OCR_CONSENT_KEY, OCR_CONSENT_TEXT, RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
+import { OCR_CONSENT_KEY, RETAIN_ORIGINAL_DEFAULT_KEY } from '@/utils/storageKeys';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — belge görüntüsü buluta gönderilmeden önce
 // kullanıcıdan açık onay alınır (App Store gizlilik gereksinimi).
@@ -40,27 +41,15 @@ interface PendingAsset {
   mimeType: string;
 }
 
-const CONSENT_POINTS: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string }[] = [
-  { icon: 'image-outline', title: 'Ne işlenir?', text: 'Yalnızca taradığın belgenin görüntüsü.' },
-  {
-    icon: 'checkmark-circle-outline',
-    title: 'Sonuç sende',
-    text: 'Tutar, vade ve karşı taraf okunur; hiçbir şey sen onaylamadan kaydedilmez.',
-  },
-  {
-    icon: 'create-outline',
-    title: 'Her zaman alternatif var',
-    text: 'İzin vermesen de tüm kayıtları elle girebilirsin.',
-  },
+const CONSENT_POINTS: { icon: keyof typeof Ionicons.glyphMap; key: 'what' | 'result' | 'alternative' }[] = [
+  { icon: 'image-outline', key: 'what' },
+  { icon: 'checkmark-circle-outline', key: 'result' },
+  { icon: 'create-outline', key: 'alternative' },
 ];
 
 // BelgeIsleniyor.html: işlem adımları. Sunucu durumu (uploaded/processing/ready_for_review)
 // bu üç adıma eşlenir; aktif adımdan öncekiler tamamlanmış sayılır.
-const PROCESS_STEPS: { title: string; hint: string }[] = [
-  { title: 'Görüntü yüklendi', hint: 'Belge güvenle iletildi' },
-  { title: 'Alanlar okunuyor', hint: 'Tutar, vade, karşı taraf' },
-  { title: 'Kayıtlarla karşılaştırılıyor', hint: 'Mükerrer kayıt kontrolü' },
-];
+const PROCESS_STEPS = ['uploaded', 'reading', 'matching'] as const;
 
 const STATUS_PROGRESS: Record<string, number> = {
   uploaded: 25,
@@ -86,7 +75,7 @@ export default function TaraScreen() {
       params: {
         type: 'fatura',
         direction: 'payable',
-        title: invoice.invoiceNo ? `Fatura ${invoice.invoiceNo}` : 'e-Fatura',
+        title: invoice.invoiceNo ? t('scan.invoiceTitle', { number: invoice.invoiceNo }) : t('scan.eInvoice'),
         amountMinor: String(invoice.amountMinor),
         dueDate: invoice.date,
       },
@@ -261,7 +250,7 @@ export default function TaraScreen() {
         showQuotaExceededAlert({ documentId: createdDocumentId });
         return;
       }
-      setError(friendlyErrorMessage(err, 'Belge işlenemedi'));
+      setError(friendlyErrorMessage(err, t('scan.failed')));
     }
   }
 
@@ -288,12 +277,12 @@ export default function TaraScreen() {
       ]);
       if (duplicate) {
         Alert.alert(
-          'Mükerrer belge',
-          `"${duplicate.file_name}" adlı belge daha önce yüklenmiş görünüyor. Yine de devam etmek istiyor musunuz?`,
+          t('scan.duplicateTitle'),
+          t('scan.duplicateBody', { name: duplicate.file_name }),
           [
-            { text: 'Vazgeç', style: 'cancel', onPress: reset },
+            { text: t('common.cancel'), style: 'cancel', onPress: reset },
             {
-              text: 'Yine de Yükle',
+              text: t('scan.uploadAnyway'),
               onPress: () => uploadAsset(uri, fileName, mimeType, contentHash),
             },
           ]
@@ -338,9 +327,9 @@ export default function TaraScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboardDraftDocuments(activeWorkspaceId) });
       setQuotaSheetOpen(false);
       setDraftTarget(null);
-      Alert.alert('Taslak olarak saklandı', 'Kotan yenilenince ana sayfadaki "İşlenmeyi bekliyor" listesinden işleyebilirsin.');
+      Alert.alert(t('scan.draftSavedTitle'), t('scan.draftSavedBody'));
     } catch (err) {
-      Alert.alert('Saklanamadı', friendlyErrorMessage(err, 'Belge taslak olarak saklanamadı'));
+      Alert.alert(t('scan.draftFailedTitle'), friendlyErrorMessage(err, t('scan.draftFailed')));
     } finally {
       setDraftSaving(false);
     }
@@ -350,10 +339,7 @@ export default function TaraScreen() {
     // Görüntüleyici rolü yazma yapamaz; tarama belge oluşturur (yazma) ve OCR kotası harcar.
     // Kamera/galeri adımından sonra RLS hatasıyla karşılaşmak yerine baştan engellenir.
     if (isViewer) {
-      Alert.alert(
-        'Yetki yok',
-        'Bu çalışma alanında yalnızca görüntüleme yetkiniz var. Belge taramak için çalışma alanı sahibinden düzenleyici rolü isteyin.'
-      );
+      Alert.alert(t('errors.noPermissionTitle'), t('scan.viewerBody'));
       return;
     }
     if (quotaRemaining !== undefined && quotaRemaining <= 0) {
@@ -390,7 +376,7 @@ export default function TaraScreen() {
   async function handlePickLibrary() {
     const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!libraryPermission.granted) {
-      setError('İzin verilmedi.');
+      setError(t('scan.permissionDenied'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
@@ -419,7 +405,7 @@ export default function TaraScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ flexGrow: 1, padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xl }}
         >
-          <ScreenHeader title="Akıllı tarama izni" left={{ icon: 'close', accessibilityLabel: 'Vazgeç', onPress: handleConsentDecline }} />
+          <ScreenHeader title={t('scan.consentScreenTitle')} left={{ icon: 'close', accessibilityLabel: t('common.cancel'), onPress: handleConsentDecline }} />
           {pendingAsset.mimeType !== 'application/pdf' ? (
             <Image
               source={{ uri: pendingAsset.uri }}
@@ -428,17 +414,17 @@ export default function TaraScreen() {
             />
           ) : null}
           <Text color="textSecondary" style={{ marginTop: theme.spacing.md, fontSize: 15, lineHeight: 21 }}>
-            {OCR_CONSENT_TEXT}
+            {t('scan.consentText')}
           </Text>
           <View style={{ marginTop: theme.spacing.md }}>
             <Group inset={62}>
               {CONSENT_POINTS.map((point) => (
-                <View key={point.title} style={{ minHeight: 56, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', gap: 12 }}>
+                <View key={point.key} style={{ minHeight: 56, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', gap: 12 }}>
                   <GroupedRowIcon name={point.icon} />
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontWeight: '600' }}>{point.title}</Text>
+                    <Text style={{ fontWeight: '600' }}>{t(`scan.consentPoints.${point.key}Title`)}</Text>
                     <Text variant="caption" color="textSecondary">
-                      {point.text}
+                      {t(`scan.consentPoints.${point.key}Text`)}
                     </Text>
                   </View>
                 </View>
@@ -450,12 +436,12 @@ export default function TaraScreen() {
             onPress={() => router.push('/legal/privacy-policy')}
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
-            <Text style={{ fontSize: 15, fontWeight: '500', textDecorationLine: 'underline' }}>KVKK aydınlatma metnini oku</Text>
+            <Text style={{ fontSize: 15, fontWeight: '500', textDecorationLine: 'underline' }}>{t('scan.readPrivacy')}</Text>
           </Pressable>
           <View style={{ flex: 1 }} />
           <View style={{ gap: theme.spacing.xs, marginTop: theme.spacing.md }}>
-            <Button label="İzin ver ve tara" onPress={handleConsentAccept} />
-            <Button label="Şimdilik elle gireceğim" variant="secondary" onPress={handleConsentDecline} />
+            <Button label={t('scan.allowAndScan')} onPress={handleConsentAccept} />
+            <Button label={t('scan.manualForNow')} variant="secondary" onPress={handleConsentDecline} />
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -467,7 +453,7 @@ export default function TaraScreen() {
     return (
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <View style={{ flex: 1, paddingHorizontal: theme.screenEdge.standard }}>
-          <ScreenHeader title="" inline left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: reset }} />
+          <ScreenHeader title="" inline left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: reset }} />
           <View style={{ alignItems: 'center', marginTop: theme.spacing.xl }}>
             <View
               style={{
@@ -488,21 +474,21 @@ export default function TaraScreen() {
               <View style={{ width: 80, height: 10, borderRadius: 2, backgroundColor: '#9C9B93', marginTop: 8 }} />
             </View>
             <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, marginTop: 24, textAlign: 'center' }}>
-              Belge okunamadı
+              {t('scan.failedScreenTitle')}
             </Text>
             <Text color="textSecondary" style={{ marginTop: 8, textAlign: 'center', fontSize: 15, lineHeight: 20, maxWidth: 300 }}>
-              Belge kaybolmadı; yeniden çekebilir ya da bilgileri kendiniz girebilirsiniz.
+              {t('scan.failedScreenBody')}
             </Text>
           </View>
           <View style={{ marginTop: theme.spacing.xl }}>
             <Group inset={62}>
               <View style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <GroupedRowIcon name="phone-portrait" />
-                <Text style={{ flex: 1, fontSize: 15 }}>Telefonu sabit tutun ve 20–30 cm yaklaşın</Text>
+                <Text style={{ flex: 1, fontSize: 15 }}>{t('scan.tipSteady')}</Text>
               </View>
               <View style={{ minHeight: 56, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <GroupedRowIcon name="sunny" />
-                <Text style={{ flex: 1, fontSize: 15 }}>Işığı yandan alın; parlama tutarı kapatabilir</Text>
+                <Text style={{ flex: 1, fontSize: 15 }}>{t('scan.tipLight')}</Text>
               </View>
             </Group>
           </View>
@@ -513,8 +499,8 @@ export default function TaraScreen() {
           ) : null}
           <View style={{ flex: 1 }} />
           <View style={{ gap: theme.spacing.xs, paddingBottom: theme.layout.tabBarClearance }}>
-            <Button label="Yeniden çek" onPress={reset} />
-            <Button label="Bilgileri elle gir" variant="secondary" onPress={() => router.push('/transactions/new')} />
+            <Button label={t('scan.retake')} onPress={reset} />
+            <Button label={t('scan.enterManually')} variant="secondary" onPress={() => router.push('/transactions/new')} />
           </View>
         </View>
       </SafeAreaView>
@@ -527,7 +513,7 @@ export default function TaraScreen() {
     return (
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <View style={{ flex: 1, paddingHorizontal: theme.screenEdge.standard }}>
-          <ScreenHeader title="" inline left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: reset }} />
+          <ScreenHeader title="" inline left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: reset }} />
           <View style={{ alignItems: 'center', marginTop: theme.spacing.md }}>
             <View
               style={{
@@ -555,9 +541,9 @@ export default function TaraScreen() {
                 }}
               />
             </View>
-            <Text style={{ fontSize: 20, fontWeight: '700', letterSpacing: -0.3, marginTop: 24 }}>Belge okunuyor</Text>
+            <Text style={{ fontSize: 20, fontWeight: '700', letterSpacing: -0.3, marginTop: 24 }}>{t('scan.readingTitle')}</Text>
             <Text color="textSecondary" style={{ marginTop: 4, fontSize: 15 }}>
-              Genellikle birkaç saniye sürer.
+              {t('scan.readingBody')}
             </Text>
           </View>
           <View style={{ marginTop: theme.spacing.xl }}>
@@ -566,11 +552,11 @@ export default function TaraScreen() {
                 const done = status === 'ready_for_review' || index < activeIndex;
                 const active = !done && index === activeIndex;
                 return (
-                  <View key={step.title} style={{ minHeight: 50, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View key={step} style={{ minHeight: 50, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <Text
                       style={{ flex: 1, fontWeight: active ? '600' : '400', color: done || active ? theme.colors.textPrimary : theme.colors.mutedControl }}
                     >
-                      {step.title}
+                      {t(`scan.steps.${step}Title`)}
                     </Text>
                     {done ? (
                       <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
@@ -582,7 +568,7 @@ export default function TaraScreen() {
               })}
             </Group>
             <Text variant="caption" color="textSecondary" style={{ marginTop: theme.spacing.xs, paddingHorizontal: 4 }}>
-              Sonuç hazır olduğunda kontrol ekranına geçilir; hiçbir şey sen onaylamadan kaydedilmez.
+              {t('scan.readingFooter')}
             </Text>
           </View>
         </View>
@@ -604,16 +590,16 @@ export default function TaraScreen() {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.sm }}>
             <GroupedRowIcon name="camera" tone="brandSoft" size={80} />
             <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', textAlign: 'center', marginTop: theme.spacing.sm }}>
-              Kameraya erişim gerekiyor
+              {t('scan.cameraTitle')}
             </Text>
             <Text color="textSecondary" style={{ textAlign: 'center', maxWidth: 300 }}>
-              Çek, senet veya fatura fotoğrafını taramak için kamera izni gerekir. İzin vermesen de galeriden seçebilir ya da elle girebilirsin.
+              {t('scan.cameraBody')}
             </Text>
           </View>
           <View style={{ gap: theme.spacing.xs }}>
-            <Button label="İzin ver" onPress={requestPermission} />
-            <Button label="Galeriden seç" variant="secondary" onPress={handlePickLibrary} />
-            <Button label="Bilgileri elle gir" variant="text" onPress={() => router.push('/transactions/new')} />
+            <Button label={t('scan.allow')} onPress={requestPermission} />
+            <Button label={t('scan.pickFromGallery')} variant="secondary" onPress={handlePickLibrary} />
+            <Button label={t('scan.enterManually')} variant="text" onPress={() => router.push('/transactions/new')} />
           </View>
         </ScrollView>
         <QuotaExceededSheet
@@ -660,20 +646,20 @@ export default function TaraScreen() {
               paddingTop: theme.spacing.xs,
             }}
           >
-            <Pressable accessibilityLabel="Kapat" onPress={() => router.replace('/(tabs)')} style={styles.iconButton}>
+            <Pressable accessibilityLabel={t('common.close')} onPress={() => router.replace('/(tabs)')} style={styles.iconButton}>
               <Ionicons name="close" size={20} color="#fff" />
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Tarama hakkında bilgi"
+              accessibilityLabel={t('scan.scanInfo')}
               onPress={() => setHelpSheetOpen(true)}
               style={styles.chip}
             >
               <Ionicons name="sparkles" size={14} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Otomatik</Text>
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{t('scan.auto')}</Text>
             </Pressable>
             <Pressable accessibilityRole="button" onPress={() => router.push('/transactions/new')} style={styles.chip}>
-              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Elle gir</Text>
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{t('scan.manual')}</Text>
             </Pressable>
           </Row>
 
@@ -682,20 +668,20 @@ export default function TaraScreen() {
               <CornerBrackets color="#FFB000" />
             </View>
             <View style={styles.hint}>
-              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '500' }}>Belgeyi çerçeve içine hizalayın</Text>
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '500' }}>{t('scan.alignHint')}</Text>
             </View>
           </View>
 
           <View style={{ paddingBottom: tabBarOverlap + theme.spacing.lg, alignItems: 'center', gap: theme.spacing.md }}>
-            <Text style={{ color: '#FFB000', fontSize: 13, fontWeight: '600', letterSpacing: 0.5 }}>OTOMATİK</Text>
+            <Text style={{ color: '#FFB000', fontSize: 13, fontWeight: '600', letterSpacing: 0.5 }}>{t('scan.autoUpper')}</Text>
             <Row style={{ alignSelf: 'stretch', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 34 }}>
-              <Pressable accessibilityLabel="Galeri" onPress={handlePickLibrary} style={styles.sideButtonSquare}>
+              <Pressable accessibilityLabel={t('scan.gallery')} onPress={handlePickLibrary} style={styles.sideButtonSquare}>
                 <Ionicons name="images" size={22} color="#fff" />
               </Pressable>
-              <Pressable accessibilityLabel="Çek" onPress={handleCapture} disabled={!cameraReady} style={styles.shutterOuter}>
+              <Pressable accessibilityLabel={t('scan.capture')} onPress={handleCapture} disabled={!cameraReady} style={styles.shutterOuter}>
                 <View style={styles.shutterInner} />
               </Pressable>
-              <Pressable accessibilityLabel="Dosyalar" onPress={handlePickDocument} style={styles.sideButtonRound}>
+              <Pressable accessibilityLabel={t('scan.files')} onPress={handlePickDocument} style={styles.sideButtonRound}>
                 <Ionicons name="document-text" size={22} color="#fff" />
               </Pressable>
             </Row>

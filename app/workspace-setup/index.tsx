@@ -16,19 +16,21 @@ import { useOnboardingStore } from '@/store/onboardingStore';
 import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
 import { showErrorAlert } from '@/utils/alerts';
+import { t } from '@/i18n';
+import { amountPlaceholder } from '@/i18n/format';
+import { localizedRecord } from '@/i18n/localized';
 
 type WorkspaceMode = 'personal' | 'business' | 'both';
 
-const MODE_OPTIONS: { key: WorkspaceMode; label: string }[] = [
-  { key: 'personal', label: 'Kişisel' },
-  { key: 'business', label: 'İşletme' },
-  { key: 'both', label: 'Her ikisi' },
+const MODE_OPTIONS: { key: WorkspaceMode; readonly label: string }[] = [
+  { key: 'personal', get label() { return t('workspace.personal'); } },
+  { key: 'business', get label() { return t('workspace.business'); } },
+  { key: 'both', get label() { return t('workspace.setup.both'); } },
 ];
 
-const DEFAULT_NAME: Record<'personal' | 'business', string> = {
-  personal: 'Kişisel Bütçe',
-  business: 'İşletme Bütçe',
-};
+const DEFAULT_NAME: Record<'personal' | 'business', string> = localizedRecord(['personal', 'business'] as const, (mode) =>
+  mode === 'personal' ? t('workspace.setup.defaultPersonal') : t('workspace.setup.defaultBusiness')
+);
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.2 — onboarding'in son adımı: çalışma alanı türü,
 // adı ve isteğe bağlı başlangıç bakiyesi. Oturum açmış ama hiç çalışma alanı olmayan
@@ -118,7 +120,7 @@ export default function WorkspaceSetupScreen() {
             title=""
             left={{
               icon: 'chevron-back',
-              accessibilityLabel: 'Geri',
+              accessibilityLabel: t('workspace.setup.back'),
               onPress: () => (skippedChoice ? router.back() : setStep('choice')),
             }}
           />
@@ -133,23 +135,23 @@ export default function WorkspaceSetupScreen() {
             {step === 'choice' ? (
               <>
                 <Stack gap="xs">
-                  <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56 }}>Nerede takip edeceksin?</Text>
+                  <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56 }}>{t('workspace.setup.choiceTitle')}</Text>
                   <Text variant="body" color="textSecondary">
-                    Kendi çalışma alanını oluştur veya seni davet eden bir ekibe davet koduyla katıl.
+                    {t('workspace.setup.choiceBody')}
                   </Text>
                 </Stack>
 
                 <Stack gap="sm" style={{ alignSelf: 'stretch' }}>
                   <ChoiceOption
                     icon="add-circle-outline"
-                    title="Kendi çalışma alanımı oluştur"
-                    description="Kişisel veya işletme bütçeni sıfırdan kur."
+                    title={t('workspace.setup.createOwn')}
+                    description={t('workspace.setup.createOwnHint')}
                     onPress={() => setStep('create')}
                   />
                   <ChoiceOption
                     icon="enter-outline"
-                    title="Davet koduyla katıl"
-                    description="Bir ekip arkadaşının paylaştığı kodla mevcut çalışma alanına katıl."
+                    title={t('workspace.setup.joinWithCode')}
+                    description={t('workspace.setup.joinWithCodeHint')}
                     onPress={() => router.push('/workspace/join')}
                   />
                 </Stack>
@@ -157,9 +159,9 @@ export default function WorkspaceSetupScreen() {
             ) : (
               <>
                 <Stack gap="xs">
-                  <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56 }}>Çalışma alanınızı oluşturalım</Text>
+                  <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56 }}>{t('workspace.setup.createTitle')}</Text>
                   <Text variant="body" color="textSecondary">
-                    Kişisel veya işletme bütçenizi takip etmek için bir çalışma alanı oluşturun.
+                    {t('workspace.setup.createBody')}
                   </Text>
                 </Stack>
 
@@ -180,24 +182,23 @@ export default function WorkspaceSetupScreen() {
                   <Stack gap="sm" style={{ alignSelf: 'stretch' }}>
                     <Text variant="caption" color="danger">
                       {isBoth
-                        ? `"Her ikisi" iki ayrı çalışma alanı oluşturur. Planınızda ${remainingSlots ?? 0} alan hakkı kaldı — kişisel veya işletmeden birini seçebilir ya da planınızı yükseltebilirsiniz.`
-                        : 'Planınızdaki çalışma alanı hakkınızın tamamını kullandınız. Yeni bir alan için planınızı yükseltin.'}
+                        ? t('workspace.setup.bothLocked', { count: remainingSlots ?? 0 })
+                        : t('workspace.setup.singleLocked')}
                     </Text>
-                    <Button label="Planları gör" onPress={() => router.push('/paywall')} />
+                    <Button label={t('workspace.seePlans')} onPress={() => router.push('/paywall')} />
                   </Stack>
                 ) : null}
 
                 {isBoth ? (
                   <Text variant="caption" color="textSecondary" style={{ alignSelf: 'stretch' }}>
-                    &ldquo;Kişisel&rdquo; ve &ldquo;İşletme&rdquo; adıyla iki ayrı çalışma alanı oluşturulur;
-                    adlarını ve başlangıç bakiyelerini daha sonra Ayarlar&apos;dan düzenleyebilirsiniz.
+                    {t('workspace.setup.bothHint')}
                   </Text>
                 ) : (
                   <FieldGroup>
-                    <TextField label="Alan adı" placeholder={DEFAULT_NAME[mode]} value={name} onChangeText={setName} />
+                    <TextField label={t('workspace.setup.name')} placeholder={DEFAULT_NAME[mode]} value={name} onChangeText={setName} />
                     <AmountField
-                      label="Başlangıç bakiyesi (isteğe bağlı)"
-                      placeholder="0,00"
+                      label={t('workspace.setup.openingBalance')}
+                      placeholder={amountPlaceholder()}
                       value={openingBalance}
                       onChangeText={setOpeningBalance}
                     />
@@ -205,7 +206,7 @@ export default function WorkspaceSetupScreen() {
                 )}
 
                 <Button
-                  label="Çalışma Alanını Oluştur"
+                  label={t('workspace.setup.submit')}
                   onPress={handleSubmit}
                   loading={setupMutation.isPending}
                   disabled={!canSubmit}

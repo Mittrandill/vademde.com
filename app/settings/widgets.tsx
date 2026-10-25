@@ -9,29 +9,29 @@ import { BottomSheet, Button, GroupedRow, GroupedSection, GroupedToggleRow, Text
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { WidgetPreview, WidgetStage, type WidgetKind } from '@/components/finance/WidgetPreview';
 import { useWidgetPrefsStore } from '@/store/widgetPrefsStore';
+import { t } from '@/i18n';
 
 type WidgetInfo = {
   kind: WidgetKind;
-  title: string;
-  subtitle: string;
-  /** iOS widget galerisinde hangi boyutta bulunduğu. */
-  size: string;
   glyph: { w: number; h: number; round?: boolean; brand?: boolean };
 };
 
+// Başlık, alt başlık ve iOS widget galerisindeki boyut adı: i18n widgets.kinds.<kind>.
+const titleOf = (info: WidgetInfo) => t(`widgets.kinds.${info.kind}.title`);
+
 // Tuval WidgetGaleri — widget'lar iOS'un kendi ekleme ekranından eklenir (targets/widget).
 const HOME_WIDGETS: WidgetInfo[] = [
-  { kind: 'next', title: 'Sıradaki vade', subtitle: 'Küçük · en yakın kayıt ve kalan gün', size: 'küçük', glyph: { w: 26, h: 26, brand: true } },
-  { kind: 'week', title: 'Bu hafta', subtitle: 'Küçük · ödenecek ve tahsil edilecek', size: 'küçük', glyph: { w: 26, h: 26 } },
-  { kind: 'upcoming', title: 'Yaklaşan vadeler', subtitle: 'Orta · 3 kayıt', size: 'orta', glyph: { w: 40, h: 20 } },
-  { kind: 'summary', title: 'Özet ve tarama', subtitle: 'Büyük · bakiye, 4 vade, Tara kısayolu', size: 'büyük', glyph: { w: 36, h: 38 } },
+  { kind: 'next', glyph: { w: 26, h: 26, brand: true } },
+  { kind: 'week', glyph: { w: 26, h: 26 } },
+  { kind: 'upcoming', glyph: { w: 40, h: 20 } },
+  { kind: 'summary', glyph: { w: 36, h: 38 } },
 ];
 
 const LOCK_WIDGETS: WidgetInfo[] = [
-  { kind: 'lockDays', title: 'Kalan gün', subtitle: 'Dairesel · sıradaki vadeye kaç gün kaldı', size: 'dairesel', glyph: { w: 26, h: 26, round: true } },
-  { kind: 'lockNext', title: 'Sıradaki vade', subtitle: 'Dikdörtgen · tutar ve kayıt adı', size: 'dikdörtgen', glyph: { w: 40, h: 20 } },
-  { kind: 'lockInline', title: 'Saatin üstünde', subtitle: 'Satır içi · “Çek yarın ₺48.250”', size: 'satır içi', glyph: { w: 40, h: 6 } },
-  { kind: 'lockNet', title: 'Bu ay net', subtitle: 'Dairesel · gelir − gider', size: 'dairesel', glyph: { w: 26, h: 26, round: true } },
+  { kind: 'lockDays', glyph: { w: 26, h: 26, round: true } },
+  { kind: 'lockNext', glyph: { w: 40, h: 20 } },
+  { kind: 'lockInline', glyph: { w: 40, h: 6 } },
+  { kind: 'lockNet', glyph: { w: 26, h: 26, round: true } },
 ];
 
 const LOCK_KINDS = new Set<WidgetKind>(LOCK_WIDGETS.map((w) => w.kind));
@@ -39,17 +39,15 @@ const LOCK_KINDS = new Set<WidgetKind>(LOCK_WIDGETS.map((w) => w.kind));
 function addSteps(info: WidgetInfo): string[] {
   if (LOCK_KINDS.has(info.kind)) {
     return [
-      'Kilit ekranına uzun basın, Özelleştir › Kilit Ekranı’na dokunun.',
-      info.kind === 'lockInline'
-        ? 'Saatin üstündeki tarih satırına dokunun.'
-        : 'Saatin altındaki widget alanına dokunun.',
-      `Listeden Vademde’yi bulun ve “${info.title}” widget’ını seçin.`,
+      t('widgets.steps.lock1'),
+      info.kind === 'lockInline' ? t('widgets.steps.lock2Inline') : t('widgets.steps.lock2'),
+      t('widgets.steps.lock3', { title: titleOf(info) }),
     ];
   }
   return [
-    'Ana ekranda boş bir yere uzun basın, sol üstteki Düzenle › Widget Ekle’ye dokunun.',
-    'Aramaya “Vademde” yazıp uygulamayı seçin.',
-    `Sayfaları kaydırarak ${info.size} boyuttaki “${info.title}” widget’ını bulun ve Widget Ekle’ye dokunun.`,
+    t('widgets.steps.home1'),
+    t('widgets.steps.home2'),
+    t('widgets.steps.home3', { size: t(`widgets.kinds.${info.kind}.size`), title: titleOf(info) }),
   ];
 }
 
@@ -79,8 +77,8 @@ function WidgetRow({ info, onPress }: { info: WidgetInfo; onPress: () => void })
           />
         </View>
       }
-      title={info.title}
-      subtitle={info.subtitle}
+      title={titleOf(info)}
+      subtitle={t(`widgets.kinds.${info.kind}.subtitle`)}
       onPress={onPress}
     />
   );
@@ -96,7 +94,7 @@ export default function WidgetsScreen() {
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
-        <ScreenHeader title="Widget’lar" />
+        <ScreenHeader title={t('widgets.title')} />
       </View>
 
       <ScrollView
@@ -107,17 +105,16 @@ export default function WidgetsScreen() {
         }}
       >
         <Text color="textSecondary">
-          Ana ekrana ya da kilit ekranına ekleyin; tutarları gizleme ayarınıza uyar. Nasıl ekleneceğini görmek
-          için bir widget’a dokunun.
+          {t('widgets.intro')}
         </Text>
 
-        <GroupedSection title="ANA EKRAN">
+        <GroupedSection title={t('widgets.home')}>
           {HOME_WIDGETS.map((info) => (
             <WidgetRow key={info.kind} info={info} onPress={() => setSelected(info)} />
           ))}
         </GroupedSection>
 
-        <GroupedSection title="KİLİT EKRANI">
+        <GroupedSection title={t('widgets.lock')}>
           {LOCK_WIDGETS.map((info) => (
             <WidgetRow key={info.kind} info={info} onPress={() => setSelected(info)} />
           ))}
@@ -126,25 +123,25 @@ export default function WidgetsScreen() {
         <GroupedSection>
           <GroupedToggleRow
             leading={<Ionicons name="eye-off-outline" size={20} color={theme.colors.textSecondary} />}
-            title="Widget’ta tutarları gizle"
+            title={t('widgets.hideAmounts')}
             value={hideAmounts}
             onValueChange={setHideAmounts}
           />
         </GroupedSection>
 
         <Text variant="caption" color="textSecondary">
-          Widget’lar yalnızca seçili çalışma alanının özetini gösterir ve uygulamayı her açtığınızda güncellenir.
+          {t('widgets.footer')}
         </Text>
       </ScrollView>
 
-      <BottomSheet visible={!!selected} onClose={() => setSelected(null)} title={selected?.title}>
+      <BottomSheet visible={!!selected} onClose={() => setSelected(null)} title={selected ? titleOf(selected) : undefined}>
         {selected ? (
           <View style={{ gap: theme.spacing.md }}>
             <WidgetStage lock={LOCK_KINDS.has(selected.kind)}>
               <WidgetPreview kind={selected.kind} />
             </WidgetStage>
             <Text variant="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-              Örnek verilerle önizleme
+              {t('widgets.samplePreview')}
             </Text>
             <View style={{ gap: theme.spacing.sm }}>
               {addSteps(selected).map((step, index) => (
@@ -165,7 +162,7 @@ export default function WidgetsScreen() {
                 </View>
               ))}
             </View>
-            <Button label="Tamam" onPress={() => setSelected(null)} />
+            <Button label={t('widgets.ok')} onPress={() => setSelected(null)} />
           </View>
         ) : null}
       </BottomSheet>

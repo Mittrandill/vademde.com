@@ -6,6 +6,8 @@ import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import { Pressable, Tag, Text } from '@/components/primitives';
 import { formatMinorAmount } from '@/utils/money';
+import { capitalizeUi, localeDateFormatter, unitAccusative, unitForCount } from '@/i18n/format';
+import { t } from '@/i18n';
 
 export type InstallmentPlanStatus = 'paid' | 'overdue' | 'upcoming';
 
@@ -19,16 +21,9 @@ export interface InstallmentPlanRow {
   status: InstallmentPlanStatus;
 }
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+const dateFormatter = localeDateFormatter({ day: 'numeric', month: 'short', year: 'numeric' });
 const COL = 92;
 
-// Türkçe belirtme hâli: taksit → taksiti, ödeme → ödemeyi, kira → kirayı.
-function accusative(word: string): string {
-  const vowels = word.toLocaleLowerCase('tr-TR').match(/[aeıioöuü]/g) ?? ['i'];
-  const last = vowels[vowels.length - 1];
-  const suffix = ({ a: 'ı', ı: 'ı', e: 'i', i: 'i', o: 'u', u: 'u', ö: 'ü', ü: 'ü' } as Record<string, string>)[last] ?? 'i';
-  return /[aeıioöuü]$/i.test(word) ? `${word}y${suffix}` : `${word}${suffix}`;
-}
 /** Başta görünen ödenmiş taksit sayısı; fazlası tek satırda özetlenir. */
 const PAID_PREVIEW = 2;
 
@@ -39,7 +34,7 @@ const PAID_PREVIEW = 2;
 export function InstallmentPlanTable({
   rows,
   currencyCode,
-  unitLabel = 'taksit',
+  unitLabel = t('domain.installmentUnits.installment.unit'),
   pageSize = 6,
   onRowPress,
   rowActionLabel,
@@ -98,12 +93,12 @@ export function InstallmentPlanTable({
           {paid ? (
             // Satırda yalnızca kısa durum etiketi: uzun açıklama sütunların üstüne taşıyordu;
             // gerekirse tablonun altında tek bir notla anlatılır.
-            <Tag tone="success" label="Ödendi" />
+            <Tag tone="success" label={t('finance.plan.paid')} />
           ) : row.status === 'overdue' ? (
-            <Tag tone="danger" label="Gecikti" />
+            <Tag tone="danger" label={t('finance.plan.overdue')} />
           ) : isNext ? (
             <Text variant="caption" color="textSecondary">
-              Sıradaki {unitLabel}
+              {t('finance.plan.nextUnit', { unit: unitLabel })}
             </Text>
           ) : null}
         </View>
@@ -135,7 +130,7 @@ export function InstallmentPlanTable({
         style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: theme.colors.separator }}
       >
         <Text variant="caption" color="textSecondary">
-          … {hiddenPaid} ödenmiş {unitLabel} daha
+          {t('finance.plan.morePaid', { count: hiddenPaid, unit: unitForCount(unitLabel, hiddenPaid) })}
         </Text>
       </Pressable>
     );
@@ -146,15 +141,15 @@ export function InstallmentPlanTable({
     <View style={{ backgroundColor: theme.colors.surfacePrimary, borderRadius: theme.radius.group, overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: theme.spacing.md, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.separator }}>
         <Text variant="caption" color="textSecondary" style={{ flex: 1, fontWeight: '600' }}>
-          Vade
+          {t('finance.plan.due')}
         </Text>
         {showPrincipal ? (
           <Text variant="caption" color="textSecondary" style={{ width: COL, textAlign: 'right', fontWeight: '600' }}>
-            Anapara
+            {t('finance.plan.principal')}
           </Text>
         ) : null}
         <Text variant="caption" color="textSecondary" style={{ width: COL, textAlign: 'right', fontWeight: '600' }}>
-          {unitLabel.charAt(0).toLocaleUpperCase('tr-TR') + unitLabel.slice(1)}
+          {capitalizeUi(unitLabel)}
         </Text>
       </View>
       {items}
@@ -165,7 +160,7 @@ export function InstallmentPlanTable({
           style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderTopWidth: 1, borderTopColor: theme.colors.separator }}
         >
           <Text style={{ fontSize: 15, fontWeight: '500' }}>
-            {remaining} {accusative(unitLabel)} daha göster
+            {t('finance.plan.showMore', { count: remaining, unit: unitAccusative(unitLabel, remaining) })}
           </Text>
           <Ionicons name="chevron-down" size={14} color={theme.colors.textPrimary} />
         </Pressable>

@@ -1,13 +1,8 @@
 import { Row, Text } from '@/components/primitives';
 import { AccountIcon } from './AccountIcon';
 import { BANK_NAME } from '@/features/banks/banks';
+import { ACCOUNT_TYPE_LABEL } from '@/features/accounts/accountTypes';
 
-const TYPE_LABEL: Record<string, string> = {
-  bank: 'Banka',
-  credit_card: 'Kredi Kartı',
-  cash: 'Kasa',
-  wallet: 'Cüzdan',
-};
 
 export interface AccountLabelRowProps {
   bankCode?: string | null;
@@ -26,7 +21,7 @@ export function AccountLabelRow({ bankCode, accountName, accountType, cardLastFo
   const label = bankCode
     ? [
         BANK_NAME[bankCode] ?? accountName,
-        accountType ? TYPE_LABEL[accountType] : null,
+        accountType ? ACCOUNT_TYPE_LABEL[accountType] : null,
         cardLastFour ? `•••• ${cardLastFour}` : null,
       ]
         .filter(Boolean)

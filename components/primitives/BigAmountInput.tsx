@@ -4,6 +4,8 @@ import { useTheme } from '@/theme';
 import { MAX_FONT_SCALE } from '@/theme/typography';
 import { formatAmountInput } from '@/utils/money';
 import { Text } from './Text';
+import { t } from '@/i18n';
+import { amountPlaceholder } from '@/i18n/format';
 
 export interface BigAmountInputProps {
   value: string;
@@ -32,10 +34,10 @@ export function BigAmountInput({ value, onChangeText, symbol, precision = 2, aut
           </Text>
         ) : null}
         <TextInput
-          accessibilityLabel="Tutar"
+          accessibilityLabel={t('ui.amount')}
           value={value}
           onChangeText={(text) => onChangeText(formatAmountInput(text, precision))}
-          placeholder={precision === 0 ? '0' : '0,00'}
+          placeholder={precision === 0 ? '0' : amountPlaceholder()}
           placeholderTextColor={theme.colors.mutedControl}
           keyboardType={precision === 0 ? 'number-pad' : 'decimal-pad'}
           autoFocus={autoFocus}

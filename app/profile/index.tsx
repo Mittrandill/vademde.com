@@ -35,6 +35,7 @@ import { getMySubscription } from '@/features/subscriptions/api';
 import { getMyProfile, updateMyProfile, uploadAvatar } from '@/features/profile/api';
 import { queryKeys } from '@/services/queryKeys';
 import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
 
 function initialsFrom(name: string | null | undefined, email: string | null | undefined): string {
   const source = name?.trim() || email?.trim() || '';
@@ -80,8 +81,9 @@ export default function ProfileScreen() {
   const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
   const planCode = subscriptionQuery.data?.plan ?? 'free';
   const planLabel =
-    ({ free: 'Ücretsiz plan', plus: 'Plus plan', isletme: 'İşletme planı' } as Record<string, string>)[planCode] ??
-    planCode;
+    ({ free: t('profile.planFree'), plus: t('profile.planPlus'), isletme: t('profile.planIsletme') } as Record<string, string>)[
+      planCode
+    ] ?? planCode;
 
   useEffect(() => {
     if (profileQuery.data) {
@@ -102,12 +104,12 @@ export default function ProfileScreen() {
 
   const updateNameMutation = useMutation({
     mutationFn: () => {
-      if (!session?.user?.id) throw new Error('Oturum bulunamadı');
+      if (!session?.user?.id) throw new Error(t('profile.noSession'));
       return updateMyProfile(session.user.id, fullName);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
-      showSuccessAlert('Ad Soyad başarıyla güncellendi.', () => {});
+      showSuccessAlert(t('profile.nameUpdated'), () => {});
     },
   });
 
@@ -125,22 +127,22 @@ export default function ProfileScreen() {
 
   const changePasswordMutation = useMutation({
     mutationFn: () => updatePassword(newPassword),
-    onSuccess: () => showSuccessAlert('Şifreniz güncellendi.', resetPasswordForm),
+    onSuccess: () => showSuccessAlert(t('profile.passwordUpdated'), resetPasswordForm),
   });
 
   const avatarMutation = useMutation({
     mutationFn: (asset: ImagePicker.ImagePickerAsset) => {
-      if (!session?.user?.id) throw new Error('Oturum bulunamadı');
+      if (!session?.user?.id) throw new Error(t('profile.noSession'));
       return uploadAvatar(session.user.id, asset.uri, asset.mimeType ?? 'image/jpeg');
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profile() }),
-    onError: (error) => Alert.alert('Fotoğraf yüklenemedi', friendlyErrorMessage(error, 'Bir hata oluştu')),
+    onError: (error) => Alert.alert(t('profile.photoUploadFailed'), friendlyErrorMessage(error, t('profile.genericError'))),
   });
 
   async function handlePickAvatar() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('İzin gerekli', 'Profil fotoğrafı seçmek için fotoğraflarınıza erişim izni verin.');
+      Alert.alert(t('profile.permissionTitle'), t('profile.permissionBody'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -155,20 +157,20 @@ export default function ProfileScreen() {
 
   function confirmDeleteAccount() {
     Alert.alert(
-      'Hesabını ve tüm verilerini sil',
-      'Bu işlem geri alınamaz. Tüm çalışma alanların, hesapların, işlemlerin, borç/alacak kayıtların ve yüklediğin belgeler kalıcı olarak silinecek.',
+      t('profile.deleteTitle'),
+      t('profile.deleteBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Hesabımı Sil',
+          text: t('profile.deleteConfirm'),
           style: 'destructive',
           onPress: () => {
             Alert.alert(
-              'Emin misin?',
-              'Bu son bir uyarıdır. Hesabını sildiğinde bu veriler kurtarılamaz.',
+              t('profile.deleteSureTitle'),
+              t('profile.deleteSureBody'),
               [
-                { text: 'Vazgeç', style: 'cancel' },
-                { text: 'Kalıcı Olarak Sil', style: 'destructive', onPress: handleDeleteAccount },
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('profile.deletePermanent'), style: 'destructive', onPress: handleDeleteAccount },
               ]
             );
           },
@@ -183,7 +185,7 @@ export default function ProfileScreen() {
       await deleteAccount();
       router.replace('/(auth)/sign-in');
     } catch (err) {
-      Alert.alert('Hesap silinemedi', friendlyErrorMessage(err, 'Bir hata oluştu'));
+      Alert.alert(t('profile.deleteFailed'), friendlyErrorMessage(err, t('profile.genericError')));
       setIsDeleting(false);
     }
   }
@@ -200,10 +202,10 @@ export default function ProfileScreen() {
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
         <ScreenHeader
           inline
-          title="Profil"
-          left={{ icon: 'close', accessibilityLabel: 'Geri', onPress: () => router.back() }}
+          title={t('profile.title')}
+          left={{ icon: 'close', accessibilityLabel: t('profile.back'), onPress: () => router.back() }}
           rightLabel={{
-            label: 'Kaydet',
+            label: t('common.save'),
             bold: true,
             disabled: !nameChanged || updateNameMutation.isPending,
             onPress: () => updateNameMutation.mutate(),
@@ -220,7 +222,7 @@ export default function ProfileScreen() {
         }}
       >
         <Stack align="center" gap="xs">
-          <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending} accessibilityLabel="Fotoğraf değiştir">
+          <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending} accessibilityLabel={t('profile.changePhoto')}>
             <View
               style={{
                 width: 88,
@@ -274,7 +276,7 @@ export default function ProfileScreen() {
           </Pressable>
           <Pressable onPress={handlePickAvatar} disabled={avatarMutation.isPending} style={{ minHeight: 44, justifyContent: 'center' }}>
             <Text style={{ fontSize: 15, fontWeight: '500', color: theme.colors.textSecondary }}>
-              {profileQuery.data?.avatar_url ? 'Fotoğrafı değiştir' : 'Fotoğraf ekle'}
+              {profileQuery.data?.avatar_url ? t('profile.changePhotoLink') : t('profile.addPhoto')}
             </Text>
           </Pressable>
           <View style={{ alignItems: 'center' }}>
@@ -284,27 +286,27 @@ export default function ProfileScreen() {
 
         <Stack gap="xs">
           <FieldGroup>
-            <TextField label="Ad soyad" placeholder="Adın ve soyadın" value={fullName} onChangeText={setFullName} />
-            <TextField label="E-posta" value={email ?? ''} editable={false} />
+            <TextField label={t('profile.fullName')} placeholder={t('profile.fullNamePlaceholder')} value={fullName} onChangeText={setFullName} />
+            <TextField label={t('profile.email')} value={email ?? ''} editable={false} />
           </FieldGroup>
           {updateNameMutation.error ? (
             <Text variant="caption" color="danger">
-              {friendlyErrorMessage(updateNameMutation.error, 'Kaydedilemedi')}
+              {friendlyErrorMessage(updateNameMutation.error, t('profile.saveFailed'))}
             </Text>
           ) : null}
         </Stack>
 
-        <GroupedSection title="GÜVENLİK">
+        <GroupedSection title={t('profile.security')}>
           <GroupedRow
             leading={<GroupedRowIcon name="key-outline" />}
-            title="Şifre değiştir"
+            title={t('profile.changePassword')}
             onPress={() => setIsChangingPassword((v) => !v)}
           />
         </GroupedSection>
         {isChangingPassword ? (
           <Stack gap="sm">
             <TextField
-              label="Yeni şifre"
+              label={t('profile.newPassword')}
               secureTextEntry={!passwordVisible}
               value={newPassword}
               onChangeText={setNewPassword}
@@ -313,60 +315,60 @@ export default function ProfileScreen() {
               autoFocus
             />
             <TextField
-              label="Yeni şifre (tekrar)"
+              label={t('profile.confirmPassword')}
               secureTextEntry={!passwordVisible}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              error={passwordMismatch ? 'Şifreler eşleşmiyor.' : undefined}
+              error={passwordMismatch ? t('profile.mismatch') : undefined}
             />
             {changePasswordMutation.error ? (
               <Text variant="caption" color="danger">
-                {translateAuthError(changePasswordMutation.error, 'Şifre güncellenemedi')}
+                {translateAuthError(changePasswordMutation.error, t('profile.passwordFailed'))}
               </Text>
             ) : null}
             <Row gap="sm">
               <View style={{ flex: 1 }}>
                 <Button
-                  label="Kaydet"
+                  label={t('common.save')}
                   onPress={() => changePasswordMutation.mutate()}
                   loading={changePasswordMutation.isPending}
                   disabled={!canSubmitPassword}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Button label="Vazgeç" variant="secondary" onPress={resetPasswordForm} />
+                <Button label={t('common.cancel')} variant="secondary" onPress={resetPasswordForm} />
               </View>
             </Row>
           </Stack>
         ) : null}
 
-        <GroupedSection title="ÇALIŞMA ALANLARI">
+        <GroupedSection title={t('profile.workspaces')}>
           {(workspacesQuery.data ?? []).map((w) => (
             <GroupedRow
               key={w.id}
               leading={<GroupedRowIcon name={w.type === 'business' ? 'briefcase-outline' : 'person-outline'} />}
               title={w.name}
-              value={w.type === 'business' ? 'İşletme' : 'Kişisel'}
+              value={w.type === 'business' ? t('profile.business') : t('profile.personal')}
               onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
             />
           ))}
           <GroupedRow
             leading={<GroupedRowIcon name="enter-outline" />}
-            title="Davet koduyla katıl"
+            title={t('profile.joinWithCode')}
             onPress={() => router.push('/workspace/join')}
           />
         </GroupedSection>
 
-        <GroupedSection title="GİZLİLİK">
+        <GroupedSection title={t('profile.privacy')}>
           <GroupedToggleRow
-            title="Taranan belgeleri sakla"
-            subtitle="Kapalıyken taranan belgenin ham görüntüsü OCR analizi biter bitmez depolamadan silinir; oluşan kayıt etkilenmez. Açarsan belge onay ekranında karşılaştırma için depoda kalır."
+            title={t('profile.retainDocs')}
+            subtitle={t('profile.retainDocsHint')}
             value={retainOriginalDefault}
             onValueChange={handleToggleRetainOriginal}
           />
           <GroupedRow
             leading={<GroupedRowIcon name="shield-checkmark-outline" />}
-            title="Gizlilik Politikası ve KVKK"
+            title={t('profile.privacyPolicy')}
             onPress={() => router.push('/legal/privacy-policy')}
           />
         </GroupedSection>
@@ -374,25 +376,25 @@ export default function ProfileScreen() {
         <GroupedSection>
           <GroupedRow
             leading={<GroupedRowIcon name="sparkles-outline" />}
-            title="Abonelik"
+            title={t('profile.subscription')}
             onPress={() => router.push('/subscription')}
           />
           <GroupedRow
             leading={<GroupedRowIcon name="settings-outline" />}
-            title="Ayarlar"
+            title={t('profile.settings')}
             onPress={() => router.push('/settings')}
           />
         </GroupedSection>
 
         <Stack gap="xs">
-          <Button label="Çıkış yap" variant="secondary" icon="log-out-outline" onPress={handleSignOut} />
+          <Button label={t('profile.signOut')} variant="secondary" icon="log-out-outline" onPress={handleSignOut} />
           <Pressable
             onPress={confirmDeleteAccount}
             disabled={isDeleting}
             style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <Text variant="cardTitle" color="danger">
-              {isDeleting ? 'Siliniyor…' : 'Hesabımı ve verilerimi sil'}
+              {isDeleting ? t('profile.deleting') : t('profile.deleteAccount')}
             </Text>
           </Pressable>
         </Stack>

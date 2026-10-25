@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import { Text } from '@/components/primitives';
 import { useTheme } from '@/theme';
+import { t } from '@/i18n';
 
 export type InstallmentStatus = 'paid' | 'next' | 'upcoming' | 'overdue';
 
@@ -24,7 +25,7 @@ export function InstallmentStrip({ items, height = 10 }: InstallmentStripProps) 
   if (items.length === 0) return null;
 
   const paid = items.filter((i) => i.status === 'paid').length;
-  const summary = `${items.length} taksitin ${paid} tanesi ödendi`;
+  const summary = t('finance.installmentSummary', { total: items.length, paid });
 
   const colorOf = (status: InstallmentStatus) =>
     status === 'paid'

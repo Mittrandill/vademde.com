@@ -6,6 +6,7 @@ import { withAlpha } from '@/theme/colors';
 import { Row, Stack, Text } from '@/components/primitives';
 import { BankLogo } from './BankLogo';
 import type { Account } from '@/features/accounts/api';
+import { t } from '@/i18n';
 
 export interface CreditCardVisualProps {
   account: Account;
@@ -81,7 +82,7 @@ export function CreditCardVisual({ account }: CreditCardVisualProps) {
         <Row align="flex-end">
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="caption" style={{ color: withAlpha(CARD_TEXT, 0.55), letterSpacing: 0.6 }}>
-              KART SAHİBİ
+              {t('finance.card.holder')}
             </Text>
             <Text variant="body" numberOfLines={1} style={{ color: CARD_TEXT, fontWeight: '600' }}>
               {account.name}
@@ -89,7 +90,7 @@ export function CreditCardVisual({ account }: CreditCardVisualProps) {
           </Stack>
           <Stack gap="xxs" align="flex-end">
             <Text variant="caption" style={{ color: withAlpha(CARD_TEXT, 0.55), letterSpacing: 0.6 }}>
-              KESİM / SON ÖDEME
+              {t('finance.card.cycle')}
             </Text>
             <Text variant="body" tabular style={{ color: CARD_TEXT, fontWeight: '600' }}>
               {account.statement_day ?? '—'} / {account.payment_due_day ?? '—'}

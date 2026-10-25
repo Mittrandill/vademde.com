@@ -3,15 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 export type SourceTagKind = 'document' | 'matched' | 'suggested' | 'check';
 
-const LABELS: Record<SourceTagKind, string> = {
-  document: 'Belgeden',
-  matched: 'Eşleşti',
-  suggested: 'Önerildi',
-  check: 'Kontrol et',
-};
 
 export interface SourceTagProps {
   kind: SourceTagKind;
@@ -23,12 +18,13 @@ export interface SourceTagProps {
 export function SourceTag({ kind }: SourceTagProps) {
   const theme = useTheme();
   const attention = kind === 'check';
+  const label = t(`ui.sourceTag.${kind}`);
   const color = attention ? theme.colors.attentionMarker : theme.colors.receivable;
 
   return (
     <View
       accessible
-      accessibilityLabel={LABELS[kind]}
+      accessibilityLabel={label}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -43,7 +39,7 @@ export function SourceTag({ kind }: SourceTagProps) {
     >
       {attention ? null : <Ionicons name="checkmark" size={theme.iconSize.sm} color={color} />}
       <Text variant="label" style={{ color, fontSize: 10, lineHeight: 12 }}>
-        {LABELS[kind]}
+        {label}
       </Text>
     </View>
   );

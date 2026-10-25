@@ -1,4 +1,5 @@
 import { Text } from '@/components/primitives';
+import { t } from '@/i18n';
 
 // Web platform.web.tsx varyantı: @howincodes/expo-dynamic-app-icon native modülü web'de
 // bulunmadığından (bkz. index.web.js'in kendisi de no-op döner), Metro bu dosyayı native
@@ -6,7 +7,7 @@ import { Text } from '@/components/primitives';
 export function AppIconPicker() {
   return (
     <Text variant="caption" color="textSecondary">
-      Uygulama ikonu yalnızca iOS uygulamasında değiştirilebilir.
+      {t('ui.appIcon.webOnly')}
     </Text>
   );
 }

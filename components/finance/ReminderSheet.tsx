@@ -16,12 +16,20 @@ import {
   type ReminderTone,
 } from '@/features/counterparties/reminder';
 import { formatMinorAmount } from '@/utils/money';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const CHANNELS: { key: ReminderChannel; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const CHANNELS: { key: ReminderChannel; readonly label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'whatsapp', label: 'WhatsApp', icon: 'logo-whatsapp' },
   { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' },
-  { key: 'email', label: 'E-posta', icon: 'mail-outline' },
+  { key: 'email', get label() { return t('finance.reminder.email'); }, icon: 'mail-outline' },
 ];
+
+const OPEN_LABEL_KEYS = {
+  whatsapp: 'finance.reminder.openWhatsapp',
+  sms: 'finance.reminder.openSms',
+  email: 'finance.reminder.openEmail',
+} as const;
 
 export interface ReminderSheetProps {
   visible: boolean;
@@ -63,28 +71,26 @@ export function ReminderSheet({ visible, onClose, workspaceId, counterparty, net
       onClose();
     } catch (error) {
       Alert.alert(
-        'Gönderilemedi',
-        error instanceof ReminderChannelError ? error.message : 'Seçilen uygulama açılamadı. Başka bir kanal deneyin.'
+        t('finance.reminder.sendFailedTitle'),
+        error instanceof ReminderChannelError ? error.message : t('finance.reminder.sendFailedBody')
       );
     } finally {
       setBusy(false);
     }
   }
 
-  const channelLabel = CHANNELS.find((c) => c.key === channel)?.label ?? '';
-
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Hatırlatma gönder">
+    <BottomSheet visible={visible} onClose={onClose} title={t('finance.reminder.title')}>
       <Stack gap="md">
         <Text variant="caption" color="textSecondary">
           {counterparty.name}
-          {dueDate ? ` · vade ${new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' }).format(new Date(dueDate))}` : ''}
+          {dueDate ? t('finance.reminder.due', { date: localeDateFormatter({ day: 'numeric', month: 'short' }).format(new Date(dueDate)) }) : ''}
           {` · ${formatMinorAmount(Math.abs(netMinor))}`}
         </Text>
 
         <Stack gap="xs">
           <Text variant="label" color="textSecondary">
-            Ton
+            {t('finance.reminder.tone')}
           </Text>
           <ScrollableTabs
             tabs={REMINDER_TONES}
@@ -101,7 +107,7 @@ export function ReminderSheet({ visible, onClose, workspaceId, counterparty, net
           onChangeText={setCustomMessage}
           multiline
           maxFontSizeMultiplier={MAX_FONT_SCALE}
-          accessibilityLabel="Mesaj metni"
+          accessibilityLabel={t('finance.reminder.messageA11y')}
           style={[
             theme.typography.body,
             {
@@ -127,16 +133,16 @@ export function ReminderSheet({ visible, onClose, workspaceId, counterparty, net
             color={attach ? theme.colors.action : theme.colors.mutedControl}
           />
           <View style={{ flex: 1 }}>
-            <Text variant="cardTitle">Hesap özetini ekle</Text>
+            <Text variant="cardTitle">{t('finance.reminder.attachStatement')}</Text>
             <Text variant="caption" color="textSecondary">
-              PDF · son 3 hareket ve bakiye (gönderdikten sonra ayrıca paylaşılır)
+              {t('finance.reminder.attachStatementHint')}
             </Text>
           </View>
         </Pressable>
 
         <Stack gap="xs">
           <Text variant="label" color="textSecondary">
-            Nereden gönderilsin?
+            {t('finance.reminder.channel')}
           </Text>
           <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
             {CHANNELS.map((c) => {
@@ -167,9 +173,9 @@ export function ReminderSheet({ visible, onClose, workspaceId, counterparty, net
           </View>
         </Stack>
 
-        <Button label={`${channelLabel}'ta aç`.replace("E-posta'ta", 'E-posta uygulamasında')} onPress={send} loading={busy} />
+        <Button label={t(OPEN_LABEL_KEYS[channel])} onPress={send} loading={busy} />
         <Text variant="caption" color="textSecondary">
-          Mesaj senin hesabından gönderilir; Vademde kimseye senin adına yazmaz.
+          {t('finance.reminder.footer')}
         </Text>
       </Stack>
     </BottomSheet>

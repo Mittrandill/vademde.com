@@ -74,6 +74,8 @@ import {
   matchStatementLines,
   statementMatchDateRange,
 } from '@/utils/cardStatement';
+import { getLocaleTag } from '@/i18n';
+import { getInputDecimalSeparator } from '@/i18n/format';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
 
@@ -317,7 +319,7 @@ export default function DocumentReviewScreen() {
     // düzeltebilir (bkz. aşağıdaki LowConfidenceHint fieldName="currency").
     setValueUnitCode(document.currency_code && CURRENCY_CODES.has(document.currency_code) ? document.currency_code : 'TRY');
     setAmount(
-      document.total_amount_minor ? formatAmountInput((document.total_amount_minor / 100).toFixed(2).replace('.', ',')) : ''
+      document.total_amount_minor ? formatAmountInput((document.total_amount_minor / 100).toFixed(2).replace('.', getInputDecimalSeparator())) : ''
     );
     // OCR bir tarih bulduysa (belge gerçek kaynaktır) o kullanılır; hiç bulamadıysa
     // kullanıcının ekstre tablosundan seçtiği ayın beklenen tarihine düşülür — böylece
@@ -353,7 +355,7 @@ export default function DocumentReviewScreen() {
 
       if (document.document_type === 'kredi') {
         if (summary?.loan?.interestRatePercent != null) {
-          setInterestRatePercent(String(summary.loan.interestRatePercent).replace('.', ','));
+          setInterestRatePercent(String(summary.loan.interestRatePercent).replace('.', getInputDecimalSeparator()));
         }
         setOcrTotalRepaymentMinor(summary?.loan?.totalRepaymentMinor ?? null);
       }
@@ -594,7 +596,7 @@ export default function DocumentReviewScreen() {
         id: item.id,
         sortOrder: item.sort_order || index + 1,
         dueDate: item.occurred_at ?? '',
-        amount: formatAmountInput((item.amount_minor / 100).toFixed(2).replace('.', ',')),
+        amount: formatAmountInput((item.amount_minor / 100).toFixed(2).replace('.', getInputDecimalSeparator())),
         paid: !!item.occurred_at && item.occurred_at < todayStr,
       }))
     );
@@ -1078,7 +1080,7 @@ export default function DocumentReviewScreen() {
   const dueDatePeriodMismatch =
     !!paramExpectedDueDate && !!dueDate && dueDate.slice(0, 7) !== paramExpectedDueDate.slice(0, 7);
   const expectedDueDateMonthLabel = paramExpectedDueDate
-    ? new Date(paramExpectedDueDate).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })
+    ? new Date(paramExpectedDueDate).toLocaleDateString(getLocaleTag(), { month: 'long', year: 'numeric' })
     : '';
   const principalMinor = parseAmountToMinor(amount) ?? 0;
   const totalRepaymentMinor =

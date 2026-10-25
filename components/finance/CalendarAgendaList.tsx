@@ -4,6 +4,8 @@ import { Card, Stack, Text } from '@/components/primitives';
 import { CalendarObligationRow } from './CalendarObligationRow';
 import { toDateKey } from '@/utils/calendar';
 import type { ObligationDueItem } from '@/features/obligations/api';
+import { localeDateFormatter, upperUi } from '@/i18n/format';
+import { t } from '@/i18n';
 
 export interface CalendarAgendaListProps {
   workspaceId: string;
@@ -11,7 +13,7 @@ export interface CalendarAgendaListProps {
   emptyLabel?: string;
 }
 
-const dateHeaderFormatter = new Intl.DateTimeFormat('tr-TR', {
+const dateHeaderFormatter = localeDateFormatter({
   day: 'numeric',
   month: 'long',
   year: 'numeric',
@@ -21,7 +23,7 @@ const dateHeaderFormatter = new Intl.DateTimeFormat('tr-TR', {
 export function CalendarAgendaList({
   workspaceId,
   obligations,
-  emptyLabel = 'Bu aralıkta vadesi gelen kayıt yok.',
+  emptyLabel = t('calendar.emptyRange'),
 }: CalendarAgendaListProps) {
   const groups = useMemo(() => {
     const withDueDate = obligations.filter((o) => o.due_date);
@@ -57,7 +59,7 @@ export function CalendarAgendaList({
       {groups.map((group) => (
         <Fragment key={group.dateKey}>
           <Text variant="caption" color="textSecondary">
-            {dateHeaderFormatter.format(group.date).toLocaleUpperCase('tr-TR')}
+            {upperUi(dateHeaderFormatter.format(group.date))}
           </Text>
           <Stack gap="xs">
             {group.items.map((obligation) => (

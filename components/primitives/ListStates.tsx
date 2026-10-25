@@ -5,6 +5,7 @@ import { useTheme } from '@/theme';
 import { Pressable } from './Pressable';
 import { Skeleton } from './Skeleton';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 // docs/06 §10.6.2 — mevcut sayfa boyutu 30; bileşenler sayfa boyutunu bilmez, çağıran verir.
 export const LIST_PAGE_SIZE = 30;
@@ -19,7 +20,7 @@ export interface LoadMoreProps {
 }
 
 // "Daha fazla yükle": ilerleme çubuğu + sayaç + buton (HANDOFF §3, Sayfalandirma.html).
-export function LoadMore({ loaded, total, onPress, loading, noun = 'kayıt' }: LoadMoreProps) {
+export function LoadMore({ loaded, total, onPress, loading, noun = t('ui.recordNoun') }: LoadMoreProps) {
   const theme = useTheme();
   if (total > 0 && loaded >= total) return null;
   const ratio = total > 0 ? Math.min(1, loaded / total) : 0;
@@ -47,7 +48,7 @@ export function LoadMore({ loaded, total, onPress, loading, noun = 'kayıt' }: L
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Daha fazla yükle"
+        accessibilityLabel={t('ui.loadMore')}
         disabled={loading}
         onPress={onPress}
         style={{
@@ -64,7 +65,7 @@ export function LoadMore({ loaded, total, onPress, loading, noun = 'kayıt' }: L
         }}
       >
         {loading ? <ActivityIndicator color={theme.colors.textSecondary} /> : null}
-        <Text variant="cardTitle">Daha fazla yükle</Text>
+        <Text variant="cardTitle">{t('ui.loadMore')}</Text>
       </Pressable>
     </View>
   );
@@ -74,7 +75,7 @@ export function ListSkeleton({ rows = 3 }: { rows?: number }) {
   const theme = useTheme();
 
   return (
-    <View accessibilityLabel="Yükleniyor">
+    <View accessibilityLabel={t('ui.loading')}>
       {Array.from({ length: rows }, (_, i) => (
         <View
           key={i}
@@ -124,7 +125,7 @@ export interface ListErrorProps {
   onRetry: () => void;
 }
 
-export function ListError({ message = 'Sonraki kayıtlar yüklenemedi.', onRetry }: ListErrorProps) {
+export function ListError({ message = t('ui.loadMoreError'), onRetry }: ListErrorProps) {
   const theme = useTheme();
 
   return (

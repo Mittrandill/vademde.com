@@ -1,0 +1,16 @@
+export const cashAlert = {
+  title: 'Nakit uyarısı',
+  notFoundTitle: 'Hesap bulunamadı',
+  notFoundBody: 'Bu hesap için tahmin hesaplanamadı.',
+  goesNegative: '{{account}} {{date}} tarihinde eksiye düşebilir',
+  staysPositive: '{{account}} önümüzdeki {{days}} gün eksiye düşmüyor',
+  totalHint: 'Tüm TL hesapların toplam bakiyesine, hesabı atanmamış kayıtlar dahil tüm kayıtlı vadeler uygulanır.',
+  accountHint: 'Tahmin, bu hesaptan ödenecek / bu hesaba tahsil edilecek kayıtlı vadelere dayanır.',
+  lowest: 'Tahmini en düşük bakiye',
+  chartA11y: 'Önümüzdeki {{days}} günlük tahmini bakiye grafiği',
+  outgoing: 'Bu hesaptan çıkacaklar',
+  noOutgoing: 'Bu hesaba bağlı ödenecek kayıt yok.',
+  whatToDo: 'Ne yapabilirsin?',
+  transferFrom: "{{account}}'dan {{amount}} aktar",
+  changeAccount: 'Ödeme hesabını değiştir',
+};

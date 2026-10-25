@@ -7,6 +7,7 @@ import { withAlpha } from '@/theme/colors';
 import { Button, Card, Divider, Row, Stack, StatColumns, Text, type StatColumn } from '@/components/primitives';
 import { Amount, type AmountDirection } from './Amount';
 import type { ValueUnitType } from '@/features/valueUnits/units';
+import { t } from '@/i18n';
 
 export interface HeroStatCardProps {
   /** Verilmezse üst satırda yalnızca ikon kutusu (varsa) gösterilir — bkz. counterparties/index.tsx,
@@ -128,7 +129,7 @@ export function HeroStatCard({
           <Stack gap="xs">
             <Row align="center" style={{ justifyContent: 'space-between' }}>
               <Text variant="caption" color="textSecondary">
-                İLERLEME ORANI
+                {t('finance.progressUpper')}
               </Text>
               <Text variant="caption" color="textSecondary" style={{ fontWeight: '600' }}>
                 %{progressPercent}

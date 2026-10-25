@@ -1,6 +1,8 @@
 // docs/01-finansal-kayit-modeli.md §8.1 — tutarlar en küçük para birimiyle (kuruş) tam sayı
-// olarak tutulur; para birimi ISO koduyla saklanır. Görüntüleme Türkçe yerelleştirilir.
+// olarak tutulur; para birimi ISO koduyla saklanır. Görüntüleme uygulama diline göre yerelleştirilir.
 import { getValueUnit } from '@/features/valueUnits/units';
+import { getLocaleTag } from '@/i18n';
+import { getInputDecimalSeparator, getInputGroupSeparator } from '@/i18n/format';
 
 export function toMinorUnits(amount: number): number {
   return Math.round(amount * 100);
@@ -25,16 +27,19 @@ export function parseAmount(value: string): number | null {
     const decimalSeparator = lastComma > lastDot ? ',' : '.';
     const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
     normalized = cleaned.split(thousandsSeparator).join('').replace(decimalSeparator, '.');
-  } else if (lastComma >= 0) {
-    // Yalnızca virgül: Türkçe yazımda ondalıktır ("1234,56").
-    normalized = cleaned.replace(',', '.');
-  } else if (lastDot >= 0) {
-    // Yalnızca nokta belirsizdir: "2.000" binlik de olabilir ondalık da. Son noktadan
-    // sonra tam 3 hane varsa binlik kabul edilir ("2.000" → 2000, "1.234.567" → 1234567);
-    // aksi halde ondalıktır ("12.50" → 12.5). Kuruş iki haneli olduğu için bu ayrım
-    // gerçek para tutarlarında güvenlidir.
-    const afterDot = cleaned.length - lastDot - 1;
-    normalized = afterDot === 3 ? cleaned.split('.').join('') : cleaned;
+  } else if (lastComma >= 0 || lastDot >= 0) {
+    // Tek tür ayıraç: cihazın ondalık ayıracıysa ondalıktır (Türkiye bölgesinde "1234,56").
+    // Diğeri belirsizdir: "2.000" binlik de olabilir ondalık da. Son ayıraçtan sonra tam 3 hane
+    // varsa binlik kabul edilir ("2.000" → 2000, "1.234.567" → 1234567); aksi halde ondalıktır
+    // ("12.50" → 12.5). Kuruş iki haneli olduğu için bu ayrım gerçek para tutarlarında güvenlidir.
+    // İngilizce bölgede ("." ondalık) aynı kural virgüle uygulanır ("1,500" → 1500).
+    const separator = lastComma >= 0 ? ',' : '.';
+    if (separator === getInputDecimalSeparator()) {
+      normalized = cleaned.replace(separator, '.');
+    } else {
+      const afterSeparator = cleaned.length - cleaned.lastIndexOf(separator) - 1;
+      normalized = afterSeparator === 3 ? cleaned.split(separator).join('') : cleaned.replace(separator, '.');
+    }
   } else {
     normalized = cleaned;
   }
@@ -53,24 +58,27 @@ export function parseAmountToMinor(value: string): number | null {
 // Kullanıcı tutar alanına yazarken binlik ayıracı ekler (ör. "1000" -> "1.000",
 // "1000000,5" -> "1.000.000,5") — büyük tutarlar, özellikle milyon seviyesinde, ayraçsız
 // okunması zor olduğu için her tuş vuruşunda canlı biçimlendirilir (bkz. AmountField).
-// Yalnızca rakam, tek bir ondalık virgül ve baştaki tek bir eksi işaretine izin verilir;
-// kullanıcının elle yazdığı nokta atılır çünkü binlik ayıracı zaten otomatik ekleniyor.
-// maxDecimals=0 olan birimlerde (adet bazlı sikkeler, bkz. ValueUnit.precision) virgül
-// tamamen engellenir.
+// Yalnızca rakam, tek bir ondalık ayıracı ve baştaki tek bir eksi işaretine izin verilir;
+// kullanıcının elle yazdığı binlik ayıracı atılır çünkü zaten otomatik ekleniyor.
+// maxDecimals=0 olan birimlerde (adet bazlı sikkeler, bkz. ValueUnit.precision) ondalık
+// tamamen engellenir. Ayıraçlar cihaz bölgesine göredir (bkz. getInputDecimalSeparator):
+// Türkiye'de "1.234,56", "." ondalıklı bölgelerde "1,234.56".
 export function formatAmountInput(value: string, maxDecimals: 0 | 2 = 2): string {
+  const decimal = getInputDecimalSeparator();
+  const group = getInputGroupSeparator();
   const isNegative = value.trim().startsWith('-');
-  let cleaned = value.replace(/[^\d,]/g, '');
-  if (maxDecimals === 0) cleaned = cleaned.replace(/,/g, '');
+  let cleaned = value.replace(decimal === ',' ? /[^\d,]/g : /[^\d.]/g, '');
+  if (maxDecimals === 0) cleaned = cleaned.split(decimal).join('');
 
-  const firstComma = cleaned.indexOf(',');
-  const rawIntPart = firstComma === -1 ? cleaned : cleaned.slice(0, firstComma);
+  const firstDecimal = cleaned.indexOf(decimal);
+  const rawIntPart = firstDecimal === -1 ? cleaned : cleaned.slice(0, firstDecimal);
   const intPart = rawIntPart.replace(/^0+(?=\d)/, '');
-  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, group);
   const sign = isNegative ? '-' : '';
 
-  if (firstComma === -1) return `${sign}${grouped}`;
-  const decimalPart = cleaned.slice(firstComma + 1).replace(/,/g, '').slice(0, maxDecimals);
-  return `${sign}${grouped},${decimalPart}`;
+  if (firstDecimal === -1) return `${sign}${grouped}`;
+  const decimalPart = cleaned.slice(firstDecimal + 1).split(decimal).join('').slice(0, maxDecimals);
+  return `${sign}${grouped}${decimal}${decimalPart}`;
 }
 
 export function fromMinorUnits(amountMinor: number): number {
@@ -80,7 +88,7 @@ export function fromMinorUnits(amountMinor: number): number {
 export function formatMinorAmount(
   amountMinor: number,
   currencyCode: string = 'TRY',
-  locale: string = 'tr-TR'
+  locale: string = getLocaleTag()
 ): string {
   // Kıymetli maden kodları (gram_altin, ceyrek_altin...) ISO 4217 değildir ve sikkelerde
   // minor = adet'tir (÷100 değil). Kod doğrudan geçirilen tüm çağıranlar (liste, detay,
@@ -93,13 +101,20 @@ export function formatMinorAmount(
   // tam Intl verisi olmayan bir ortamda (Hermes) RangeError fırlatabilir. Bu fonksiyon
   // her liste/detay satırında çalıştığı için buradaki bir throw tüm ekranı çökertirdi;
   // bu yüzden güvenli bir sayısal biçime düşülür ve kod tutar sonuna eklenir.
+  // narrowSymbol: İngilizce yerelde TRY "₺" yerine "TRY" yazılmasın (Türkçede çıktı aynıdır).
+  // Desteklemeyen ortamda RangeError'a düşmeden varsayılan sembole geri dönülür.
+  const currencyOptions: Intl.NumberFormatOptions = {
+    style: 'currency',
+    currency: currencyCode,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  };
   try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
+    try {
+      return new Intl.NumberFormat(locale, { ...currencyOptions, currencyDisplay: 'narrowSymbol' }).format(value);
+    } catch {
+      return new Intl.NumberFormat(locale, currencyOptions).format(value);
+    }
   } catch {
     let numeric: string;
     try {
@@ -159,7 +174,7 @@ export function fromValueUnitMinor(amountMinor: number, unitCode: string): numbe
 export function formatValueUnitAmount(
   amountMinor: number,
   unitCode: string,
-  locale: string = 'tr-TR'
+  locale: string = getLocaleTag()
 ): string {
   const unit = getValueUnit(unitCode);
   if (unit.unitType === 'fiat') return formatMinorAmount(amountMinor, unitCode, locale);

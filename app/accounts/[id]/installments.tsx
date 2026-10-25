@@ -34,6 +34,8 @@ import {
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { parseAmountToMinor, formatMinorAmount } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { amountPlaceholder, zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
 function monthLabel(isoDate: string) {
   const [y, m] = isoDate.split('-').map(Number);
@@ -78,9 +80,9 @@ export default function CardInstallmentsScreen() {
   const deleteMutation = useMutation({ mutationFn: deleteCardInstallmentPurchase, onSuccess: refresh });
 
   function confirmDelete(purchaseId: string, merchant: string) {
-    Alert.alert('Alışverişi sil', `${merchant} taksit kaydı silinecek. Kart hareketleri etkilenmez.`, [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate(purchaseId) },
+    Alert.alert(t('accounts.installments.deleteTitle'), t('accounts.installments.deleteBody', { merchant }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteMutation.mutate(purchaseId) },
     ]);
   }
 
@@ -90,8 +92,8 @@ export default function CardInstallmentsScreen() {
         contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg, paddingBottom: theme.spacing.massive }}
       >
         <ScreenHeader
-          title={`${accountQuery.data?.name ?? 'Kart'} · taksitler`}
-          right={{ icon: 'add', accessibilityLabel: 'Taksitli alışveriş ekle', variant: 'accent', onPress: () => setAddOpen(true) }}
+          title={t('accounts.installments.title', { card: accountQuery.data?.name ?? t('accounts.installments.cardFallback') })}
+          right={{ icon: 'add', accessibilityLabel: t('accounts.installments.add'), variant: 'accent', onPress: () => setAddOpen(true) }}
         />
 
         {purchasesQuery.isLoading ? (
@@ -99,9 +101,9 @@ export default function CardInstallmentsScreen() {
         ) : purchases.length === 0 ? (
           <EmptyState
             icon="card-outline"
-            title="Taksitli alışveriş yok"
-            message="Taksitli bir alışveriş ekle; gelecek ekstrelere ne kadar yansıyacağını burada gör."
-            actionLabel="Alışveriş ekle"
+            title={t('accounts.installments.emptyTitle')}
+            message={t('accounts.installments.emptyBody')}
+            actionLabel={t('accounts.installments.addPurchase')}
             onActionPress={() => setAddOpen(true)}
           />
         ) : (
@@ -113,12 +115,17 @@ export default function CardInstallmentsScreen() {
                 backgroundColor: theme.colors.surfacePrimary,
               }}>
               <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
-                Gelecek ekstrelere yansıyacak
+                {t('accounts.installments.futureLoad')}
               </Text>
               <HeroAmount amountMinor={totalRemaining} baseSize={48} />
               <Text variant="caption" color="textSecondary">
-                {active.length} taksitli alışveriş
-                {lastMonth ? ` · son taksit ${MONTH_NAMES[Number(lastMonth.slice(5, 7)) - 1]} ${lastMonth.slice(0, 4)}` : ''}
+                {t('accounts.installments.activeCount', { count: active.length })}
+                {lastMonth
+                  ? t('accounts.installments.lastInstallment', {
+                      month: MONTH_NAMES[Number(lastMonth.slice(5, 7)) - 1],
+                      year: lastMonth.slice(0, 4),
+                    })
+                  : ''}
               </Text>
             </View>
 
@@ -129,7 +136,7 @@ export default function CardInstallmentsScreen() {
                 backgroundColor: theme.colors.surfacePrimary,
               }}>
               <Text variant="label" color="textSecondary">
-                Ekstre başına taksit yükü
+                {t('accounts.installments.perStatement')}
               </Text>
               {loads.map((load) => (
                 <View key={load.month} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
@@ -147,7 +154,7 @@ export default function CardInstallmentsScreen() {
                     />
                   </View>
                   <Text variant="label" tabular style={{ width: 84, textAlign: 'right', textTransform: 'none' }}>
-                    {formatMinorAmount(load.minor).replace(/,00$/, '')}
+                    {formatMinorAmount(load.minor).replace(zeroFractionPattern(), '')}
                   </Text>
                 </View>
               ))}
@@ -155,13 +162,13 @@ export default function CardInstallmentsScreen() {
 
             <Stack gap="xs">
               <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                Alışverişler
+                {t('accounts.installments.purchases')}
               </Text>
               {progress.map((p) => (
                 <Pressable
                   key={p.purchase.id}
                   accessibilityRole="button"
-                  accessibilityHint="Silmek için uzun bas"
+                  accessibilityHint={t('accounts.installments.longPressHint')}
                   onLongPress={() => confirmDelete(p.purchase.id, p.purchase.merchant)}
                   style={{
                     gap: theme.spacing.xs,
@@ -175,7 +182,7 @@ export default function CardInstallmentsScreen() {
                       {p.purchase.merchant}
                     </Text>
                     <Text variant="cardTitle" tabular>
-                      {formatMinorAmount(p.monthlyMinor)}/ay
+                      {t('accounts.installments.perMonth', { amount: formatMinorAmount(p.monthlyMinor) })}
                     </Text>
                   </View>
                   <InstallmentStrip
@@ -186,10 +193,10 @@ export default function CardInstallmentsScreen() {
                   />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text variant="caption" color="textSecondary">
-                      {p.purchase.installment_count} dönem · {p.elapsedStatementCount} dönem geçti
+                      {t('accounts.installments.cycles', { total: p.purchase.installment_count, elapsed: p.elapsedStatementCount })}
                     </Text>
                     <Text variant="caption" color="textSecondary" tabular>
-                      gelecek yük {formatMinorAmount(p.futureStatementMinor)}
+                      {t('accounts.installments.futureAmount', { amount: formatMinorAmount(p.futureStatementMinor) })}
                     </Text>
                   </View>
                 </Pressable>
@@ -199,7 +206,7 @@ export default function CardInstallmentsScreen() {
         )}
 
         <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.xxs }}>
-          Bu ekran ekstre takvimini ve gelecek dönem yükünü gösterir. Geçen dönemler ödendi anlamına gelmez; gerçek borç ve ödemeler kart hesabı ile ekstre kayıtlarında izlenir.
+          {t('accounts.installments.footer')}
         </Text>
       </ScrollView>
 
@@ -242,10 +249,10 @@ function AddPurchaseSheet({
     mutationFn: async () => {
       const totalMinor = parseAmountToMinor(amount);
       const installmentCount = Number(count);
-      if (!merchant.trim()) throw new Error('Alışveriş adını gir.');
-      if (!totalMinor || totalMinor <= 0) throw new Error('Toplam tutarı gir.');
+      if (!merchant.trim()) throw new Error(t('accounts.installments.merchantRequired'));
+      if (!totalMinor || totalMinor <= 0) throw new Error(t('accounts.installments.totalRequired'));
       if (!Number.isInteger(installmentCount) || installmentCount < 2 || installmentCount > 60) {
-        throw new Error('Taksit sayısı 2 ile 60 arasında olmalı.');
+        throw new Error(t('accounts.installments.countRange'));
       }
       await createCardInstallmentPurchase({
         workspaceId: workspaceId as string,
@@ -263,17 +270,17 @@ function AddPurchaseSheet({
       setError(null);
       onSaved();
     },
-    onError: (e) => setError(friendlyErrorMessage(e, 'Kaydedilemedi.')),
+    onError: (e) => setError(friendlyErrorMessage(e, t('accounts.installments.saveFailed'))),
   });
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Taksitli alışveriş">
+    <BottomSheet visible={visible} onClose={onClose} title={t('accounts.installments.sheetTitle')}>
       <Stack gap="sm">
-        <TextField label="ALIŞVERİŞ" placeholder="Örn. Teknosa · dizüstü" value={merchant} onChangeText={setMerchant} />
-        <AmountField label="TOPLAM TUTAR (₺)" placeholder="0,00" value={amount} onChangeText={setAmount} />
-        <TextField label="TAKSİT SAYISI" keyboardType="number-pad" value={count} onChangeText={setCount} />
+        <TextField label={t('accounts.installments.merchant')} placeholder={t('accounts.installments.merchantPlaceholder')} value={merchant} onChangeText={setMerchant} />
+        <AmountField label={t('accounts.installments.total')} placeholder={amountPlaceholder()} value={amount} onChangeText={setAmount} />
+        <TextField label={t('accounts.installments.count')} keyboardType="number-pad" value={count} onChangeText={setCount} />
         <FormRow
-          label="İLK TAKSİTİN EKSTRESİ"
+          label={t('accounts.installments.firstStatement')}
           value={`${MONTH_NAMES[month.month]} ${month.year}`}
           onPress={() => setMonthOpen(true)}
         />
@@ -282,7 +289,7 @@ function AddPurchaseSheet({
             {error}
           </Text>
         ) : null}
-        <Button label="Kaydet" onPress={() => mutation.mutate()} loading={mutation.isPending} />
+        <Button label={t('common.save')} onPress={() => mutation.mutate()} loading={mutation.isPending} />
       </Stack>
       <MonthYearSheet visible={monthOpen} onClose={() => setMonthOpen(false)} year={month.year} month={month.month} onChange={setMonth} />
     </BottomSheet>

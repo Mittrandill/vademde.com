@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Group, GroupedRowIcon, Pressable, Tag, Text } from '@/components/primitives';
 import { openReceipt, type PendingReceipt } from '@/features/receipts/api';
+import { t } from '@/i18n';
 
 interface ReceiptAttachFieldProps {
   /** Yeni seçilen (henüz yüklenmemiş) dekont. */
@@ -26,7 +27,7 @@ interface ReceiptAttachFieldProps {
 async function pickFromCamera(): Promise<PendingReceipt | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
-    Alert.alert('Kamera izni gerekli', 'Dekont fotoğrafı çekebilmek için ayarlardan kamera iznini açın.');
+    Alert.alert(t('finance.receiptField.cameraPermissionTitle'), t('finance.receiptField.cameraPermissionBody'));
     return null;
   }
   const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
@@ -42,7 +43,7 @@ async function pickFromCamera(): Promise<PendingReceipt | null> {
 async function pickFromLibrary(): Promise<PendingReceipt | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
-    Alert.alert('Fotoğraf izni gerekli', 'Galeriden dekont seçebilmek için ayarlardan fotoğraf iznini açın.');
+    Alert.alert(t('finance.receiptField.photoPermissionTitle'), t('finance.receiptField.photoPermissionBody'));
     return null;
   }
   const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
@@ -87,11 +88,11 @@ export function ReceiptAttachField({
       const picked = await picker();
       if (picked) onChange(picked);
     };
-    Alert.alert('Dekont ekle', 'Dekontu nasıl eklemek istersiniz?', [
-      { text: 'Fotoğraf çek', onPress: () => run(pickFromCamera) },
-      { text: 'Galeriden seç', onPress: () => run(pickFromLibrary) },
-      { text: 'Dosyalardan seç (PDF)', onPress: () => run(pickFromFiles) },
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('finance.receiptField.addTitle'), t('finance.receiptField.addBody'), [
+      { text: t('finance.receiptField.takePhoto'), onPress: () => run(pickFromCamera) },
+      { text: t('finance.receiptField.fromGallery'), onPress: () => run(pickFromLibrary) },
+      { text: t('finance.receiptField.fromFiles'), onPress: () => run(pickFromFiles) },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   }
 
@@ -100,7 +101,7 @@ export function ReceiptAttachField({
     try {
       await openReceipt(existingReceiptId);
     } catch {
-      Alert.alert('Dekont açılamadı', 'Dosya bulunamadı ya da bağlantı kurulamadı.');
+      Alert.alert(t('finance.receipt.openFailedTitle'), t('finance.receipt.openFailedBody'));
     }
   }
 
@@ -128,24 +129,24 @@ export function ReceiptAttachField({
           <Text numberOfLines={1} style={{ flex: 1 }}>
             {value.fileName}
           </Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Dekontu kaldır" onPress={() => onChange(null)} hitSlop={10}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('finance.receiptField.remove')} onPress={() => onChange(null)} hitSlop={10}>
             <Ionicons name="close-circle" size={22} color={theme.colors.mutedControl} />
           </Pressable>
         </View>
       ) : existingReceiptId ? (
         <View style={rowStyle}>
           <GroupedRowIcon name="attach" />
-          <Text style={{ flex: 1 }}>Dekont ekli</Text>
+          <Text style={{ flex: 1 }}>{t('finance.receiptField.attached')}</Text>
           <Pressable accessibilityRole="button" onPress={openExisting} hitSlop={8}>
-            <Text style={{ fontSize: 15, fontWeight: '600' }}>Aç</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600' }}>{t('finance.receiptField.open')}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={choose} hitSlop={8}>
             <Text color="textSecondary" style={{ fontSize: 15 }}>
-              Değiştir
+              {t('finance.receiptField.change')}
             </Text>
           </Pressable>
           {onRemoveExisting ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Dekontu ödemeden ayır" onPress={onRemoveExisting} hitSlop={8}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('finance.receiptField.detach')} onPress={onRemoveExisting} hitSlop={8}>
               <Ionicons name="close-circle" size={20} color={theme.colors.mutedControl} />
             </Pressable>
           ) : null}
@@ -153,15 +154,15 @@ export function ReceiptAttachField({
       ) : (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={allowed ? 'Dekont ekle' : 'Dekont ekle, Plus planına özel'}
+          accessibilityLabel={allowed ? t('finance.receiptField.addTitle') : t('finance.receiptField.addLockedA11y')}
           onPress={choose}
           style={rowStyle}
         >
           <GroupedRowIcon name={allowed ? 'attach' : 'lock-closed'} />
-          <Text style={{ flex: 1 }}>Dekont ekle</Text>
+          <Text style={{ flex: 1 }}>{t('finance.receiptField.addTitle')}</Text>
           {allowed ? (
             <Text color="textSecondary" style={{ fontSize: 15 }}>
-              İsteğe bağlı
+              {t('finance.receiptField.optional')}
             </Text>
           ) : (
             <Tag tone="brand" label="Plus" />

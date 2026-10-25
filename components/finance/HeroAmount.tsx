@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Text } from '@/components/primitives';
 import type { ThemeColors } from '@/theme/colors';
 import { formatMinorAmount } from '@/utils/money';
+import { t } from '@/i18n';
 
 export interface HeroAmountProps {
   amountMinor: number;
@@ -41,7 +42,7 @@ export function HeroAmount({
   return (
     <View
       accessible
-      accessibilityLabel={hidden ? 'Tutar gizli' : formatted}
+      accessibilityLabel={hidden ? t('finance.amountHidden') : formatted}
       style={{ flexDirection: 'row', alignItems: 'baseline' }}
     >
       <Text

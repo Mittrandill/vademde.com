@@ -17,6 +17,7 @@ import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
 import { queryKeys } from '@/services/queryKeys';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
 
 function workspaceInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -65,7 +66,7 @@ export default function WorkspacesScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
       setEditingWorkspaceId(null);
     },
-    onError: (error) => Alert.alert('Kaydedilemedi', friendlyErrorMessage(error, 'Bir hata oluştu')),
+    onError: (error) => Alert.alert(t('workspace.saveFailedTitle'), friendlyErrorMessage(error, t('workspace.genericError'))),
   });
 
   const deleteMutation = useMutation({
@@ -74,7 +75,7 @@ export default function WorkspacesScreen() {
       if (activeWorkspaceId === id) setActiveWorkspaceId(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
     },
-    onError: (error) => Alert.alert('Silinemedi', friendlyErrorMessage(error, 'Bir hata oluştu')),
+    onError: (error) => Alert.alert(t('workspace.deleteFailedTitle'), friendlyErrorMessage(error, t('workspace.genericError'))),
   });
 
   function startEditing(workspace: Workspace) {
@@ -84,17 +85,17 @@ export default function WorkspacesScreen() {
 
   function confirmDelete(workspace: Workspace) {
     Alert.alert(
-      `"${workspace.name}" çalışma alanını sil`,
-      'Bu işlem geri alınamaz. Bu çalışma alanındaki tüm hesaplar, işlemler, borç/alacak kayıtları ve belgeler kalıcı olarak silinecek.',
+      t('workspace.deleteTitle', { name: workspace.name }),
+      t('workspace.deleteBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Sil',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
-            Alert.alert('Emin misin?', 'Bu son bir uyarıdır. Bu veriler kurtarılamaz.', [
-              { text: 'Vazgeç', style: 'cancel' },
-              { text: 'Kalıcı Olarak Sil', style: 'destructive', onPress: () => deleteMutation.mutate(workspace.id) },
+            Alert.alert(t('workspace.deleteSureTitle'), t('workspace.deleteSureBody'), [
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: t('workspace.deletePermanent'), style: 'destructive', onPress: () => deleteMutation.mutate(workspace.id) },
             ]);
           },
         },
@@ -108,7 +109,7 @@ export default function WorkspacesScreen() {
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ paddingHorizontal: theme.screenEdge.standard, paddingTop: theme.spacing.sm }}>
-        <ScreenHeader title="Çalışma Alanları" />
+        <ScreenHeader title={t('workspace.list.title')} />
       </View>
 
       <ScrollView
@@ -125,18 +126,18 @@ export default function WorkspacesScreen() {
 
         {choosingPrimary ? (
           <Text variant="caption" color="textSecondary">
-            Aktif kalacak çalışma alanını seçmek için aşağıdaki listeden bir alana dokunun.
+            {t('workspace.list.choosePrimaryHint')}
           </Text>
         ) : null}
 
         {isEmpty ? (
           <Text variant="body" color="textSecondary">
-            Henüz bir çalışma alanın yok. Yeni bir tane oluştur veya davet koduyla mevcut birine katıl.
+            {t('workspace.list.empty')}
           </Text>
         ) : (
           <Stack gap="sm">
             <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: theme.spacing.xxs }}>
-              Her çalışma alanının verisi tamamen ayrıdır. Aktif olanı seç; ana sayfa ona göre değişir.
+              {t('workspace.list.isolationNote')}
             </Text>
             <Group inset={62}>
                 {workspaces.map((w) => {
@@ -148,18 +149,18 @@ export default function WorkspacesScreen() {
                   if (editingWorkspaceId === w.id) {
                     return (
                       <Stack key={w.id} gap="sm" style={{ padding: theme.spacing.md }}>
-                        <TextField placeholder="Çalışma alanı adı" value={nameDraft} onChangeText={setNameDraft} autoFocus />
+                        <TextField placeholder={t('workspace.namePlaceholder')} value={nameDraft} onChangeText={setNameDraft} autoFocus />
                         <Row gap="sm">
                           <View style={{ flex: 1 }}>
                             <Button
-                              label="Kaydet"
+                              label={t('common.save')}
                               onPress={() => renameMutation.mutate({ id: w.id, name: nameDraft.trim() })}
                               loading={renameMutation.isPending}
                               disabled={!nameDraft.trim()}
                             />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Button label="Vazgeç" variant="secondary" onPress={() => setEditingWorkspaceId(null)} />
+                            <Button label={t('common.cancel')} variant="secondary" onPress={() => setEditingWorkspaceId(null)} />
                           </View>
                         </Row>
                       </Stack>
@@ -180,18 +181,18 @@ export default function WorkspacesScreen() {
                             {w.name}
                           </Text>
                           <Text variant="caption" color={readOnly ? 'danger' : 'textSecondary'} numberOfLines={1}>
-                            {w.type === 'business' ? 'İşletme' : 'Kişisel'}
-                            {readOnly ? ' · Salt-okunur' : ''}
-                            {planState?.overLimit && isPrimary ? ' · Birincil alan' : ''}
+                            {w.type === 'business' ? t('workspace.business') : t('workspace.personal')}
+                            {readOnly ? t('workspace.list.readOnly') : ''}
+                            {planState?.overLimit && isPrimary ? t('workspace.list.primary') : ''}
                           </Text>
                         </Stack>
                         {isOwner ? (
                           <Text color="textSecondary" style={{ fontSize: 15 }}>
-                            Sahip
+                            {t('workspace.list.owner')}
                           </Text>
                         ) : null}
                         <Pressable
-                          accessibilityLabel="Ekip"
+                          accessibilityLabel={t('workspace.list.team')}
                           hitSlop={8}
                           onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: w.id } })}
                         >
@@ -199,10 +200,10 @@ export default function WorkspacesScreen() {
                         </Pressable>
                         {isOwner ? (
                           <>
-                            <Pressable accessibilityLabel="Adını düzenle" hitSlop={8} onPress={() => startEditing(w)}>
+                            <Pressable accessibilityLabel={t('workspace.list.rename')} hitSlop={8} onPress={() => startEditing(w)}>
                               <Ionicons name="pencil" size={16} color={theme.colors.textSecondary} />
                             </Pressable>
-                            <Pressable accessibilityLabel="Çalışma alanını sil" hitSlop={8} onPress={() => confirmDelete(w)}>
+                            <Pressable accessibilityLabel={t('workspace.list.delete')} hitSlop={8} onPress={() => confirmDelete(w)}>
                               <Ionicons name="trash-outline" size={16} color={theme.colors.danger} />
                             </Pressable>
                           </>
@@ -223,13 +224,13 @@ export default function WorkspacesScreen() {
             {activeWorkspaceId ? (
               <GroupedRow
                 leading={<GroupedRowIcon name="people" />}
-                title="Ekibi yönet"
+                title={t('workspace.list.manageTeam')}
                 onPress={() => router.push({ pathname: '/workspace/[id]/members', params: { id: activeWorkspaceId } })}
               />
             ) : null}
             <GroupedRow
               leading={<GroupedRowIcon name="enter" />}
-              title="Davet koduyla katıl"
+              title={t('workspace.list.joinWithCode')}
               onPress={() => router.push('/workspace/join')}
             />
             {/* Limit dolduğunda satır gizlenmez — kullanıcı neden oluşturamadığını görmeli ve
@@ -237,7 +238,7 @@ export default function WorkspacesScreen() {
                 (enforce_workspace_plan_limit trigger'ı). */}
             <GroupedRow
               leading={<GroupedRowIcon name={atWorkspaceLimit ? 'lock-closed' : 'add'} />}
-              title={atWorkspaceLimit ? 'Yeni alan için planı yükselt' : 'Yeni çalışma alanı'}
+              title={atWorkspaceLimit ? t('workspace.list.upgradeForNew') : t('workspace.list.newWorkspace')}
               trailing={atWorkspaceLimit ? <Tag tone="brand" label="Plus" /> : undefined}
               onPress={() =>
                 atWorkspaceLimit
@@ -249,8 +250,8 @@ export default function WorkspacesScreen() {
           {atWorkspaceLimit ? (
             <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: 4 }}>
               {planState?.plan === 'free'
-                ? `Ücretsiz planda ${planState.workspaceLimit} çalışma alanı oluşturabilirsiniz.`
-                : `Planınızda ${planState?.workspaceLimit} çalışma alanı hakkınız var ve tamamı kullanılıyor.`}
+                ? t('workspace.list.freeLimit', { count: planState.workspaceLimit })
+                : t('workspace.list.planLimit', { count: planState?.workspaceLimit ?? 0 })}
             </Text>
           ) : null}
         </Stack>

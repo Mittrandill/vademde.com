@@ -9,8 +9,10 @@ import { ReceiptRow } from '@/components/finance/ReceiptRow';
 import { getCounterparty } from '@/features/counterparties/api';
 import { listReceiptArchive, normalizeName, useDocumentArchiveAccess } from '@/features/receipts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+const monthFormatter = localeDateFormatter({ month: 'long', year: 'numeric' });
 
 // Belge arşivi (Plus): ödemelere eklenen dekontların tek yerde listesi. counterpartyId
 // verilirse yalnızca o cariyle ilgili dekontlar gösterilir (cari sayfasındaki "Tümünü gör").
@@ -51,7 +53,9 @@ export default function ReceiptArchiveScreen() {
     return groups;
   }, [items]);
 
-  const title = counterpartyId ? `${counterpartyQuery.data?.name ?? 'Cari'} dekontları` : 'Belge arşivi';
+  const title = counterpartyId
+    ? t('archive.counterpartyTitle', { name: counterpartyQuery.data?.name ?? t('archive.counterpartyFallback') })
+    : t('archive.title');
 
   return (
     <DetailScaffold
@@ -59,21 +63,21 @@ export default function ReceiptArchiveScreen() {
       header={{ title }}
       isLoading={archive.isLoading || (archive.allowed && archiveQuery.isPending)}
       error={archiveQuery.error}
-      errorFallbackMessage="Arşiv yüklenemedi"
+      errorFallbackMessage={t('archive.loadFailed')}
     >
       {!archive.allowed ? (
         <Stack gap="lg" align="center" style={{ paddingVertical: theme.spacing.xl }}>
           <EmptyState
             icon="lock-closed-outline"
-            title="Belge arşivi Plus'ta"
-            message="Ödemelere dekont, fotoğraf veya PDF ekleyin; hepsi burada saklanır ve tek dokunuşla açılır."
+            title={t('archive.lockedTitle')}
+            message={t('archive.lockedBody')}
           />
-          <Button label="Planları gör" onPress={() => router.push('/paywall')} />
+          <Button label={t('archive.seePlans')} onPress={() => router.push('/paywall')} />
         </Stack>
       ) : (
         <Stack gap="lg">
           <TextField
-            placeholder="Kişi, firma veya kayıt ara"
+            placeholder={t('archive.search')}
             value={search}
             onChangeText={setSearch}
             autoCapitalize="none"
@@ -82,12 +86,8 @@ export default function ReceiptArchiveScreen() {
           {sections.length === 0 ? (
             <EmptyState
               icon="folder-open-outline"
-              title={search ? 'Sonuç yok' : 'Henüz dekont yok'}
-              message={
-                search
-                  ? 'Aramanıza uyan dekont bulunamadı.'
-                  : 'Bir ödeme eklerken dekont ekleyin ya da dekontu tarayın; burada görünsün.'
-              }
+              title={search ? t('archive.noResults') : t('archive.empty')}
+              message={search ? t('archive.noResultsBody') : t('archive.emptyBody')}
             />
           ) : (
             sections.map((section) => (

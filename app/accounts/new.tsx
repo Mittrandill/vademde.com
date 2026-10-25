@@ -20,14 +20,18 @@ import { formatIbanInput, isValidIbanFormat, normalizeIban } from '@/utils/iban'
 import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCreditCardStatementReminder } from '@/services/creditCardReminders';
+import { amountPlaceholder, getInputDecimalSeparator } from '@/i18n/format';
+import { t } from '@/i18n';
+import { ACCOUNT_TYPE_LABEL } from '@/features/accounts/accountTypes';
 
-const TYPES: Array<{ value: Account['type']; label: string }> = [
-  { value: 'cash', label: 'Kasa' },
-  { value: 'bank', label: 'Banka' },
-  { value: 'wallet', label: 'Cüzdan' },
-  { value: 'credit_card', label: 'Kredi Kartı' },
-  { value: 'pos', label: 'POS' },
-];
+const TYPES: Array<{ value: Account['type']; readonly label: string }> = (
+  ['cash', 'bank', 'wallet', 'credit_card', 'pos'] as const
+).map((value) => ({
+  value,
+  get label() {
+    return ACCOUNT_TYPE_LABEL[value];
+  },
+}));
 
 // Ayın gerçek gün sayısını aşan (ör. 30 Şubat) bir kesim/ödeme günü girilmesin —
 // ay sonuna doğru clampCreditCardReminders (services/creditCardReminders.ts) bunu
@@ -47,7 +51,7 @@ export default function NewAccountScreen() {
   const [name, setName] = useState('');
   const { allowExit } = useExitGuard(!isEditing && name.trim() !== '');
   const [type, setType] = useState<Account['type']>(
-    TYPES.some((t) => t.value === typeParam) ? (typeParam as Account['type']) : 'cash'
+    TYPES.some((option) => option.value === typeParam) ? (typeParam as Account['type']) : 'cash'
   );
   const [bankCode, setBankCode] = useState<string | null>(null);
   const [iban, setIban] = useState('');
@@ -81,7 +85,7 @@ export default function NewAccountScreen() {
     const openingUnitPrecision = getValueUnit(account.currency_code).precision;
     setOpeningBalance(
       formatAmountInput(
-        (account.opening_balance_minor / 10 ** openingUnitPrecision).toFixed(openingUnitPrecision).replace('.', ','),
+        (account.opening_balance_minor / 10 ** openingUnitPrecision).toFixed(openingUnitPrecision).replace('.', getInputDecimalSeparator()),
         openingUnitPrecision
       )
     );
@@ -90,17 +94,17 @@ export default function NewAccountScreen() {
     setCardLastFour(account.card_last_four ?? '');
     setCreditLimit(
       account.credit_limit_minor != null
-        ? formatAmountInput((account.credit_limit_minor / 100).toFixed(2).replace('.', ','))
+        ? formatAmountInput((account.credit_limit_minor / 100).toFixed(2).replace('.', getInputDecimalSeparator()))
         : ''
     );
     setOverdraftLimit(
       account.overdraft_limit_minor != null
-        ? formatAmountInput((account.overdraft_limit_minor / 100).toFixed(2).replace('.', ','))
+        ? formatAmountInput((account.overdraft_limit_minor / 100).toFixed(2).replace('.', getInputDecimalSeparator()))
         : ''
     );
     setValueUnitCode(account.currency_code);
     setCommissionRate(
-      account.pos_commission_rate != null ? String(account.pos_commission_rate).replace('.', ',') : ''
+      account.pos_commission_rate != null ? String(account.pos_commission_rate).replace('.', getInputDecimalSeparator()) : ''
     );
     setInitialized(true);
   }, [accountQuery.data, initialized]);
@@ -132,7 +136,7 @@ export default function NewAccountScreen() {
     onSuccess: (account) => {
       allowExit();
       showSaveSuccess(
-        isEditing ? 'Hesap başarıyla güncellendi.' : 'Hesap başarıyla oluşturuldu.',
+        isEditing ? t('accounts.form.updated') : t('accounts.form.created'),
         () => router.back(),
         () => {
           if (activeWorkspaceId) {
@@ -161,11 +165,11 @@ export default function NewAccountScreen() {
   // border kırmızıya döner ama mesaj satırın altında ortak, tek bir yerde toplanır.
   const dayErrorMessage =
     statementDayHasError && paymentDueDayHasError
-      ? 'Kesim ve son ödeme günü 1-31 arası olmalı.'
+      ? t('accounts.form.dayErrorBoth')
       : statementDayHasError
-        ? 'Hesap kesim günü 1-31 arası olmalı.'
+        ? t('accounts.form.dayErrorStatement')
         : paymentDueDayHasError
-          ? 'Son ödeme günü 1-31 arası olmalı.'
+          ? t('accounts.form.dayErrorDue')
           : null;
   const cardLastFourHasError = cardLastFour.length > 0 && !/^\d{4}$/.test(cardLastFour);
   const parsedCommissionRate = commissionRate.trim() ? parseAmount(commissionRate) : null;
@@ -209,14 +213,14 @@ export default function NewAccountScreen() {
         >
           <ScreenHeader
             inline
-            title={isEditing ? 'Hesabı düzenle' : 'Yeni hesap'}
-            leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
-            rightLabel={{ label: isEditing ? 'Güncelle' : 'Kaydet', bold: true, disabled: !canSubmit || saveMutation.isPending, onPress: handleSubmit }}
+            title={isEditing ? t('accounts.form.editTitle') : t('accounts.form.newTitle')}
+            leftLabel={{ label: t('common.cancel'), onPress: () => router.back() }}
+            rightLabel={{ label: isEditing ? t('accounts.form.update') : t('common.save'), bold: true, disabled: !canSubmit || saveMutation.isPending, onPress: handleSubmit }}
           />
 
           <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
             <ScrollableTabs
-              tabs={TYPES.map((t) => ({ key: t.value, label: t.label }))}
+              tabs={TYPES.map((option) => ({ key: option.value, label: option.label }))}
               activeKey={type}
               onChange={(key) => setType(key as Account['type'])}
             />
@@ -225,30 +229,30 @@ export default function NewAccountScreen() {
               <>
                 <View>
                   <FieldGroup>
-                    <TextField label="Kart adı" placeholder="Örn. Bonus Kartım" value={name} onChangeText={setName} />
-                    <BankPicker selectedId={bankCode} onSelect={setBankCode} label="Banka" />
+                    <TextField label={t('accounts.form.cardName')} placeholder={t('accounts.form.cardNamePlaceholder')} value={name} onChangeText={setName} />
+                    <BankPicker selectedId={bankCode} onSelect={setBankCode} label={t('accounts.form.bank')} />
                     <TextField
-                      label="Kart son 4 hane (isteğe bağlı)"
+                      label={t('accounts.form.lastFour')}
                       placeholder="0000"
                       keyboardType="number-pad"
                       maxLength={4}
                       value={cardLastFour}
                       onChangeText={(value) => setCardLastFour(value.replace(/[^0-9]/g, ''))}
-                      error={cardLastFourHasError ? '4 haneli rakam girin.' : undefined}
+                      error={cardLastFourHasError ? t('accounts.form.lastFourError') : undefined}
                     />
                   </FieldGroup>
-                  {foot('Güvenlik nedeniyle yalnızca son 4 hane saklanır, tam kart numarası hiçbir zaman istenmez.')}
+                  {foot(t('accounts.form.lastFourHint'))}
                 </View>
 
                 <View style={{ gap: 10 }}>
                   <Text variant="label" color="textSecondary">
-                    Kesim ve ödeme
+                    {t('accounts.form.cycle')}
                   </Text>
                   <View>
                     <FieldGroup>
                       <TextField
-                        label="Hesap kesim günü"
-                        placeholder="Örn. 15"
+                        label={t('accounts.form.statementDay')}
+                        placeholder={t('accounts.form.statementDayPlaceholder')}
                         keyboardType="number-pad"
                         maxLength={2}
                         value={statementDay}
@@ -256,8 +260,8 @@ export default function NewAccountScreen() {
                         invalid={statementDayHasError}
                       />
                       <TextField
-                        label="Son ödeme günü"
-                        placeholder="Örn. 5"
+                        label={t('accounts.form.dueDay')}
+                        placeholder={t('accounts.form.dueDayPlaceholder')}
                         keyboardType="number-pad"
                         maxLength={2}
                         value={paymentDueDay}
@@ -267,7 +271,7 @@ export default function NewAccountScreen() {
                     </FieldGroup>
                     {foot(
                       dayErrorMessage ??
-                        'Son ödeme günü isteğe bağlıdır. Hesap kesiminden son ödeme gününe kadar ekstre yükleme hatırlatması gönderilir.',
+                        t('accounts.form.cycleHint'),
                       dayErrorMessage ? 'danger' : 'textSecondary'
                     )}
                   </View>
@@ -275,15 +279,15 @@ export default function NewAccountScreen() {
 
                 <View style={{ gap: 10 }}>
                   <Text variant="label" color="textSecondary">
-                    Limit ve bakiye
+                    {t('accounts.form.limitAndBalance')}
                   </Text>
                   <View>
                     <FieldGroup>
-                      <AmountField label="Kredi limiti (isteğe bağlı)" placeholder="0,00" value={creditLimit} onChangeText={setCreditLimit} />
-                      <AmountField label="Güncel kart borcu (isteğe bağlı)" placeholder="0,00" value={openingBalance} onChangeText={setOpeningBalance} />
+                      <AmountField label={t('accounts.form.creditLimit')} placeholder={amountPlaceholder()} value={creditLimit} onChangeText={setCreditLimit} />
+                      <AmountField label={t('accounts.form.currentCardDebt')} placeholder={amountPlaceholder()} value={openingBalance} onChangeText={setOpeningBalance} />
                     </FieldGroup>
                     {foot(
-                      'Limit girilirse kart detayında kullanılabilir limit gösterilir. Güncel borç diğer hesapların toplam bakiyesine dahil edilmez, yalnızca bilgi amaçlıdır.'
+                      t('accounts.form.limitHint')
                     )}
                   </View>
                 </View>
@@ -291,35 +295,35 @@ export default function NewAccountScreen() {
             ) : isPos ? (
               <View>
                 <FieldGroup>
-                  <TextField label="Hesap adı" placeholder="Örn. Garanti POS" value={name} onChangeText={setName} />
-                  <BankPicker selectedId={bankCode} onSelect={setBankCode} label="Banka" />
+                  <TextField label={t('accounts.form.accountName')} placeholder={t('accounts.form.posPlaceholder')} value={name} onChangeText={setName} />
+                  <BankPicker selectedId={bankCode} onSelect={setBankCode} label={t('accounts.form.bank')} />
                   <TextField
-                    label="Komisyon oranı (%)"
-                    placeholder="Örn. 2,75"
+                    label={t('accounts.form.commission')}
+                    placeholder={t('accounts.form.commissionPlaceholder')}
                     keyboardType="decimal-pad"
                     value={commissionRate}
                     onChangeText={setCommissionRate}
-                    error={commissionRateHasError ? '0 ile 100 arasında bir oran girin.' : undefined}
+                    error={commissionRateHasError ? t('accounts.form.commissionError') : undefined}
                   />
-                  <AmountField label="Açılış bakiyesi (isteğe bağlı)" placeholder="0,00" value={openingBalance} onChangeText={setOpeningBalance} />
+                  <AmountField label={t('accounts.form.openingBalanceOptional')} placeholder={amountPlaceholder()} value={openingBalance} onChangeText={setOpeningBalance} />
                 </FieldGroup>
-                {foot("Bu POS'a girilen her tahsilattan bu oranda komisyon otomatik düşülür; kasaya net tutar geçer.")}
+                {foot(t('accounts.form.posHint'))}
               </View>
             ) : (
               <>
                 <View>
                   <FieldGroup>
-                    {type === 'bank' ? <BankPicker selectedId={bankCode} onSelect={setBankCode} label="Banka" /> : null}
+                    {type === 'bank' ? <BankPicker selectedId={bankCode} onSelect={setBankCode} label={t('accounts.form.bank')} /> : null}
                     <TextField
-                      label="Hesap adı"
-                      placeholder={isCash ? 'Örn. Nakit Kasa' : 'Örn. Garanti BBVA Ticari'}
+                      label={t('accounts.form.accountName')}
+                      placeholder={isCash ? t('accounts.form.cashPlaceholder') : t('accounts.form.bankPlaceholder')}
                       value={name}
                       onChangeText={setName}
                     />
-                    {isCash ? <ValueUnitPicker selectedId={valueUnitCode} onSelect={setValueUnitCode} label="Birim" /> : null}
+                    {isCash ? <ValueUnitPicker selectedId={valueUnitCode} onSelect={setValueUnitCode} label={t('accounts.form.unit')} /> : null}
                     {type === 'bank' ? (
                       <TextField
-                        label="IBAN (isteğe bağlı)"
+                        label={t('accounts.form.iban')}
                         placeholder="TR00 0000 0000 0000 0000 0000 00"
                         value={iban}
                         onChangeText={(value) => setIban(formatIbanInput(value))}
@@ -327,22 +331,22 @@ export default function NewAccountScreen() {
                         autoCorrect={false}
                         maxLength={32}
                         style={{ fontFamily: monoFamily, fontSize: 16 }}
-                        error={ibanHasError ? 'IBAN "TR" ile başlamalı ve 26 karakter olmalı.' : undefined}
+                        error={ibanHasError ? t('accounts.form.ibanError') : undefined}
                       />
                     ) : null}
                     {isBank ? (
-                      <AmountField label="Ek hesap (KMH) limiti (isteğe bağlı)" placeholder="0,00" value={overdraftLimit} onChangeText={setOverdraftLimit} />
+                      <AmountField label={t('accounts.form.overdraft')} placeholder={amountPlaceholder()} value={overdraftLimit} onChangeText={setOverdraftLimit} />
                     ) : null}
                     {isBank ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <View style={{ flex: 1 }}>
-                          <AmountField label="Açılış bakiyesi" placeholder="₺0,00" value={openingBalance} onChangeText={setOpeningBalance} />
+                          <AmountField label={t('accounts.form.openingBalance')} placeholder={`₺${amountPlaceholder()}`} value={openingBalance} onChangeText={setOpeningBalance} />
                         </View>
                         {/* Sayısal klavyede eksi tuşu yok; KMH kullanan hesabın başlangıç bakiyesi eksi olabildiği için
                             işaret klavyeden bağımsız bu düğmeyle değiştirilir. */}
                         <Pressable
                           accessibilityRole="button"
-                          accessibilityLabel={openingBalanceIsNegative ? 'Bakiyeyi pozitif yap' : 'Bakiyeyi negatif yap'}
+                          accessibilityLabel={openingBalanceIsNegative ? t('accounts.form.makePositive') : t('accounts.form.makeNegative')}
                           onPress={toggleOpeningBalanceSign}
                           style={{
                             width: 40,
@@ -361,8 +365,8 @@ export default function NewAccountScreen() {
                       </View>
                     ) : (
                       <AmountField
-                        label="Açılış bakiyesi (isteğe bağlı)"
-                        placeholder={isCash && openingPrecision === 0 ? '1' : '0,00'}
+                        label={t('accounts.form.openingBalanceOptional')}
+                        placeholder={isCash && openingPrecision === 0 ? '1' : amountPlaceholder()}
                         precision={isCash ? openingPrecision : 2}
                         value={openingBalance}
                         onChangeText={setOpeningBalance}
@@ -370,9 +374,9 @@ export default function NewAccountScreen() {
                     )}
                   </FieldGroup>
                   {isBank
-                    ? foot('IBAN yalnızca sizin göreceğiniz şekilde saklanır; listelerde son 4 hanesi görünür. Hesap zaten ek hesap (KMH) kullanımdaysa işareti eksiye çevirin.')
+                    ? foot(t('accounts.form.bankHint'))
                     : isCash
-                      ? foot('Bu kasada TL dışında döviz veya altın tutuyorsanız birimini seçin; bakiye ve hareketler bu birimde gösterilir.')
+                      ? foot(t('accounts.form.cashHint'))
                       : null}
                 </View>
               </>
@@ -380,7 +384,7 @@ export default function NewAccountScreen() {
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {friendlyErrorMessage(saveMutation.error, 'Hesap kaydedilemedi')}
+                {friendlyErrorMessage(saveMutation.error, t('accounts.form.saveFailed'))}
               </Text>
             ) : null}
           </View>

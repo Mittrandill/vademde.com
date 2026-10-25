@@ -1,0 +1,17 @@
+export const search = {
+  placeholder: 'Cari, hareket veya kayıt ara',
+  clear: 'Aramayı temizle',
+  title: 'Ara',
+  hint: 'Cari adı, hareket açıklaması veya kayıt başlığı yazın. En az 2 harf gerekir.',
+  noResults: 'Sonuç bulunamadı',
+  noMatch: '“{{query}}” için eşleşen bir şey yok.',
+  all: 'Tümü · {{count}}',
+  counterparties: 'Cariler · {{count}}',
+  transactions: 'Hareketler · {{count}}',
+  obligations: 'Kayıtlar · {{count}}',
+  sectionCounterparties: 'Cari',
+  sectionTransactions: 'Hareketler',
+  sectionObligations: 'Kayıtlar',
+  seeAll: '{{count}} sonucun tümü',
+  transactionFallback: 'Hareket',
+};

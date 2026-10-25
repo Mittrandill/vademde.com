@@ -4,20 +4,22 @@ import * as Sharing from 'expo-sharing';
 
 import { formatMinorAmount } from '@/utils/money';
 import { getCounterpartyStatement, type Counterparty } from '@/features/counterparties/api';
+import { localeDateFormatter } from '@/i18n/format';
+import { getLanguage, t } from '@/i18n';
 
 // design Hatirlatma.html — alacak hatırlatma: ton şablonları + WhatsApp/SMS/e-posta + hesap özeti PDF.
 // Mesaj kullanıcının kendi hesabından gider; Vademde kimseye kullanıcı adına yazmaz.
 export type ReminderTone = 'nazik' | 'resmi' | 'kisa' | 'gecikti';
 export type ReminderChannel = 'whatsapp' | 'sms' | 'email';
 
-export const REMINDER_TONES: { key: ReminderTone; label: string }[] = [
-  { key: 'nazik', label: 'Nazik' },
-  { key: 'resmi', label: 'Resmi' },
-  { key: 'kisa', label: 'Kısa' },
-  { key: 'gecikti', label: 'Vadesi geçti' },
+export const REMINDER_TONES: { key: ReminderTone; readonly label: string }[] = [
+  { key: 'nazik', get label() { return t('finance.reminder.toneNazik'); } },
+  { key: 'resmi', get label() { return t('finance.reminder.toneResmi'); } },
+  { key: 'kisa', get label() { return t('finance.reminder.toneKisa'); } },
+  { key: 'gecikti', get label() { return t('finance.reminder.toneGecikti'); } },
 ];
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+const dateFormatter = localeDateFormatter({ day: 'numeric', month: 'long' });
 
 export interface ReminderContext {
   name: string;
@@ -29,19 +31,20 @@ export interface ReminderContext {
 
 export function buildReminderMessage(tone: ReminderTone, ctx: ReminderContext): string {
   const amount = formatMinorAmount(ctx.amountMinor, ctx.currencyCode ?? 'TRY');
-  const due = ctx.dueDate ? `${dateFormatter.format(new Date(ctx.dueDate))} vadeli ` : '';
-  const attachment = ctx.attachStatement ? ' Hesap özeti ektedir.' : '';
+  const due = ctx.dueDate ? t('finance.reminder.templateDue', { date: dateFormatter.format(new Date(ctx.dueDate)) }) : '';
+  const attachment = ctx.attachStatement ? t('finance.reminder.templateAttachment') : '';
   const first = ctx.name.trim().split(/\s+/)[0] || ctx.name;
+  const vars = { name: ctx.name, first, due, amount, attachment };
 
   switch (tone) {
     case 'resmi':
-      return `Sayın ${ctx.name}, ${due}${amount} tutarındaki alacağımızla ilgili ödemenizi rica ederiz.${attachment} Saygılarımızla.`;
+      return t('finance.reminder.templateResmi', vars);
     case 'kisa':
-      return `Merhaba ${first}, ${due}${amount} ödemenizi hatırlatırım.${attachment}`;
+      return t('finance.reminder.templateKisa', vars);
     case 'gecikti':
-      return `Merhaba ${first}, ${due}${amount} tutarındaki ödemenizin vadesi geçti. En kısa sürede ödemenizi rica ederim.${attachment} İyi çalışmalar.`;
+      return t('finance.reminder.templateGecikti', vars);
     default:
-      return `Merhaba ${first}, ${due}${amount} tutarındaki ödemenizi hatırlatmak isterim.${attachment} İyi çalışmalar.`;
+      return t('finance.reminder.templateNazik', vars);
   }
 }
 
@@ -63,13 +66,13 @@ export async function openReminderChannel(
   const text = encodeURIComponent(message);
 
   if (channel === 'email') {
-    if (!counterparty.email) throw new ReminderChannelError('Bu kişi için e-posta adresi kayıtlı değil.');
-    const subject = encodeURIComponent('Ödeme hatırlatması');
+    if (!counterparty.email) throw new ReminderChannelError(t('finance.reminder.noEmail'));
+    const subject = encodeURIComponent(t('finance.reminder.emailSubject'));
     await Linking.openURL(`mailto:${counterparty.email}?subject=${subject}&body=${text}`);
     return;
   }
 
-  if (!counterparty.phone) throw new ReminderChannelError('Bu kişi için telefon numarası kayıtlı değil.');
+  if (!counterparty.phone) throw new ReminderChannelError(t('finance.reminder.noPhone'));
 
   if (channel === 'sms') {
     const separator = (await Linking.canOpenURL('sms:')) ? '&' : '?';
@@ -105,22 +108,22 @@ export async function shareStatementPdf(
         )}</td></tr>`
     )
     .join('');
-  const html = `<html><head><meta charset="utf-8"><style>
+  const html = `<html lang="${getLanguage()}"><head><meta charset="utf-8"><style>
     body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111114;padding:40px}
     h1{font-size:22px;margin:0 0 4px} .m{color:#5E606A;font-size:13px}
     table{width:100%;border-collapse:collapse;margin-top:24px;font-size:14px}
     td{padding:10px 0;border-bottom:1px solid #DCDEE3} .r{text-align:right}
     .total{font-size:26px;font-weight:700;margin-top:16px}
   </style></head><body>
-    <h1>Hesap özeti · ${escapeHtml(counterparty.name)}</h1>
-    <div class="m">${escapeHtml(dateFormatter.format(new Date()))} itibarıyla</div>
+    <h1>${escapeHtml(t('finance.reminder.pdfTitle', { name: counterparty.name }))}</h1>
+    <div class="m">${escapeHtml(t('finance.reminder.pdfAsOf', { date: dateFormatter.format(new Date()) }))}</div>
     <div class="total">${escapeHtml(formatMinorAmount(Math.abs(netMinor)))}</div>
-    <div class="m">${netMinor > 0 ? 'Cari bakiye (alacak)' : 'Cari bakiye'}</div>
-    <table>${rows || '<tr><td class="m">Hareket yok.</td></tr>'}</table>
+    <div class="m">${escapeHtml(netMinor > 0 ? t('finance.reminder.pdfBalanceReceivable') : t('finance.reminder.pdfBalance'))}</div>
+    <table>${rows || `<tr><td class="m">${escapeHtml(t('finance.reminder.pdfEmpty'))}</td></tr>`}</table>
   </body></html>`;
 
   const { uri } = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Hesap özeti' });
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('finance.reminder.pdfShareTitle') });
   }
 }

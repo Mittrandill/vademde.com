@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Card, Group, Pressable, Text } from '@/components/primitives';
+import { t } from '@/i18n';
 
 export interface FinanceDetailHeroStat {
   label: string;
@@ -39,7 +40,7 @@ export function FinanceDetailHero({
   amount,
   amountColor,
   progress,
-  progressLabel = 'Ödeme ilerlemesi',
+  progressLabel = t('finance.progressLabel'),
   progressColor,
   stats,
 }: FinanceDetailHeroProps) {

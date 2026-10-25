@@ -15,10 +15,12 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { formatMinorAmount } from '@/utils/money';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
+import { localeDateFormatter, zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
 type Kind = 'expense' | 'income';
 
-const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long' });
+const monthFormatter = localeDateFormatter({ month: 'long' });
 
 // design Kategoriler.html: Gider/Gelir sekmeleri; bu ay en çok kullanılanlar üstte, kalanlar "Diğer"de.
 // Kullanım tutarı raporlardaki mevcut kategori dökümünden (bu ay) gelir; yeni sorgu mantığı yoktur.
@@ -71,8 +73,8 @@ export default function CategoriesScreen() {
     const top = used.slice(0, 4);
     const rest = visible.filter((c) => !top.includes(c));
     return [
-      { title: `Bu ay en çok · ${monthFormatter.format(new Date())}`, data: top },
-      { title: top.length > 0 ? 'Diğer' : 'Kategoriler', data: rest },
+      { title: t('categories.topThisMonth', { month: monthFormatter.format(new Date()) }), data: top },
+      { title: top.length > 0 ? t('categories.other') : t('categories.title'), data: rest },
     ].filter((s) => s.data.length > 0);
   }, [categories, kind, search, usageById]);
 
@@ -88,20 +90,20 @@ export default function CategoriesScreen() {
       >
         <Stack gap="md">
           <ScreenHeader
-            title="Kategoriler"
-            left={{ icon: 'close', accessibilityLabel: 'Kapat', onPress: () => router.back() }}
-            right={{ icon: 'add', accessibilityLabel: 'Yeni kategori', variant: 'accent', onPress: () => router.push('/categories/new') }}
+            title={t('categories.title')}
+            left={{ icon: 'close', accessibilityLabel: t('common.close'), onPress: () => router.back() }}
+            right={{ icon: 'add', accessibilityLabel: t('categories.newCategory'), variant: 'accent', onPress: () => router.push('/categories/new') }}
           />
           <SegmentedControl
             options={[
-              { key: 'income', label: `Gelir · ${counts.income}` },
-              { key: 'expense', label: `Gider · ${counts.expense}` },
+              { key: 'income', label: t('categories.incomeCount', { count: counts.income }) },
+              { key: 'expense', label: t('categories.expenseCount', { count: counts.expense }) },
             ]}
             value={kind}
             onChange={setKind}
           />
           <TextField
-            placeholder="Kategori ara"
+            placeholder={t('categories.search')}
             value={search}
             onChangeText={setSearch}
             returnKeyType="search"
@@ -117,7 +119,7 @@ export default function CategoriesScreen() {
                     key={item.id}
                     leading={<CategoryIcon icon={item.icon} color={item.color} size={34} />}
                     title={item.name}
-                    value={used > 0 ? formatMinorAmount(used).replace(/,00$/, '') : '—'}
+                    value={used > 0 ? formatMinorAmount(used).replace(zeroFractionPattern(), '') : '—'}
                     onPress={() => router.push({ pathname: '/categories/new', params: { id: item.id } })}
                   />
                 );
@@ -128,12 +130,8 @@ export default function CategoriesScreen() {
           {sections.length === 0 && categoriesQuery.isSuccess ? (
             <EmptyState
               icon="pricetag-outline"
-              title={categories.length === 0 ? 'Henüz kategori yok' : 'Sonuç bulunamadı'}
-              message={
-                categories.length === 0
-                  ? 'Sağ üstteki + ile ilk kategorinizi ekleyin.'
-                  : 'Arama terimini veya sekmeyi değiştirin.'
-              }
+              title={categories.length === 0 ? t('categories.emptyTitle') : t('categories.noResults')}
+              message={categories.length === 0 ? t('categories.emptyBody') : t('categories.noResultsBody')}
             />
           ) : null}
         </Stack>

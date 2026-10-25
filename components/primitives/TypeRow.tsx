@@ -8,6 +8,7 @@ import { BottomSheet } from './BottomSheet';
 import { FormRow } from './FormRow';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 export interface TypeOption {
   id: string;
@@ -42,7 +43,7 @@ export function TypeRow({
   groups,
   selectedId,
   onSelect,
-  placeholder = 'Seç',
+  placeholder = t('ui.selectShort'),
   sheetTitle,
   searchPlaceholder = 'Ara',
 }: TypeRowProps) {
@@ -104,7 +105,7 @@ export function TypeRow({
         <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
           {filtered.length === 0 ? (
             <Text color="textSecondary" style={{ paddingVertical: theme.spacing.lg, textAlign: 'center' }}>
-              Sonuç bulunamadı
+              {t('ui.noResults')}
             </Text>
           ) : null}
           {filtered.map((group) => (

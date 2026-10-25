@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/colors';
 import { Card, Text } from '@/components/primitives';
+import { lowerUi } from '@/i18n/format';
 
 export interface FinanceListHeroMetric {
   label: string;
@@ -42,7 +43,7 @@ export function FinanceListHero({
   return (
     <Card style={{ gap: 4 }}>
       <Text color="textSecondary" style={{ fontSize: 13 }}>
-        {label[0] + label.slice(1).toLocaleLowerCase('tr-TR')}
+        {label[0] + lowerUi(label.slice(1))}
       </Text>
       <View accessible accessibilityLabel={amountText} style={{ flexDirection: 'row', alignItems: 'baseline' }}>
         <Text
@@ -82,7 +83,7 @@ export function FinanceListHero({
           {shown.map((metric, index) => (
             <View key={`${metric.label}-${index}`} style={{ flex: 1, minWidth: 0, gap: 2 }}>
               <Text variant="caption" color="textSecondary" numberOfLines={1} style={{ fontSize: 12 }}>
-                {metric.label[0] + metric.label.slice(1).toLocaleLowerCase('tr-TR')}
+                {metric.label[0] + lowerUi(metric.label.slice(1))}
               </Text>
               <Text
                 color={metric.valueColor}

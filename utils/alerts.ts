@@ -1,6 +1,8 @@
 import { Alert, InteractionManager } from 'react-native';
 import { router } from 'expo-router';
 
+import { t } from '@/i18n';
+
 // Kayıt/güncelleme/silme sonrası tek tip başarı bildirimi. onOk içine ekran geçişi ve
 // önbellek geçersizleştirme konur (navigasyon hemen değil, kullanıcı "Tamam"a basınca
 // tetiklenir) — bu sayede Alert'in kapanış animasyonuyla ekran geçişi aynı anda çalışıp
@@ -10,7 +12,7 @@ import { router } from 'expo-router';
 // Not: Alert.alert react-native-web'de no-op'tur (bkz. components/primitives/ActionSheet.tsx
 // yorumu) — bu bildirim yalnızca iOS/Android'de görünür, web'de sessizce hiçbir şey yapmaz.
 export function showSuccessAlert(message: string, onOk: () => void) {
-  Alert.alert('Başarılı', message, [{ text: 'Tamam', onPress: onOk }]);
+  Alert.alert(t('errors.success'), message, [{ text: t('common.ok'), onPress: onOk }]);
 }
 
 // Kayıt sonrası çökme sınıfının (Fabric `componentViewDescriptorWithTag` assertion'ı,
@@ -39,44 +41,27 @@ export function showSaveSuccess(message: string, navigate: () => void, deferred?
 // 20260905130000_enforce_plan_limits.sql) hatayı makine tarafından ayırt edilebilir bir
 // önekle fırlatır. Ham Postgres mesajı kullanıcıya gösterilmez; burada başlık + anlaşılır
 // metin + doğrudan paywall'a giden bir eyleme çevrilir.
-const PLAN_ERROR_MESSAGES: { code: string; title: string; message: string }[] = [
-  {
-    code: 'WORKSPACE_LIMIT_REACHED',
-    title: 'Çalışma alanı limiti',
-    message:
-      'Ücretsiz planda tek çalışma alanı oluşturabilirsiniz. Birden fazla alan için planınızı yükseltin.',
-  },
-  {
-    code: 'WORKSPACE_READ_ONLY',
-    title: 'Çalışma alanı salt-okunur',
-    message:
-      'Ücretsiz planda tek çalışma alanı kullanılabilir. Bu alandaki verileriniz duruyor ve okunabiliyor; yeniden kayıt eklemek için planınızı yükseltin veya bu alanı birincil alan olarak seçin.',
-  },
-  {
-    code: 'TEAM_PLAN_REQUIRED',
-    title: 'Ekip özelliği',
-    message: 'Ekip üyesi davet etmek Plus ve İşletme planlarında kullanılabilir.',
-  },
-  {
-    code: 'RECEIPT_ARCHIVE_PLAN_REQUIRED',
-    title: 'Belge arşivi',
-    message: 'Ödemelere dekont eklemek ve arşivlemek Plus planında kullanılabilir.',
-  },
-  {
-    code: 'TEAM_LIMIT_REACHED',
-    title: 'Ekip üyesi limiti',
-    message: 'Bu çalışma alanı planınızın ekip üyesi limitine ulaştı.',
-  },
-];
+const PLAN_ERRORS = [
+  { code: 'WORKSPACE_LIMIT_REACHED', key: 'workspaceLimit' },
+  { code: 'WORKSPACE_READ_ONLY', key: 'workspaceReadOnly' },
+  { code: 'TEAM_PLAN_REQUIRED', key: 'team' },
+  { code: 'RECEIPT_ARCHIVE_PLAN_REQUIRED', key: 'receiptArchive' },
+  { code: 'TEAM_LIMIT_REACHED', key: 'teamLimit' },
+] as const;
 
-function findPlanError(rawMessage: string) {
-  return PLAN_ERROR_MESSAGES.find((entry) => rawMessage.includes(entry.code)) ?? null;
+function findPlanError(rawMessage: string): { title: string; message: string } | null {
+  const entry = PLAN_ERRORS.find((candidate) => rawMessage.includes(candidate.code));
+  if (!entry) return null;
+  return { title: t(`errors.plan.${entry.key}Title`), message: t(`errors.plan.${entry.key}`) };
 }
 
 const NETWORK_ERROR = /network request failed|fetch failed|failed to fetch|load failed|\bTLS\b|\bSSL\b|timed out|timeout|offline|internet connection|NSURLError|ECONN|ENOTFOUND|EAI_AGAIN|AbortError|güvenli bağlantı|bağlantı kesildi/i;
 // Kullanıcıya anlamsız gelen teknik hata parçaları (Postgres/PostgREST/JS/native yığın izi).
 const TECHNICAL_ERROR = /violates|duplicate key|PGRST|JSON|syntax error|relation "|column "|does not exist|null value|Exception|TypeError|ReferenceError|undefined|is not a function|Cannot read|permission denied|invalid input|\.swift:\d+|\.kt:\d+|\.java:\d+/i;
-export const NETWORK_ERROR_MESSAGE = 'İnternet bağlantısı kurulamadı. Bağlantınızı kontrol edip tekrar deneyin.';
+// Dil değişebildiği için sabit değil, okunduğu anda çözülür (bkz. i18n errors.network).
+export function networkErrorMessage(): string {
+  return t('errors.network');
+}
 
 export function isNetworkError(error: unknown): boolean {
   const message = (error as { message?: unknown } | null)?.message;
@@ -87,44 +72,41 @@ export function isNetworkError(error: unknown): boolean {
 // sabit bir metne, teknik/İngilizce ham mesajlar `fallback`'e düşer; sunucunun Türkçe iş kuralı
 // mesajları (ör. "Ödeme güncel kalan tutarı aşıyor") olduğu gibi kalır. Ekranlar hata metnini
 // doğrudan `error.message` ile değil bununla göstermelidir.
-export function friendlyErrorMessage(error: unknown, fallback = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.'): string {
+export function friendlyErrorMessage(error: unknown, fallback = t('errors.generic')): string {
   const err = error as { message?: unknown; code?: unknown } | null;
   const raw = typeof err?.message === 'string' ? err.message.replace(/^(\w*Error:\s*)+/, '').trim() : '';
   if (!raw) return fallback;
-  if (NETWORK_ERROR.test(raw)) return NETWORK_ERROR_MESSAGE;
+  if (NETWORK_ERROR.test(raw)) return networkErrorMessage();
   const planError = findPlanError(raw);
   if (planError) return planError.message;
   if (err?.code === '42501' || /row-level security/i.test(raw)) {
-    return 'Bu çalışma alanında yalnızca görüntüleme yetkiniz var.';
+    return t('errors.viewerOnly');
   }
   if (TECHNICAL_ERROR.test(raw)) return fallback;
   return raw;
 }
 
-export function showErrorAlert(error: unknown, fallback = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.') {
+export function showErrorAlert(error: unknown, fallback = t('errors.generic')) {
   const err = error as { message?: string; code?: string } | null;
   const rawMessage = err?.message ?? '';
 
   const planError = findPlanError(rawMessage);
   if (planError) {
     Alert.alert(planError.title, planError.message, [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Planları gör', onPress: () => router.push('/paywall') },
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('errors.seePlans'), onPress: () => router.push('/paywall') },
     ]);
     return;
   }
 
   const isRlsDenied = err?.code === '42501' || /row-level security/i.test(rawMessage);
   if (isRlsDenied) {
-    Alert.alert(
-      'Yetki yok',
-      'Bu çalışma alanında yalnızca görüntüleme yetkiniz var. Değişiklik yapmak için çalışma alanı sahibinden düzenleyici rolü isteyin.'
-    );
+    Alert.alert(t('errors.noPermissionTitle'), t('errors.viewerOnlyDetail'));
     return;
   }
   if (isNetworkError(error)) {
-    Alert.alert('Bağlantı yok', NETWORK_ERROR_MESSAGE);
+    Alert.alert(t('errors.noConnectionTitle'), networkErrorMessage());
     return;
   }
-  Alert.alert('İşlem tamamlanamadı', friendlyErrorMessage(error, fallback));
+  Alert.alert(t('errors.failedTitle'), friendlyErrorMessage(error, fallback));
 }

@@ -6,11 +6,13 @@ import NetInfo from '@react-native-community/netinfo';
 
 import { useTheme } from '@/theme';
 import { Text } from '@/components/primitives';
+import { useTranslation } from '@/i18n';
 
 // Tuval: Cevrimdisi — üstte ince şerit. Şerit akışın içinde yer alır ve durum çubuğu
 // boşluğunu kendisi üstlenir; altındaki ekranların SafeAreaView'ları bu yüzden ek boşluk eklemez.
 export function OfflineBanner({ children }: { children: ReactNode }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [offline, setOffline] = useState(false);
 
@@ -35,7 +37,7 @@ export function OfflineBanner({ children }: { children: ReactNode }) {
           <View style={{ height: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <Ionicons name="cloud-offline-outline" size={15} color={theme.colors.textSecondary} />
             <Text variant="caption" color="textSecondary" style={{ fontWeight: '500' }}>
-              Çevrimdışı · değişiklikler cihazda saklanıyor
+              {t('ui.offline')}
             </Text>
           </View>
         </View>

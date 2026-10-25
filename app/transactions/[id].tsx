@@ -18,15 +18,17 @@ import { getTransactionReceipt, openReceipt } from '@/features/receipts/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { showSaveSuccess, showErrorAlert } from '@/utils/alerts';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+const dateFormatter = localeDateFormatter({ day: '2-digit', month: 'long', year: 'numeric' });
 
 
-const DIRECTION_LABEL: Record<string, string> = {
-  income: 'Gelir',
-  expense: 'Gider',
-  transfer: 'Transfer',
-};
+const DIRECTION_LABEL: Record<string, string> = localizedRecord(
+  ['income', 'expense', 'transfer'] as const,
+  (direction) => t(`common.${direction}`)
+);
 
 const DIRECTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   income: 'arrow-down-circle-outline',
@@ -59,14 +61,14 @@ export default function TransactionDetailScreen() {
     try {
       await openReceipt(receiptQuery.data.id);
     } catch {
-      Alert.alert('Dekont açılamadı', 'Dosya bulunamadı ya da bağlantı kurulamadı.');
+      Alert.alert(t('transactions.detail.receiptOpenFailed'), t('transactions.detail.receiptOpenFailedBody'));
     }
   }
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTransaction(id as string),
     onSuccess: () => {
-      showSaveSuccess('Hareket başarıyla silindi.', () => router.replace('/(tabs)/hareketler'), () => {
+      showSaveSuccess(t('transactions.form.deleted'), () => router.replace('/(tabs)/hareketler'), () => {
         if (activeWorkspaceId) {
           queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'transactions'] });
         }
@@ -76,9 +78,9 @@ export default function TransactionDetailScreen() {
   });
 
   function confirmDelete() {
-    Alert.alert('Hareketi Sil', 'Bu hareket kalıcı olarak silinecek. Emin misiniz?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
+    Alert.alert(t('transactions.form.deleteTitle'), t('transactions.form.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteMutation.mutate() },
     ]);
   }
 
@@ -87,7 +89,7 @@ export default function TransactionDetailScreen() {
   async function handleShare() {
     if (!transaction) return;
     const title =
-      transaction.description?.trim() || transaction.category?.name || DIRECTION_LABEL[transaction.direction] || 'Hareket';
+      transaction.description?.trim() || transaction.category?.name || DIRECTION_LABEL[transaction.direction] || t('transactions.detail.fallbackTitle');
     const parts = [
       title,
       formatMinorAmount(transaction.amount_minor, transaction.currency_code),
@@ -107,7 +109,7 @@ export default function TransactionDetailScreen() {
         header={{ title: '' }}
         isLoading
         error={transactionQuery.error}
-        errorFallbackMessage="Hareket yüklenemedi"
+        errorFallbackMessage={t('transactions.detail.loadFailed')}
       >
         {null}
       </DetailScaffold>
@@ -115,7 +117,7 @@ export default function TransactionDetailScreen() {
   }
 
   const title =
-    transaction.description?.trim() || transaction.category?.name || DIRECTION_LABEL[transaction.direction] || 'Hareket';
+    transaction.description?.trim() || transaction.category?.name || DIRECTION_LABEL[transaction.direction] || t('transactions.detail.fallbackTitle');
   const isObligationPayment = (transaction.payments?.length ?? 0) > 0;
   const linkedPayment = transaction.payments?.[0];
   // Avans / nakit avans / borç verme hareketi kaydın kendisiyle birlikte doğar ve silinir (bkz.
@@ -135,7 +137,7 @@ export default function TransactionDetailScreen() {
           inline: true,
           right: {
             icon: 'ellipsis-horizontal',
-            accessibilityLabel: 'Diğer seçenekler',
+            accessibilityLabel: t('common.moreOptions'),
             onPress: () => setMenuOpen(true),
           },
         }}
@@ -179,7 +181,7 @@ export default function TransactionDetailScreen() {
         />
 
         <Group inset={16}>
-          <InfoRow label="Hesap">
+          <InfoRow label={t('transactions.detail.account')}>
             <AccountLabelRow
               bankCode={transaction.account?.bank_code}
               accountName={transaction.account?.name}
@@ -189,22 +191,22 @@ export default function TransactionDetailScreen() {
             />
           </InfoRow>
           {transaction.direction === 'transfer' && transaction.transferToAccount ? (
-            <InfoRow label="Hedef hesap">
+            <InfoRow label={t('transactions.detail.targetAccount')}>
               <Text>{transaction.transferToAccount.name}</Text>
             </InfoRow>
           ) : null}
           {transaction.category ? (
-            <InfoRow label="Kategori">
+            <InfoRow label={t('transactions.detail.category')}>
               <Text>{transaction.category.name}</Text>
             </InfoRow>
           ) : null}
           {transaction.counterparty ? (
-            <InfoRow label="Kişi / firma">
+            <InfoRow label={t('transactions.detail.counterparty')}>
               <Text>{transaction.counterparty.name}</Text>
             </InfoRow>
           ) : null}
           {transaction.description?.trim() ? (
-            <InfoRow label="Not">
+            <InfoRow label={t('transactions.detail.note')}>
               <Text numberOfLines={2} style={{ textAlign: 'right' }}>
                 {transaction.description.trim()}
               </Text>
@@ -215,17 +217,17 @@ export default function TransactionDetailScreen() {
         {receiptQuery.data ? (
           <View style={{ gap: 10 }}>
             <Text variant="label" color="textSecondary">
-              Belge
+              {t('transactions.detail.document')}
             </Text>
             <Group inset={16}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Dekontu aç"
+                accessibilityLabel={t('transactions.detail.openReceipt')}
                 onPress={handleOpenReceipt}
                 style={{ minHeight: 56, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
               >
                 <Ionicons name="attach" size={22} color={theme.colors.textPrimary} />
-                <Text style={{ flex: 1, fontWeight: '500' }}>Dekontu aç</Text>
+                <Text style={{ flex: 1, fontWeight: '500' }}>{t('transactions.detail.openReceipt')}</Text>
                 <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
               </Pressable>
             </Group>
@@ -235,7 +237,7 @@ export default function TransactionDetailScreen() {
 
       <ActionSheet
         visible={menuOpen}
-        title="Hareket"
+        title={t('transactions.detail.fallbackTitle')}
         onClose={() => setMenuOpen(false)}
         // Bir borç/alacak ödemesinden (fatura, çek, senet, kredi, kart ödemesi...) oluşan hareket
         // burada düzenlenmez/silinmez: silinirse ödeme kaydı kalır ve borç "ödendi" görünürken para
@@ -247,22 +249,22 @@ export default function TransactionDetailScreen() {
             ? [
                 {
                   key: 'obligation',
-                  label: 'Bağlı Kayda Git',
-                  description: 'Bu hareket bir ödemeye bağlı; düzenleme ve silme ödeme geçmişinden yapılır.',
+                  label: t('transactions.detail.goToLinked'),
+                  description: t('transactions.detail.goToLinkedBody'),
                   icon: 'document-text-outline',
                   onPress: () => router.push(`/obligations/${linkedObligationId}`),
                 },
-                { key: 'share', label: 'Paylaş', icon: 'share-outline', onPress: handleShare },
+                { key: 'share', label: t('common.share'), icon: 'share-outline', onPress: handleShare },
               ]
             : [
                 {
                   key: 'edit',
-                  label: 'Düzenle',
+                  label: t('common.edit'),
                   icon: 'create-outline',
                   onPress: () => router.push({ pathname: '/transactions/new', params: { id: transaction.id } }),
                 },
-                { key: 'share', label: 'Paylaş', icon: 'share-outline', onPress: handleShare },
-                { key: 'delete', label: 'Sil', icon: 'trash-outline', danger: true, onPress: confirmDelete },
+                { key: 'share', label: t('common.share'), icon: 'share-outline', onPress: handleShare },
+                { key: 'delete', label: t('common.delete'), icon: 'trash-outline', danger: true, onPress: confirmDelete },
               ]
         }
       />

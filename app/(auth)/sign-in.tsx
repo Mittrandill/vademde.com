@@ -16,10 +16,12 @@ import {
   signInWithPassword,
 } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
+import { useTranslation } from '@/i18n';
 
 export default function SignInScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -36,7 +38,7 @@ export default function SignInScreen() {
     try {
       await signInWithPassword(email.trim(), password);
     } catch (err) {
-      setError(translateAuthError(err, 'Giriş yapılamadı'));
+      setError(translateAuthError(err, t('auth.signIn.failed')));
     } finally {
       setLoading(false);
     }
@@ -51,7 +53,7 @@ export default function SignInScreen() {
     } catch (err) {
       const code = (err as { code?: string })?.code;
       if (code !== 'ERR_REQUEST_CANCELED') {
-        setError(translateAuthError(err, 'Apple ile giriş yapılamadı'));
+        setError(translateAuthError(err, t('auth.signIn.appleFailed')));
       }
     } finally {
       setAppleLoading(false);
@@ -65,7 +67,7 @@ export default function SignInScreen() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      setError(translateAuthError(err, 'Google ile giriş yapılamadı'));
+      setError(translateAuthError(err, t('auth.signIn.googleFailed')));
     } finally {
       setGoogleLoading(false);
     }
@@ -75,14 +77,14 @@ export default function SignInScreen() {
     setError(null);
     setInfo(null);
     if (!email.trim()) {
-      setError('Şifre sıfırlama bağlantısı için önce e-posta adresinizi girin.');
+      setError(t('auth.signIn.resetNeedsEmail'));
       return;
     }
     try {
       await resetPasswordForEmail(email.trim());
-      setInfo('Şifre sıfırlama bağlantısı gönderildi. Gelen kutunuzu kontrol edin.');
+      setInfo(t('auth.signIn.resetSent'));
     } catch (err) {
-      setError(translateAuthError(err, 'Bağlantı gönderilemedi'));
+      setError(translateAuthError(err, t('auth.signIn.resetFailed')));
     }
   }
 
@@ -98,10 +100,10 @@ export default function SignInScreen() {
           <View style={{ marginTop: theme.spacing.sm, alignItems: 'flex-start', gap: theme.spacing.xs }}>
             <VademdeMark size={40} />
             <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, marginTop: theme.spacing.sm }}>
-              Tekrar hoş geldiniz
+              {t('auth.signIn.title')}
             </Text>
             <Text color="textSecondary" style={{ fontSize: 15, lineHeight: 20 }}>
-              Kayıtlarınız tüm cihazlarınızda eşitlenir.
+              {t('auth.signIn.subtitle')}
             </Text>
           </View>
 
@@ -118,7 +120,7 @@ export default function SignInScreen() {
           <Row gap="sm" align="center" style={{ marginTop: theme.spacing.xl }}>
             <Divider style={{ flex: 1 }} />
             <Text variant="caption" color="textSecondary">
-              veya e-posta ile
+              {t('auth.signIn.orEmail')}
             </Text>
             <Divider style={{ flex: 1 }} />
           </Row>
@@ -126,15 +128,15 @@ export default function SignInScreen() {
           <View style={{ marginTop: theme.spacing.md }}>
             <FieldGroup>
               <TextField
-                label="E-posta"
-                placeholder="ornek@eposta.com"
+                label={t('auth.email')}
+                placeholder={t('auth.emailPlaceholder')}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 value={email}
                 onChangeText={setEmail}
               />
               <TextField
-                label="Şifre"
+                label={t('auth.password')}
                 placeholder="••••••••"
                 secureTextEntry={!passwordVisible}
                 value={password}
@@ -144,7 +146,7 @@ export default function SignInScreen() {
               />
             </FieldGroup>
             <Pressable onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' }}>
-              <Text style={{ fontSize: 15, fontWeight: '500' }}>Şifremi unuttum</Text>
+              <Text style={{ fontSize: 15, fontWeight: '500' }}>{t('auth.signIn.forgotPassword')}</Text>
             </Pressable>
           </View>
 
@@ -162,10 +164,10 @@ export default function SignInScreen() {
           <View style={{ flex: 1, minHeight: theme.spacing.lg }} />
 
           <View style={{ gap: theme.spacing.xs }}>
-            <Button label="Giriş yap" onPress={handleSubmit} loading={loading} />
+            <Button label={t('auth.signIn.submit')} onPress={handleSubmit} loading={loading} />
             <Link href="/(auth)/sign-up" style={{ alignSelf: 'center', paddingVertical: 12 }}>
               <Text color="textSecondary">
-                Hesabın yok mu? <Text style={{ fontWeight: '600' }}>Kayıt ol</Text>
+                {t('auth.signIn.noAccount')}<Text style={{ fontWeight: '600' }}>{t('auth.signIn.signUpLink')}</Text>
               </Text>
             </Link>
           </View>

@@ -7,6 +7,8 @@ import { Card, Pressable, Text } from '@/components/primitives';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { WalletArt } from './HomeArt';
 import { formatMinorAmount } from '@/utils/money';
+import { t } from '@/i18n';
+import { getDisplayDecimalSeparator } from '@/i18n/format';
 
 export interface HomeHeroProps {
   totalBalanceMinor: number;
@@ -20,7 +22,7 @@ export interface HomeHeroProps {
 const MASK = '••••••';
 
 function splitAmount(text: string): { whole: string; fraction: string } {
-  const index = text.lastIndexOf(',');
+  const index = text.lastIndexOf(getDisplayDecimalSeparator());
   return index === -1 ? { whole: text, fraction: '' } : { whole: text.slice(0, index), fraction: text.slice(index) };
 }
 
@@ -69,11 +71,11 @@ export function HomeHero({
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text color="textSecondary" style={{ fontSize: 13, fontWeight: '500' }}>
-            Toplam bakiye
+            {t('home.hero.totalBalance')}
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={hidden ? 'Tutarları göster' : 'Tutarları gizle'}
+            accessibilityLabel={hidden ? t('home.hero.showAmounts') : t('home.hero.hideAmounts')}
             onPress={onToggleHidden}
             style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.fill, alignItems: 'center', justifyContent: 'center' }}
           >
@@ -92,7 +94,7 @@ export function HomeHero({
 
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
           <Text color="textSecondary" style={{ fontSize: 15 }}>
-            Bu ay
+            {t('home.hero.thisMonth')}
           </Text>
           <Text tabular style={{ fontSize: 15, fontWeight: '600', color: positive ? colors.receivable : colors.textPrimary }}>
             {positive ? '+' : '−'}
@@ -111,7 +113,7 @@ export function HomeHero({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success }} />
               <Text color="textSecondary" style={{ fontSize: 13 }}>
-                Alacak
+                {t('home.hero.receivable')}
               </Text>
             </View>
             <Text variant="displayAmount" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontSize: 20, lineHeight: 24 }}>
@@ -127,7 +129,7 @@ export function HomeHero({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.mutedControl }} />
               <Text color="textSecondary" style={{ fontSize: 13 }}>
-                Borç
+                {t('home.hero.payable')}
               </Text>
             </View>
             <Text variant="displayAmount" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontSize: 20, lineHeight: 24 }}>

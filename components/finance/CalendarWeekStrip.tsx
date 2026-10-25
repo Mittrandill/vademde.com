@@ -5,6 +5,8 @@ import { useTheme } from '@/theme';
 import { Card, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { isSameDay, toDateKey } from '@/utils/calendar';
 import type { ObligationDueItem } from '@/features/obligations/api';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
 export interface CalendarWeekStripProps {
   weekDays: Date[];
@@ -15,14 +17,13 @@ export interface CalendarWeekStripProps {
   onNextWeek: () => void;
 }
 
-const WEEKDAY_LABELS = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'];
 // docs/03-bilgi-mimarisi-ekranlar.md §5.9 — "Çek ve senet vadeleri ... güçlü biçimde
 // öne çıkarılır"; CalendarMonthGrid'deki aynı vurgu kuralı (kalın çerçeve) burada da
 // kullanılır ki iki görünüm arasında tutarlı bir görsel dil korunsun.
 const STRONG_DOCUMENT_TYPES = new Set(['cek', 'senet']);
 const LOAN_DOCUMENT_TYPES = new Set(['kredi']);
-const weekRangeFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
-const weekRangeFormatterWithYear = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+const weekRangeFormatter = localeDateFormatter({ day: 'numeric', month: 'long' });
+const weekRangeFormatterWithYear = localeDateFormatter({ day: 'numeric', month: 'long', year: 'numeric' });
 
 export function CalendarWeekStrip({
   weekDays,
@@ -49,7 +50,7 @@ export function CalendarWeekStrip({
             onPress={onPrevWeek}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel="Önceki hafta"
+            accessibilityLabel={t('calendar.previousWeek')}
             style={{
               width: 34,
               height: 34,
@@ -68,7 +69,7 @@ export function CalendarWeekStrip({
             onPress={onNextWeek}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel="Sonraki hafta"
+            accessibilityLabel={t('calendar.nextWeek')}
             style={{
               width: 34,
               height: 34,
@@ -97,7 +98,7 @@ export function CalendarWeekStrip({
               <Pressable key={dateKey} onPress={() => onSelectDate(day)} style={{ flex: 1 }}>
                 <Stack gap="xxs" align="center">
                   <Text variant="caption" color="textSecondary">
-                    {WEEKDAY_LABELS[index]}
+                    {t('ui.weekdaysShort').split(',')[index]}
                   </Text>
                   <View
                     style={{

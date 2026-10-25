@@ -22,10 +22,13 @@ import {
 } from '@/features/counterparties/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showSaveSuccess, showErrorAlert, friendlyErrorMessage } from '@/utils/alerts';
+import { t } from '@/i18n';
 
-const TYPES: { value: CounterpartyType; label: string }[] = COUNTERPARTY_TYPES.map((value) => ({
+const TYPES: { value: CounterpartyType; readonly label: string }[] = COUNTERPARTY_TYPES.map((value) => ({
   value,
-  label: COUNTERPARTY_TYPE_LABEL[value],
+  get label() {
+    return COUNTERPARTY_TYPE_LABEL[value];
+  },
 }));
 
 export default function NewCounterpartyScreen() {
@@ -46,7 +49,7 @@ export default function NewCounterpartyScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {friendlyErrorMessage(existingQuery.error, 'Kayıt yüklenemedi')}
+              {friendlyErrorMessage(existingQuery.error, t('counterparties.form.loadFailed'))}
             </Text>
           ) : null}
         </Stack>
@@ -80,7 +83,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId || !name.trim()) throw new Error('Ad zorunlu');
+      if (!activeWorkspaceId || !name.trim()) throw new Error(t('counterparties.form.nameRequired'));
       const payload = {
         name: name.trim(),
         type,
@@ -95,7 +98,9 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
     onSuccess: () => {
       allowExit();
       showSaveSuccess(
-        isEditing ? `${typeLabel} başarıyla güncellendi.` : `${typeLabel} başarıyla oluşturuldu.`,
+        isEditing
+          ? t('counterparties.form.updated', { type: typeLabel })
+          : t('counterparties.form.created', { type: typeLabel }),
         () => router.back(),
         invalidate
       );
@@ -106,20 +111,20 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
   const deleteMutation = useMutation({
     mutationFn: () => deleteCounterparty(id as string),
     onSuccess: () => {
-      showSaveSuccess(`${typeLabel} başarıyla silindi.`, () => router.back(), invalidate);
+      showSaveSuccess(t('counterparties.form.deleted', { type: typeLabel }), () => router.back(), invalidate);
     },
     onError: () => {
       Alert.alert(
-        'Silinemedi',
-        'Bu cari işlem veya borç/alacak kayıtlarında kullanılıyor. Önce ilişkili kayıtları güncelleyin.'
+        t('counterparties.form.deleteFailed'),
+        t('counterparties.form.inUse')
       );
     },
   });
 
   function confirmDelete() {
-    Alert.alert(`${typeLabel} Kaydını Sil`, 'Bu kayıt kalıcı olarak silinecek. Emin misiniz?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
+    Alert.alert(t('counterparties.form.deleteTitle', { type: typeLabel }), t('counterparties.form.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteMutation.mutate() },
     ]);
   }
 
@@ -128,10 +133,10 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
       <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xxl }} keyboardShouldPersistTaps="handled">
         <ScreenHeader
           inline
-          title={isEditing ? 'Cariyi düzenle' : 'Yeni cari'}
-          leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+          title={isEditing ? t('counterparties.form.editTitle') : t('counterparties.form.newTitle')}
+          leftLabel={{ label: t('common.cancel'), onPress: () => router.back() }}
           rightLabel={{
-            label: isEditing ? 'Güncelle' : 'Kaydet',
+            label: isEditing ? t('counterparties.form.update') : t('common.save'),
             bold: true,
             disabled: !name.trim() || saveMutation.isPending,
             onPress: () => saveMutation.mutate(),
@@ -140,7 +145,7 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
 
         <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
           <SegmentedControl
-            options={TYPES.map((t) => ({ key: t.value, label: t.label }))}
+            options={TYPES.map((option) => ({ key: option.value, label: option.label }))}
             value={type}
             onChange={setType}
             stretch
@@ -149,45 +154,49 @@ function CounterpartyForm({ id, initial }: { id: string | null; initial: Counter
           <View>
             <FieldGroup>
               <TextField
-                label={type === 'company' ? 'Ünvan' : 'Ad soyad'}
-                placeholder={type === 'company' ? 'Firma adı' : 'Ad Soyad'}
+                label={type === 'company' ? t('counterparties.form.companyName') : t('counterparties.form.fullName')}
+                placeholder={type === 'company' ? t('counterparties.form.companyPlaceholder') : t('counterparties.form.namePlaceholder')}
                 value={name}
                 onChangeText={setName}
               />
               <TextField
                 label={
-                  type === 'company' ? 'Vergi no' : type === 'personel' ? 'TC kimlik no' : 'TC / vergi no'
+                  type === 'company'
+                    ? t('counterparties.form.taxNo')
+                    : type === 'personel'
+                      ? t('counterparties.form.nationalId')
+                      : t('counterparties.form.idOrTax')
                 }
-                placeholder="İsteğe bağlı"
+                placeholder={t('counterparties.form.optional')}
                 value={taxNumber}
                 onChangeText={setTaxNumber}
                 keyboardType="number-pad"
               />
-              <TextField label="Telefon" placeholder="İsteğe bağlı" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              <TextField label={t('counterparties.form.phone')} placeholder={t('counterparties.form.optional')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
               <TextField
-                label="E-posta"
-                placeholder="İsteğe bağlı"
+                label={t('counterparties.form.email')}
+                placeholder={t('counterparties.form.optional')}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-              <TextField label="Not" placeholder="İsteğe bağlı" value={notes} onChangeText={setNotes} />
+              <TextField label={t('counterparties.form.note')} placeholder={t('counterparties.form.optional')} value={notes} onChangeText={setNotes} />
             </FieldGroup>
             <Text variant="caption" color="textSecondary" style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-              Aynı numarayla kayıtlı bir cari varsa listede ayırt edebilmeniz için numarayı girmenizi öneririz.
+              {t('counterparties.form.numberHint')}
             </Text>
           </View>
 
           {saveMutation.error ? (
             <Text variant="caption" color="danger">
-              {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
+              {friendlyErrorMessage(saveMutation.error, t('counterparties.form.saveFailed'))}
             </Text>
           ) : null}
 
           {isEditing ? (
             <Button
-              label={`${typeLabel} kaydını sil`}
+              label={t('counterparties.form.deleteButton', { type: typeLabel })}
               variant="dangerText"
               onPress={confirmDelete}
               loading={deleteMutation.isPending}

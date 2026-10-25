@@ -1,0 +1,22 @@
+// Takvim sekmesi ve takvim bileşenleri.
+export const calendar = {
+  title: 'Takvim',
+  month: 'Ay',
+  week: 'Hafta',
+  list: 'Liste',
+  loadFailed: 'Takvim yüklenemedi',
+  previousWeek: 'Önceki hafta',
+  nextWeek: 'Sonraki hafta',
+  emptyDay: 'Bu tarihte vadesi gelen kayıt yok.',
+  emptyRange: 'Bu aralıkta vadesi gelen kayıt yok.',
+  payableUpper: 'ÖDENECEK',
+  receivableUpper: 'TAHSİL EDİLECEK',
+  netUpper: 'NET',
+  legendPayable: 'Ödenecek',
+  legendReceivable: 'Tahsil Edilecek',
+  legendInstruments: 'Çek / Senet',
+  legendLoan: 'Kredi',
+  currentCardDebt: 'Güncel kart borcu',
+  pay: 'Öde',
+  collect: 'Tahsil Et',
+};

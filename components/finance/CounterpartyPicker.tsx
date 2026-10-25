@@ -1,6 +1,7 @@
 import { SearchablePicker } from '@/components/primitives';
 import { createCounterparty, type Counterparty, type CounterpartyType } from '@/features/counterparties/api';
 import { PersonAvatar } from './PersonAvatar';
+import { t } from '@/i18n';
 
 export interface CounterpartyPickerProps {
   /** Satırın sağında küçük etiket (ör. \"Kategori\"); tuval satırlarındaki ikincil metin. */
@@ -23,7 +24,7 @@ export function CounterpartyPicker({
   onSelect,
   onCreated,
   defaultType = 'individual',
-  placeholder = 'Kişi / firma seçin',
+  placeholder = t('ui.pickers.counterparty.placeholder'),
   label,
 }: CounterpartyPickerProps) {
   return (
@@ -34,8 +35,8 @@ export function CounterpartyPicker({
       onSelect={onSelect}
       renderLeading={(item) => <PersonAvatar name={item.name} size={36} />}
       placeholder={placeholder}
-      title="Cari Seç"
-      emptyLabel="Eşleşen cari bulunamadı."
+      title={t('ui.pickers.counterparty.title')}
+      emptyLabel={t('ui.pickers.counterparty.empty')}
       onCreateNew={async (name) => {
         const created = await createCounterparty({ workspace_id: workspaceId, name, type: defaultType });
         onSelect(created.id);

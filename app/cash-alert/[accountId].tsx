@@ -12,9 +12,11 @@ import { HeroAmount } from '@/components/finance/HeroAmount';
 import { FORECAST_DAYS, TOTAL_FORECAST_ID, useCashForecasts } from '@/features/cashflow/useCashForecasts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
+import { localeDateFormatter, zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
-const dayMonthShort = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+const dayMonth = localeDateFormatter({ day: 'numeric', month: 'long' });
+const dayMonthShort = localeDateFormatter({ day: 'numeric', month: 'short' });
 const CHART_HEIGHT = 140;
 const CHART_WIDTH = 330;
 
@@ -59,7 +61,7 @@ export default function CashAlertScreen() {
       <ScrollView
         contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg, paddingBottom: theme.spacing.massive }}
       >
-        <ScreenHeader title="Nakit uyarısı" />
+        <ScreenHeader title={t('cashAlert.title')} />
 
         {isLoading ? (
           <Stack gap="md">
@@ -67,19 +69,19 @@ export default function CashAlertScreen() {
             <Skeleton height={160} borderRadius={theme.radius.widget} />
           </Stack>
         ) : !item || !chart ? (
-          <EmptyState icon="wallet-outline" title="Hesap bulunamadı" message="Bu hesap için tahmin hesaplanamadı." />
+          <EmptyState icon="wallet-outline" title={t('cashAlert.notFoundTitle')} message={t('cashAlert.notFoundBody')} />
         ) : (
           <>
             <Stack gap="xs">
               <Text variant="sectionTitle">
                 {first
-                  ? `${item.name} ${dayMonth.format(new Date(first.date))} tarihinde eksiye düşebilir`
-                  : `${item.name} önümüzdeki ${FORECAST_DAYS} gün eksiye düşmüyor`}
+                  ? t('cashAlert.goesNegative', { account: item.name, date: dayMonth.format(new Date(first.date)) })
+                  : t('cashAlert.staysPositive', { account: item.name, days: FORECAST_DAYS })}
               </Text>
               <Text variant="body" color="textSecondary">
                 {isTotal
-                  ? 'Tüm TL hesapların toplam bakiyesine, hesabı atanmamış kayıtlar dahil tüm kayıtlı vadeler uygulanır.'
-                  : 'Tahmin, bu hesaptan ödenecek / bu hesaba tahsil edilecek kayıtlı vadelere dayanır.'}
+                  ? t('cashAlert.totalHint')
+                  : t('cashAlert.accountHint')}
               </Text>
             </Stack>
 
@@ -93,11 +95,11 @@ export default function CashAlertScreen() {
             >
             <Stack gap="xs">
               <Text variant="label" color="textSecondary">
-                Tahmini en düşük bakiye
+                {t('cashAlert.lowest')}
               </Text>
               <HeroAmount amountMinor={item.forecast.lowestMinor} baseSize={48} color={item.forecast.lowestMinor < 0 ? 'danger' : 'textPrimary'} />
             </Stack>
-            <View accessible accessibilityLabel={`Önümüzdeki ${FORECAST_DAYS} günlük tahmini bakiye grafiği`}>
+            <View accessible accessibilityLabel={t('cashAlert.chartA11y', { days: FORECAST_DAYS })}>
               <Svg width="100%" height={CHART_HEIGHT + 4} viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT + 4}`} preserveAspectRatio="none">
                 {chart.negativeFrom ? (
                   <Rect x={0} y={chart.zeroY} width={CHART_WIDTH} height={CHART_HEIGHT - chart.zeroY + 4} fill={theme.colors.danger} opacity={0.08} />
@@ -107,7 +109,7 @@ export default function CashAlertScreen() {
               </Svg>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: theme.spacing.xxs }}>
                 <Text variant="label" color="textPrimary" style={{ textTransform: 'none' }}>
-                  Bugün
+                  {t('common.today')}
                 </Text>
                 {first ? (
                   <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none' }}>
@@ -123,11 +125,11 @@ export default function CashAlertScreen() {
 
             <Stack gap="xs">
               <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                Bu hesaptan çıkacaklar
+                {t('cashAlert.outgoing')}
               </Text>
               {item.forecast.outgoing.length === 0 ? (
                 <Text variant="body" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                  Bu hesaba bağlı ödenecek kayıt yok.
+                  {t('cashAlert.noOutgoing')}
                 </Text>
               ) : (
                 <Group inset={16}>
@@ -152,20 +154,23 @@ export default function CashAlertScreen() {
             {first ? (
               <Stack gap="xs">
                 <Text variant="label" color="textSecondary" style={{ paddingLeft: theme.spacing.xxs }}>
-                  Ne yapabilirsin?
+                  {t('cashAlert.whatToDo')}
                 </Text>
                 <Group>
                   {bestSource && transferMinor > 0 ? (
                     <GroupedRow
                       leading={<GroupedRowIcon name="swap-horizontal-outline" />}
-                      title={`${bestSource.name}'dan ${formatMinorAmount(transferMinor).replace(/,00$/, '')} aktar`}
+                      title={t('cashAlert.transferFrom', {
+                        account: bestSource.name,
+                        amount: formatMinorAmount(transferMinor).replace(zeroFractionPattern(), ''),
+                      })}
                       onPress={() => router.push(`/transactions/new?direction=transfer&accountId=${bestSource.accountId}`)}
                     />
                   ) : null}
                   {item.forecast.outgoing[0] ? (
                     <GroupedRow
                       leading={<GroupedRowIcon name="create-outline" />}
-                      title="Ödeme hesabını değiştir"
+                      title={t('cashAlert.changeAccount')}
                       onPress={() => router.push(`/obligations/${item.forecast.outgoing[0].obligationId}`)}
                     />
                   ) : null}

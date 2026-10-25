@@ -10,6 +10,8 @@ import {
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { getValueUnit } from '@/features/valueUnits/units';
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
 type RateHistoryRow = { unit_code: string; rate_date: string; try_equivalent_minor: number };
 
@@ -58,19 +60,16 @@ export type CounterpartyType = 'individual' | 'company' | 'personel';
 
 export const COUNTERPARTY_TYPES: CounterpartyType[] = ['individual', 'company', 'personel'];
 
-export const COUNTERPARTY_TYPE_LABEL: Record<CounterpartyType, string> = {
-  individual: 'Kişi',
-  company: 'Firma',
-  personel: 'Personel',
-};
+export const COUNTERPARTY_TYPE_LABEL: Record<CounterpartyType, string> = localizedRecord(COUNTERPARTY_TYPES, (type) =>
+  t(`domain.counterpartyTypes.${type}`)
+);
 
 // Türkçe çoğul eki programatik türetilemez (bkz. features/obligations/documentTypes.ts
 // DOCUMENT_TYPE_LABEL_PLURAL) — liste filtresi başlıkları elle yazılır.
-export const COUNTERPARTY_TYPE_LABEL_PLURAL: Record<CounterpartyType, string> = {
-  individual: 'Kişiler',
-  company: 'Firmalar',
-  personel: 'Personel',
-};
+export const COUNTERPARTY_TYPE_LABEL_PLURAL: Record<CounterpartyType, string> = localizedRecord(
+  COUNTERPARTY_TYPES,
+  (type) => t(`domain.counterpartyTypesPlural.${type}`)
+);
 
 export function getCounterpartyType(type: string | null | undefined): CounterpartyType {
   return type === 'company' || type === 'personel' ? type : 'individual';
@@ -254,13 +253,10 @@ export interface StatementEntry {
   dueDate: string | null;
 }
 
-const METHOD_LABEL: Record<string, string> = {
-  nakit: 'Nakit',
-  havale: 'Havale/EFT',
-  kredi_karti: 'Kredi kartı',
-  online_odeme: 'Online',
-  diger: 'Diğer',
-};
+const METHOD_LABEL: Record<string, string> = localizedRecord(
+  ['nakit', 'havale', 'kredi_karti', 'online_odeme', 'diger'] as const,
+  (method) => t(`domain.paymentMethodsShort.${method}`)
+);
 
 interface StatementObligationRow {
   id: string;
@@ -387,17 +383,19 @@ export async function getCounterpartyStatement(
   for (const o of obligations) {
     const isReceivable = o.direction === 'receivable';
     const isSettlingInstrument = settlingInstrumentIds.has(o.id);
-    const label = DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt';
+    const label = DOCUMENT_TYPE_LABEL[o.document_type] ?? t('common.record');
     let balanceEffect: number;
     let subtitle: string;
     if (isInstrument(o)) {
       // Faturayı kapatan çek: kapattığı tutar kadar; bağımsız çek: kalan (tutar − ödenen) kadar.
       const own = isSettlingInstrument ? 0 : (isReceivable ? o.total_amount_minor : -o.total_amount_minor) + (instrumentPaymentEffect.get(o.id) ?? 0);
       balanceEffect = own + (settlementEffectBySettler.get(o.id) ?? 0);
-      subtitle = `${label} · ${isReceivable ? 'alındı' : 'verildi'}`;
+      subtitle = isReceivable ? t('counterparties.statement.received', { label }) : t('counterparties.statement.given', { label });
     } else {
       balanceEffect = (isReceivable ? o.total_amount_minor : -o.total_amount_minor) + (settlementEffectBySettler.get(o.id) ?? 0);
-      subtitle = `${label} · ${isReceivable ? 'Alacak' : 'Borç'}`;
+      subtitle = isReceivable
+        ? t('counterparties.statement.receivable', { label })
+        : t('counterparties.statement.payable', { label });
     }
     entries.push({
       key: `o:${o.id}`,
@@ -424,13 +422,15 @@ export async function getCounterpartyStatement(
     const obligation = obligationById.get(p.obligation_id);
     if (!obligation) continue;
     const isReceivable = obligation.direction === 'receivable';
-    const verb = isReceivable ? 'Tahsilat' : 'Ödeme';
+    const verb = isReceivable ? t('counterparties.statement.collection') : t('counterparties.statement.payment');
     const method = p.transaction?.payment_method ? METHOD_LABEL[p.transaction.payment_method] : null;
     const title = p.settled_by_obligation_id
-      ? (p.notes ?? `${verb} (para hareketi yok)`)
+      ? (p.notes ?? t('counterparties.statement.noMovement', { verb }))
       : p.transaction_id
-        ? `${verb}${method ? ` — ${method}` : ''}`
-        : `${verb} (hesapsız işaretlendi)`;
+        ? method
+          ? t('counterparties.statement.withMethod', { verb, method })
+          : verb
+        : t('counterparties.statement.noAccount', { verb });
     entries.push({
       key: `p:${p.id}`,
       kind: 'payment',
@@ -455,26 +455,26 @@ export async function getCounterpartyStatement(
   // Kayda bağlı olmayan hareketler (peşin alış/satış vb.) bakiyeyi değiştirmez. Ödemeden doğan
   // hareketler (yukarıda ödeme satırı olarak var) ve bir kaydın parçası olan hareketler (avansın
   // parası — avans kaydıyla birlikte gösterilir) tekrar listelenmez.
-  for (const t of transactionRows as unknown as StatementTransactionRow[]) {
-    if ((t.payments?.length ?? 0) > 0) continue;
-    if (t.source_obligation_id && obligationById.has(t.source_obligation_id)) continue;
-    const method = t.payment_method ? METHOD_LABEL[t.payment_method] : null;
+  for (const tx of transactionRows as unknown as StatementTransactionRow[]) {
+    if ((tx.payments?.length ?? 0) > 0) continue;
+    if (tx.source_obligation_id && obligationById.has(tx.source_obligation_id)) continue;
+    const method = tx.payment_method ? METHOD_LABEL[tx.payment_method] : null;
     entries.push({
-      key: `t:${t.id}`,
+      key: `t:${tx.id}`,
       kind: 'transaction',
-      date: t.occurred_at,
-      title: t.description?.trim() || (t.direction === 'income' ? 'Gelir' : 'Gider'),
-      subtitle: [t.account?.name, method].filter(Boolean).join(' · ') || null,
-      amountMinor: t.amount_minor,
-      currencyCode: t.currency_code,
+      date: tx.occurred_at,
+      title: tx.description?.trim() || (tx.direction === 'income' ? t('common.income') : t('common.expense')),
+      subtitle: [tx.account?.name, method].filter(Boolean).join(' · ') || null,
+      amountMinor: tx.amount_minor,
+      currencyCode: tx.currency_code,
       balanceEffectMinor: 0,
       runningBalanceMinor: null,
       fxRateTryMinor: null,
       fxRateEstimated: false,
       obligationId: null,
-      transactionId: t.id,
+      transactionId: tx.id,
       documentType: null,
-      direction: t.direction,
+      direction: tx.direction,
       status: null,
       dueDate: null,
     });

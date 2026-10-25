@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Group, Pressable, Text } from '@/components/primitives';
 import type { PendingReviewDocument } from '@/features/dashboard/api';
+import { t } from '@/i18n';
 
 export interface PendingReviewQueueProps {
   documents: PendingReviewDocument[];
@@ -29,9 +30,9 @@ export function PendingReviewQueue({ documents }: PendingReviewQueueProps) {
           <Thumb style={{ left: 20, top: 0 }} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ fontWeight: '600' }}>{documents.length} belge onay bekliyor</Text>
+          <Text style={{ fontWeight: '600' }}>{t('scan.pending.count', { count: documents.length })}</Text>
           <Text variant="caption" color="textSecondary">
-            Bir alanda emin olmadığımız var
+            {t('scan.pending.body')}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />

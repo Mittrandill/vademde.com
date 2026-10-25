@@ -18,9 +18,11 @@ import {
   type AiInsight,
   type InsightKind,
 } from '@/features/insights/api';
-import { AI_DISCLAIMER, useAiAccess } from '@/features/insights/useAiAccess';
+import { aiDisclaimer, useAiAccess } from '@/features/insights/useAiAccess';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
+import { zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
 type TabKey = 'all' | InsightKind;
 
@@ -39,7 +41,7 @@ export default function InsightsScreen() {
           paddingBottom: theme.spacing.massive,
         }}
       >
-        <ScreenHeader title="Akıllı öneriler" />
+        <ScreenHeader title={t('insights.title')} />
         <AiGate>
           <InsightsContent />
         </AiGate>
@@ -87,7 +89,7 @@ function InsightsContent() {
   const tabs = useMemo(() => {
     const kinds = Array.from(new Set(insights.map((i) => i.kind)));
     return [
-      { key: 'all', label: `Tümü · ${insights.length}` },
+      { key: 'all', label: t('insights.all', { count: insights.length }) },
       ...kinds.map((k) => ({ key: k, label: INSIGHT_KIND_LABEL[k] })),
     ];
   }, [insights]);
@@ -105,16 +107,16 @@ function InsightsContent() {
           }}
         >
           <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
-            Tasarruf potansiyeli
+            {t('insights.savingPotential')}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: theme.spacing.xs }}>
             <HeroAmount amountMinor={savingMinor} baseSize={44} color="receivable" />
             <Text variant="caption" color="textSecondary">
-              / ay
+              {t('insights.perMonth')}
             </Text>
           </View>
           <Text variant="caption" color="textSecondary">
-            Kayıtlarından çıkarıldı. Hiçbir şey sen onaylamadan değişmez.
+            {t('insights.derivedNote')}
           </Text>
         </View>
       ) : null}
@@ -131,8 +133,8 @@ function InsightsContent() {
       ) : visible.length === 0 ? (
         <EmptyState
           icon="sparkles-outline"
-          title={refreshMutation.isPending ? 'Kayıtların inceleniyor' : 'Şimdilik öneri yok'}
-          message="Yeterli kayıt biriktikçe tekrarlayan abonelikler ve artan harcamalar burada görünür."
+          title={refreshMutation.isPending ? t('insights.analyzing') : t('insights.noneYet')}
+          message={t('insights.noneBody')}
         />
       ) : (
         visible.map((insight) => (
@@ -144,10 +146,10 @@ function InsightsContent() {
         ))
       )}
 
-      <Button label="Bir şey sor" variant="secondary" icon="chatbubble-ellipses-outline" onPress={() => router.push('/insights/ask')} />
+      <Button label={t('insights.ask')} variant="secondary" icon="chatbubble-ellipses-outline" onPress={() => router.push('/insights/ask')} />
 
       <Text variant="caption" color="textSecondary">
-        {AI_DISCLAIMER}
+        {aiDisclaimer()}
       </Text>
     </Stack>
   );
@@ -180,8 +182,8 @@ function InsightCard({ insight, onDismiss }: { insight: AiInsight; onDismiss: ()
             }}
           >
             {impact < 0 ? '−' : '+'}
-            {formatMinorAmount(Math.abs(impact)).replace(/,00$/, '')}
-            {insight.kind === 'nakit' ? ' açık' : '/ay'}
+            {formatMinorAmount(Math.abs(impact)).replace(zeroFractionPattern(), '')}
+            {insight.kind === 'nakit' ? t('insights.gap') : t('insights.perMonthShort')}
           </Text>
         ) : null}
       </View>
@@ -205,18 +207,18 @@ function InsightCard({ insight, onDismiss }: { insight: AiInsight; onDismiss: ()
             }}
           >
             <Text variant="cardTitle" style={{ fontSize: 14 }}>
-              İncele
+              {t('insights.review')}
             </Text>
           </Pressable>
         ) : null}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Bu öneriyi gizle"
+          accessibilityLabel={t('insights.hideA11y')}
           onPress={onDismiss}
           style={{ minHeight: theme.touchTarget.minimum, paddingHorizontal: theme.spacing.sm, justifyContent: 'center' }}
         >
           <Text variant="cardTitle" color="textSecondary" style={{ fontSize: 14 }}>
-            Gizle
+            {t('insights.hide')}
           </Text>
         </Pressable>
       </View>

@@ -1,5 +1,11 @@
 import type { Ionicons } from '@expo/vector-icons';
 
+import { t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
+import type { tr } from '@/i18n/locales/tr';
+
+export type DocumentTypeId = keyof typeof tr.domain.documentTypes;
+
 // docs/01-finansal-kayit-modeli.md §3.2 — finansal kayıt/belge türleri.
 // docs/08-tasarim-sistemi.md §12.9 — her belge türü kendi ikonunu taşır.
 export interface DocumentTypeOption {
@@ -15,26 +21,26 @@ export interface DocumentTypeOption {
 }
 
 export const DOCUMENT_TYPES: DocumentTypeOption[] = [
-  { id: 'kredi', name: 'Kredi', icon: 'cash', color: '#3E8E5A' },
-  { id: 'kredi_karti_ekstresi', name: 'Kredi Kartı Ekstresi', icon: 'card', color: '#4C8DFF' },
-  { id: 'nakit_avans', name: 'Nakit Avans', icon: 'cash-outline', color: '#FF7A59' },
-  { id: 'cek', name: 'Çek', icon: 'document-text', color: '#2FA9C9' },
-  { id: 'senet', name: 'Senet', icon: 'reader', color: '#7C6FF0' },
-  { id: 'borc_verme', name: 'Borç Verme', icon: 'hand-left-outline', color: '#8C6F4E' },
+  { id: 'kredi', get name() { return t('domain.documentTypes.kredi'); }, icon: 'cash', color: '#3E8E5A' },
+  { id: 'kredi_karti_ekstresi', get name() { return t('domain.documentTypes.kredi_karti_ekstresi'); }, icon: 'card', color: '#4C8DFF' },
+  { id: 'nakit_avans', get name() { return t('domain.documentTypes.nakit_avans'); }, icon: 'cash-outline', color: '#FF7A59' },
+  { id: 'cek', get name() { return t('domain.documentTypes.cek'); }, icon: 'document-text', color: '#2FA9C9' },
+  { id: 'senet', get name() { return t('domain.documentTypes.senet'); }, icon: 'reader', color: '#7C6FF0' },
+  { id: 'borc_verme', get name() { return t('domain.documentTypes.borc_verme'); }, icon: 'hand-left-outline', color: '#8C6F4E' },
   // Ödeme/tahsilat fazlasından doğan ön ödeme / alınan avans (bkz. features/payments/api.ts
   // createAdvanceObligation). Elle açılmaz; sonraki faturadan Mahsup ile düşülür.
-  { id: 'avans', name: 'Avans / Ön Ödeme', icon: 'wallet-outline', color: '#A0845C', systemOnly: true },
-  { id: 'fatura', name: 'Fatura', icon: 'receipt', color: '#F0B429' },
-  { id: 'abonelik', name: 'Abonelik', icon: 'repeat', color: '#8B6BE0' },
-  { id: 'kira', name: 'Kira', icon: 'home', color: '#C97B4A' },
-  { id: 'maas', name: 'Personel Maaşı', icon: 'person-circle', color: '#6C7A89' },
-  { id: 'vergi_sgk', name: 'Vergi / SGK', icon: 'shield-checkmark', color: '#3457D5' },
-  { id: 'tedarikci_borcu', name: 'Tedarikçi Borcu', icon: 'cube', color: '#39B7C9' },
-  { id: 'musteri_alacagi', name: 'Müşteri Alacağı', icon: 'people', color: '#52CE96' },
-  { id: 'banka_dekontu', name: 'Banka Dekontu', icon: 'business', color: '#5B6472' },
-  { id: 'makbuz_fis', name: 'Makbuz / Fiş', icon: 'clipboard', color: '#E8985E' },
-  { id: 'sozlesme_odeme_plani', name: 'Sözleşme / Ödeme Planı', icon: 'document-attach', color: '#E177B0' },
-  { id: 'diger', name: 'Diğer', icon: 'ellipsis-horizontal', color: '#8B8D98' },
+  { id: 'avans', get name() { return t('domain.documentTypes.avans'); }, icon: 'wallet-outline', color: '#A0845C', systemOnly: true },
+  { id: 'fatura', get name() { return t('domain.documentTypes.fatura'); }, icon: 'receipt', color: '#F0B429' },
+  { id: 'abonelik', get name() { return t('domain.documentTypes.abonelik'); }, icon: 'repeat', color: '#8B6BE0' },
+  { id: 'kira', get name() { return t('domain.documentTypes.kira'); }, icon: 'home', color: '#C97B4A' },
+  { id: 'maas', get name() { return t('domain.documentTypes.maas'); }, icon: 'person-circle', color: '#6C7A89' },
+  { id: 'vergi_sgk', get name() { return t('domain.documentTypes.vergi_sgk'); }, icon: 'shield-checkmark', color: '#3457D5' },
+  { id: 'tedarikci_borcu', get name() { return t('domain.documentTypes.tedarikci_borcu'); }, icon: 'cube', color: '#39B7C9' },
+  { id: 'musteri_alacagi', get name() { return t('domain.documentTypes.musteri_alacagi'); }, icon: 'people', color: '#52CE96' },
+  { id: 'banka_dekontu', get name() { return t('domain.documentTypes.banka_dekontu'); }, icon: 'business', color: '#5B6472' },
+  { id: 'makbuz_fis', get name() { return t('domain.documentTypes.makbuz_fis'); }, icon: 'clipboard', color: '#E8985E' },
+  { id: 'sozlesme_odeme_plani', get name() { return t('domain.documentTypes.sozlesme_odeme_plani'); }, icon: 'document-attach', color: '#E177B0' },
+  { id: 'diger', get name() { return t('domain.documentTypes.diger'); }, icon: 'ellipsis-horizontal', color: '#8B8D98' },
 ];
 
 export const DOCUMENT_TYPE_COLOR: Record<string, string> = Object.fromEntries(
@@ -48,32 +54,17 @@ export function getDocumentTypeColor(documentType?: string | null): string {
   return DOCUMENT_TYPE_COLOR[documentType] ?? FALLBACK_DOCUMENT_TYPE_COLOR;
 }
 
-export const DOCUMENT_TYPE_LABEL: Record<string, string> = Object.fromEntries(
-  DOCUMENT_TYPES.map((t) => [t.id, t.name])
+export const DOCUMENT_TYPE_LABEL: Record<string, string> = localizedRecord(
+  DOCUMENT_TYPES.map((type) => type.id as DocumentTypeId),
+  (id) => t(`domain.documentTypes.${id}`)
 );
 
 // Türkçe çoğul/iyelik eki programatik türetilemez (bkz. app/paywall/index.tsx
-// PLAN_CTA_LABELS yorumu) — liste ekranı başlığı için elle yazılmış eşleme.
-export const DOCUMENT_TYPE_LABEL_PLURAL: Record<string, string> = {
-  kredi: 'Kredilerim',
-  kredi_karti_ekstresi: 'Kredi Kartı Ekstrelerim',
-  nakit_avans: 'Nakit Avanslarım',
-  cek: 'Çeklerim',
-  senet: 'Senetlerim',
-  borc_verme: 'Verdiğim Borçlar',
-  avans: 'Avanslar / Ön Ödemeler',
-  fatura: 'Faturalarım',
-  abonelik: 'Aboneliklerim',
-  kira: 'Kira Ödemelerim',
-  maas: 'Personel Maaşları',
-  vergi_sgk: 'Vergi / SGK Kayıtlarım',
-  tedarikci_borcu: 'Tedarikçi Borçlarım',
-  musteri_alacagi: 'Müşteri Alacaklarım',
-  banka_dekontu: 'Banka Dekontlarım',
-  makbuz_fis: 'Makbuz / Fişlerim',
-  sozlesme_odeme_plani: 'Sözleşme / Ödeme Planlarım',
-  diger: 'Diğer Kayıtlarım',
-};
+// PLAN_CTA_LABELS yorumu) — liste ekranı başlığı için elle yazılmış eşleme (i18n domain.documentTypesPlural).
+export const DOCUMENT_TYPE_LABEL_PLURAL: Record<string, string> = localizedRecord(
+  DOCUMENT_TYPES.map((type) => type.id as DocumentTypeId),
+  (id) => t(`domain.documentTypesPlural.${id}`)
+);
 
 export const DOCUMENT_TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = Object.fromEntries(
   DOCUMENT_TYPES.map((t) => [t.id, t.icon])
@@ -147,7 +138,11 @@ export interface InstallmentUnitLabels {
 
 export function getInstallmentUnitLabels(documentType: string | null): InstallmentUnitLabels {
   const monthly = !!documentType && MONTHLY_PERIOD_DOCUMENT_TYPES.has(documentType);
-  return monthly
-    ? { countLabel: 'KAÇ AY', unit: 'ay', unitDative: 'aya', unitTitle: 'Ay' }
-    : { countLabel: 'TAKSİT SAYISI', unit: 'taksit', unitDative: 'taksite', unitTitle: 'Taksit' };
+  const labels = monthly ? 'monthly' : 'installment';
+  return {
+    countLabel: t(`domain.installmentUnits.${labels}.countLabel`),
+    unit: t(`domain.installmentUnits.${labels}.unit`),
+    unitDative: t(`domain.installmentUnits.${labels}.unitDative`),
+    unitTitle: t(`domain.installmentUnits.${labels}.unitTitle`),
+  };
 }

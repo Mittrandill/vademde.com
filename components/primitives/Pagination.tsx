@@ -5,6 +5,7 @@ import { useTheme } from '@/theme';
 import { Pressable } from './Pressable';
 import { Row } from './Stack';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 export interface PaginationProps {
   /** 0 tabanlı geçerli sayfa. */
@@ -44,7 +45,7 @@ export function Pagination({ page, totalPages, onChange, loading }: PaginationPr
 
   return (
     <Row gap="xs" align="center" style={{ justifyContent: 'center' }}>
-      <StepButton icon="chevron-back" label="Önceki sayfa" disabled={page === 0} onPress={() => onChange(page - 1)} />
+      <StepButton icon="chevron-back" label={t('ui.previousPage')} disabled={page === 0} onPress={() => onChange(page - 1)} />
 
       {pages.map((p, index) =>
         p === 'ellipsis' ? (
@@ -55,7 +56,7 @@ export function Pagination({ page, totalPages, onChange, loading }: PaginationPr
           <Pressable
             key={p}
             accessibilityRole="button"
-            accessibilityLabel={`${p + 1}. sayfa`}
+            accessibilityLabel={t('ui.pageA11y', { page: p + 1 })}
             onPress={() => onChange(p)}
             style={{
               minWidth: theme.touchTarget.minimum,
@@ -85,7 +86,7 @@ export function Pagination({ page, totalPages, onChange, loading }: PaginationPr
 
       <StepButton
         icon="chevron-forward"
-        label="Sonraki sayfa"
+        label={t('ui.nextPage')}
         disabled={page >= totalPages - 1}
         onPress={() => onChange(page + 1)}
       />

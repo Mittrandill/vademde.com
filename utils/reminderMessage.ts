@@ -1,6 +1,7 @@
 import { BANKS } from '@/features/banks/banks';
 import { SERVICES } from '@/features/services/services';
 import { VALUE_UNIT_BY_CODE } from '@/features/valueUnits/units';
+import { localeNumberFormatter } from '@/i18n/format';
 
 // Push bildirimiyle aynı cümle: "Türkiye İş Bankası 10.000 TL Tutarındaki Kredi Ödemeniz 3 Gün Sonra".
 // supabase/functions/send-reminders/index.ts aynı eşlemeleri taşır (Deno uygulama kodunu içe aktaramaz);
@@ -44,7 +45,7 @@ export function formatReminderAmount(amountMinor: number, currencyCode: string):
   const unit = VALUE_UNIT_BY_CODE[currencyCode];
   const value = unit && unit.precision === 0 ? amountMinor : amountMinor / 100;
   const hasFraction = Math.abs(value - Math.round(value)) > 1e-9;
-  const text = new Intl.NumberFormat('tr-TR', {
+  const text = localeNumberFormatter({
     minimumFractionDigits: hasFraction ? 2 : 0,
     maximumFractionDigits: 2,
   }).format(value);

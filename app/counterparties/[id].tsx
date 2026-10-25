@@ -47,14 +47,16 @@ import { queryKeys } from '@/services/queryKeys';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { showSuccessAlert } from '@/utils/alerts';
 import type { ValueUnitType } from '@/features/valueUnits/units';
+import { capitalizeUi, localeDateFormatter, upperUi, zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
 // Tahsilat Al / Ödeme Yap → /payments/new (bkz. features/payments/api.ts settleObligations).
 // Önceden "Çek/Senet" seçimi Borç/Alacak formuna gidip bağımsız yeni bir kayıt açıyordu; faturaya
 // çek verilince borç ikiye katlanıyordu. Yöntem (nakit, havale, kart, çek, senet) artık formun
 // içinde seçilir ve her yöntem seçilen açık kayıtları kapatır.
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
-const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
+const dateFormatter = localeDateFormatter({ day: '2-digit', month: 'short', year: 'numeric' });
+const shortDateFormatter = localeDateFormatter({ day: '2-digit', month: 'short' });
 
 const TAB_PAGE_SIZE = 10;
 // Ekstre satırları kısa ve günlere gruplu olduğundan sayfa başına daha fazlası gösterilir.
@@ -78,7 +80,7 @@ export default function CounterpartyDetailScreen() {
   const deleteCounterpartyMutation = useMutation({
     mutationFn: () => deleteCounterparty(id as string),
     onSuccess: () => {
-      showSuccessAlert('Cari kaydı başarıyla silindi.', () => {
+      showSuccessAlert(t('counterparties.detail.deleted'), () => {
         router.replace('/counterparties');
         InteractionManager.runAfterInteractions(() => {
           if (activeWorkspaceId) {
@@ -90,16 +92,16 @@ export default function CounterpartyDetailScreen() {
     },
     onError: () => {
       Alert.alert(
-        'Silinemedi',
-        'Bu kişi/firma işlem veya borç/alacak kayıtlarında kullanılıyor. Önce ilişkili kayıtları güncelleyin.'
+        t('counterparties.form.deleteFailed'),
+        t('counterparties.detail.inUse')
       );
     },
   });
 
   function confirmDeleteCounterparty() {
-    Alert.alert('Cariyi Sil', 'Bu kişi/firma kalıcı olarak silinecek. Emin misiniz?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => deleteCounterpartyMutation.mutate() },
+    Alert.alert(t('counterparties.detail.deleteTitle'), t('counterparties.detail.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteCounterpartyMutation.mutate() },
     ]);
   }
 
@@ -160,7 +162,7 @@ export default function CounterpartyDetailScreen() {
         header={{ title: '' }}
         isLoading
         error={counterpartyQuery.error}
-        errorFallbackMessage="Kayıt yüklenemedi"
+        errorFallbackMessage={t('counterparties.detail.loadFailed')}
       >
         {null}
       </DetailScaffold>
@@ -198,46 +200,46 @@ export default function CounterpartyDetailScreen() {
   const receivableShare = directionalTotal > 0 ? (ledger?.receivableMinor ?? 0) / directionalTotal : 0;
 
   const tabOptions: { key: DetailTab; label: string }[] = [
-    { key: 'kayitlar', label: `Açık kayıtlar (${allOpenObligations.length})` },
-    { key: 'hareketler', label: 'İşlemler' },
-    { key: 'genel', label: 'Bilgiler' },
+    { key: 'kayitlar', label: t('counterparties.detail.openTab', { count: allOpenObligations.length }) },
+    { key: 'hareketler', label: t('counterparties.detail.transactionsTab') },
+    { key: 'genel', label: t('counterparties.detail.infoTab') },
   ];
   // Faturayı kapatmış çek/senetler cari bakiyesine girmez; vadede hareket edecek tutar olarak not düşülür.
   const instrumentParts = [
     ledger?.instrumentPayableMinor
-      ? `bu cariye verilen ${formatMinorAmount(ledger.instrumentPayableMinor)} çek/senet vadesinde hesabından ödenecek`
+      ? t('counterparties.detail.instrumentPayable', { amount: formatMinorAmount(ledger.instrumentPayableMinor) })
       : null,
     ledger?.instrumentReceivableMinor
-      ? `bu cariden alınan ${formatMinorAmount(ledger.instrumentReceivableMinor)} çek/senet vadesinde tahsil edilecek`
+      ? t('counterparties.detail.instrumentReceivable', { amount: formatMinorAmount(ledger.instrumentReceivableMinor) })
       : null,
   ].filter((part): part is string => !!part);
   const instrumentNoteBody = instrumentParts.join('; ');
   const instrumentNote = instrumentNoteBody
-    ? `${instrumentNoteBody.charAt(0).toLocaleUpperCase('tr-TR')}${instrumentNoteBody.slice(1)} — cari bakiyesine dahil değil.`
+    ? t('counterparties.detail.instrumentNote', { body: capitalizeUi(instrumentNoteBody) })
     : null;
 
   const infoRows = [
-    { label: 'Tür', value: getCounterpartyTypeLabel(counterparty.type) },
-    ...(counterparty.phone ? [{ label: 'Telefon', value: counterparty.phone }] : []),
-    ...(counterparty.email ? [{ label: 'E-posta', value: counterparty.email }] : []),
+    { label: t('counterparties.detail.type'), value: getCounterpartyTypeLabel(counterparty.type) },
+    ...(counterparty.phone ? [{ label: t('counterparties.detail.phone'), value: counterparty.phone }] : []),
+    ...(counterparty.email ? [{ label: t('counterparties.detail.email'), value: counterparty.email }] : []),
     ...(counterparty.tax_number
-      ? [{ label: counterparty.type === 'company' ? 'Vergi No' : counterparty.type === 'personel' ? 'TC Kimlik No' : 'TC / Vergi No', value: counterparty.tax_number }]
+      ? [{ label: counterparty.type === 'company' ? t('counterparties.detail.taxNo') : counterparty.type === 'personel' ? t('counterparties.detail.nationalId') : t('counterparties.detail.idOrTax'), value: counterparty.tax_number }]
       : []),
-    { label: 'Alacak', value: formatMinorAmount(ledger?.receivableMinor ?? 0) },
-    { label: 'Borç', value: formatMinorAmount(ledger?.payableMinor ?? 0) },
-    { label: 'Geciken', value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
+    { label: t('counterparties.detail.receivable'), value: formatMinorAmount(ledger?.receivableMinor ?? 0) },
+    { label: t('counterparties.detail.payable'), value: formatMinorAmount(ledger?.payableMinor ?? 0) },
+    { label: t('counterparties.detail.overdue'), value: formatMinorAmount(ledger?.overdueMinor ?? 0) },
     // Faturayı kapatmış çek/senet cari bakiyesine girmez (cari çek verilince kapanır); vadede
     // hesaptan ödenecek/tahsil edilecek tutar olarak burada ayrıca görünür.
     ...(ledger?.instrumentPayableMinor
-      ? [{ label: 'Verilen çek/senet (vadede ödenecek)', value: formatMinorAmount(ledger.instrumentPayableMinor) }]
+      ? [{ label: t('counterparties.detail.instrumentPayableRow'), value: formatMinorAmount(ledger.instrumentPayableMinor) }]
       : []),
     ...(ledger?.instrumentReceivableMinor
-      ? [{ label: 'Alınan çek/senet (vadede tahsil)', value: formatMinorAmount(ledger.instrumentReceivableMinor) }]
+      ? [{ label: t('counterparties.detail.instrumentReceivableRow'), value: formatMinorAmount(ledger.instrumentReceivableMinor) }]
       : []),
     ...(ledger?.nearestDueDate
-      ? [{ label: 'En Yakın Vade', value: dateFormatter.format(new Date(ledger.nearestDueDate)) }]
+      ? [{ label: t('counterparties.detail.nearestDue'), value: dateFormatter.format(new Date(ledger.nearestDueDate)) }]
       : []),
-    ...(counterparty.notes ? [{ label: 'Notlar', value: counterparty.notes }] : []),
+    ...(counterparty.notes ? [{ label: t('counterparties.detail.notes'), value: counterparty.notes }] : []),
   ];
 
   return (
@@ -256,7 +258,7 @@ export default function CounterpartyDetailScreen() {
         title: counterparty.name,
         right: {
           icon: 'ellipsis-horizontal',
-          accessibilityLabel: 'Cari işlemleri',
+          accessibilityLabel: t('counterparties.detail.actionsA11y'),
           onPress: () => setMenuOpen(true),
         },
       }}
@@ -269,7 +271,7 @@ export default function CounterpartyDetailScreen() {
             {counterparty.name}
           </Text>
           <Text variant="caption" color="textSecondary" numberOfLines={1}>
-            {[getCounterpartyTypeLabel(counterparty.type), counterparty.tax_number ? `${counterparty.type === 'company' ? 'VKN' : 'TC/VKN'} ${counterparty.tax_number}` : null]
+            {[getCounterpartyTypeLabel(counterparty.type), counterparty.tax_number ? `${counterparty.type === 'company' ? t('counterparties.detail.taxShort') : t('counterparties.detail.idOrTaxShort')} ${counterparty.tax_number}` : null]
               .filter(Boolean)
               .join(' · ')}
           </Text>
@@ -280,7 +282,7 @@ export default function CounterpartyDetailScreen() {
         <View style={{ flexDirection: 'row' }}>
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="caption" color="textSecondary">
-              Net bakiye
+              {t('counterparties.detail.netBalance')}
             </Text>
             <Text
               tabular
@@ -293,15 +295,15 @@ export default function CounterpartyDetailScreen() {
               {formatMinorAmount(Math.abs(netMinor))}
             </Text>
             <Text variant="caption" color="textSecondary">
-              {settled ? 'Hesap denk' : owesUs ? 'Size borçlu' : 'Siz borçlusunuz'}
+              {settled ? t('counterparties.detail.settled') : owesUs ? t('counterparties.detail.owesYou') : t('counterparties.detail.youOwe')}
             </Text>
           </Stack>
           <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
             <Text variant="caption" color="textSecondary">
-              En yakın vade
+              {t('counterparties.detail.nearestDueShort')}
             </Text>
             <Text style={{ fontSize: 15, fontWeight: '600' }}>
-              {ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : 'Yok'}
+              {ledger?.nearestDueDate ? shortDateFormatter.format(new Date(ledger.nearestDueDate)) : t('counterparties.detail.none')}
             </Text>
           </Stack>
         </View>
@@ -309,7 +311,7 @@ export default function CounterpartyDetailScreen() {
         <View style={{ flexDirection: 'row' }}>
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="caption" color="textSecondary">
-              Borç
+              {t('counterparties.detail.payable')}
             </Text>
             <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
               {formatMinorAmount(ledger?.payableMinor ?? 0)}
@@ -317,7 +319,7 @@ export default function CounterpartyDetailScreen() {
           </Stack>
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="caption" color="textSecondary">
-              Alacak
+              {t('counterparties.detail.receivable')}
             </Text>
             <Text tabular style={{ fontSize: 15, fontWeight: '600', color: theme.colors.success }}>
               {formatMinorAmount(ledger?.receivableMinor ?? 0)}
@@ -325,7 +327,7 @@ export default function CounterpartyDetailScreen() {
           </Stack>
           <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
             <Text variant="caption" color="textSecondary">
-              Geciken
+              {t('counterparties.detail.overdue')}
             </Text>
             <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
               {formatMinorAmount(ledger?.overdueMinor ?? 0)}
@@ -337,25 +339,25 @@ export default function CounterpartyDetailScreen() {
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <QuickAction
           icon="arrow-up"
-          label="Ödeme yap"
+          label={t('counterparties.detail.pay')}
           primary
           onPress={() => router.push({ pathname: '/payments/new', params: { direction: 'payable', counterpartyId: counterparty.id } })}
         />
         <QuickAction
           icon="arrow-down"
-          label="Tahsilat al"
+          label={t('counterparties.detail.collect')}
           onPress={() => router.push({ pathname: '/payments/new', params: { direction: 'receivable', counterpartyId: counterparty.id } })}
         />
         <QuickAction
           icon="document-text"
-          label="Alış faturası"
+          label={t('counterparties.detail.purchaseInvoice')}
           onPress={() =>
             router.push({ pathname: '/obligations/new', params: { type: 'fatura', direction: 'payable', counterpartyId: counterparty.id } })
           }
         />
         <QuickAction
           icon="receipt"
-          label="Satış faturası"
+          label={t('counterparties.detail.salesInvoice')}
           onPress={() =>
             router.push({ pathname: '/obligations/new', params: { type: 'fatura', direction: 'receivable', counterpartyId: counterparty.id } })
           }
@@ -378,9 +380,9 @@ export default function CounterpartyDetailScreen() {
                 <Row gap="sm" align="center">
                   <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
                   <Stack gap="xxs" style={{ flex: 1 }}>
-                    <Text variant="cardTitle">Ödeme dekontları</Text>
+                    <Text variant="cardTitle">{t('counterparties.detail.receiptsLocked')}</Text>
                     <Text variant="caption" color="textSecondary">
-                      Dekontları ödemeye ekleyip arşivlemek Plus planında.
+                      {t('counterparties.detail.receiptsLockedBody')}
                     </Text>
                   </Stack>
                   <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
@@ -389,7 +391,7 @@ export default function CounterpartyDetailScreen() {
             </Pressable>
           ) : receipts.length > 0 ? (
             <Stack gap="xs">
-              <SectionHeader title="Ödeme Dekontları" />
+              <SectionHeader title={t('counterparties.detail.receipts')} />
               {receipts.slice(0, 3).map((item) => (
                 <ReceiptRow key={item.documentId} item={item} hideCounterparty />
               ))}
@@ -399,7 +401,7 @@ export default function CounterpartyDetailScreen() {
               >
                 <Row gap="xs" align="center" style={{ justifyContent: 'center', paddingVertical: theme.spacing.xs }}>
                   <Text variant="caption" style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
-                    Tümünü gör ({receipts.length})
+                    {t('counterparties.detail.seeAll', { count: receipts.length })}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={theme.colors.textPrimary} />
                 </Row>
@@ -407,15 +409,15 @@ export default function CounterpartyDetailScreen() {
             </Stack>
           ) : null}
           <FinanceDetailInfoCard
-            title="Cari Bilgileri"
-            description="İletişim, tür ve finansal özet"
+            title={t('counterparties.detail.infoTitle')}
+            description={t('counterparties.detail.infoBody')}
             rows={infoRows}
           />
         </Stack>
       ) : tab === 'kayitlar' ? (
         <Stack gap="md">
           {openObligations.length === 0 ? (
-            <EmptyState icon="checkmark-circle-outline" message="Açık borç veya alacak yok." />
+            <EmptyState icon="checkmark-circle-outline" message={t('counterparties.detail.noOpen')} />
           ) : (
             <Group>
               {openObligations.map((o) => (
@@ -430,7 +432,7 @@ export default function CounterpartyDetailScreen() {
       ) : (
         <Stack gap="md">
           {statementQuery.isPending ? null : pagedEntries.length === 0 ? (
-            <EmptyState icon="receipt-outline" message="Bu cariyle henüz hareket yok." />
+            <EmptyState icon="receipt-outline" message={t('counterparties.detail.noTransactions')} />
           ) : (
             <StatementTable entries={pagedEntries} />
           )}
@@ -442,15 +444,15 @@ export default function CounterpartyDetailScreen() {
     </DetailScaffold>
     <ActionSheet
       visible={menuOpen}
-      title="Cari işlemleri"
+      title={t('counterparties.detail.actionsA11y')}
       onClose={() => setMenuOpen(false)}
       options={[
         ...(owesUs
           ? [
               {
                 key: 'reminder',
-                label: 'Hatırlatma Gönder',
-                description: 'WhatsApp, SMS veya e-posta ile alacağı hatırlat.',
+                label: t('counterparties.detail.sendReminder'),
+                description: t('counterparties.detail.sendReminderBody'),
                 icon: 'notifications-outline' as const,
                 onPress: () => setReminderOpen(true),
               },
@@ -458,8 +460,8 @@ export default function CounterpartyDetailScreen() {
           : []),
         {
           key: 'sales-invoice',
-          label: 'Satış Faturası Oluştur',
-          description: 'Bu cariye kesilen bir alacak faturası ekleyin.',
+          label: t('counterparties.detail.createSales'),
+          description: t('counterparties.detail.createSalesBody'),
           icon: 'document-text-outline',
           onPress: () =>
             router.push({
@@ -469,8 +471,8 @@ export default function CounterpartyDetailScreen() {
         },
         {
           key: 'purchase-invoice',
-          label: 'Alış Faturası Oluştur',
-          description: 'Bu cariden gelen bir borç faturası ekleyin.',
+          label: t('counterparties.detail.createPurchase'),
+          description: t('counterparties.detail.createPurchaseBody'),
           icon: 'document-text-outline',
           onPress: () =>
             router.push({
@@ -480,31 +482,31 @@ export default function CounterpartyDetailScreen() {
         },
         {
           key: 'collection',
-          label: 'Tahsilat Al',
-          description: 'Nakit, havale, kart, çek veya senet ile tahsilat işleyin.',
+          label: t('counterparties.detail.collectAction'),
+          description: t('counterparties.detail.collectActionBody'),
           icon: 'arrow-down-circle-outline',
           onPress: () =>
             router.push({ pathname: '/payments/new', params: { direction: 'receivable', counterpartyId: counterparty.id } }),
         },
         {
           key: 'payment',
-          label: 'Ödeme Yap',
-          description: 'Nakit, havale, kart, çek veya senet ile ödeme işleyin.',
+          label: t('counterparties.detail.payAction'),
+          description: t('counterparties.detail.payActionBody'),
           icon: 'arrow-up-circle-outline',
           onPress: () =>
             router.push({ pathname: '/payments/new', params: { direction: 'payable', counterpartyId: counterparty.id } }),
         },
         {
           key: 'edit',
-          label: 'Düzenle',
-          description: 'Cari bilgilerini güncelleyin.',
+          label: t('common.edit'),
+          description: t('counterparties.detail.editBody'),
           icon: 'create-outline',
           onPress: () => router.push({ pathname: '/counterparties/new', params: { id: counterparty.id } }),
         },
         {
           key: 'delete',
-          label: deleteCounterpartyMutation.isPending ? 'Siliniyor…' : 'Sil',
-          description: 'Cariyi kalıcı olarak kaldırın.',
+          label: deleteCounterpartyMutation.isPending ? t('counterparties.detail.deleting') : t('common.delete'),
+          description: t('counterparties.detail.deleteActionBody'),
           icon: 'trash-outline',
           danger: true,
           onPress: () => {
@@ -599,7 +601,7 @@ function OpenObligationRow({ obligation }: { obligation: ObligationWithRelations
   const theme = useTheme();
   const overdue = obligation.status === 'gecikti';
   const caption = [
-    obligation.due_date ? `Vade ${dateFormatter.format(new Date(obligation.due_date))}` : 'Vade yok',
+    obligation.due_date ? t('counterparties.detail.due', { date: dateFormatter.format(new Date(obligation.due_date)) }) : t('counterparties.detail.noDue'),
     DOCUMENT_TYPE_LABEL[obligation.document_type] ?? null,
   ]
     .filter(Boolean)
@@ -631,10 +633,10 @@ const INSTRUMENT_TYPES = new Set(['cek', 'senet']);
 // ay sonundaki cari bakiyesi). Ödeme/tahsilat tutarı yeşil; bakiye o satırdan sonraki cari durumudur
 // (tek para birimli ekstrede). Çek/senedin vadedeki ödemesi ayrı satır olmaz, durumu çekin satırında yazar.
 const TABLE_COLUMNS = { amount: 84, balance: 92 };
-const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+const monthFormatter = localeDateFormatter({ month: 'long', year: 'numeric' });
 
 const wholeAmount = (minor: number, currency: string) =>
-  formatMinorAmount(minor, currency).replace(/,00(?=\D*$)/, '');
+  formatMinorAmount(minor, currency).replace(zeroFractionPattern(), '');
 
 const signed = (minor: number, currency: string) => `${minor < 0 ? '−' : ''}${wholeAmount(Math.abs(minor), currency)}`;
 
@@ -647,7 +649,7 @@ function StatementTable({ entries }: { entries: StatementEntry[] }) {
     const key = `${date.getFullYear()}-${date.getMonth()}`;
     let group = months[months.length - 1];
     if (!group || group.key !== key) {
-      group = { key, label: monthFormatter.format(date).toLocaleUpperCase('tr-TR'), items: [] };
+      group = { key, label: upperUi(monthFormatter.format(date)), items: [] };
       months.push(group);
     }
     group.items.push(entry);
@@ -657,13 +659,13 @@ function StatementTable({ entries }: { entries: StatementEntry[] }) {
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: theme.spacing.md, paddingBottom: 6 }}>
         <Text variant="caption" color="textSecondary" style={{ flex: 1, fontWeight: '600' }}>
-          İşlem
+          {t('counterparties.detail.colTransaction')}
         </Text>
         <Text variant="caption" color="textSecondary" style={{ width: TABLE_COLUMNS.amount, textAlign: 'right', fontWeight: '600' }}>
-          Tutar
+          {t('counterparties.detail.colAmount')}
         </Text>
         <Text variant="caption" color="textSecondary" style={{ width: TABLE_COLUMNS.balance, textAlign: 'right', fontWeight: '600' }}>
-          Bakiye
+          {t('counterparties.detail.colBalance')}
         </Text>
       </View>
       <View style={{ borderRadius: theme.radius.group, overflow: 'hidden', backgroundColor: theme.colors.surfacePrimary }}>
@@ -685,7 +687,7 @@ function StatementTable({ entries }: { entries: StatementEntry[] }) {
                 }}
               >
                 <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary }}>
-                  {month.label} · {month.items.length} işlem
+                  {t('counterparties.detail.monthCount', { month: month.label, count: month.items.length })}
                 </Text>
                 {closing.runningBalanceMinor !== null ? (
                   <Text tabular style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary }}>
@@ -714,13 +716,13 @@ function StatementTableRow({ entry, last }: { entry: StatementEntry; last: boole
 
   const caption = [
     shortDateFormatter.format(new Date(entry.date)),
-    isInstrument && entry.dueDate ? `vade ${shortDateFormatter.format(new Date(entry.dueDate))}` : entry.subtitle,
+    isInstrument && entry.dueDate ? t('counterparties.detail.dueLower', { date: shortDateFormatter.format(new Date(entry.dueDate)) }) : entry.subtitle,
     entry.fxRateTryMinor
-      ? `kur ${entry.fxRateEstimated ? '≈ ' : ''}${formatMinorAmount(entry.fxRateTryMinor)}`
+      ? t(entry.fxRateEstimated ? 'counterparties.detail.rateEstimated' : 'counterparties.detail.rate', { rate: formatMinorAmount(entry.fxRateTryMinor) })
       : entry.currencyCode !== 'TRY'
-        ? 'kur bulunamadı'
+        ? t('counterparties.detail.rateMissing')
         : null,
-    isInstrument && entry.status ? (DONE_STATUSES.has(entry.status) ? OBLIGATION_STATUS_LABEL[entry.status as ObligationStatus] : 'Bekliyor') : null,
+    isInstrument && entry.status ? (DONE_STATUSES.has(entry.status) ? OBLIGATION_STATUS_LABEL[entry.status as ObligationStatus] : t('counterparties.detail.pending')) : null,
   ]
     .filter(Boolean)
     .join(' · ');

@@ -60,6 +60,7 @@ import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys
 import { syncObligationReminder } from '@/services/notifications';
 import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { ScanPromptBanner } from '@/components/finance/ScanPromptBanner';
+import { amountPlaceholder, getInputDecimalSeparator, localeDateFormatter } from '@/i18n/format';
 
 type Direction = 'payable' | 'receivable';
 
@@ -83,7 +84,7 @@ interface PlanRow {
   original: Installment | null;
 }
 
-const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
+const shortDateFormatter = localeDateFormatter({ day: '2-digit', month: 'short' });
 
 export default function NewObligationScreen() {
   const theme = useTheme();
@@ -211,11 +212,11 @@ function ObligationForm({
   const [valueUnitDefaulted, setValueUnitDefaulted] = useState(!!initial);
   const [totalAmount, setTotalAmount] = useState(() => {
     if (!initial) {
-      return initialAmountMinor ? formatAmountInput((initialAmountMinor / 100).toFixed(2).replace('.', ','), 2) : '';
+      return initialAmountMinor ? formatAmountInput((initialAmountMinor / 100).toFixed(2).replace('.', getInputDecimalSeparator()), 2) : '';
     }
     const precision = getValueUnit(initial.currency_code).precision;
     return formatAmountInput(
-      (initial.total_amount_minor / 10 ** precision).toFixed(precision).replace('.', ','),
+      (initial.total_amount_minor / 10 ** precision).toFixed(precision).replace('.', getInputDecimalSeparator()),
       precision
     );
   });
@@ -311,7 +312,7 @@ function ObligationForm({
   const ratesQuery = useQuery({ queryKey: queryKeys.valueUnitRates(), queryFn: listValueUnitRates, enabled: valueUnitCode !== 'TRY' });
   const currentRateMinor = ratesQuery.data?.find((r) => r.unit_code === valueUnitCode)?.try_equivalent_minor ?? null;
   const [fxRateInput, setFxRateInput] = useState<string | null>(null);
-  const fxRateText = fxRateInput ?? (currentRateMinor !== null ? (currentRateMinor / 100).toFixed(2).replace('.', ',') : '');
+  const fxRateText = fxRateInput ?? (currentRateMinor !== null ? (currentRateMinor / 100).toFixed(2).replace('.', getInputDecimalSeparator()) : '');
   const fxRateMinor = valueUnitCode === 'TRY' || isEditing ? null : (parseAmountToMinor(fxRateText) ?? null);
   const isFiatUnit = valueUnit.unitType === 'fiat';
 
@@ -352,7 +353,7 @@ function ObligationForm({
       installmentNumber: inst.installment_number,
       dueDate: inst.due_date,
       amountStr: formatAmountInput(
-        (inst.amount_minor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+        (inst.amount_minor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', getInputDecimalSeparator()),
         valueUnit.precision
       ),
       locked: inst.remaining_amount_minor <= 0,
@@ -854,7 +855,7 @@ function ObligationForm({
     const editingPlanAmount = editingPlanItem
       ? planEdits[editingPlanItem.installmentNumber]?.amountStr ??
         formatAmountInput(
-          (editingPlanItem.amountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', ','),
+          (editingPlanItem.amountMinor / 10 ** valueUnit.precision).toFixed(valueUnit.precision).replace('.', getInputDecimalSeparator()),
           valueUnit.precision
         )
       : '';
@@ -1031,7 +1032,7 @@ function ObligationForm({
               {valueUnitCode !== 'TRY' && !isEditing && !isLendingType ? (
                 <TextField
                   label={`Kur (1 ${valueUnit.quantityLabel} = ₺)`}
-                  placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : '0,00'}
+                  placeholder={currentRateMinor === null ? 'Güncel kur bulunamadı' : amountPlaceholder()}
                   keyboardType="decimal-pad"
                   value={fxRateText}
                   onChangeText={setFxRateInput}
@@ -1076,7 +1077,7 @@ function ObligationForm({
                       ? `${periodLabels.unitTitle} başına tutar (${valueUnit.quantityLabel})`
                       : `Tutar (${valueUnit.quantityLabel})`
                   }
-                  placeholder={valueUnit.precision === 0 ? '1' : '0,00'}
+                  placeholder={valueUnit.precision === 0 ? '1' : amountPlaceholder()}
                   precision={valueUnit.precision}
                   value={totalAmount}
                   onChangeText={setTotalAmount}
@@ -1480,7 +1481,7 @@ function InstallmentPlanEditor({
                       </Row>
                       <DateField value={row.dueDate} onChangeText={(value) => onDateChange(index, value)} />
                       <AmountField
-                        placeholder={precision === 0 ? '1' : '0,00'}
+                        placeholder={precision === 0 ? '1' : amountPlaceholder()}
                         precision={precision}
                         value={row.amountStr}
                         onChangeText={(value) => onAmountChange(index, value)}
@@ -1550,7 +1551,7 @@ function InstallmentPlanEditor({
             <View style={{ flex: 1 }}>
               <AmountField
                 label="YENİ TUTAR"
-                placeholder={rows[lastIndex]?.amountStr || (precision === 0 ? '1' : '0,00')}
+                placeholder={rows[lastIndex]?.amountStr || (precision === 0 ? '1' : amountPlaceholder())}
                 precision={precision}
                 value={extendAmountStr}
                 onChangeText={setExtendAmountStr}

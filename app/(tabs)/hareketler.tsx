@@ -46,17 +46,19 @@ import { queryKeys } from '@/services/queryKeys';
 import { useQuickAddStore } from '@/store/quickAddStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount, formatValueUnitAmount, parseAmountToMinor } from '@/utils/money';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
 type FilterKey = 'all' | 'income' | 'expense' | 'payable' | 'receivable' | 'transfer';
 
 // "Transfer" için ayrı bir hızlı-filtre sekmesi yok; transfer işlemleri "Tümü" altında
 // görünmeye devam eder.
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'income', label: 'Gelir' },
-  { key: 'expense', label: 'Gider' },
-  { key: 'payable', label: 'Borç' },
-  { key: 'receivable', label: 'Alacak' },
+const FILTERS: { key: FilterKey; readonly label: string }[] = [
+  { key: 'all', get label() { return t('transactions.filterAll'); } },
+  { key: 'income', get label() { return t('transactions.filterIncome'); } },
+  { key: 'expense', get label() { return t('transactions.filterExpense'); } },
+  { key: 'payable', get label() { return t('transactions.filterPayable'); } },
+  { key: 'receivable', get label() { return t('transactions.filterReceivable'); } },
 ];
 
 interface HareketRow {
@@ -268,44 +270,44 @@ export default function HareketlerScreen() {
     // ödendiği bilgisi ilgili taksit/borç satırının alt başlığına taşınır.
     const paymentTxByInstallmentId = new Map<string, TransactionWithRelations>();
     const paymentTxByObligationId = new Map<string, TransactionWithRelations>();
-    for (const t of transactionsData) {
-      for (const p of t.payments ?? []) {
-        if (p.installment_id) paymentTxByInstallmentId.set(p.installment_id, t);
-        else if (p.obligation_id) paymentTxByObligationId.set(p.obligation_id, t);
+    for (const tx of transactionsData) {
+      for (const p of tx.payments ?? []) {
+        if (p.installment_id) paymentTxByInstallmentId.set(p.installment_id, tx);
+        else if (p.obligation_id) paymentTxByObligationId.set(p.obligation_id, tx);
       }
     }
 
     const transactionRows: HareketRow[] = transactionsData
-      .filter((t) => (t.payments?.length ?? 0) === 0)
-      .map((t) => ({
-        id: t.id,
+      .filter((tx) => (tx.payments?.length ?? 0) === 0)
+      .map((tx) => ({
+        id: tx.id,
         kind: 'transaction',
-        locked: isLockedTransaction(t),
+        locked: isLockedTransaction(tx),
         title:
-          t.counterparty?.name ||
-          t.description?.trim() ||
-          t.category?.name ||
-          (t.direction === 'transfer' ? 'Transfer' : t.direction === 'income' ? 'Gelir' : 'Gider'),
-        subtitle: t.counterparty?.name || t.account?.name || '',
-        date: t.occurred_at,
-        amountMinor: t.amount_minor,
-        currencyCode: t.currency_code,
-        direction: t.direction,
-        bankCode: t.account?.bank_code ?? null,
-        categoryIcon: t.category?.icon ?? null,
-        categoryName: t.category?.name ?? null,
-        categoryColor: t.category?.color ?? null,
-        counterpartyName: t.counterparty?.name ?? null,
-        accountName: t.account?.name ?? null,
-        accountType: t.account?.type ?? null,
-        cardLastFour: t.account?.card_last_four ?? null,
-        accountCurrencyCode: t.account?.currency_code ?? null,
-        transferToBankCode: t.transferToAccount?.bank_code ?? null,
-        transferToAccountName: t.transferToAccount?.name ?? null,
-        transferToAccountType: t.transferToAccount?.type ?? null,
-        transferToCurrencyCode: t.transferToAccount?.currency_code ?? null,
-        accountId: t.account_id,
-        counterpartyId: t.counterparty_id,
+          tx.counterparty?.name ||
+          tx.description?.trim() ||
+          tx.category?.name ||
+          (tx.direction === 'transfer' ? t('common.transfer') : tx.direction === 'income' ? t('common.income') : t('common.expense')),
+        subtitle: tx.counterparty?.name || tx.account?.name || '',
+        date: tx.occurred_at,
+        amountMinor: tx.amount_minor,
+        currencyCode: tx.currency_code,
+        direction: tx.direction,
+        bankCode: tx.account?.bank_code ?? null,
+        categoryIcon: tx.category?.icon ?? null,
+        categoryName: tx.category?.name ?? null,
+        categoryColor: tx.category?.color ?? null,
+        counterpartyName: tx.counterparty?.name ?? null,
+        accountName: tx.account?.name ?? null,
+        accountType: tx.account?.type ?? null,
+        cardLastFour: tx.account?.card_last_four ?? null,
+        accountCurrencyCode: tx.account?.currency_code ?? null,
+        transferToBankCode: tx.transferToAccount?.bank_code ?? null,
+        transferToAccountName: tx.transferToAccount?.name ?? null,
+        transferToAccountType: tx.transferToAccount?.type ?? null,
+        transferToCurrencyCode: tx.transferToAccount?.currency_code ?? null,
+        accountId: tx.account_id,
+        counterpartyId: tx.counterparty_id,
       }));
 
     const installmentItems = wantsObligations ? (installmentsQuery.data ?? []) : [];
@@ -383,7 +385,7 @@ export default function HareketlerScreen() {
       return {
         id: o.id,
         kind: 'obligation',
-        title: `${o.title} — ${o.installment_number}. Taksit`,
+        title: t('transactions.installmentTitle', { title: o.title, number: o.installment_number }),
         subtitle: o.counterparty?.name || o.category?.name || '',
         // bkz. yukarıdaki obligationRows'taki aynı not — bu satırlar zaten yalnızca ödenmiş
         // taksitler (paidInstallmentItems), gerçek ödeme tarihi vade tarihinden farklı olabilir.
@@ -534,7 +536,7 @@ export default function HareketlerScreen() {
         <Pressable
           onPress={() => setFilterSheetOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel="Filtrele"
+          accessibilityLabel={t('transactions.filter')}
           style={headerButtonStyle(activeFilterCount > 0 ? theme.colors.brandPrimary : theme.colors.fill)}
         >
           <Ionicons
@@ -546,7 +548,7 @@ export default function HareketlerScreen() {
         <Pressable
           onPress={() => setSortAscending((v) => !v)}
           accessibilityRole="button"
-          accessibilityLabel="Tarihe göre sırala"
+          accessibilityLabel={t('transactions.sortByDate')}
           style={headerButtonStyle(theme.colors.fill)}
         >
           <Ionicons name={sortAscending ? 'arrow-up' : 'arrow-down'} size={18} color={theme.colors.textPrimary} />
@@ -554,13 +556,13 @@ export default function HareketlerScreen() {
         <Pressable
           onPress={showQuickAdd}
           accessibilityRole="button"
-          accessibilityLabel="Yeni hareket"
+          accessibilityLabel={t('transactions.newTransaction')}
           style={headerButtonStyle(theme.colors.fill)}
         >
           <Ionicons name="add" size={20} color={theme.colors.textPrimary} />
         </Pressable>
       </View>
-      <Text variant="pageTitle">Hareketler</Text>
+      <Text variant="pageTitle">{t('transactions.title')}</Text>
 
       <View
         style={{
@@ -575,7 +577,7 @@ export default function HareketlerScreen() {
       >
         <Ionicons name="search" size={17} color={theme.colors.textSecondary} />
         <TextInput
-          placeholder="Ara"
+          placeholder={t('transactions.search')}
           placeholderTextColor={theme.colors.textSecondary}
           value={searchInput}
           onChangeText={setSearchInput}
@@ -585,7 +587,7 @@ export default function HareketlerScreen() {
           style={{ flex: 1, fontSize: 17, color: theme.colors.textPrimary, padding: 0 }}
         />
         {searchInput.length > 0 ? (
-          <Pressable accessibilityLabel="Aramayı temizle" onPress={() => setSearchInput('')} hitSlop={8}>
+          <Pressable accessibilityLabel={t('transactions.clearSearch')} onPress={() => setSearchInput('')} hitSlop={8}>
             <Ionicons name="close-circle" size={17} color={theme.colors.mutedControl} />
           </Pressable>
         ) : null}
@@ -605,7 +607,10 @@ export default function HareketlerScreen() {
       <Card style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="caption" color="textSecondary">
-            {filters.range === 'last3' ? 'Son 3 ay' : MONTH_NAMES[month.month]} · {monthRows.length} hareket
+            {t('transactions.summaryCount', {
+              period: filters.range === 'last3' ? t('transactions.last3Months') : MONTH_NAMES[month.month],
+              count: monthRows.length,
+            })}
           </Text>
           <Text
             variant="displayAmount"
@@ -629,7 +634,7 @@ export default function HareketlerScreen() {
       </Card>
 
       {error ? (
-        <Text color="danger">{friendlyErrorMessage(error, 'Hareketler yüklenemedi')}</Text>
+        <Text color="danger">{friendlyErrorMessage(error, t('transactions.loadFailed'))}</Text>
       ) : null}
     </View>
   );
@@ -657,11 +662,11 @@ export default function HareketlerScreen() {
             <View style={{ paddingTop: theme.spacing.xl }}>
               <EmptyState
                 icon="receipt-outline"
-                title={search || activeFilterCount > 0 ? 'Sonuç bulunamadı' : 'Bu ayda hareket yok'}
+                title={search || activeFilterCount > 0 ? t('transactions.noResults') : t('transactions.emptyMonth')}
                 message={
                   search || activeFilterCount > 0
-                    ? 'Arama terimini veya filtreleri değiştirin.'
-                    : 'Başka bir ay seçin ya da sağ üstteki + ile kayıt ekleyin.'
+                    ? t('transactions.noResultsHint')
+                    : t('transactions.emptyMonthHint')
                 }
               />
             </View>
@@ -672,13 +677,13 @@ export default function HareketlerScreen() {
             <LoadMore
               loaded={visibleRows.length}
               total={monthRows.length}
-              noun="hareket"
+              noun={t('transactions.noun')}
               loading={isFetching}
               onPress={() => setVisibleCount((c) => c + LIST_PAGE_SIZE)}
             />
           ) : (
             <View style={{ paddingTop: theme.spacing.md }}>
-              <ListEnd label={`Hepsi bu kadar · ${monthRows.length} hareket`} />
+              <ListEnd label={t('transactions.listEnd', { count: monthRows.length })} />
             </View>
           )
         }
@@ -710,7 +715,7 @@ export default function HareketlerScreen() {
             ? [
                 {
                   key: 'edit',
-                  label: 'Düzenle',
+                  label: t('common.edit'),
                   icon: 'create-outline',
                   onPress: () => rowActions.onEdit(menuRow),
                 },
@@ -719,8 +724,8 @@ export default function HareketlerScreen() {
                   : [
                       {
                         key: 'copy',
-                        label: 'Kopyala',
-                        description: 'Aynı hesap, yön ve açıklamayla yeni hareket',
+                        label: t('transactions.copy'),
+                        description: t('transactions.copyHint'),
                         icon: 'copy-outline' as const,
                         onPress: () =>
                           router.push({
@@ -735,15 +740,15 @@ export default function HareketlerScreen() {
                       },
                       {
                         key: 'receipt',
-                        label: 'Fiş ekle',
-                        description: 'Hareketi açıp dekont/fiş ekleyin',
+                        label: t('transactions.addReceipt'),
+                        description: t('transactions.addReceiptHint'),
                         icon: 'attach-outline' as const,
                         onPress: () => rowActions.onEdit(menuRow),
                       },
                     ]),
                 {
                   key: 'delete',
-                  label: 'Sil',
+                  label: t('common.delete'),
                   icon: 'trash-outline',
                   danger: true,
                   onPress: () => rowActions.onDelete(menuRow),
@@ -755,7 +760,7 @@ export default function HareketlerScreen() {
 
       <UndoToast
         visible={!!pendingDelete}
-        message="Hareket silindi"
+        message={t('transactions.deleted')}
         onUndo={undoDelete}
         bottom={theme.layout.tabBarClearance - 8}
       />
@@ -773,7 +778,7 @@ function rowSign(r: HareketRow): number {
   return 0;
 }
 
-const dayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+const dayFormatter = localeDateFormatter({ day: 'numeric', month: 'long', weekday: 'long' });
 
 function headerButtonStyle(backgroundColor: string) {
   return { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor } as const;
@@ -797,7 +802,7 @@ function DayGroup({ date, rows, actions }: { date: string; rows: { key: string; 
       new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) /
       86_400_000
   );
-  const label = diff === 0 ? 'Bugün' : diff === 1 ? 'Dün' : dayFormatter.format(d);
+  const label = diff === 0 ? t('common.today') : diff === 1 ? t('common.yesterday') : dayFormatter.format(d);
   const visible = rows.filter(({ row }) => row.id !== actions.hiddenId);
   if (visible.length === 0) return null;
 
@@ -815,7 +820,7 @@ function DayGroup({ date, rows, actions }: { date: string; rows: { key: string; 
                 ? [
                     {
                       key: 'edit',
-                      label: 'Düzenle',
+                      label: t('common.edit'),
                       icon: 'create-outline',
                       backgroundColor: theme.colors.mutedControl,
                       color: '#FFFFFF',
@@ -823,7 +828,7 @@ function DayGroup({ date, rows, actions }: { date: string; rows: { key: string; 
                     },
                     {
                       key: 'delete',
-                      label: 'Sil',
+                      label: t('common.delete'),
                       icon: 'trash-outline',
                       backgroundColor: theme.colors.danger,
                       color: '#FFFFFF',
@@ -911,5 +916,5 @@ function HareketRowView({ item, onLongPress }: { item: HareketRow; onLongPress?:
 // İşlem satırının alt başlığı: kategori adı yoksa yön etiketi (Gelir/Gider/Transfer).
 function categoryOrType(item: HareketRow): string {
   if (item.categoryName) return item.categoryName;
-  return item.direction === 'transfer' ? 'Transfer' : '';
+  return item.direction === 'transfer' ? t('common.transfer') : '';
 }

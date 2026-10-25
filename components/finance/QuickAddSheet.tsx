@@ -5,6 +5,7 @@ import { router, type Href } from 'expo-router';
 import { useTheme } from '@/theme';
 import { BottomSheet, Pressable, Text } from '@/components/primitives';
 import { useQuickAddStore } from '@/store/quickAddStore';
+import { t } from '@/i18n';
 
 interface QuickAddItem {
   key: string;
@@ -15,14 +16,14 @@ interface QuickAddItem {
 
 // design HizliEkle.html — yalnızca mevcut rotalara yönlendirir; yeni veri mantığı yoktur.
 const ITEMS: QuickAddItem[] = [
-  { key: 'expense', icon: 'arrow-up-circle-outline', label: 'Gider', href: '/transactions/new?direction=expense' },
-  { key: 'income', icon: 'arrow-down-circle-outline', label: 'Gelir', href: '/transactions/new?direction=income' },
-  { key: 'transfer', icon: 'swap-horizontal-outline', label: 'Transfer', href: '/transactions/new?direction=transfer' },
-  { key: 'obligation', icon: 'calendar-outline', label: 'Vadeli borç veya alacak', href: '/obligations/new' },
-  { key: 'instrument', icon: 'document-text-outline', label: 'Çek veya senet', href: '/obligations/new?type=cek' },
+  { key: 'expense', icon: 'arrow-up-circle-outline', get label() { return t('finance.quickAdd.expense'); }, href: '/transactions/new?direction=expense' },
+  { key: 'income', icon: 'arrow-down-circle-outline', get label() { return t('finance.quickAdd.income'); }, href: '/transactions/new?direction=income' },
+  { key: 'transfer', icon: 'swap-horizontal-outline', get label() { return t('finance.quickAdd.transfer'); }, href: '/transactions/new?direction=transfer' },
+  { key: 'obligation', icon: 'calendar-outline', get label() { return t('finance.quickAdd.obligation'); }, href: '/obligations/new' },
+  { key: 'instrument', icon: 'document-text-outline', get label() { return t('finance.quickAdd.instrument'); }, href: '/obligations/new?type=cek' },
   // Tasarımda tek satır; ödeme yönü rota parametresiyle seçildiği için iki satıra bölündü.
-  { key: 'payment', icon: 'checkmark-circle-outline', label: 'Ödeme kaydet', href: '/payments/new?direction=payable' },
-  { key: 'collection', icon: 'checkmark-done-circle-outline', label: 'Tahsilat kaydet', href: '/payments/new?direction=receivable' },
+  { key: 'payment', icon: 'checkmark-circle-outline', get label() { return t('finance.quickAdd.payment'); }, href: '/payments/new?direction=payable' },
+  { key: 'collection', icon: 'checkmark-done-circle-outline', get label() { return t('finance.quickAdd.collection'); }, href: '/payments/new?direction=receivable' },
 ];
 
 export function QuickAddSheet() {
@@ -64,10 +65,10 @@ export function QuickAddSheet() {
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="cardTitle" style={{ fontSize: 17, fontWeight: '700', color: theme.colors.onAction }}>
-              Belge tara
+              {t('finance.quickAdd.scan')}
             </Text>
             <Text variant="caption" style={{ color: theme.colors.onAction }}>
-              Çek, senet, fatura, dekont — en hızlısı
+              {t('finance.quickAdd.scanHint')}
             </Text>
           </View>
           <Ionicons name="arrow-forward" size={theme.iconSize.xxl} color={theme.colors.onAction} />

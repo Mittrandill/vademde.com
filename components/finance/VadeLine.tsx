@@ -4,6 +4,8 @@ import { Text } from '@/components/primitives';
 import { MONTH_NAMES } from '@/components/primitives/MonthStepper';
 import { useTheme } from '@/theme';
 import { formatMinorAmount } from '@/utils/money';
+import { zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
 export interface VadeLineDay {
   /** YYYY-MM-DD */
@@ -23,7 +25,7 @@ export interface VadeLineProps {
 }
 
 const wholeAmount = (minor: number, currency: string) =>
-  formatMinorAmount(minor, currency).replace(/,00(?=\D*$)/, '');
+  formatMinorAmount(minor, currency).replace(zeroFractionPattern(), '');
 
 function dayLabel(iso: string) {
   const [, m, d] = iso.split('-').map(Number);
@@ -44,17 +46,20 @@ export function VadeLine({ days, currencyCode = 'TRY', halfHeight = 64 }: VadeLi
   // Etiketler: bugün + dört eşit aralıklı gün (sütun sayısından bağımsız).
   const labelIdx = Array.from(new Set([0, 1, 2, 3, 4].map((i) => Math.round((i * (days.length - 1)) / 4))));
 
-  const summary = `Ödenecek ${wholeAmount(totalPayable, currencyCode)}, tahsil ${wholeAmount(totalReceivable, currencyCode)}`;
+  const summary = t('finance.vadeLine.summary', {
+    payable: wholeAmount(totalPayable, currencyCode),
+    receivable: wholeAmount(totalReceivable, currencyCode),
+  });
 
   return (
-    <View accessible accessibilityLabel={`Vade hattı. ${summary}`} style={{ gap: theme.spacing.xs }}>
+    <View accessible accessibilityLabel={t('finance.vadeLine.a11y', { summary })} style={{ gap: theme.spacing.xs }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none' }}>
-          Ödenecek {wholeAmount(totalPayable, currencyCode)}
+          {t('finance.vadeLine.payable', { amount: wholeAmount(totalPayable, currencyCode) })}
         </Text>
         {peak.payableMinor > 0 ? (
           <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none' }}>
-            en yüksek: {dayLabel(peak.date)}
+            {t('finance.vadeLine.peak', { day: dayLabel(peak.date) })}
           </Text>
         ) : null}
       </View>
@@ -112,13 +117,13 @@ export function VadeLine({ days, currencyCode = 'TRY', halfHeight = 64 }: VadeLi
             tabular
             style={{ textTransform: 'none', fontWeight: i === 0 ? '600' : '500' }}
           >
-            {i === 0 ? 'Bugün' : dayLabel(days[i].date)}
+            {i === 0 ? t('common.today') : dayLabel(days[i].date)}
           </Text>
         ))}
       </View>
 
       <Text variant="label" color="textSecondary" tabular style={{ textTransform: 'none' }}>
-        Tahsil {wholeAmount(totalReceivable, currencyCode)}
+        {t('finance.vadeLine.receivable', { amount: wholeAmount(totalReceivable, currencyCode) })}
       </Text>
     </View>
   );

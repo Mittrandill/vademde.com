@@ -16,8 +16,10 @@ import {
 import type { Obligation } from '@/features/obligations/api';
 import { formatMinorAmount } from '@/utils/money';
 import { showErrorAlert } from '@/utils/alerts';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+const dateFormatter = localeDateFormatter({ day: 'numeric', month: 'long', year: 'numeric' });
 
 // design CekDetay.html: alınmış çek/senedin yolculuğu + "Ne yapmak istiyorsun?" eylemleri.
 // Eylemler mevcut akışlara gider (ciro/tahsilat) ya da yalnızca durum etiketini değiştirir;
@@ -35,7 +37,7 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
   const statusMutation = useMutation({
     mutationFn: (next: 'portfoy' | 'tahsile_verildi') => setInstrumentStatus(obligation.id, next),
     onSuccess: refresh,
-    onError: () => Alert.alert('Güncellenemedi', 'Durum değiştirilemedi. Lütfen tekrar deneyin.'),
+    onError: () => Alert.alert(t('finance.instrument.updateFailedTitle'), t('finance.instrument.updateFailedBody')),
   });
   const bouncedMutation = useMutation({
     mutationFn: (expected: InstrumentBouncePreview) => markBounced(obligation.id, expected),
@@ -50,11 +52,14 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
       const affected = preview.impacts.filter((o) => o.reopened_minor > 0)
         .map((o) => `${o.title}: ${formatMinorAmount(o.reopened_minor, o.currency_code)}`).join('\n');
       const preserved = preview.replacement_claim_minor > 0
-        ? `\n\nFatura/avans bağlantısı olmayan ${formatMinorAmount(preview.replacement_claim_minor, preview.currency_code)} bakiye ayrı bir cari borç/alacak kaydında korunacak; borç silinmeyecek.` : '';
-      Alert.alert('Karşılıksız olarak işaretle',
-        `Çek/senet geçmişte saklanır, aktif bakiyeden çıkarılır. Yalnızca bu kaynağın kapanışları geri alınır ve kendi avansları geçersizleşir. Gerçek para iadesi yapılmaz.${affected ? `\n\nYeniden açılacak kayıtlar:\n${affected}` : ''}${preserved}\n\nOnaylıyor musunuz?`, [
-          { text: 'Vazgeç', style: 'cancel' },
-          { text: 'Onayla', style: 'destructive', onPress: () => bouncedMutation.mutate(preview) },
+        ? t('finance.instrument.preserved', { amount: formatMinorAmount(preview.replacement_claim_minor, preview.currency_code) }) : '';
+      Alert.alert(t('finance.instrument.bounceTitle'),
+        t('finance.instrument.bounceBody', {
+          affected: affected ? t('finance.instrument.bounceAffected', { list: affected }) : '',
+          preserved,
+        }), [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('finance.instrument.confirm'), style: 'destructive', onPress: () => bouncedMutation.mutate(preview) },
         ]);
     },
     onError: (error) => showErrorAlert(error), networkMode: 'always',
@@ -71,8 +76,8 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
     actions.push({
       key: 'endorse',
       icon: 'swap-horizontal-outline',
-      title: 'Ciro et',
-      text: 'Bir borca karşılık ver',
+      title: t('finance.instrument.endorse'),
+      text: t('finance.instrument.endorseHint'),
       onPress: () => router.push({ pathname: '/payments/new', params: { endorseId: obligation.id } }),
     });
     actions.push(
@@ -80,23 +85,23 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
         ? {
             key: 'bank',
             icon: 'business-outline',
-            title: 'Tahsile ver',
-            text: 'Bankaya teslim et',
+            title: t('finance.instrument.toBank'),
+            text: t('finance.instrument.toBankHint'),
             onPress: () => statusMutation.mutate('tahsile_verildi'),
           }
         : {
             key: 'back',
             icon: 'arrow-undo-outline',
-            title: 'Portföye geri al',
-            text: 'Tahsilden geri çek',
+            title: t('finance.instrument.backToPortfolio'),
+            text: t('finance.instrument.backToPortfolioHint'),
             onPress: () => statusMutation.mutate('portfoy'),
           }
     );
     actions.push({
       key: 'collect',
       icon: 'checkmark-circle-outline',
-      title: 'Tahsil edildi',
-      text: 'Hesaba geçti',
+      title: t('finance.instrument.collected'),
+      text: t('finance.instrument.collectedHint'),
       onPress: () => router.push({ pathname: '/payments/new', params: { obligationId: obligation.id } }),
     });
   }
@@ -104,18 +109,18 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
   // Yolculuk: geçilen adım dolu, şu an vurgulu, sıradaki soluk.
   const stepIndex = status === 'portfoy' ? 1 : status === 'tahsile_verildi' || status === 'ciro_edildi' ? 2 : 3;
   const steps = [
-    { title: received ? 'Alındı' : 'Verildi', text: obligation.created_at ? dateFormatter.format(new Date(obligation.created_at)) : '' },
+    { title: received ? t('finance.instrument.received') : t('finance.instrument.given'), text: obligation.created_at ? dateFormatter.format(new Date(obligation.created_at)) : '' },
     {
-      title: received ? INSTRUMENT_STATUS_LABEL.portfoy : 'Ödeme bekliyor',
-      text: obligation.due_date ? `Vade ${dateFormatter.format(new Date(obligation.due_date))}` : '',
+      title: received ? INSTRUMENT_STATUS_LABEL.portfoy : t('finance.instrument.awaitingPayment'),
+      text: obligation.due_date ? t('finance.instrument.dueOn', { date: dateFormatter.format(new Date(obligation.due_date)) }) : '',
     },
     {
-      title: status === 'ciro_edildi' ? 'Ciro edildi' : status === 'tahsile_verildi' ? 'Tahsilde' : 'Ciro veya tahsil',
-      text: status === 'portfoy' ? 'Henüz seçilmedi' : '',
+      title: status === 'ciro_edildi' ? t('finance.instrument.endorsed') : status === 'tahsile_verildi' ? t('finance.instrument.atBank') : t('finance.instrument.endorseOrCollect'),
+      text: status === 'portfoy' ? t('finance.instrument.notChosen') : '',
     },
     {
-      title: status === 'karsiliksiz' ? 'Karşılıksız' : 'Kapandı',
-      text: status === 'karsiliksiz' ? 'Ödeme yapılmadı' : '',
+      title: status === 'karsiliksiz' ? t('finance.instrument.bounced') : t('finance.instrument.closed'),
+      text: status === 'karsiliksiz' ? t('finance.instrument.unpaid') : '',
     },
   ];
 
@@ -124,7 +129,7 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
       {actions.length > 0 ? (
         <Stack gap="xs">
           <Text variant="label" color="textSecondary">
-            Ne yapmak istiyorsun?
+            {t('finance.instrument.whatToDo')}
           </Text>
           <View style={{ borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary, overflow: 'hidden' }}>
             {actions.map((a, index) => (
@@ -166,14 +171,14 @@ export function InstrumentLifecycle({ obligation }: { obligation: Obligation }) 
         >
           <Ionicons name="close-circle-outline" size={20} color={theme.colors.danger} />
           <Text variant="cardTitle" style={{ color: theme.colors.danger, fontSize: 14 }}>
-            Karşılıksız olarak işaretle
+            {t('finance.instrument.bounceTitle')}
           </Text>
         </Pressable>
       ) : null}
 
       <Stack gap="xs">
         <Text variant="label" color="textSecondary">
-          {label === 'senet' ? 'Senedin yolculuğu' : 'Çekin yolculuğu'}
+          {label === 'senet' ? t('finance.instrument.noteJourney') : t('finance.instrument.chequeJourney')}
         </Text>
         {steps.map((step, index) => {
           const passed = index < stepIndex;

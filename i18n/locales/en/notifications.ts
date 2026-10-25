@@ -1,0 +1,36 @@
+import type { notifications as tr } from '../tr/notifications';
+import type { Messages } from '../../types';
+
+export const notifications: Messages<typeof tr> = {
+  title: 'Notifications',
+  actions: 'Actions',
+  today: 'TODAY',
+  thisWeek: 'THIS WEEK',
+  past: 'EARLIER',
+  statementTitle: "Don't forget to upload your statement",
+  statementBody: "{{account}} — scan this month's statement or enter the card balance manually.",
+  cardDueTitle: 'Credit card payment due',
+  cardDueBody: "{{account}}'s payment due date is {{when}}. Don't forget to pay your card balance.",
+  cardDueToday: 'today',
+  cardDueIn3: 'in 3 days',
+  addedToCalendar: 'Added to calendar.',
+  error: 'Error',
+  calendarFailed: "Couldn't add to calendar",
+  reminderCreated: 'Reminder created.',
+  reminderFailed: "Couldn't create the reminder",
+  clearTitle: 'Clear Notifications',
+  clearBody:
+    'All pending notifications, not just this page, will be cleared from the inbox. The actual due-date reminders stay scheduled. Are you sure?',
+  clear: 'Clear',
+  emptyTitle: 'No notifications yet',
+  emptyBody: 'When a reminder is sent, it will appear here.',
+  markAllRead: 'Mark All as Read',
+  clearAll: 'Clear All',
+  addToCalendar: 'Add to Calendar',
+  createReminder: 'Create Reminder',
+  markRead: 'Mark as Read',
+  dismiss: 'Clear Notification',
+  markPaid: 'Mark as paid',
+  markCollected: 'Mark as collected',
+  check: 'Review',
+};

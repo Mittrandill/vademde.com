@@ -16,18 +16,20 @@ import { convertToReferenceMinor, listValueUnitRates } from '@/features/valueUni
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
+import { fractionPattern, localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
 type SortKey = 'upcoming' | 'price' | 'category' | 'account';
 
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'upcoming', label: 'Yaklaşan' },
-  { key: 'price', label: 'Pahalıdan ucuza' },
-  { key: 'category', label: 'Kategori' },
-  { key: 'account', label: 'Kart' },
+const SORTS: { key: SortKey; readonly label: string }[] = [
+  { key: 'upcoming', get label() { return t('subscriptionsList.sortUpcoming'); } },
+  { key: 'price', get label() { return t('subscriptionsList.sortPrice'); } },
+  { key: 'category', get label() { return t('subscriptionsList.sortCategory'); } },
+  { key: 'account', get label() { return t('subscriptionsList.sortAccount'); } },
 ];
 
 const DAY_MS = 86_400_000;
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+const dayMonth = localeDateFormatter({ day: 'numeric', month: 'short' });
 
 interface SubscriptionRow {
   item: ObligationDueItem;
@@ -104,7 +106,7 @@ export default function SubscriptionsScreen() {
     const sorted = [...rows];
     if (sort === 'price') {
       sorted.sort((a, b) => (b.referenceMinor ?? 0) - (a.referenceMinor ?? 0));
-      return [{ title: 'Tümü', rows: sorted }];
+      return [{ title: t('subscriptionsList.all'), rows: sorted }];
     }
     sorted.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
     if (sort === 'category' || sort === 'account') {
@@ -112,18 +114,18 @@ export default function SubscriptionsScreen() {
       for (const r of sorted) {
         const label =
           (sort === 'category' ? r.item.category?.name : r.item.account?.name) ??
-          (sort === 'category' ? 'Kategorisiz' : 'Hesap yok');
+          (sort === 'category' ? t('subscriptionsList.uncategorized') : t('subscriptionsList.noAccount'));
         byLabel.set(label, [...(byLabel.get(label) ?? []), r]);
       }
       return [...byLabel.entries()].map(([title, list]) => ({ title, rows: list }));
     }
     const now = new Date();
     const buckets: { title: string; rows: SubscriptionRow[] }[] = [
-      { title: 'Deneme bitiyor', rows: [] },
-      { title: 'Bu hafta', rows: [] },
-      { title: 'Bu ay', rows: [] },
-      { title: 'Daha sonra', rows: [] },
-      { title: 'Yıllık', rows: [] },
+      { title: t('subscriptionsList.trialEnding'), rows: [] },
+      { title: t('subscriptionsList.thisWeek'), rows: [] },
+      { title: t('subscriptionsList.thisMonth'), rows: [] },
+      { title: t('subscriptionsList.later'), rows: [] },
+      { title: t('subscriptionsList.yearly'), rows: [] },
     ];
     for (const r of sorted) {
       const idx =
@@ -147,10 +149,10 @@ export default function SubscriptionsScreen() {
         contentContainerStyle={{ padding: theme.screenEdge.standard, gap: theme.spacing.lg, paddingBottom: theme.spacing.massive }}
       >
         <ScreenHeader
-          title="Aboneliklerim"
+          title={t('subscriptionsList.title')}
           right={{
             icon: 'add',
-            accessibilityLabel: 'Yeni abonelik',
+            accessibilityLabel: t('subscriptionsList.newSubscription'),
             variant: 'accent',
             onPress: () => router.push('/obligations/new?type=abonelik'),
           }}
@@ -165,8 +167,8 @@ export default function SubscriptionsScreen() {
         ) : rows.length === 0 ? (
           <EmptyState
             icon="repeat-outline"
-            title="Henüz abonelik yok"
-            message="Netflix, Spotify gibi düzenli ödemelerini ekle; aylık toplamını ve yenileme tarihlerini burada gör."
+            title={t('subscriptionsList.emptyTitle')}
+            message={t('subscriptionsList.emptyBody')}
           />
         ) : (
           <>
@@ -179,12 +181,15 @@ export default function SubscriptionsScreen() {
               }}
             >
               <Text variant="body" color="textSecondary" style={{ fontWeight: '500' }}>
-                Aylık toplam
+                {t('subscriptionsList.monthlyTotal')}
               </Text>
               <HeroAmount amountMinor={monthlyTotalMinor} baseSize={48} />
               <Text variant="caption" color="textSecondary">
-                {rows.length} abonelik · yılda yaklaşık {formatMinorAmount(monthlyTotalMinor * 12).replace(/,\d{2}(?=\D*$)/, '')}
-                {hasForeign ? ' · döviz olanlar bugünkü kurla' : ''}
+                {t('subscriptionsList.summary', {
+                  count: rows.length,
+                  yearly: formatMinorAmount(monthlyTotalMinor * 12).replace(fractionPattern(), ''),
+                })}
+                {hasForeign ? t('subscriptionsList.foreignNote') : ''}
               </Text>
             </View>
 
@@ -216,13 +221,13 @@ function SubscriptionRowView({ row }: { row: SubscriptionRow }) {
   const tag =
     trialDaysLeft !== null && trialDaysLeft <= 14
       ? trialDaysLeft === 0
-        ? 'Deneme bugün bitiyor'
-        : `Deneme ${trialDaysLeft} gün`
+        ? t('subscriptionsList.trialEndsToday')
+        : t('subscriptionsList.trialDays', { count: trialDaysLeft })
       : daysLeft <= 0
-        ? 'Bugün'
+        ? t('common.today')
         : daysLeft === 1
-          ? 'Yarın'
-          : `${daysLeft} gün`;
+          ? t('common.tomorrow')
+          : t('common.inDays', { count: daysLeft });
   const name = (item.service_code && SERVICE_NAME[item.service_code]) || item.title;
   const subtitle = [item.category?.name, item.account?.name, dayMonth.format(dueDate)].filter(Boolean).join(' · ');
   const amountText =
@@ -241,7 +246,7 @@ function SubscriptionRowView({ row }: { row: SubscriptionRow }) {
         <View style={{ alignItems: 'flex-end', gap: 3 }}>
           <Text style={{ fontWeight: '600' }} tabular>
             {amountText}
-            {yearly ? ' /yıl' : ''}
+            {yearly ? t('subscriptionsList.perYear') : ''}
           </Text>
           {foreign && referenceMinor !== null ? (
             <Text variant="caption" color="textSecondary" tabular>

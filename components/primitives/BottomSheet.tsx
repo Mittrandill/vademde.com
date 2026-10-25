@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -28,7 +29,7 @@ export function BottomSheet({ visible, onClose, title, children }: BottomSheetPr
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
         <Pressable
-          accessibilityLabel="Kapat"
+          accessibilityLabel={t('ui.close')}
           onPress={onClose}
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.overlay }]}
         />

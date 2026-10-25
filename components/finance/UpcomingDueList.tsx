@@ -13,6 +13,8 @@ import { invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { showErrorAlert } from '@/utils/alerts';
 import { formatMinorAmount, formatValueUnitAmount } from '@/utils/money';
+import { localeDateFormatter, upperUi } from '@/i18n/format';
+import { t } from '@/i18n';
 
 export interface UpcomingDueListProps {
   obligations: ObligationDueItem[];
@@ -20,15 +22,15 @@ export interface UpcomingDueListProps {
 
 type Range = 'today' | '7' | '30';
 
-const RANGES: { key: Range; label: string; days: number }[] = [
-  { key: 'today', label: 'Bugün', days: 0 },
-  { key: '7', label: '7 gün', days: 7 },
-  { key: '30', label: '30 gün', days: 30 },
+const RANGES: { key: Range; readonly label: string; days: number }[] = [
+  { key: 'today', get label() { return t('common.today'); }, days: 0 },
+  { key: '7', get label() { return t('home.upcoming.days7'); }, days: 7 },
+  { key: '30', get label() { return t('home.upcoming.days30'); }, days: 30 },
 ];
 
 const VISIBLE_COUNT = 5;
 const DAY_MS = 86_400_000;
-const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'short' });
+const monthFormatter = localeDateFormatter({ month: 'short' });
 
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -73,14 +75,14 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
 
   return (
     <View>
-      <SectionHeader title="Yaklaşan vadeler" actionLabel="Takvim" onActionPress={() => router.push('/(tabs)/takvim')} />
+      <SectionHeader title={t('home.upcoming.title')} actionLabel={t('home.upcoming.calendar')} onActionPress={() => router.push('/(tabs)/takvim')} />
       <SegmentedControl options={RANGES.map(({ key, label }) => ({ key, label }))} value={range} onChange={setRange} />
 
       <View style={{ marginTop: theme.spacing.sm }}>
         {items.length === 0 ? (
           <Group inset={16}>
             <View style={{ minHeight: 56, justifyContent: 'center', paddingHorizontal: 16 }}>
-              <Text color="textSecondary">Bu aralıkta vade yok.</Text>
+              <Text color="textSecondary">{t('home.upcoming.empty')}</Text>
             </View>
           </Group>
         ) : (
@@ -91,7 +93,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
                 leftActions={[
                   {
                     key: 'paid',
-                    label: o.direction === 'receivable' ? 'Tahsil' : 'Ödendi',
+                    label: o.direction === 'receivable' ? t('common.collect') : t('common.paid'),
                     icon: 'checkmark',
                     backgroundColor: theme.colors.receivable,
                     color: theme.colors.onAction,
@@ -109,7 +111,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
                     : [
                         {
                           key: 'postpone',
-                          label: 'Ertele',
+                          label: t('common.postpone'),
                           icon: 'calendar' as const,
                           backgroundColor: theme.colors.brandPrimary,
                           color: theme.colors.onAction,
@@ -127,7 +129,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
                 onPress={() => router.push('/obligations')}
                 style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: '500' }}>Tüm vadeli kayıtlar</Text>
+                <Text style={{ fontSize: 15, fontWeight: '500' }}>{t('home.upcoming.allDue')}</Text>
                 <Ionicons name="chevron-forward" size={12} color={theme.colors.textPrimary} />
               </Pressable>
             ) : null}
@@ -139,7 +141,7 @@ export function UpcomingDueList({ obligations }: UpcomingDueListProps) {
         visible={!!postponing}
         onClose={() => setPostponing(null)}
         value={postponing?.due_date ?? null}
-        title="Vadeyi ertele"
+        title={t('home.upcoming.postponeTitle')}
         onChange={(iso) => {
           const item = postponing;
           setPostponing(null);
@@ -157,12 +159,12 @@ function DueRow({ item: o, today }: { item: ObligationDueItem; today: Date }) {
   const overdue = o.status === 'gecikti' || diff < 0;
   const receivable = o.direction === 'receivable';
   const relative = overdue
-    ? `${Math.max(1, Math.abs(diff))} gün gecikti`
+    ? t('common.daysOverdue', { count: Math.max(1, Math.abs(diff)) })
     : diff === 0
-      ? 'Bugün'
+      ? t('common.today')
       : diff === 1
-        ? 'Yarın'
-        : `${diff} gün`;
+        ? t('common.tomorrow')
+        : t('common.inDays', { count: diff });
   const amountText =
     o.value_unit_type === 'kiymetli_maden'
       ? formatValueUnitAmount(o.remaining_amount_minor, o.currency_code)
@@ -180,7 +182,7 @@ function DueRow({ item: o, today }: { item: ObligationDueItem; today: Date }) {
           {String(due.getDate()).padStart(2, '0')}
         </Text>
         <Text style={{ fontSize: 11, fontWeight: '600', color: overdue ? theme.colors.danger : theme.colors.textSecondary }}>
-          {monthFormatter.format(due).toLocaleUpperCase('tr-TR')}
+          {upperUi(monthFormatter.format(due))}
         </Text>
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -188,7 +190,7 @@ function DueRow({ item: o, today }: { item: ObligationDueItem; today: Date }) {
           {o.counterparty?.name || o.title}
         </Text>
         <Text variant="caption" color="textSecondary" numberOfLines={1}>
-          {DOCUMENT_TYPE_LABEL[o.document_type] ?? 'Kayıt'} · {relative}
+          {DOCUMENT_TYPE_LABEL[o.document_type] ?? t('common.record')} · {relative}
         </Text>
       </View>
       <Text tabular style={{ fontWeight: '600', color: receivable ? theme.colors.receivable : theme.colors.textPrimary }}>

@@ -4,15 +4,20 @@ import { useQuery } from '@tanstack/react-query';
 
 import { getMySubscription } from '@/features/subscriptions/api';
 import { queryKeys } from '@/services/queryKeys';
+import { t } from '@/i18n';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — kayıt özetleri yapay zekâ hizmetine gönderilmeden önce
 // "Akıllı Tarama İzni"nden AYRI bir onay alınır (KVKK). Onay cihazda tutulur.
 export const AI_CONSENT_KEY = 'vademde-ai-insights-consent-granted';
 
-export const AI_CONSENT_TEXT =
-  'Önerileri ve yanıtları üretmek için hareket ve vade kayıtlarının özeti güvenli bağlantı üzerinden akıllı analiz hizmetine gönderilir. Belge görselleri gönderilmez. Rakamlar kayıtlarından hesaplanır; hiçbir şey sen onaylamadan değişmez.';
+// Metinler dil değişebildiği için sabit değil, okunduğu anda çözülür (i18n insights).
+export function aiConsentText(): string {
+  return t('insights.consentText');
+}
 
-export const AI_DISCLAIMER = 'Öneriler bilgilendirme amaçlıdır; yatırım veya kredi tavsiyesi değildir.';
+export function aiDisclaimer(): string {
+  return t('insights.disclaimer');
+}
 
 export interface AiAccess {
   /** Plan ve onay bilgisi yüklenene kadar false. */

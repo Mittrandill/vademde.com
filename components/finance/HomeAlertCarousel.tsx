@@ -14,8 +14,10 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatMinorAmount } from '@/utils/money';
 import { CashArt, OverdueArt, SparkleArt } from './HomeArt';
 import { GlowBackground, GlowChevron } from './GlowSurface';
+import { localeDateFormatter, zeroFractionPattern } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+const dayMonth = localeDateFormatter({ day: 'numeric', month: 'long' });
 const MASK = '••••••';
 
 interface AlertCardProps {
@@ -120,11 +122,11 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         id="g-overdue"
         width={cardWidth}
         tone={theme.colors.danger}
-        eyebrow="Gecikmiş"
+        eyebrow={t('home.alerts.overdue')}
         headline={hidden ? MASK : formatMinorAmount(overdueMinor)}
         headlineIsAmount
-        body={`Ödeme tarihi geçen ${overdueCount} kaydın var.`}
-        cta="Hemen incele"
+        body={t('home.alerts.overdueBody', { count: overdueCount })}
+        cta={t('home.alerts.reviewNow')}
         art={<OverdueArt width={170} />}
         textMaxWidth="76%"
         onPress={() => router.push({ pathname: '/obligations', params: { status: 'overdue' } })}
@@ -141,10 +143,10 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         id="g-cash"
         width={cardWidth}
         tone={theme.colors.attentionMarker}
-        eyebrow="Nakit uyarısı"
-        headline={`${risky.name} ${date} tarihinde eksiye düşebilir`}
-        body="Vadelere göre tahmini bakiye eksiye inebilir."
-        cta="Detayları gör"
+        eyebrow={t('home.alerts.cash')}
+        headline={t('home.alerts.cashHeadline', { account: risky.name, date })}
+        body={t('home.alerts.cashBody')}
+        cta={t('home.alerts.seeDetails')}
         art={<CashArt width={150} />}
         onPress={() => router.push(`/cash-alert/${risky.accountId}`)}
       />
@@ -164,10 +166,14 @@ export function HomeAlertCarousel({ overdueMinor, overdueCount, hidden }: HomeAl
         id="g-ai"
         width={cardWidth}
         tone={theme.colors.payable}
-        eyebrow={`${insights.length} akıllı öneri`}
-        headline={savingMinor > 0 ? `Ayda ${formatMinorAmount(savingMinor).replace(/,00$/, '')} tasarruf` : (top?.title ?? 'Öneriler hazır')}
-        body={savingMinor > 0 && top ? top.title : 'Harcamalarına göre hazırlandı.'}
-        cta="Önerileri gör"
+        eyebrow={t('home.alerts.insightsCount', { count: insights.length })}
+        headline={
+          savingMinor > 0
+            ? t('home.alerts.monthlySaving', { amount: formatMinorAmount(savingMinor).replace(zeroFractionPattern(), '') })
+            : (top?.title ?? t('home.alerts.insightsReady'))
+        }
+        body={savingMinor > 0 && top ? top.title : t('home.alerts.insightsBody')}
+        cta={t('home.alerts.seeInsights')}
         art={<SparkleArt width={130} />}
         onPress={() => router.push('/insights')}
       />

@@ -8,10 +8,11 @@ import { useTheme } from '@/theme';
 import { Button, Pressable, Stack, Text } from '@/components/primitives';
 import { VademdeMark } from '@/components/brand/VademdeMark';
 import { useAppLockStore } from '@/store/appLockStore';
-import { authenticate, getBiometricSupport } from '@/services/appLock';
+import { authenticate, biometricLabel, getBiometricSupport } from '@/services/appLock';
 import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
 import { queryKeys } from '@/services/queryKeys';
 import { signOut } from '@/features/auth/api';
+import { useTranslation } from '@/i18n';
 
 // Uygulama arka plana alındıktan sonra bu süreyi aşarsa yeniden kilitlenir. Her sekme
 // değişiminde veya bildirim çekmecesini açıp kapatınca Face ID sormak kullanılamaz bir
@@ -25,6 +26,7 @@ const RELOCK_AFTER_MS = 30 * 1000;
 // erişemez duruma düşmez.
 export function AppLockGate({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const enabled = useAppLockStore((s) => s.enabled);
 
   const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
@@ -37,7 +39,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
   const planAllowsLock = limitsQuery.data?.face_id ?? false;
 
   const supportQuery = useQuery({ queryKey: ['biometric-support'], queryFn: getBiometricSupport });
-  const label = supportQuery.data?.label ?? 'Biyometrik kilit';
+  const label = biometricLabel(supportQuery.data?.kind);
 
   const active = enabled && planAllowsLock && (supportQuery.data?.available ?? false);
   const [unlocked, setUnlocked] = useState(false);
@@ -52,11 +54,11 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     if (promptingRef.current) return;
     promptingRef.current = true;
     setChecking(true);
-    const success = await authenticate("Vademde'yi aç");
+    const success = await authenticate(t('ui.appLock.prompt'));
     promptingRef.current = false;
     setChecking(false);
     if (success) setUnlocked(true);
-  }, []);
+  }, [t]);
 
   // Kilit ilk kez etkinleştiğinde (veya uygulama arka plandan dönüp yeniden kilitlendiğinde)
   // istem otomatik açılır — kullanıcının önce bir butona basması gereksiz bir adım olurdu.
@@ -65,7 +67,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     if (!active || unlocked || promptingRef.current) return;
     promptingRef.current = true;
     let cancelled = false;
-    authenticate("Vademde'yi aç")
+    authenticate(t('ui.appLock.prompt'))
       .then((success) => {
         promptingRef.current = false;
         if (!cancelled && success) setUnlocked(true);
@@ -76,7 +78,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [active, unlocked]);
+  }, [active, unlocked, t]);
 
   useEffect(() => {
     if (!active) return;
@@ -104,15 +106,15 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
           <VademdeMark size={72} />
           <Stack gap="xxs" align="center">
             <Text variant="pageTitle" style={{ textAlign: 'center' }}>
-              Uygulama kilitli
+              {t('ui.appLock.title')}
             </Text>
             <Text variant="body" color="textSecondary" style={{ textAlign: 'center' }}>
-              Devam etmek için {label} ile kimliğini doğrula
+              {t('ui.appLock.body', { label })}
             </Text>
           </Stack>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${label} ile aç`}
+            accessibilityLabel={t('ui.appLock.unlockWith', { label })}
             onPress={unlock}
             disabled={checking}
             style={{
@@ -129,19 +131,19 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
           </Pressable>
         </Stack>
         <View style={{ alignSelf: 'stretch' }}>
-          <Button label={`${label} ile aç`} onPress={unlock} loading={checking} />
+          <Button label={t('ui.appLock.unlockWith', { label })} onPress={unlock} loading={checking} />
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              Alert.alert('Şifreyle giriş yap', 'Oturumun kapatılacak; e-posta ve şifrenle yeniden giriş yapabilirsin.', [
-                { text: 'Vazgeç', style: 'cancel' },
-                { text: 'Oturumu Kapat', style: 'destructive', onPress: () => void signOut().catch(() => undefined) },
+              Alert.alert(t('ui.appLock.passwordSignIn'), t('ui.appLock.passwordSignInBody'), [
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('ui.appLock.signOut'), style: 'destructive', onPress: () => void signOut().catch(() => undefined) },
               ])
             }
             style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: theme.spacing.xs }}
           >
             <Text variant="body" color="textSecondary">
-              Şifreyle giriş yap
+              {t('ui.appLock.passwordSignIn')}
             </Text>
           </Pressable>
         </View>

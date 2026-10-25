@@ -5,6 +5,7 @@ import type { BottomTabBarProps } from 'expo-router/js-tabs';
 
 import { useTheme } from '@/theme';
 import { useQuickAddStore } from '@/store/quickAddStore';
+import { t } from '@/i18n';
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   index: 'home',
@@ -147,7 +148,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             onPress={() => navigateTo(taraRoute, state.index === taraIndex)}
             // Uzun basış: Hızlı ekle sheet'i.
             onLongPress={showQuickAdd}
-            accessibilityHint="Uzun basarak hızlı ekle menüsünü aç"
+            accessibilityHint={t('ui.quickAddHint')}
             style={{
               width: TARA_CIRCLE_SIZE,
               height: TARA_CIRCLE_SIZE,

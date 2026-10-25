@@ -5,6 +5,7 @@ import { SearchablePicker } from '@/components/primitives';
 import { BankLogo } from './BankLogo';
 import { ValueUnitBadge } from './ValueUnitPicker';
 import type { Account } from '@/features/accounts/api';
+import { t } from '@/i18n';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
   cash: 'cash-outline',
@@ -43,9 +44,9 @@ export function AccountPicker({ accounts, selectedId, onSelect, placeholder, tit
       selectedId={selectedId}
       onSelect={onSelect}
       renderLeading={(item) => <AccountAvatar account={item} />}
-      placeholder={placeholder ?? 'Hesap seçin'}
-      title={title ?? 'Hesap Seç'}
-      emptyLabel="Eşleşen hesap bulunamadı."
+      placeholder={placeholder ?? t('ui.pickers.account.placeholder')}
+      title={title ?? t('ui.pickers.account.title')}
+      emptyLabel={t('ui.pickers.account.empty')}
     />
   );
 }

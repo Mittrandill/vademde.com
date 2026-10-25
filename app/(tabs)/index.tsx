@@ -39,6 +39,7 @@ import { syncCardPaymentDueReminders, syncCreditCardStatementReminder } from '@/
 import { statementPeriodKey, useCardDueItems } from '@/features/accounts/cardDues';
 import { useReflowKey } from '@/services/reflow';
 import { useWidgetSnapshot } from '@/features/dashboard/useWidgetSnapshot';
+import { t } from '@/i18n';
 
 // Ücretsiz plandaki kullanıcıya ilk açılışta ve sonrasında en fazla 5 günde bir kez
 // gösterilen yumuşak paywall hatırlatması (kullanıcı kararı — Dashboard'da başka bir
@@ -324,13 +325,13 @@ export default function HomeScreen() {
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Çalışma alanını değiştir"
+                accessibilityLabel={t('home.switchWorkspace')}
                 onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
                 disabled={workspaces.length <= 1}
                 style={{ flex: 1, gap: 2 }}
               >
                 <Text variant="caption" color="textSecondary">
-                  Çalışma alanı
+                  {t('home.workspace')}
                 </Text>
                 <Row gap="xs" align="center">
                   <Text numberOfLines={1} style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, flexShrink: 1 }}>
@@ -343,7 +344,7 @@ export default function HomeScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Akıllı öneriler ve yapay zekâ sohbeti"
+                accessibilityLabel={t('home.insightsA11y')}
                 onPress={() => router.push('/insights')}
                 style={{
                   width: 40,
@@ -359,7 +360,7 @@ export default function HomeScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Bildirimler"
+                accessibilityLabel={t('home.notifications')}
                 onPress={() => router.push('/notifications')}
                 style={{
                   width: 40,

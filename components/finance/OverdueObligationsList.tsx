@@ -5,6 +5,7 @@ import { Amount } from './Amount';
 import { ObligationIcon } from './ObligationIcon';
 import type { ObligationDueItem } from '@/features/obligations/api';
 import type { ValueUnitType } from '@/features/valueUnits/units';
+import { t } from '@/i18n';
 
 export interface OverdueObligationsListProps {
   obligations: ObligationDueItem[];
@@ -24,11 +25,11 @@ function daysOverdue(dueDate: string): number {
 export function OverdueObligationsList({ obligations }: OverdueObligationsListProps) {
   return (
     <Stack gap="sm">
-      <Text variant="sectionTitle">Gecikmiş Ödemeler</Text>
+      <Text variant="sectionTitle">{t('finance.overdueTitle')}</Text>
       {obligations.length === 0 ? (
         <Card>
           <Text variant="body" color="textSecondary">
-            Gecikmiş kayıt yok.
+            {t('finance.overdueEmpty')}
           </Text>
         </Card>
       ) : (
@@ -47,7 +48,7 @@ export function OverdueObligationsList({ obligations }: OverdueObligationsListPr
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Text variant="cardTitle">{o.title}</Text>
                     <Text variant="caption" color="danger">
-                      {daysOverdue(o.due_date as string)} gün gecikti
+                      {t('common.daysOverdue', { count: daysOverdue(o.due_date as string) })}
                     </Text>
                   </Stack>
                   <Amount

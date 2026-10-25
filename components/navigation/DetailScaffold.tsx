@@ -6,6 +6,7 @@ import { useTheme } from '@/theme';
 import { Stack, Text } from '@/components/primitives';
 import { useReflowKey } from '@/services/reflow';
 import { ScreenHeader, type ScreenHeaderProps } from './ScreenHeader';
+import { t } from '@/i18n';
 
 export interface DetailScaffoldProps {
   header: ScreenHeaderProps;
@@ -43,7 +44,7 @@ export function DetailScaffold({
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {error ? (
             <Text variant="body" color="danger">
-              {error instanceof Error ? error.message : (errorFallbackMessage ?? 'Kayıt yüklenemedi')}
+              {error instanceof Error ? error.message : (errorFallbackMessage ?? t('ui.recordLoadFailed'))}
             </Text>
           ) : (
             (loadingIndicator ?? null)

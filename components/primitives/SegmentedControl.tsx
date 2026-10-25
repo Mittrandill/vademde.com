@@ -5,6 +5,7 @@ import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/colors';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
+import { t } from '@/i18n';
 
 export interface SegmentedControlOption<T extends string> {
   key: T;
@@ -56,7 +57,7 @@ function SegmentedControlInner<T extends string>({
             }}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            accessibilityLabel={`${option.label} seçeneği`}
+            accessibilityLabel={t('ui.optionA11y', { label: option.label })}
             style={{
               flex: scrollable ? undefined : 1,
               minWidth: scrollable ? 92 : 0,

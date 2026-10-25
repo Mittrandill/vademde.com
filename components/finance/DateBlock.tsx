@@ -1,14 +1,15 @@
 import { View } from 'react-native';
 
 import { Text } from '@/components/primitives';
+import { localeDateFormatter } from '@/i18n/format';
 
 export interface DateBlockProps {
   date: string | Date;
   width?: number;
 }
 
-const dayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric' });
-const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'short' });
+const dayFormatter = localeDateFormatter({ day: 'numeric' });
+const monthFormatter = localeDateFormatter({ month: 'short' });
 
 // Hareket/işlem listelerinde ikon ile başlık arasına yerleşen kompakt tarih bloğu:
 // üstte büyük gün rakamı, altında kısa ay adı (ör. "5" / "Ağu") — satırın sonunda küçük

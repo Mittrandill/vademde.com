@@ -35,6 +35,7 @@ import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/util
 import { isValidIbanFormat, normalizeIban } from '@/utils/iban';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
 import { showErrorAlert, showSaveSuccess, friendlyErrorMessage } from '@/utils/alerts';
+import { getInputDecimalSeparator } from '@/i18n/format';
 
 // docs/04-ocr-belge-isleme.md §7.7 ve docs/09-kullanici-akislari.md "Dekont eşleştirme" —
 // taranan belge bir banka dekontu olduğunda kredi/fiş gibi bir "sonuç ekranı": okunan alanlar,
@@ -121,7 +122,7 @@ export default function ReceiptResultScreen() {
     if (!document || initialized) return;
     setDirection(document.direction === 'income' ? 'income' : 'expense');
     setAmount(
-      formatAmountInput(((document.total_amount_minor ?? 0) / 100).toFixed(2).replace('.', ','))
+      formatAmountInput(((document.total_amount_minor ?? 0) / 100).toFixed(2).replace('.', getInputDecimalSeparator()))
     );
     setDateStr(
       isoDatePart(summary?.transactionDateTime) ?? isoDatePart(document.issue_date) ?? localIsoDate()

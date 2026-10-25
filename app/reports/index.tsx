@@ -62,42 +62,51 @@ import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subs
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { formatMinorAmount, fromMinorUnits } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
+import { capitalizeUi, formatPercent, localeDateFormatter, zeroFractionPattern } from '@/i18n/format';
+import { getLanguage, t } from '@/i18n';
+import { localizedRecord } from '@/i18n/localized';
 
 type Period = 'month' | '3m' | 'year' | 'all' | 'custom';
 type CategoryDirection = 'expense' | 'income';
 type SectionKey = 'ozet' | 'kategoriler' | 'borc' | 'kurlar' | 'diger';
 type DetailKey = 'aylar' | 'kategoriler' | 'kisiler' | 'nakit' | 'hesaplar' | 'kurlar';
 
-const PERIODS: { key: Exclude<Period, 'custom'>; label: string }[] = [
-  { key: 'month', label: 'Bu ay' },
-  { key: '3m', label: 'Son 3 ay' },
-  { key: 'year', label: 'Bu yıl' },
-  { key: 'all', label: 'Tümü' },
+const PERIODS: { key: Exclude<Period, 'custom'>; readonly label: string }[] = [
+  { key: 'month', get label() { return t('reports.screen.thisMonth'); } },
+  { key: '3m', get label() { return t('reports.screen.last3Months'); } },
+  { key: 'year', get label() { return t('reports.screen.thisYear'); } },
+  { key: 'all', get label() { return t('common.all'); } },
 ];
 
 // Bölüm atlama çipleri: dokununca sayfa ilgili karta kayar.
-const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'ozet', label: 'Özet' },
-  { key: 'kategoriler', label: 'Kategoriler' },
-  { key: 'borc', label: 'Borç/alacak' },
-  { key: 'kurlar', label: 'Kurlar' },
-  { key: 'diger', label: 'Diğer' },
-];
+const SECTION_LABEL_KEY = {
+  ozet: 'reports.screen.summary',
+  kategoriler: 'reports.screen.categories',
+  borc: 'reports.screen.debtShort',
+  kurlar: 'reports.screen.ratesShort',
+  diger: 'reports.screen.other',
+} as const satisfies Record<SectionKey, string>;
+const SECTIONS: { key: SectionKey; readonly label: string }[] = (Object.keys(SECTION_LABEL_KEY) as SectionKey[]).map((key) => ({
+  key,
+  get label() {
+    return t(SECTION_LABEL_KEY[key]);
+  },
+}));
 
-const DETAIL_TITLE: Record<DetailKey, string> = {
-  aylar: 'Son 6 ay',
-  kategoriler: 'Kategoriler',
-  kisiler: 'Kişi ve firmalar',
-  nakit: 'Beklenen nakit akışı',
-  hesaplar: 'Hesap bakiyeleri',
-  kurlar: 'Güncel kurlar',
-};
+const DETAIL_TITLE_KEY = {
+  aylar: 'reports.screen.last6Months',
+  kategoriler: 'reports.screen.categories',
+  kisiler: 'reports.screen.counterparties',
+  nakit: 'reports.screen.cashFlow',
+  hesaplar: 'reports.screen.balances',
+  kurlar: 'reports.screen.rates',
+} as const satisfies Record<DetailKey, string>;
 
 /** Kategoriler kartında gösterilen satır sayısı; tamamı ok düğmesinden açılır. */
 const CATEGORY_PREVIEW = 4;
 
 function capitalize(text: string): string {
-  return text.charAt(0).toLocaleUpperCase('tr-TR') + text.slice(1);
+  return capitalizeUi(text);
 }
 
 // Türkçe bulunma eki: "Ekim'de", "Ağustos'ta", "Mart'ta" (ünlü uyumu + sert ünsüz benzeşmesi).
@@ -108,10 +117,13 @@ function locative(word: string): string {
   return `${word}’${hard ? 't' : 'd'}${back ? 'a' : 'e'}`;
 }
 
-const DIRECTION_LABEL: Record<string, string> = { income: 'Gelir', expense: 'Gider', transfer: 'Transfer' };
+const DIRECTION_LABEL: Record<string, string> = localizedRecord(
+  ['income', 'expense', 'transfer'] as const,
+  (direction) => t(`common.${direction}`)
+);
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
-const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long' });
+const dateFormatter = localeDateFormatter({ day: 'numeric', month: 'long', year: 'numeric' });
+const monthFormatter = localeDateFormatter({ month: 'long' });
 
 interface CustomRange {
   start: string;
@@ -178,14 +190,14 @@ function rangeLabel(period: Period, custom: CustomRange | null): string {
   }
   if (period === 'month') {
     const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    return `1 – ${last} ${monthFormatter.format(now)} ${now.getFullYear()}`;
+    return t('reports.screen.monthRange', { last, month: monthFormatter.format(now), year: now.getFullYear() });
   }
   if (period === '3m') {
     const s = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    return `${monthFormatter.format(s)} – ${monthFormatter.format(now)} ${now.getFullYear()}`;
+    return t('reports.screen.multiMonthRange', { from: monthFormatter.format(s), to: monthFormatter.format(now), year: now.getFullYear() });
   }
-  if (period === 'year') return `${now.getFullYear()} yılı`;
-  return 'Tüm zamanlar';
+  if (period === 'year') return t('reports.screen.yearLabel', { year: now.getFullYear() });
+  return t('reports.screen.allTime');
 }
 
 // Daha Fazla > Analiz menüsünden açılan ekran (bkz. app/(tabs)/daha-fazla.tsx).
@@ -332,25 +344,35 @@ export default function ReportsScreen() {
     if (prev && prev.expenseMinor > 0) {
       const pct = Math.round(((expense - prev.expenseMinor) / prev.expenseMinor) * 100);
       if (pct !== 0) {
-        const when = period === 'month' ? locative(capitalize(monthFormatter.format(new Date()))) : 'Bu dönemde';
-        parts.push(`${when} gideri önceki döneme göre %${Math.abs(pct)} ${pct < 0 ? 'azalttın' : 'artırdın'}.`);
+        const month = capitalize(monthFormatter.format(new Date()));
+        const when = period === 'month' ? (getLanguage() === 'tr' ? locative(month) : t('reports.screen.inMonth', { month })) : t('reports.screen.thisPeriod');
+        parts.push(t(pct < 0 ? 'reports.screen.summaryDown' : 'reports.screen.summaryUp', { when, pct: formatPercent(Math.abs(pct)) }));
       }
     }
     const top = expenseCategoryQuery.data?.[0];
-    if (top) parts.push(`En büyük gider kalemi ${top.name}.`);
+    if (top) parts.push(t('reports.screen.topCategory', { name: top.name }));
     const prevMap = prevExpenseCategoryQuery.data ? new Map(prevExpenseCategoryQuery.data.map((c) => [c.name, c.amountMinor])) : null;
     const rising = (expenseCategoryQuery.data ?? [])
       .map((c) => ({ name: c.name, pct: prevMap?.get(c.name) ? Math.round(((c.amountMinor - (prevMap.get(c.name) as number)) / (prevMap.get(c.name) as number)) * 100) : 0 }))
       .filter((c) => c.pct >= 20)
       .sort((a, b) => b.pct - a.pct)[0];
-    if (rising) parts.push(`${rising.name} harcaması %${rising.pct} arttı.`);
+    if (rising) parts.push(t('reports.screen.risingCategory', { name: rising.name, pct: formatPercent(rising.pct) }));
     return parts.join(' ');
   }, [prev, expense, period, expenseCategoryQuery.data, prevExpenseCategoryQuery.data]);
 
   async function handleExportCsv() {
     const rows = await listTransactionsForExport(ws, range);
     const csv = toCsv(
-      ['Tarih', 'Açıklama', 'Yön', 'Tutar', 'Para Birimi', 'Kategori', 'Kişi/Firma', 'Hesap'],
+      [
+        t('reports.screen.csvDate'),
+        t('reports.screen.csvDescription'),
+        t('reports.screen.csvDirection'),
+        t('reports.screen.csvAmount'),
+        t('reports.screen.csvCurrency'),
+        t('reports.screen.csvCategory'),
+        t('reports.screen.csvCounterparty'),
+        t('reports.screen.csvAccount'),
+      ],
       rows.map((row) => [
         row.occurredAt.slice(0, 10),
         row.description ?? '',
@@ -362,7 +384,7 @@ export default function ReportsScreen() {
         row.accountName ?? '',
       ])
     );
-    await Share.share({ message: csv, title: 'Vademde Hareket Raporu' });
+    await Share.share({ message: csv, title: t('reports.screen.csvTitle') });
   }
 
   async function handleExportPdf(sections: ReportPdfSections) {
@@ -398,7 +420,7 @@ export default function ReportsScreen() {
       else await handleExportPdf(sections);
       setExportOpen(false);
     } catch (error) {
-      Alert.alert('Hata', friendlyErrorMessage(error, 'Rapor oluşturulamadı'));
+      Alert.alert(t('common.error'), friendlyErrorMessage(error, t('reports.screen.exportFailed')));
     } finally {
       setIsExporting(false);
     }
@@ -422,9 +444,9 @@ export default function ReportsScreen() {
     return (
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack gap="xs" style={{ flex: 1, padding: theme.screenEdge.standard, justifyContent: 'center' }}>
-          <Text variant="pageTitle">Raporlar</Text>
+          <Text variant="pageTitle">{t('reports.screen.title')}</Text>
           <Text variant="body" color="textSecondary">
-            Rapor görmek için önce bir çalışma alanı seçin.
+            {t('reports.screen.noWorkspace')}
           </Text>
         </Stack>
       </SafeAreaView>
@@ -436,7 +458,7 @@ export default function ReportsScreen() {
     .filter((r) => VALUE_UNITS.some((u) => u.code === r.unit_code))
     .sort((a, b) => VALUE_UNITS.findIndex((u) => u.code === a.unit_code) - VALUE_UNITS.findIndex((u) => u.code === b.unit_code));
   const newestRate = ratesWithData.reduce<string | null>((n, r) => (!n || r.cached_at > n ? r.cached_at : n), null);
-  const rateAgeText = newestRate ? `${formatCacheAge(newestRate)} güncellendi` : null;
+  const rateAgeText = newestRate ? t('reports.screen.rateAge', { age: formatCacheAge(newestRate) }) : null;
 
   const categories = categoryQuery.data ?? [];
   const cashFlowNet = (cashFlowQuery.data ?? []).reduce((sum, b) => sum + b.receivableMinor - b.payableMinor, 0);
@@ -447,15 +469,15 @@ export default function ReportsScreen() {
 
   // "%12 geçen döneme göre ↑" gibi değişim cümlesi; önceki dönem yoksa açıklama.
   function changeCaption(current: number, previous: number | null, unit: '%' | 'puan' = '%'): string {
-    if (previous === null) return period === 'all' ? 'Tüm zamanların toplamı' : 'Önceki dönemde kayıt yok';
+    if (previous === null) return period === 'all' ? t('reports.screen.allTimeTotal') : t('reports.screen.noPrevious');
     if (unit === 'puan') {
       const diff = current - previous;
-      return diff === 0 ? 'Geçen dönemle aynı' : `${Math.abs(diff)} puan ${diff > 0 ? 'yükseldi' : 'düştü'}`;
+      return diff === 0 ? t('reports.screen.same') : t(diff > 0 ? 'reports.screen.pointsUp' : 'reports.screen.pointsDown', { count: Math.abs(diff) });
     }
     const pct = percentChange(current, previous);
-    if (pct === null) return current > 0 ? 'Önceki dönemde kayıt yok' : 'Hareket yok';
-    if (pct === 0) return 'Geçen dönemle aynı';
-    return `%${Math.abs(pct)} ${pct > 0 ? 'arttı' : 'azaldı'} · geçen döneme göre`;
+    if (pct === null) return current > 0 ? t('reports.screen.noPrevious') : t('reports.screen.noActivity');
+    if (pct === 0) return t('reports.screen.same');
+    return t(pct > 0 ? 'reports.screen.pctUp' : 'reports.screen.pctDown', { pct: formatPercent(Math.abs(pct)) });
   }
 
   const expenseColor = theme.colors.brandPrimary;
@@ -468,9 +490,9 @@ export default function ReportsScreen() {
         contentContainerStyle={{ paddingHorizontal: theme.screenEdge.standard, paddingBottom: theme.spacing.massive, gap: theme.spacing.sm }}
       >
         <ScreenHeader
-          title="Raporlar"
-          left={{ icon: 'chevron-back', accessibilityLabel: 'Geri', onPress: closeScreen }}
-          right={{ icon: 'share-outline', accessibilityLabel: 'Dışa aktar', onPress: () => setExportOpen(true) }}
+          title={t('reports.screen.title')}
+          left={{ icon: 'chevron-back', accessibilityLabel: t('common.back'), onPress: closeScreen }}
+          right={{ icon: 'share-outline', accessibilityLabel: t('reports.screen.export'), onPress: () => setExportOpen(true) }}
         />
 
         {/* Dönem kartı: hazır dönemler + seçili aralık ve özel aralık seçici. */}
@@ -479,7 +501,7 @@ export default function ReportsScreen() {
           <View style={{ height: 1, backgroundColor: theme.colors.separator }} />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Dönem: ${periodText}. Aralık seç`}
+            accessibilityLabel={t('reports.screen.periodA11y', { period: periodText })}
             onPress={() => setRangeOpen(true)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, paddingHorizontal: 4, minHeight: 36 }}
           >
@@ -489,7 +511,7 @@ export default function ReportsScreen() {
             </Text>
             <View style={{ width: 1, height: 20, backgroundColor: theme.colors.separator }} />
             <Text style={{ fontSize: 15, color: period === 'custom' ? theme.colors.attentionMarker : theme.colors.textSecondary }}>
-              Aralık seç
+              {t('reports.screen.chooseRange')}
             </Text>
             <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
           </Pressable>
@@ -514,7 +536,7 @@ export default function ReportsScreen() {
                 items={[
                   {
                     key: 'gelir',
-                    label: 'Gelir',
+                    label: t('common.income'),
                     value: formatMinorAmount(income),
                     valueColor: incomeColor,
                     icon: 'arrow-up',
@@ -523,7 +545,7 @@ export default function ReportsScreen() {
                   },
                   {
                     key: 'gider',
-                    label: 'Gider',
+                    label: t('common.expense'),
                     value: expense > 0 ? `−${formatMinorAmount(expense)}` : formatMinorAmount(expense),
                     valueColor: theme.colors.danger,
                     icon: 'arrow-down',
@@ -532,30 +554,30 @@ export default function ReportsScreen() {
                   },
                   {
                     key: 'tasarruf',
-                    label: 'Tasarruf oranı',
-                    value: savingsRate === null ? '—' : `%${savingsRate}`,
+                    label: t('reports.screen.savingsRate'),
+                    value: savingsRate === null ? '—' : formatPercent(savingsRate),
                     icon: 'pie-chart-outline',
                     iconColor: theme.colors.textSecondary,
                     caption:
                       savingsRate === null
-                        ? 'Gelir kaydı olan dönemlerde hesaplanır.'
+                        ? t('reports.screen.savingsHint')
                         : changeCaption(savingsRate, prevSavingsRate, 'puan'),
                   },
                 ]}
               />
               {monthlyComparisonQuery.data ? (
                 <ReportCard
-                  title="Son 6 ay"
+                  title={t('reports.screen.last6Months')}
                   right={
                     <ChartLegend
                       items={[
-                        { label: 'Gider', color: expenseColor },
-                        { label: 'Gelir', color: incomeColor },
+                        { label: t('common.expense'), color: expenseColor },
+                        { label: t('common.income'), color: incomeColor },
                       ]}
                     />
                   }
                   onMore={() => setDetail('aylar')}
-                  moreLabel="Aylık tabloyu aç"
+                  moreLabel={t('reports.screen.openMonthly')}
                 >
                   <MonthBars data={monthlyComparisonQuery.data} expenseColor={expenseColor} incomeColor={incomeColor} />
                 </ReportCard>
@@ -566,14 +588,14 @@ export default function ReportsScreen() {
 
         <View onLayout={(e) => onSectionLayout('kategoriler', e)}>
           <ReportCard
-            title="Kategoriler"
+            title={t('reports.screen.categories')}
             right={
               <View style={{ width: 128 }}>
                 <SegmentedControl
                   size="compact"
                   options={[
-                    { key: 'expense', label: 'Gider' },
-                    { key: 'income', label: 'Gelir' },
+                    { key: 'expense', label: t('common.expense') },
+                    { key: 'income', label: t('common.income') },
                   ]}
                   value={categoryDirection}
                   onChange={(k) => setCategoryDirection(k as CategoryDirection)}
@@ -582,12 +604,12 @@ export default function ReportsScreen() {
               </View>
             }
             onMore={categories.length > 0 ? () => setDetail('kategoriler') : undefined}
-            moreLabel="Tüm kategorileri aç"
+            moreLabel={t('reports.screen.openCategories')}
           >
             <CategoryRows
               items={categories}
               previous={prevCategoryMap}
-              emptyLabel="Bu dönemde kayıt yok."
+              emptyLabel={t('reports.screen.noRecords')}
               goodWhenDown={categoryDirection === 'expense'}
               barColor={categoryDirection === 'expense' ? expenseColor : incomeColor}
               limit={CATEGORY_PREVIEW}
@@ -596,7 +618,7 @@ export default function ReportsScreen() {
         </View>
 
         <View onLayout={(e) => onSectionLayout('borc', e)}>
-          <ReportCard title="Borç ve alacak" onMore={() => router.push('/obligations')} moreLabel="Borç ve alacak listesini aç">
+          <ReportCard title={t('reports.screen.debt')} onMore={() => router.push('/obligations')} moreLabel={t('reports.screen.openDebt')}>
             <DebtRows
               payableMinor={payableTotalMinor}
               payableCount={payableObligations.length}
@@ -610,28 +632,28 @@ export default function ReportsScreen() {
         </View>
 
         <View onLayout={(e) => onSectionLayout('kurlar', e)}>
-          <ReportCard title="Güncel kurlar" onMore={() => setDetail('kurlar')} moreLabel="Tüm kurları aç">
+          <ReportCard title={t('reports.screen.rates')} onMore={() => setDetail('kurlar')} moreLabel={t('reports.screen.openRates')}>
             <RateRows rates={ratesWithData} ageText={rateAgeText} limit={3} />
           </ReportCard>
         </View>
 
         <View onLayout={(e) => onSectionLayout('diger', e)} style={{ marginTop: theme.spacing.xs }}>
-          <GroupedSection title="DİĞER RAPORLAR">
+          <GroupedSection title={t('reports.screen.otherReports')}>
             <GroupedRow
               leading={<GroupedRowIcon name="people" />}
-              title="Kişi ve firmalar"
-              value={counterpartyCount > 0 ? `${counterpartyCount} kişi` : undefined}
+              title={t('reports.screen.counterparties')}
+              value={counterpartyCount > 0 ? t('reports.screen.peopleCount', { count: counterpartyCount }) : undefined}
               onPress={() => setDetail('kisiler')}
             />
             <GroupedRow
               leading={<GroupedRowIcon name="trending-up" tone="success" />}
-              title="Beklenen nakit akışı"
-              subtitle="Önümüzdeki 30 gün"
+              title={t('reports.screen.cashFlow')}
+              subtitle={t('reports.screen.next30Days')}
               trailing={
                 cashFlowQuery.data ? (
                   <Text tabular style={{ fontSize: 15, color: cashFlowNet >= 0 ? theme.colors.receivable : theme.colors.danger }}>
                     {cashFlowNet >= 0 ? '+' : '−'}
-                    {formatMinorAmount(Math.abs(cashFlowNet)).replace(/,00(?=\D*$)/, '')}
+                    {formatMinorAmount(Math.abs(cashFlowNet)).replace(zeroFractionPattern(), '')}
                   </Text>
                 ) : undefined
               }
@@ -639,26 +661,26 @@ export default function ReportsScreen() {
             />
             <GroupedRow
               leading={<GroupedRowIcon name="wallet" tone="violet" />}
-              title="Hesap bakiyeleri"
-              value={accountCount > 0 ? `${accountCount} hesap` : undefined}
+              title={t('reports.screen.balances')}
+              value={accountCount > 0 ? t('reports.screen.accountCount', { count: accountCount }) : undefined}
               onPress={() => setDetail('hesaplar')}
             />
           </GroupedSection>
         </View>
       </ScrollView>
 
-      <BottomSheet visible={!!detail} onClose={() => setDetail(null)} title={detail ? DETAIL_TITLE[detail] : undefined}>
+      <BottomSheet visible={!!detail} onClose={() => setDetail(null)} title={detail ? t(DETAIL_TITLE_KEY[detail]) : undefined}>
         <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: theme.spacing.sm }}>
           {detail === 'aylar' ? <MonthTable data={monthlyComparisonQuery.data ?? []} /> : null}
           {detail === 'kategoriler' ? (
             <>
               <Text variant="caption" color="textSecondary" style={{ marginBottom: 6 }}>
-                {periodText} · {categoryDirection === 'expense' ? 'gider' : 'gelir'} kategorileri
+                {t(categoryDirection === 'expense' ? 'reports.screen.expenseCategories' : 'reports.screen.incomeCategories', { period: periodText })}
               </Text>
               <CategoryRows
                 items={categories}
                 previous={prevCategoryMap}
-                emptyLabel="Bu dönemde kayıt yok."
+                emptyLabel={t('reports.screen.noRecords')}
                 goodWhenDown={categoryDirection === 'expense'}
                 barColor={categoryDirection === 'expense' ? expenseColor : incomeColor}
                 limit={categories.length}
@@ -668,7 +690,7 @@ export default function ReportsScreen() {
           {detail === 'kisiler' ? (
             <>
               <Text variant="caption" color="textSecondary" style={{ marginBottom: 6 }}>
-                {periodText} · en çok hareket olanlar
+                {t('reports.screen.mostActive', { period: periodText })}
               </Text>
               <CounterpartyRows items={counterpartyQuery.data ?? []} />
             </>

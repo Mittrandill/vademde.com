@@ -24,8 +24,10 @@ import { buildObligationReminderMessage } from '@/utils/reminderMessage';
 import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const timeFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const timeFormatter = localeDateFormatter({ day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -33,10 +35,12 @@ function startOfDay(date: Date): Date {
 
 // listRecentReminders yalnızca 'delivered' (push'u gerçekten gönderilmiş) satırları döner,
 // bunların remind_at'i her zaman bugün ya da geçmiştir.
-function sectionTitleFor(remindAt: Date, today: Date): string {
+type SectionKey = 'today' | 'thisWeek' | 'past';
+
+function sectionKeyFor(remindAt: Date, today: Date): SectionKey {
   const diffDays = Math.round((today.getTime() - startOfDay(remindAt).getTime()) / (24 * 60 * 60 * 1000));
-  if (diffDays <= 0) return 'BUGÜN';
-  return diffDays < 7 ? 'BU HAFTA' : 'GEÇMİŞ';
+  if (diffDays <= 0) return 'today';
+  return diffDays < 7 ? 'thisWeek' : 'past';
 }
 
 interface ReminderContent {
@@ -48,15 +52,18 @@ interface ReminderContent {
 function contentFor(reminder: DeliveredReminder): ReminderContent | null {
   if (reminder.kind === 'statement_upload' && reminder.account) {
     return {
-      title: 'Ekstre yüklemeyi unutmayın',
-      body: `${reminder.account.name} — bu ayki ekstrenizi tarayın veya kart borcunu elle girin.`,
+      title: t('notifications.statementTitle'),
+      body: t('notifications.statementBody', { account: reminder.account.name }),
       onPress: () => router.push(`/accounts/${reminder.account!.id}`),
     };
   }
   if (reminder.kind === 'card_payment_due' && reminder.account) {
     return {
-      title: 'Kredi kartı son ödeme',
-      body: `${reminder.account.name} son ödeme günü ${reminder.stage === 'due_day' ? 'bugün' : '3 gün sonra'}. Kart borcunuzu ödemeyi unutmayın.`,
+      title: t('notifications.cardDueTitle'),
+      body: t('notifications.cardDueBody', {
+        account: reminder.account.name,
+        when: reminder.stage === 'due_day' ? t('notifications.cardDueToday') : t('notifications.cardDueIn3'),
+      }),
       onPress: () => router.push(`/accounts/${reminder.account!.id}`),
     };
   }
@@ -127,34 +134,34 @@ export default function NotificationsScreen() {
 
   const calendarMutation = useMutation({
     mutationFn: (obligation: CalendarExportObligation) => addObligationToCalendar(obligation),
-    onSuccess: () => showSuccessAlert('Takvime eklendi.', () => {}),
-    onError: (error) => Alert.alert('Hata', friendlyErrorMessage(error, 'Takvime eklenemedi')),
+    onSuccess: () => showSuccessAlert(t('notifications.addedToCalendar'), () => {}),
+    onError: (error) => Alert.alert(t('notifications.error'), friendlyErrorMessage(error, t('notifications.calendarFailed'))),
   });
 
   const reminderMutation = useMutation({
     mutationFn: (obligation: CalendarExportObligation) => createObligationReminder(obligation),
-    onSuccess: () => showSuccessAlert('Hatırlatıcı oluşturuldu.', () => {}),
-    onError: (error) => Alert.alert('Hata', friendlyErrorMessage(error, 'Hatırlatıcı oluşturulamadı')),
+    onSuccess: () => showSuccessAlert(t('notifications.reminderCreated'), () => {}),
+    onError: (error) => Alert.alert(t('notifications.error'), friendlyErrorMessage(error, t('notifications.reminderFailed'))),
   });
 
   function confirmDismissAll() {
-    Alert.alert('Bildirimleri Temizle', 'Bu sayfadaki değil, tüm bekleyen bildirimler gelen kutusundan temizlenecek. Vadeleri hatırlatan gerçek bildirimler yine planlı kalır. Emin misiniz?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Temizle', style: 'destructive', onPress: () => dismissAllMutation.mutate() },
+    Alert.alert(t('notifications.clearTitle'), t('notifications.clearBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('notifications.clear'), style: 'destructive', onPress: () => dismissAllMutation.mutate() },
     ]);
   }
 
   const reminders = remindersQuery.data ?? [];
   const today = startOfDay(new Date());
-  const groups = new Map<string, DeliveredReminder[]>();
+  const groups = new Map<SectionKey, DeliveredReminder[]>();
   for (const reminder of reminders) {
-    const title = sectionTitleFor(new Date(reminder.remind_at), today);
-    if (!groups.has(title)) groups.set(title, []);
-    groups.get(title)!.push(reminder);
+    const key = sectionKeyFor(new Date(reminder.remind_at), today);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(reminder);
   }
-  const sections = ['BUGÜN', 'BU HAFTA', 'GEÇMİŞ']
-    .filter((title) => groups.has(title))
-    .map((title) => ({ title, data: groups.get(title)! }));
+  const sections = (['today', 'thisWeek', 'past'] as const)
+    .filter((key) => groups.has(key))
+    .map((key) => ({ key, title: t(`notifications.${key}`), data: groups.get(key)! }));
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -167,8 +174,8 @@ export default function NotificationsScreen() {
         }}
       >
         <ScreenHeader
-          title="Bildirimler"
-          rightLabel={{ label: 'İşlemler', onPress: () => setBulkMenuOpen(true) }}
+          title={t('notifications.title')}
+          rightLabel={{ label: t('notifications.actions'), onPress: () => setBulkMenuOpen(true) }}
         />
 
         {remindersQuery.isLoading ? (
@@ -180,12 +187,12 @@ export default function NotificationsScreen() {
         ) : sections.length === 0 && remindersQuery.isSuccess ? (
           <EmptyState
             icon="notifications-outline"
-            title="Henüz bildirim yok"
-            message="Bir hatırlatma gönderildiğinde burada görünecek."
+            title={t('notifications.emptyTitle')}
+            message={t('notifications.emptyBody')}
           />
         ) : (
           sections.map((section) => (
-            <View key={section.title} style={{ marginTop: theme.spacing.lg }}>
+            <View key={section.key} style={{ marginTop: theme.spacing.lg }}>
               <Text variant="label" color="textSecondary" style={{ marginBottom: 10 }}>
                 {section.title}
               </Text>
@@ -214,18 +221,18 @@ export default function NotificationsScreen() {
 
       <ActionSheet
         visible={bulkMenuOpen}
-        title="Bildirimler"
+        title={t('notifications.title')}
         onClose={() => setBulkMenuOpen(false)}
         options={[
           {
             key: 'read-all',
-            label: 'Tümünü Okundu İşaretle',
+            label: t('notifications.markAllRead'),
             icon: 'checkmark-done-outline',
             onPress: () => markAllReadMutation.mutate(),
           },
           {
             key: 'dismiss-all',
-            label: 'Tümünü Temizle',
+            label: t('notifications.clearAll'),
             icon: 'trash-outline',
             danger: true,
             onPress: confirmDismissAll,
@@ -259,23 +266,23 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
   if (item.obligation) {
     options.push({
       key: 'calendar',
-      label: 'Takvime Ekle',
+      label: t('notifications.addToCalendar'),
       icon: 'calendar-outline',
       onPress: () => onAddToCalendar(item.obligation!),
     });
     if (Platform.OS === 'ios') {
       options.push({
         key: 'reminder',
-        label: 'Hatırlatıcı Oluştur',
+        label: t('notifications.createReminder'),
         icon: 'alarm-outline',
         onPress: () => onCreateReminder(item.obligation!),
       });
     }
   }
   if (isUnread) {
-    options.push({ key: 'read', label: 'Okundu İşaretle', icon: 'checkmark-done-outline', onPress: () => onMarkRead(item.id) });
+    options.push({ key: 'read', label: t('notifications.markRead'), icon: 'checkmark-done-outline', onPress: () => onMarkRead(item.id) });
   }
-  options.push({ key: 'dismiss', label: 'Bildirimi Temizle', icon: 'trash-outline', danger: true, onPress: () => onDismiss(item.id) });
+  options.push({ key: 'dismiss', label: t('notifications.dismiss'), icon: 'trash-outline', danger: true, onPress: () => onDismiss(item.id) });
 
   return (
     <>
@@ -315,7 +322,7 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
                 style={{ minHeight: 44, justifyContent: 'center' }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600' }}>
-                  {item.obligation.direction === 'payable' ? 'Ödendi işaretle' : 'Tahsil edildi işaretle'}
+                  {item.obligation.direction === 'payable' ? t('notifications.markPaid') : t('notifications.markCollected')}
                 </Text>
               </Pressable>
               <Pressable
@@ -324,7 +331,7 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
                 style={{ minHeight: 44, justifyContent: 'center' }}
               >
                 <Text color="textSecondary" style={{ fontSize: 15 }}>
-                  Kontrol et
+                  {t('notifications.check')}
                 </Text>
               </Pressable>
             </View>

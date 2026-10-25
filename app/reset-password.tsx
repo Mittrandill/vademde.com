@@ -8,12 +8,14 @@ import { useReflowKey } from '@/services/reflow';
 import { Button, Stack, Text, TextField } from '@/components/primitives';
 import { updatePassword } from '@/features/auth/api';
 import { translateAuthError } from '@/features/auth/errors';
+import { useTranslation } from '@/i18n';
 
 // services/authDeepLinks.ts, şifre sıfırlama e-postasındaki bağlantıyı yakalayıp oturumu
 // kurduktan sonra buraya yönlendirir; kullanıcı burada yeni şifresini belirler.
 export default function ResetPasswordScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
+  const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -31,7 +33,7 @@ export default function ResetPasswordScreen() {
       await updatePassword(password);
       router.replace('/(tabs)');
     } catch (err) {
-      setError(translateAuthError(err, 'Şifre güncellenemedi'));
+      setError(translateAuthError(err, t('auth.resetPassword.failed')));
     } finally {
       setLoading(false);
     }
@@ -46,15 +48,15 @@ export default function ResetPasswordScreen() {
         >
           <Stack gap="xl">
             <Stack gap="xs">
-              <Text variant="pageTitle">Yeni Şifre Belirle</Text>
+              <Text variant="pageTitle">{t('auth.resetPassword.title')}</Text>
               <Text variant="body" color="textSecondary">
-                Hesabınız için yeni bir şifre girin.
+                {t('auth.resetPassword.subtitle')}
               </Text>
             </Stack>
 
             <Stack gap="sm">
               <TextField
-                placeholder="Yeni şifre"
+                placeholder={t('auth.resetPassword.newPassword')}
                 secureTextEntry={!passwordVisible}
                 value={password}
                 onChangeText={setPassword}
@@ -62,11 +64,11 @@ export default function ResetPasswordScreen() {
                 onRightIconPress={() => setPasswordVisible((v) => !v)}
               />
               <TextField
-                placeholder="Yeni şifre (tekrar)"
+                placeholder={t('auth.resetPassword.confirmPassword')}
                 secureTextEntry={!passwordVisible}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                error={mismatch ? 'Şifreler eşleşmiyor.' : undefined}
+                error={mismatch ? t('auth.resetPassword.mismatch') : undefined}
               />
             </Stack>
 
@@ -76,7 +78,7 @@ export default function ResetPasswordScreen() {
               </Text>
             ) : null}
 
-            <Button label="Şifreyi Güncelle" onPress={handleSubmit} loading={loading} disabled={!canSubmit} />
+            <Button label={t('auth.resetPassword.submit')} onPress={handleSubmit} loading={loading} disabled={!canSubmit} />
           </Stack>
         </ScrollView>
       </KeyboardAvoidingView>

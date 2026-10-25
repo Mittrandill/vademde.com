@@ -6,8 +6,10 @@ import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/colors';
 import { Button, Card, Row, Stack, Text } from '@/components/primitives';
 import { graceDaysLeft, type PlanEnforcementState } from '@/features/subscriptions/api';
+import { localeDateFormatter } from '@/i18n/format';
+import { t } from '@/i18n';
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+const dateFormatter = localeDateFormatter({ day: 'numeric', month: 'long', year: 'numeric' });
 
 // docs/10-abonelik-gelir-modeli.md — ücretsiz plan tek çalışma alanı içindir. Limitin
 // üzerindeki mevcut kullanıcıların verisi silinmez: önce 14 günlük lütuf süresi boyunca bu
@@ -32,14 +34,16 @@ export function PlanLimitBanner({
   const daysLeft = graceDaysLeft(state);
   const accent = locked ? theme.colors.danger : theme.colors.brandPrimary;
 
-  const title = locked ? 'Fazla çalışma alanları salt-okunur' : 'Çalışma alanı limitini aştınız';
+  const title = locked ? t('ui.planLimit.lockedTitle') : t('ui.planLimit.overTitle');
   const description = locked
-    ? `Ücretsiz planda tek çalışma alanı kullanılabilir. Şu an ${state.workspaceCount} alanınız var; birincil alan dışındakilere yeni kayıt eklenemiyor. Verilerinizin hiçbiri silinmedi — okumaya, dışa aktarmaya ve silmeye devam edebilirsiniz.`
-    : `Ücretsiz planda ${state.workspaceLimit} çalışma alanı kullanılabilir, sizde ${state.workspaceCount} tane var. ${
-        state.graceUntil
-          ? `${dateFormatter.format(new Date(state.graceUntil))} tarihine kadar (${daysLeft} gün) hepsi açık kalacak; bu tarihten sonra yalnızca seçtiğiniz birincil alana kayıt eklenebilir.`
-          : 'Planınızı yükseltmezseniz bir süre sonra yalnızca birincil alanınıza kayıt eklenebilir.'
-      } Hiçbir veri silinmez.`;
+    ? t('ui.planLimit.lockedBody', { count: state.workspaceCount })
+    : t('ui.planLimit.overBody', {
+        limit: state.workspaceLimit,
+        count: state.workspaceCount,
+        detail: state.graceUntil
+          ? t('ui.planLimit.graceDetail', { date: dateFormatter.format(new Date(state.graceUntil)), count: daysLeft ?? 0 })
+          : t('ui.planLimit.noGraceDetail'),
+      });
 
   return (
     <Card
@@ -72,9 +76,9 @@ export function PlanLimitBanner({
           {description}
         </Text>
 
-        <Button label="Planları gör" onPress={() => router.push('/paywall')} />
+        <Button label={t('ui.planLimit.seePlans')} onPress={() => router.push('/paywall')} />
         {onChoosePrimary ? (
-          <Button label="Aktif kalacak alanı seç" variant="secondary" onPress={onChoosePrimary} />
+          <Button label={t('ui.planLimit.choosePrimary')} variant="secondary" onPress={onChoosePrimary} />
         ) : null}
       </Stack>
     </Card>

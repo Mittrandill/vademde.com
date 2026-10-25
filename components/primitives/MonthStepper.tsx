@@ -4,11 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
+import { t } from '@/i18n';
+import { localizedList } from '@/i18n/localized';
 
-export const MONTH_NAMES = [
-  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-];
+// Ay adları okunduğu anda uygulama dilinden çözülür (i18n ui.months).
+export const MONTH_NAMES = localizedList(12, (index) => t('ui.months').split(',')[index]);
 
 export interface MonthStepperProps {
   year: number;
@@ -48,7 +48,7 @@ export function MonthStepper({ year, month, onChange, onPressLabel }: MonthStepp
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      {button('chevron-back', 'Önceki ay', -1)}
+      {button('chevron-back', t('ui.previousMonth'), -1)}
       <Pressable
         accessibilityRole={onPressLabel ? 'button' : 'text'}
         onPress={onPressLabel}
@@ -59,7 +59,7 @@ export function MonthStepper({ year, month, onChange, onPressLabel }: MonthStepp
           {MONTH_NAMES[month]} {year}
         </Text>
       </Pressable>
-      {button('chevron-forward', 'Sonraki ay', 1)}
+      {button('chevron-forward', t('ui.nextMonth'), 1)}
     </View>
   );
 }

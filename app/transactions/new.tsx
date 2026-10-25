@@ -42,14 +42,16 @@ import {
   type PendingReceipt,
 } from '@/features/receipts/api';
 import { queryKeys, invalidatePaymentRelatedQueries } from '@/services/queryKeys';
+import { formatPercent, getInputDecimalSeparator } from '@/i18n/format';
+import { t } from '@/i18n';
 
 type Direction = 'income' | 'expense' | 'transfer';
 type PaymentMethod = 'nakit' | 'havale' | 'kredi_karti' | 'online_odeme' | 'diger';
 
-const DIRECTIONS: Array<{ value: Direction; label: string }> = [
-  { value: 'expense', label: 'Gider' },
-  { value: 'income', label: 'Gelir' },
-  { value: 'transfer', label: 'Transfer' },
+const DIRECTIONS: Array<{ value: Direction; readonly label: string }> = [
+  { value: 'expense', get label() { return t('common.expense'); } },
+  { value: 'income', get label() { return t('common.income'); } },
+  { value: 'transfer', get label() { return t('common.transfer'); } },
 ];
 
 // Çek/senet birer finansal kayıt türüdür (obligations.document_type, bkz.
@@ -57,13 +59,14 @@ const DIRECTIONS: Array<{ value: Direction; label: string }> = [
 // Ekle → Çek/Senet" seçilirse doğrudan /obligations/new'e yönlendirilir (bkz.
 // app/counterparties/[id].tsx). Bu liste yalnızca anlık/gerçekleşmiş hareketlerin ödeme
 // yöntemini etiketler.
-const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
-  { value: 'nakit', label: 'Nakit' },
-  { value: 'havale', label: 'Havale/EFT' },
-  { value: 'kredi_karti', label: 'Kredi Kartı' },
-  { value: 'online_odeme', label: 'Online Ödeme' },
-  { value: 'diger', label: 'Diğer' },
-];
+const PAYMENT_METHODS: Array<{ value: PaymentMethod; readonly label: string }> = (
+  ['nakit', 'havale', 'kredi_karti', 'online_odeme', 'diger'] as const
+).map((value) => ({
+  value,
+  get label() {
+    return t(`domain.paymentMethods.${value}`);
+  },
+}));
 
 export default function NewTransactionScreen() {
   const theme = useTheme();
@@ -90,7 +93,7 @@ export default function NewTransactionScreen() {
         <Stack style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {existingQuery.error ? (
             <Text variant="body" color="danger">
-              {friendlyErrorMessage(existingQuery.error, 'Kayıt yüklenemedi')}
+              {friendlyErrorMessage(existingQuery.error, t('transactions.form.loadFailed'))}
             </Text>
           ) : null}
         </Stack>
@@ -104,8 +107,8 @@ export default function NewTransactionScreen() {
     return (
       <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
         <Stack gap="lg" style={{ padding: theme.screenEdge.standard }}>
-          <ScreenHeader inline title="Hareketi düzenle" leftLabel={{ label: 'Kapat', onPress: () => router.back() }} />
-          <Text>Bu hareket bir borç/alacak kaydına bağlı. Tutarını veya hesabını değiştirmek için ilgili kaydı ya da ödemeyi düzenleyin.</Text>
+          <ScreenHeader inline title={t('transactions.form.editTitle')} leftLabel={{ label: t('common.close'), onPress: () => router.back() }} />
+          <Text>{t('transactions.form.lockedBody')}</Text>
         </Stack>
       </SafeAreaView>
     );
@@ -167,7 +170,7 @@ function TransactionForm({
   const [amount, setAmount] = useState(
     initial
       ? formatAmountInput(
-          (initial.amount_minor / 10 ** initialPrecision).toFixed(initialPrecision).replace('.', ','),
+          (initial.amount_minor / 10 ** initialPrecision).toFixed(initialPrecision).replace('.', getInputDecimalSeparator()),
           initialPrecision
         )
       : ''
@@ -285,25 +288,25 @@ function TransactionForm({
       queryClient.invalidateQueries({ queryKey: [activeWorkspaceId, 'receipt-archive'] });
     } catch (error) {
       Alert.alert(
-        'Dekont eklenemedi',
-        `Hareket kaydedildi ama dekont yüklenemedi: ${friendlyErrorMessage(error, 'bilinmeyen hata')}. Hareketi düzenleyerek dekontu yeniden ekleyebilirsiniz.`
+        t('transactions.form.receiptFailedTitle'),
+        t('transactions.form.receiptFailedBody', { error: friendlyErrorMessage(error, t('transactions.form.unknownError')) })
       );
     }
   }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!activeWorkspaceId || !accountId || !amount) throw new Error('Eksik alan var');
+      if (!activeWorkspaceId || !accountId || !amount) throw new Error(t('transactions.form.missingField'));
       const amountMinor = parseValueUnitAmountToMinor(amount, unitCode);
-      if (amountMinor === null) throw new Error('Tutar okunamadı, kontrol edin');
-      if (amountMinor <= 0) throw new Error('Tutar sıfırdan büyük olmalı');
+      if (amountMinor === null) throw new Error(t('transactions.form.amountUnreadable'));
+      if (amountMinor <= 0) throw new Error(t('transactions.form.amountPositive'));
       // Geçersiz tarihte new Date(...).toISOString() RangeError fırlatıp kaydı düşürürdü.
       const parsedDate = new Date(dateStr);
-      if (Number.isNaN(parsedDate.getTime())) throw new Error('Tarih okunamadı, kontrol edin');
+      if (Number.isNaN(parsedDate.getTime())) throw new Error(t('transactions.form.dateUnreadable'));
       const occurredAt = parsedDate.toISOString();
 
       if (isEditing) {
-        if (direction === 'transfer' && !transferToAccountId) throw new Error('Hedef hesap seçin');
+        if (direction === 'transfer' && !transferToAccountId) throw new Error(t('transactions.form.targetRequired'));
         const updated = await updateTransaction(id, {
           account_id: accountId,
           transfer_to_account_id: direction === 'transfer' ? transferToAccountId : null,
@@ -321,7 +324,7 @@ function TransactionForm({
       }
 
       if (direction === 'transfer') {
-        if (!transferToAccountId) throw new Error('Hedef hesap seçin');
+        if (!transferToAccountId) throw new Error(t('transactions.form.targetRequired'));
         return createTransfer({
           workspaceId: activeWorkspaceId,
           fromAccountId: accountId,
@@ -350,7 +353,7 @@ function TransactionForm({
     },
     onSuccess: () => {
       allowExit();
-      const message = isEditing ? 'Hareket başarıyla güncellendi.' : 'Hareket başarıyla oluşturuldu.';
+      const message = isEditing ? t('transactions.form.updated') : t('transactions.form.created');
       showSaveSuccess(message, () => router.back(), () => {
         if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
       });
@@ -361,7 +364,7 @@ function TransactionForm({
   const deleteMutation = useMutation({
     mutationFn: () => deleteTransaction(id as string),
     onSuccess: () => {
-      showSaveSuccess('Hareket başarıyla silindi.', () => router.back(), () => {
+      showSaveSuccess(t('transactions.form.deleted'), () => router.back(), () => {
         if (activeWorkspaceId) invalidatePaymentRelatedQueries(queryClient, activeWorkspaceId);
       });
     },
@@ -369,9 +372,9 @@ function TransactionForm({
   });
 
   function confirmDelete() {
-    Alert.alert('Hareketi Sil', 'Bu hareket kalıcı olarak silinecek. Emin misiniz?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => deleteMutation.mutate() },
+    Alert.alert(t('transactions.form.deleteTitle'), t('transactions.form.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteMutation.mutate() },
     ]);
   }
 
@@ -419,10 +422,16 @@ function TransactionForm({
         <ScrollView contentContainerStyle={{ padding: theme.screenEdge.standard, paddingBottom: theme.spacing.xxl }} keyboardShouldPersistTaps="handled">
           <ScreenHeader
             inline
-            title={isEditing ? 'Hareketi düzenle' : direction === 'transfer' ? 'Transfer' : 'Yeni hareket'}
-            leftLabel={{ label: 'Vazgeç', onPress: () => router.back() }}
+            title={
+              isEditing
+                ? t('transactions.form.editTitle')
+                : direction === 'transfer'
+                  ? t('transactions.form.transferTitle')
+                  : t('transactions.form.newTitle')
+            }
+            leftLabel={{ label: t('common.cancel'), onPress: () => router.back() }}
             rightLabel={{
-              label: isEditing ? 'Güncelle' : 'Kaydet',
+              label: isEditing ? t('transactions.form.update') : t('common.save'),
               bold: true,
               disabled: !canSubmit || saveMutation.isPending,
               onPress: () => saveMutation.mutate(),
@@ -494,44 +503,44 @@ function TransactionForm({
             </View>
 
             {!isEditing && direction !== 'transfer' ? (
-              <ScanPromptBanner description="Dekont, fiş veya fatura fotoğrafını tara; tutar, tarih ve hesap otomatik dolsun." />
+              <ScanPromptBanner description={t('transactions.form.scanHint')} />
             ) : null}
 
             {direction === 'transfer' ? (
               <>
                 <Text variant="caption" color="textSecondary" style={{ textAlign: 'center', paddingHorizontal: 30 }}>
-                  Transfer gelir ya da gider sayılmaz; toplam varlık değişmez.
+                  {t('transactions.form.transferNote')}
                 </Text>
                 {transferSourceAccounts.length === 0 ? (
                   <Text variant="caption" color="danger" style={{ textAlign: 'center' }}>
-                    Transfer için kredi kartı dışında en az bir hesap gerekir.
+                    {t('transactions.form.transferNeedsAccount')}
                   </Text>
                 ) : null}
                 <FieldGroup>
-                  <TextField label="Not" placeholder="Örn. Çek için aktarım" value={description} onChangeText={setDescription} />
-                  <DateField label="Tarih" value={dateStr} onChangeText={setDateStr} />
+                  <TextField label={t('transactions.form.note')} placeholder={t('transactions.form.notePlaceholder')} value={description} onChangeText={setDescription} />
+                  <DateField label={t('transactions.form.date')} value={dateStr} onChangeText={setDateStr} />
                 </FieldGroup>
               </>
             ) : (
             <FieldGroup>
-              <TextField label="Açıklama" placeholder="Örn. Market alışverişi" value={description} onChangeText={setDescription} />
+              <TextField label={t('transactions.form.description')} placeholder={t('transactions.form.descriptionPlaceholder')} value={description} onChangeText={setDescription} />
               {categoriesQuery.isPending ? (
-                <FormRow label="Kategori" value="Kategoriler yükleniyor…" />
+                <FormRow label={t('transactions.form.category')} value={t('transactions.form.categoriesLoading')} />
               ) : categories.length === 0 ? (
                 <FormRow
-                  label="Kategori"
-                  value={`${direction === 'income' ? 'Gelir' : 'Gider'} kategorisi yok. Kategoriler'den ekleyebilirsiniz.`}
+                  label={t('transactions.form.category')}
+                  value={direction === 'income' ? t('transactions.form.noIncomeCategory') : t('transactions.form.noExpenseCategory')}
                 />
               ) : (
-                <CategoryPicker categories={categories} selectedId={categoryId} onSelect={setCategoryId} label="Kategori" />
+                <CategoryPicker categories={categories} selectedId={categoryId} onSelect={setCategoryId} label={t('transactions.form.category')} />
               )}
               {sourceAccounts.length === 0 ? (
                 <FormRow
-                  label="Hesap"
+                  label={t('transactions.form.account')}
                   value={
                     direction === 'expense' && accounts.length > 0
-                        ? 'POS dışında en az bir hesap gerekir.'
-                        : "Önce Hesaplar'dan bir hesap ekleyin."
+                      ? t('transactions.form.needsNonPos')
+                      : t('transactions.form.addAccountFirst')
                   }
                 />
               ) : (
@@ -539,20 +548,22 @@ function TransactionForm({
                   accounts={sourceAccounts}
                   selectedId={accountId}
                   onSelect={setAccountId}
-                  title="Hesap seç"
-                  placeholder="Hesap seçin"
-                  label="Hesap"
+                  title={t('transactions.form.selectAccountTitle')}
+                  placeholder={t('transactions.form.selectAccount')}
+                  label={t('transactions.form.account')}
                 />
               )}
-              <DateField label="Tarih" value={dateStr} onChangeText={setDateStr} />
+              <DateField label={t('transactions.form.date')} value={dateStr} onChangeText={setDateStr} />
             </FieldGroup>
             )}
 
             {showPosCommissionPreview ? (
               <Text variant="caption" color="textSecondary">
-                Bu tahsilattan %{posCommissionRate} POS komisyonu (
-                {formatMinorAmount(posCommissionFeeMinor, selectedAccount!.currency_code)}) otomatik düşülecek,
-                kasaya net {formatMinorAmount(posCommissionNetMinor, selectedAccount!.currency_code)} geçecek.
+                {t('transactions.form.posPreview', {
+                  rate: formatPercent(posCommissionRate as number),
+                  fee: formatMinorAmount(posCommissionFeeMinor, selectedAccount!.currency_code),
+                  net: formatMinorAmount(posCommissionNetMinor, selectedAccount!.currency_code),
+                })}
               </Text>
             ) : null}
 
@@ -560,7 +571,7 @@ function TransactionForm({
               <>
                 <Stack gap="xs">
                   <Text variant="label" color="textSecondary">
-                    Kişi / firma
+                    {t('transactions.form.counterparty')}
                   </Text>
                   {activeWorkspaceId ? (
                     <CounterpartyPicker
@@ -581,12 +592,12 @@ function TransactionForm({
                       <Row gap="sm" align="center">
                         <Stack gap="xxs" style={{ flex: 1 }}>
                           <Text style={{ fontWeight: '600' }}>
-                            {direction === 'income' ? 'Bu bir tahsilat mı?' : 'Bu bir borç ödemesi mi?'}
+                            {direction === 'income' ? t('transactions.form.isCollection') : t('transactions.form.isPayment')}
                           </Text>
                           <Text variant="caption" color="textSecondary">
-                            Bu kişiyle {openObligations.length} açık {direction === 'income' ? 'alacak' : 'borç'} var.
-                            Kapatmak için {direction === 'income' ? 'Tahsilat Al' : 'Ödeme Yap'} ile kaydedin; burada
-                            kaydedilen hareket açık kayıtları düşürmez.
+                            {direction === 'income'
+                              ? t('transactions.form.openReceivables', { count: openObligations.length })
+                              : t('transactions.form.openPayables', { count: openObligations.length })}
                           </Text>
                         </Stack>
                         <Ionicons name="chevron-forward" size={14} color={theme.colors.mutedControl} />
@@ -597,7 +608,7 @@ function TransactionForm({
 
                 <Stack gap="xs">
                   <Text variant="label" color="textSecondary">
-                    Ödeme yöntemi
+                    {t('transactions.form.paymentMethod')}
                   </Text>
                   <SegmentedControl<PaymentMethod | ''>
                     options={PAYMENT_METHODS.map((m) => ({ key: m.value, label: m.label }))}
@@ -619,13 +630,13 @@ function TransactionForm({
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">
-                {friendlyErrorMessage(saveMutation.error, 'Kayıt kaydedilemedi')}
+                {friendlyErrorMessage(saveMutation.error, t('transactions.form.saveFailed'))}
               </Text>
             ) : null}
 
             {isEditing ? (
               <Button
-                label="Hareketi sil"
+                label={t('transactions.form.delete')}
                 variant="dangerText"
                 onPress={confirmDelete}
                 loading={deleteMutation.isPending}
