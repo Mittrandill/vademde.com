@@ -8,6 +8,22 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.8 — Türkçe / İngilizce dil desteği (2026-10-26)
+
+| Platform | Build | Durum | Gönderim |
+|---|---|---|---|
+| Android | versionCode 17 | Build `ba4c5c22-f284-4afd-a76b-f36bc7d27a23` başarılı. Play **production** gönderimi `150429b9-bcd3-4cbe-8619-f73429602770` **FINISHED**, `releaseStatus: completed`. Google inceleme/yayın durumu Play Console'dan izlenir | 2026-10-26 |
+| iOS | build 51 | Build `41ba79f8-0470-4529-8a8a-39d41e11bcc2` başarılı (Swift widget dahil). App Store Connect/TestFlight gönderimi `aca5bb63-a5f3-4673-8156-9ef6315a6c73` **FINISHED**. Apple işleme süresi sonrası TestFlight'ta görünür; incelemeye kullanıcı gönderecek | 2026-10-26 |
+
+- Build kaynak commit'i `fc7073f` (main); sürüm/runtime `1.0.8`. Android keystore ve iOS ana uygulama/widget provisioning profilleri mevcut EAS kimlik bilgilerinden kullanıldı.
+- Android submit yolu bu makinedeki gerçek dosyaya göre `./google-play-service-account.json` olarak düzeltildi. Anahtar Git'e eklenmedi.
+- Arayüz, yasal metinler, PDF, hatırlatma/bildirim, AI/OCR ve widget TR/EN destekler; 2947 sözlük anahtarı. Ayrıntılar: `docs/20-ingilizce-dil-destegi.md`.
+- Migration `20261025184930_add_server_locale_support` ve beş ilgili Edge Function 25 Ekim'de canlıya uygulandı; mevcut 224 profil Türkçe kaldı. Mevcut finans kayıtları ve kullanıcı adları değiştirilmedi.
+- İki production build `eas build --platform all --profile production --non-interactive --no-wait` ile oluşturuldu; ayrı `eas submit --id <build-id> --profile production` komutlarıyla gönderildi. 1.0.7 için OTA çıkarılmadı.
+- Kalan kontrol: cihazda TR/EN akışları ve widget; mağaza İngilizce metin/görselleri; iOS'ta 1.0.8 sürümüne build 51'i seçip App Review'a gönderme. Gerçek Gemini/push/OCR denemeleri henüz yapılmadı.
+
+---
+
 ## 1.0.7 OTA — Ekip üyesi limitleri: Plus 2, İşletme 50 (2026-10-25)
 
 | Platform | Kanal | Durum | Gönderim |

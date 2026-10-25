@@ -38,7 +38,7 @@
 - [x] 5. Özellik katmanının sabit kullanıcı metinleri (`features/`, `services/`, `utils/`)
 - [x] 6. Sunucu: profil dili, bildirim/AI, kategori kataloğu, sunucu hata eşlemesi — yerel doğrulandı; canlı migration ve beş Edge Function yayını tamam
 - [x] 7. Yasal metinler (gizlilik, kullanım koşulları) İngilizce
-- [x] 8. Widget metinleri (Swift) — kod ve JS aktarımı tamam; Xcode derlemesi/cihaz doğrulaması bekliyor
+- [x] 8. Widget metinleri (Swift) — kod, JS aktarımı ve EAS/Xcode production derlemesi tamam; cihaz doğrulaması bekliyor
 - [ ] 9. Doğrulama: TR'de hiçbir metin değişmedi mi (regresyon), EN'de Türkçe kalan metin taraması, cihazda deneme
 - [ ] 10. Mağaza: sürüm `1.0.8` olarak ayarlandı; TR/EN ad + alt başlık + anahtar kelimeler + açıklama,
       EN ekran görüntüleri, Plus Aylık ürün adındaki "Vamdemde" yazım hatası; build + inceleme
@@ -159,10 +159,15 @@
   **Mobil build/OTA yayınlanmadı**; runtimeVersion appVersion olduğu için 1.0.8 native build
   hazırlanmalı. Eski 1.0.7 uygulamaları mağaza güncellemesine kadar mevcut sürümde kalır.
 
+- 2026-10-26 — 1.0.8 Android **versionCode 17** ve iOS **build 51** EAS production
+  derlemeleri başarılı; iOS Swift widget gerçek Xcode derlemesinden geçti. iOS TestFlight
+  gönderimi başarılı; Android production gönderimi de **FINISHED**. Build/submission kimlikleri ve
+  güncel nihai durumlar `docs/15-yayin-gunlugu.md` başındaki 1.0.8 kaydında tutulur.
+  iOS App Review başvurusunu kullanıcı yapacak. Kaynak commit `fc7073f`, OTA yok.
+
 **Sıradaki ilk iş:** aşama 9 — TR/EN cihaz kontrolü (özellikle uzun İngilizce metinler,
-para/tarih girişi, dil değişimi, yasal metinler ve widget). Swift widget için macOS/Xcode
-derlemesi ve uygulama/widget dil geçişi kontrolü gerekiyor. Ardından
-mağaza hazırlığı (aşama 10). `app.json` sürümü 1.0.8.
+para/tarih girişi, dil değişimi, yasal metinler ve widget). Ardından mağaza metin/görselleri
+ve iOS App Review (aşama 10). `app.json` sürümü 1.0.8.
 
 Migration ve beş Edge Function yayını tamamlandı. Yeni uygulamanın beklediği
 `ai_insights.locale` canlıda var. Gerçek kullanıcı oturumuyla push/Gemini/OCR denemesi bekliyor.
@@ -179,7 +184,7 @@ normalizasyonundaki `tr-TR` dönüşümleri ve kayıtlı kategori adları arayü
 Banka resmî adları ve OCR eşleştirme alias'ları özel isim/veri olarak korundu. `reports/api.ts`
 `EXCLUDE_CARD_STATEMENT_LUMP` içindeki eski Türkçe açıklama filtresi veri uyumluluğu içindir;
 sunucu İngilizce açıklamalar üretmeye başlarken o filtreyi de değerlendir.
-Kalan büyük aşamalar: Swift native derlemesi ve cihaz/mağaza doğrulaması.
+Kalan büyük aşamalar: cihaz/mağaza doğrulaması ve iOS App Review.
 
 **Bilinen açıklar:** paywall `formatPrice` için `narrowSymbol` kullanılmadı (Hermes riski);
 eski serbest OCR uyarıları kullanıcının kabulüyle Türkçe korunuyor. Migration tabanlı Postgres testi temel tabloları izole kurar;
