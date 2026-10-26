@@ -36,7 +36,7 @@ import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/a
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { syncCardPaymentDueReminders, syncCreditCardStatementReminder } from '@/services/creditCardReminders';
-import { statementPeriodKey, useCardDueItems } from '@/features/accounts/cardDues';
+import { nextCardDue, statementPeriodKey, useCardDueItems } from '@/features/accounts/cardDues';
 import { useReflowKey } from '@/services/reflow';
 import { useWidgetSnapshot } from '@/features/dashboard/useWidgetSnapshot';
 import { t } from '@/i18n';
@@ -231,12 +231,13 @@ export default function HomeScreen() {
   // yansısın diye (bkz. features/accounts/cardDues.ts).
   const cardDues = useCardDueItems(activeWorkspaceId);
 
-  // Kartın son ödeme günü hatırlatmaları sıradaki son ödemeye göre her açılışta senkronize edilir.
+  // Kartın son ödeme günü hatırlatmaları sıradaki (gecikmemiş) son ödemeye göre her açılışta
+  // senkronize edilir.
   useEffect(() => {
     if (!activeWorkspaceId || !accountsQuery.data || !cardDues.isSuccess) return;
     for (const account of accountsQuery.data) {
       if (account.type !== 'credit_card') continue;
-      const due = cardDues.items.find((i) => i.card_due_account_id === account.id);
+      const due = nextCardDue(cardDues.items, account.id);
       const nextDue = due?.due_date
         ? { dueDate: due.due_date, periodKey: statementPeriodKey(account, due.due_date) }
         : null;

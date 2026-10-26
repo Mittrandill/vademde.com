@@ -1,7 +1,7 @@
 import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import { fetchAll } from '@/services/fetchAll';
-import { computeCardDebt, type CardDebtStatement, type CardDebtTransaction, type CardStatementAnchor } from '@/utils/cardDebt';
+import { computeCardDebt, type CardDebtCharge, type CardDebtStatement, type CardDebtTransaction, type CardStatementAnchor } from '@/utils/cardDebt';
 import {
   ACTIVE_OBLIGATION_STATUSES,
   listAllObligations,
@@ -242,6 +242,8 @@ export interface AccountBalanceReportItem {
   balanceMinor: number;
   /** Yalnızca kredi kartında: güncel borcun dayandığı en son ekstre (yoksa null). */
   cardStatement?: CardStatementAnchor | null;
+  /** Yalnızca kredi kartında: ekstreyle karşılanmayan borcun kalemleri (son ödeme dağıtımı için). */
+  cardCharges?: CardDebtCharge[];
 }
 
 type BalanceTransactionRow = CardDebtTransaction;
@@ -265,7 +267,7 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
   const [{ data: accounts, error: accountsError }, transactions] = await Promise.all([
     supabase
       .from('accounts')
-      .select('id, name, type, bank_code, currency_code, opening_balance_minor, statement_day, payment_due_day, created_at')
+      .select('id, name, type, bank_code, currency_code, opening_balance_minor, opening_balance_set_at, statement_day, payment_due_day, created_at')
       .eq('workspace_id', workspaceId)
       .eq('is_archived', false)
       .order('created_at', { ascending: true }),
@@ -345,13 +347,13 @@ export async function getAccountBalances(workspaceId: string): Promise<AccountBa
             .filter((p) => p.transaction?.transfer_to_account_id !== account.id)
             .reduce((sum, p) => sum + p.amount_minor, 0),
         }));
-      const { debtMinor, anchor } = computeCardDebt(
+      const { debtMinor, anchor, charges } = computeCardDebt(
         account,
         cardTransactions,
         cardStatements,
         cashAdvances.filter((a) => a.account_id === account.id)
       );
-      return { ...base, balanceMinor: debtMinor, cardStatement: anchor };
+      return { ...base, balanceMinor: debtMinor, cardStatement: anchor, cardCharges: charges };
     }
     return { ...base, balanceMinor: account.opening_balance_minor + (deltas.get(account.id) ?? 0) };
   });

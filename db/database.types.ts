@@ -26,6 +26,7 @@ export type Database = {
           is_archived: boolean
           name: string
           opening_balance_minor: number
+          opening_balance_set_at: string | null
           overdraft_limit_minor: number | null
           payment_due_day: number | null
           pos_commission_rate: number | null
@@ -45,6 +46,7 @@ export type Database = {
           is_archived?: boolean
           name: string
           opening_balance_minor?: number
+          opening_balance_set_at?: string | null
           overdraft_limit_minor?: number | null
           payment_due_day?: number | null
           pos_commission_rate?: number | null
@@ -64,6 +66,7 @@ export type Database = {
           is_archived?: boolean
           name?: string
           opening_balance_minor?: number
+          opening_balance_set_at?: string | null
           overdraft_limit_minor?: number | null
           payment_due_day?: number | null
           pos_commission_rate?: number | null

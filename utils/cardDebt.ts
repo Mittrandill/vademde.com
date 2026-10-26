@@ -17,6 +17,9 @@ export interface CardDebtAccount extends CreditCardPeriodAccount {
   id: string;
   opening_balance_minor: number;
   created_at: string;
+  /** Açılış bakiyesinin ("güncel kart borcu") en son girildiği an — DB tetikleyicisi tutar.
+   * Eski kayıtlarda/istemcilerde yoksa created_at kullanılır. */
+  opening_balance_set_at?: string | null;
 }
 
 export interface CardDebtTransaction {
@@ -59,9 +62,19 @@ export interface CardStatementAnchor {
   statementRemainingMinor: number;
 }
 
+/** Ekstreyle karşılanmayan borcu oluşturan kalemler (gün = YYYY-MM-DD). Son ödeme günlerine
+ * dağıtım için kullanılır (bkz. features/accounts/cardDues.ts). */
+export interface CardDebtCharge {
+  day: string;
+  amountMinor: number;
+  /** Açılış bakiyesi: o güne kadar birikmiş borç (kesim değil son ödeme gününe göre yerleşir). */
+  isOpening: boolean;
+}
+
 export interface CardDebtResult {
   debtMinor: number;
   anchor: CardStatementAnchor | null;
+  charges: CardDebtCharge[];
 }
 
 const CANCELLED = 'iptal_edildi';
@@ -119,6 +132,10 @@ export function cardDebtDelta(cardId: string, tx: CardDebtTransaction): number {
   return 0;
 }
 
+export function openingBalanceDay(account: Pick<CardDebtAccount, 'created_at' | 'opening_balance_set_at'>): string {
+  return localDay(account.opening_balance_set_at ?? account.created_at);
+}
+
 export function computeCardDebt(
   account: CardDebtAccount,
   transactions: CardDebtTransaction[],
@@ -145,25 +162,36 @@ export function computeCardDebt(
   }
 
   // Açılış bakiyesi ("güncel kart borcu") en son ekstreden sonra girildiyse daha yeni bilgidir.
-  const openingIsNewer = account.opening_balance_minor !== 0 && localDay(account.created_at) > (anchor?.cutoffDate ?? '');
+  const openingDay = openingBalanceDay(account);
+  const openingIsNewer = account.opening_balance_minor !== 0 && openingDay > (anchor?.cutoffDate ?? '');
   const openAdvances = cashAdvances.filter((a) => a.status !== CANCELLED && a.remaining_amount_minor > 0);
+  const chargesOf = (txs: CardDebtTransaction[], advances: CardDebtCashAdvance[]): CardDebtCharge[] => [
+    ...txs
+      .map((tx) => ({ day: localDay(tx.occurred_at), amountMinor: cardDebtDelta(account.id, tx), isOpening: false }))
+      .filter((c) => c.amountMinor > 0),
+    ...advances.map((a) => ({ day: localDay(a.created_at), amountMinor: a.remaining_amount_minor, isOpening: false })),
+  ];
 
   if (!anchor || openingIsNewer) {
     const delta = transactions.reduce((sum, tx) => sum + cardDebtDelta(account.id, tx), 0);
     const advances = openAdvances.reduce((sum, a) => sum + a.remaining_amount_minor, 0);
-    return { debtMinor: account.opening_balance_minor + delta + advances, anchor: null };
+    const charges = chargesOf(transactions, openAdvances);
+    if (account.opening_balance_minor > 0) {
+      charges.push({ day: openingDay, amountMinor: account.opening_balance_minor, isOpening: true });
+    }
+    return { debtMinor: account.opening_balance_minor + delta + advances, anchor: null, charges };
   }
 
   const cutoffDate = anchor.cutoffDate;
-  const afterCutoff = transactions
-    .filter((tx) => localDay(tx.occurred_at) > cutoffDate)
-    .reduce((sum, tx) => sum + cardDebtDelta(account.id, tx), 0);
-  const advancesAfterCutoff = openAdvances
-    .filter((a) => localDay(a.created_at) > cutoffDate)
-    .reduce((sum, a) => sum + a.remaining_amount_minor, 0);
+  const txsAfterCutoff = transactions.filter((tx) => localDay(tx.occurred_at) > cutoffDate);
+  const advancesAfter = openAdvances.filter((a) => localDay(a.created_at) > cutoffDate);
+  const afterCutoff = txsAfterCutoff.reduce((sum, tx) => sum + cardDebtDelta(account.id, tx), 0);
+  const advancesAfterCutoff = advancesAfter.reduce((sum, a) => sum + a.remaining_amount_minor, 0);
   const { offCardPaidMinor, ...publicAnchor } = anchor;
   return {
     debtMinor: anchor.statementTotalMinor - offCardPaidMinor + afterCutoff + advancesAfterCutoff,
     anchor: publicAnchor,
+    // Ekstrenin kendisi ekstre kaydıyla görünür; burada yalnızca kesimden sonrakiler.
+    charges: chargesOf(txsAfterCutoff, advancesAfter),
   };
 }
