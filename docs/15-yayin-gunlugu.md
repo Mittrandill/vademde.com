@@ -8,6 +8,24 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.8 OTA — Kart son ödemesi: ödenmeyen dönem takvimde kalır (2026-10-26)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.8) | `eas update --channel production --environment production` — update group `519e5973-2900-40db-94df-b0959a74a9ea` (iOS `01a1772d-34f2-7781-88b6-98489262c1fd`, Android `01a1772d-34f2-7c71-989d-369df175920d`), commit `69e63fc` | 2026-10-26 |
+
+- 1.0.8 mağazaya çıkmadan yayınlandı: şu an yalnızca TestFlight build 51 alır; mağaza kullanıcıları 1.0.8'i
+  kurduktan sonraki ikinci soğuk açılışta alır. 1.0.7 kullanıcılarına inmez (runtime `appVersion`).
+- Gerçek kullanıcı geri bildirimi: ekstresiz kartın son ödemesi takvimde görünmüyordu. Sanal kalem yalnızca
+  bugünden sonraki ilk son ödemeye yazıldığı için gün geçince siliniyordu. Artık ekstreyle karşılanmayan borç
+  kalemlerine göre dönemlerin son ödeme günlerine dağıtılır, ödemeler en eski dönemden düşer; ödenmeyen dönem
+  "gecikti" olarak kalır, toplam güncel kart borcuna eşittir (`features/accounts/cardDues.ts`, `tests/card-dues.cjs`).
+- Güncel kart borcu yeniden girilince eski dönemle toplanmaz: `accounts.opening_balance_set_at` (tetikleyici;
+  migration `20261026120000`, web reposunda, canlıya uygulandı — eski build'ler sütunu okumaz, kırılmaz).
+- Web aynı gün `44b039a` ile yayınlandı.
+
+---
+
 ## 1.0.8 — Türkçe / İngilizce dil desteği (2026-10-26)
 
 | Platform | Build | Durum | Gönderim |
