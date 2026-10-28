@@ -8,6 +8,19 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## Sunucu — RevenueCat promosyonları + Gemini kredi kesintisi (2026-10-28)
+
+- 2026-10-28 09:47–14:26 UTC arası Gemini ön ödemeli kredisi bitti (`402 prepayment credits are depleted`);
+  15 OCR işi `failed` oldu, 2 kullanıcı etkilendi. Kredi yüklendi; kullanıcılara özür push'u gönderildi.
+- `revenuecat-webhook` Supabase sürüm 8 (`--no-verify-jwt`), commit `4f3be37`: RevenueCat panelinden verilen
+  promosyon `NON_RENEWING_PURCHASE` (store `PROMOTIONAL`) olarak geliyor ve `ignored` sayılıyordu; artık
+  `store='promotional'`, `will_renew=false` olarak aboneliğe yazılır. Düzeltmeden önce verilen bir promosyon
+  (bitiş 2026-11-28) satırı elle yazıldı.
+- Takip: 2026-11-28 sonrası promosyon bitişinde RevenueCat'in `EXPIRATION` gönderip planı `free`'ye
+  düşürdüğü doğrulanacak. Mobil build/OTA gerekmez.
+
+---
+
 ## 1.0.8 OTA — Kart son ödemesi: ödenmeyen dönem takvimde kalır (2026-10-26)
 
 | Platform | Kanal | Durum | Gönderim |
