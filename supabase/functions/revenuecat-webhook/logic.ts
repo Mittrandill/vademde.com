@@ -46,6 +46,7 @@ export type Outcome = 'applied' | 'ignored' | 'duplicate' | 'stale_skipped';
 const ISLETME_ENTITLEMENT = 'isletme';
 const STATE_TYPES = new Set([
   'INITIAL_PURCHASE',
+  'NON_RENEWING_PURCHASE',
   'RENEWAL',
   'PRODUCT_CHANGE',
   'UNCANCELLATION',
@@ -158,6 +159,9 @@ export async function processEvent(client: DbClient, event: RevenueCatEvent): Pr
   let outcome: Outcome = 'applied';
   switch (event.type) {
     case 'INITIAL_PURCHASE':
+    // Panelden verilen promosyon (store=PROMOTIONAL) bu tiple gelir; yenilenmez, süresi dolunca
+    // RevenueCat EXPIRATION gönderir.
+    case 'NON_RENEWING_PURCHASE':
     case 'RENEWAL':
     case 'PRODUCT_CHANGE':
     case 'UNCANCELLATION': {
@@ -174,7 +178,7 @@ export async function processEvent(client: DbClient, event: RevenueCatEvent): Pr
             current_period_end: event.expiration_at_ms
               ? new Date(event.expiration_at_ms).toISOString()
               : null,
-            will_renew: true,
+            will_renew: event.type !== 'NON_RENEWING_PURCHASE',
             updated_at: now,
             // Çıkarılamadıysa alan hiç gönderilmez; var olan değer ezilmez.
             ...(billingPeriod ? { billing_period: billingPeriod } : {}),
