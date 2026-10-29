@@ -116,6 +116,11 @@ await processEvent(c, ev({ type: 'RENEWAL', is_trial_conversion: true }));
 eq(c.log.upserts[0].row.status, 'active', 'trial conversion renewal is active');
 
 c = fakeClient();
+eq(await processEvent(c, ev({ type: 'NON_RENEWING_PURCHASE', store: 'PROMOTIONAL', period_type: 'PROMOTIONAL', product_id: 'rc_promo_plus_monthly' })), 'applied', 'promotional grant is applied');
+row = c.log.upserts[0].row;
+eq([row.plan, row.status, row.store, row.will_renew, row.billing_period], ['plus', 'active', 'promotional', false, 'monthly'], 'promotional grant writes a non-renewing promotional plus');
+
+c = fakeClient();
 await processEvent(c, ev({ type: 'CANCELLATION' }));
 eq(c.log.updates[0], { row: { will_renew: false, updated_at: c.log.updates[0].row.updated_at }, column: 'owner_id', value: USER }, 'cancellation only stops renewal; plan is untouched');
 eq(c.log.upserts.length, 0, 'cancellation does not downgrade the plan');
