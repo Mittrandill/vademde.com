@@ -8,6 +8,24 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.8 OTA — Kayıt sırasında realtime yenilemelerini birleştirme (2026-10-29)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.8) | Yayınlandı — update group `1249e79e-12d0-4c73-aa3b-d882dc828100` (iOS `01a18746-5cb1-7a78-8d79-76c91bbc8563`, Android `01a18746-5cb1-7bd3-b99c-95ae7f81dc5b`), kaynak commit `fa512c4` | 2026-10-29 |
+
+- Çok taksitli manuel kredi kaydında her realtime satır bildirimi aynı sorguları tekrar tekrar yeniliyordu.
+  Bildirimler artık 400 ms pencerede birleştirilir; aktif kayıt işlemi bitene kadar yenileme bekler.
+  Devam eden yenileme sırasında gelen bildirimler tek bir sonraki yenilemeye dönüşür.
+- Doğrulama: realtime kuyruğunun 13 kontrolü, finans regresyonunun 81 kontrolü, TypeScript ve değişen
+  dosyalarda ESLint geçti. Android ve iOS production paketleri başarıyla derlendi ve yüklendi.
+  Sorunu yaşayan gerçek Android cihazda güncelleme sonrası sonuç henüz doğrulanmadı.
+- `eas update --channel production --environment production --platform all` ile yayınlandı.
+  Runtime `appVersion`: yalnızca 1.0.8 uygulamalar alır; eski sürümlerin önce mağazadan güncellenmesi gerekir.
+- [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/1249e79e-12d0-4c73-aa3b-d882dc828100).
+
+---
+
 ## 1.0.8 OTA — Kart son ödemesi: ödenmeyen dönem takvimde kalır (2026-10-26)
 
 | Platform | Kanal | Durum | Gönderim |
