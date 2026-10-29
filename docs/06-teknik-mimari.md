@@ -80,7 +80,10 @@ Gemini API anahtarı mobil uygulamada bulunmaz. Uygulama belgeyi güvenli storag
 ### 10.6.3 Gerçek zamanlı güncelleme
 
 - Finansal tablolar (`accounts`, `categories`, `counterparties`, `transactions`, `obligations`, `installments`, `payments`) Supabase Realtime `supabase_realtime` publication'ına eklenir.
-- Aktif çalışma alanına (`workspace_id`) filtrelenmiş `postgres_changes` aboneliği açılır; gelen her olayda ilgili React Query anahtarları geçersiz kılınır.
+- Aktif çalışma alanına (`workspace_id`) filtrelenmiş `postgres_changes` aboneliği açılır. Satır bildirimleri `services/workspaceRefresh.ts` içinde 400 ms'lik sabit pencerede birleştirilir; her taksit için tekrar tekrar sorgu başlatılmaz.
+- Cihazda devam eden bir mutation varsa yenileme başarı/hata sonucuna kadar bekler; çevrimdışı duraklatılmış mutation ekipten gelen güncellemeleri engellemez. Finansal kayıt ve hatırlatma adımlarının sırası değişmez.
+- Etkileşim/ekran geçişi bittikten sonra çalışma alanı prefix'i bir kez geçersiz kılınır: aktif sorgular yenilenir, aktif olmayanlar sonraki kullanım için stale olur. Bir yenileme bitmeden ikincisi başlatılmaz; bu sırada gelen bildirimler sonraki turda işlenir. Çalışma alanı değişince veya çıkışta bekleyen zamanlayıcılar/etkileşim işi ve mutation aboneliği temizlenir.
+- Regresyon kontrolü: `node tests/realtime-refresh.cjs` (gerçek TanStack QueryClient ile 36 taksit, eşzamanlı yazma, hata, çevrimdışı bekleme, çalışma alanı değişimi ve geç gelen bildirim senaryoları).
 - Bu, işletme çalışma alanlarında birden fazla ekip üyesinin aynı anda çalışmasında veya aynı kullanıcının birden fazla cihazında verinin manuel yenileme olmadan güncel kalmasını sağlar.
 
 ### 10.6.4 Çevrimdışı senkronizasyon
