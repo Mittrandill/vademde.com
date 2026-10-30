@@ -8,6 +8,27 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.8 OTA — Destek cevapları Bildirimler ekranında + "Bildirimler kapalı" kartı (2026-10-30)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.8) | Yayınlandı — update group `bbb4bb67-43c4-4eed-bd01-4fefa637a28d` (iOS `01a18e1e-b49c-73fd-8aa9-85cdc5902cd5`, Android `01a18e1e-b49c-7d93-be4e-ea3cb7e6ebc6`), kaynak commit `43f62b9` | 2026-10-30 |
+
+- **Bildirimler ekranı:** Üstte "Destek" bölümü — destek ekibinin son cevapları (okunmamış noktasıyla);
+  dokununca sohbet açılır ve cevap okundu işaretlenir. Push ile birlikte cevap artık uygulama içinde de görünür.
+- **Ana ekran "Bildirimler kapalı" kartı:** Bildirim izni yoksa gösterilir. İzin sorulabiliyorsa sorar, reddedilmişse
+  sistem ayarlarını açar; uygulamaya dönünce izin yeniden okunur ve push token hemen kaydedilir. "Şimdi değil" 7 gün gizler.
+  Gerekçe: yayın anında 396 kullanıcının 204'ünün kayıtlı push cihazı yoktu (vade hatırlatmaları hiç ulaşmıyor;
+  bir kısmı yalnızca web kullanıcısı olabilir). Etkisi bu oranın düşmesiyle izlenecek.
+- **Admin paneli (vademde.app `0c3b116`, canlı):** Üye listesinde kayıtlı push cihazı olmayanlara "Bildirim kapalı"
+  rozeti. `admin_list` members dalı `push_devices` döner (migration `20261030130000_admin_members_push_devices.sql`,
+  production'a uygulandı).
+- Doğrulama: TypeScript ve değişen dosyalarda ESLint geçti (`app/(tabs)/index.tsx`'teki kullanılmayan `queryClient`
+  uyarısı önceden vardı). Gerçek cihazda henüz denenmedi.
+- [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/bbb4bb67-43c4-4eed-bd01-4fefa637a28d).
+
+---
+
 ## 1.0.8 OTA — Uygulama içi destek sohbeti + vade sayısı alanı başlığın altında (2026-10-30)
 
 | Platform | Kanal | Durum | Gönderim |
