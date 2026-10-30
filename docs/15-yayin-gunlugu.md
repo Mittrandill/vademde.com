@@ -8,6 +8,28 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.8 OTA — Push token hesap değişiminde kaydolmuyordu + Ayarlar > Bildirimler izin durumu (2026-10-30)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.8) | Yayınlandı — update group `59148d1f-6c33-4103-acd1-2c8930d6a347` (iOS `01a18e30-41bc-7c9f-aeb4-fde7507626c5`, Android `01a18e30-41bc-7939-a671-2da66bc807f4`), kaynak commit `6d14d44` | 2026-10-30 |
+
+- **Hata:** Push token telefona özgüdür (`push_tokens.token` UNIQUE). Aynı telefonda önce başka hesapla giriş
+  yapıldıysa satır o hesapta kalıyor, yeni hesabın istemci upsert'ü `push_tokens_update_own` RLS'ine takılıp 403
+  alıyor ve sessizce düşüyordu (son 24 saatte 5 adet 403). Sonuç: izin açık olduğu halde hesap hiç bildirim almıyor,
+  admin panelinde "Bildirim kapalı" görünüyordu.
+- **Düzeltme:** `register_push_token(p_token, p_platform)` RPC'si (migration
+  `20261030140000_register_push_token.sql`, production'a uygulandı) token'ı `auth.uid()`'ye taşır; istemci artık
+  bunu çağırır. Geri alınan işlemde sahte kullanıcılarla doğrulandı (eski yol `42501`, RPC sonrası sahip doğru).
+- **Ayarlar > Bildirimler:** Artık bildirim listesini açmıyor; izin durumunu (Açık/Kapalı) gösterir ve telefonun
+  bildirim ayarlarını açar (iOS izni uygulama içinden kapatmaya izin vermez). Liste ana ekran zilinde ve
+  Daha Fazla > Bildirimler'de.
+- Doğrulama: TypeScript ve değişen dosyalarda ESLint geçti (yalnızca önceden var olan `import/no-duplicates`
+  uyarıları). Gerçek cihazda henüz denenmedi.
+- [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/59148d1f-6c33-4103-acd1-2c8930d6a347).
+
+---
+
 ## 1.0.8 OTA — Destek cevapları Bildirimler ekranında + "Bildirimler kapalı" kartı (2026-10-30)
 
 | Platform | Kanal | Durum | Gönderim |
