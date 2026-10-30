@@ -33,6 +33,11 @@ export const notifications = {
   markCollected: 'Tahsil edildi işaretle',
   check: 'Kontrol et',
   supportSection: 'Destek',
+  remindersTab: 'Hatırlatmalar',
+  supportTab: 'Destek',
+  supportTabUnread: 'Destek ({{count}})',
+  supportEmptyTitle: 'Destek bildirimi yok',
+  supportEmptyBody: 'Destek ekibi talebine cevap verdiğinde burada görünecek.',
   supportReplyTitle: 'Destek talebi hakkında',
   permissionBanner: {
     title: 'Bildirimler kapalı',

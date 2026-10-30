@@ -35,6 +35,11 @@ export const notifications: Messages<typeof tr> = {
   markCollected: 'Mark as collected',
   check: 'Review',
   supportSection: 'Support',
+  remindersTab: 'Reminders',
+  supportTab: 'Support',
+  supportTabUnread: 'Support ({{count}})',
+  supportEmptyTitle: 'No support notifications',
+  supportEmptyBody: 'When the support team replies to your request, it will appear here.',
   supportReplyTitle: 'About your support request',
   permissionBanner: {
     title: 'Notifications are off',

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Alert, InteractionManager, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { ActionSheet, EmptyState, Group, GroupedRowIcon, Pagination, Pressable, Skeleton, Stack, Text } from '@/components/primitives';
+import { ActionSheet, EmptyState, Group, GroupedRowIcon, Pagination, Pressable, SegmentedControl, Skeleton, Stack, Text } from '@/components/primitives';
 import type { ActionSheetOption } from '@/components/primitives/ActionSheet';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import {
@@ -37,6 +37,8 @@ function startOfDay(date: Date): Date {
 // listRecentReminders yalnızca 'delivered' (push'u gerçekten gönderilmiş) satırları döner,
 // bunların remind_at'i her zaman bugün ya da geçmiştir.
 type SectionKey = 'today' | 'thisWeek' | 'past';
+
+type TabKey = 'reminders' | 'support';
 
 function sectionKeyFor(remindAt: Date, today: Date): SectionKey {
   const diffDays = Math.round((today.getTime() - startOfDay(remindAt).getTime()) / (24 * 60 * 60 * 1000));
@@ -84,6 +86,8 @@ export default function NotificationsScreen() {
   const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<TabKey>(params.tab === 'support' ? 'support' : 'reminders');
   const [page, setPage] = useState(0);
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
 
@@ -113,13 +117,14 @@ export default function NotificationsScreen() {
     placeholderData: keepPreviousData,
   });
 
-  // Destek cevapları çalışma alanına değil kullanıcıya aittir; hatırlatma listesinin üstünde ayrı
-  // bir bölümde gösterilir (bkz. supabase/functions/support-reply).
+  // Destek cevapları çalışma alanına değil kullanıcıya aittir; hatırlatmalarla karışmasın diye ayrı
+  // sekmede gösterilir (bkz. supabase/functions/support-reply).
   const supportQuery = useQuery({
     queryKey: queryKeys.supportReplyNotifications(),
     queryFn: () => listSupportReplyNotifications(),
   });
   const supportItems = supportQuery.data ?? [];
+  const supportUnread = supportItems.filter((item) => !item.read).length;
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) => markReminderRead(id),
@@ -184,29 +189,51 @@ export default function NotificationsScreen() {
       >
         <ScreenHeader
           title={t('notifications.title')}
-          rightLabel={{ label: t('notifications.actions'), onPress: () => setBulkMenuOpen(true) }}
+          rightLabel={tab === 'reminders' ? { label: t('notifications.actions'), onPress: () => setBulkMenuOpen(true) } : undefined}
         />
 
-        {supportItems.length > 0 ? (
-          <View style={{ marginTop: theme.spacing.lg }}>
-            <Text variant="label" color="textSecondary" style={{ marginBottom: 10 }}>
-              {t('notifications.supportSection')}
-            </Text>
-            <Group inset={62}>
-              {supportItems.map((item) => (
-                <SupportNotificationRow key={item.id} item={item} />
-              ))}
-            </Group>
-          </View>
-        ) : null}
+        <View style={{ marginTop: theme.spacing.md }}>
+          <SegmentedControl
+            options={[
+              { key: 'reminders', label: t('notifications.remindersTab') },
+              {
+                key: 'support',
+                label: supportUnread > 0 ? t('notifications.supportTabUnread', { count: supportUnread }) : t('notifications.supportTab'),
+              },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+        </View>
 
-        {remindersQuery.isLoading ? (
+        {tab === 'support' ? (
+          supportQuery.isLoading ? (
+            <Stack gap="sm" style={{ paddingTop: theme.spacing.lg }}>
+              <Skeleton height={64} borderRadius={theme.radius.group} />
+              <Skeleton height={64} borderRadius={theme.radius.group} />
+            </Stack>
+          ) : supportItems.length === 0 ? (
+            <EmptyState
+              icon="chatbubbles-outline"
+              title={t('notifications.supportEmptyTitle')}
+              message={t('notifications.supportEmptyBody')}
+            />
+          ) : (
+            <View style={{ marginTop: theme.spacing.lg }}>
+              <Group inset={62}>
+                {supportItems.map((item) => (
+                  <SupportNotificationRow key={item.id} item={item} />
+                ))}
+              </Group>
+            </View>
+          )
+        ) : remindersQuery.isLoading ? (
           <Stack gap="sm" style={{ paddingTop: theme.spacing.lg }}>
             <Skeleton height={64} borderRadius={theme.radius.group} />
             <Skeleton height={64} borderRadius={theme.radius.group} />
             <Skeleton height={64} borderRadius={theme.radius.group} />
           </Stack>
-        ) : sections.length === 0 && remindersQuery.isSuccess && supportItems.length === 0 ? (
+        ) : sections.length === 0 && remindersQuery.isSuccess ? (
           <EmptyState
             icon="notifications-outline"
             title={t('notifications.emptyTitle')}
@@ -234,7 +261,7 @@ export default function NotificationsScreen() {
           ))
         )}
 
-        {totalPages > 1 ? (
+        {tab === 'reminders' && totalPages > 1 ? (
           <View style={{ marginTop: theme.spacing.md }}>
             <Pagination page={effectivePage} totalPages={totalPages} onChange={setPage} loading={remindersQuery.isFetching} />
           </View>
@@ -384,7 +411,7 @@ function SupportNotificationRow({ item }: { item: SupportReplyNotification }) {
           {item.subject}
         </Text>
         <Text color="textSecondary" numberOfLines={2} style={{ fontSize: 15, lineHeight: 20 }}>
-          {item.body.replace(/s+/g, ' ').trim()}
+          {item.body.replace(/\s+/g, ' ').trim()}
         </Text>
         <Text variant="caption" color="textSecondary" style={{ marginTop: 4 }}>
           {timeFormatter.format(new Date(item.createdAt))}
