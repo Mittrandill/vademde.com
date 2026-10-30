@@ -52,7 +52,7 @@ function RootNavigator() {
     setAnalyticsSignedIn(!!userId);
     if (userId) {
       configurePurchases(userId);
-      registerPushToken(userId);
+      registerPushToken();
     } else {
       logOutPurchases();
       unregisterCurrentPushToken();

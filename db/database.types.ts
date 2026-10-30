@@ -1533,6 +1533,10 @@ export type Database = {
         Returns: undefined
       }
       redeem_workspace_invite: { Args: { p_code: string }; Returns: string }
+      register_push_token: {
+        Args: { p_platform: string; p_token: string }
+        Returns: undefined
+      }
       remove_workspace_member: {
         Args: { p_user_id: string; p_workspace_id: string }
         Returns: undefined

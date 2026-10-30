@@ -160,8 +160,11 @@ export async function dismissAllReminders(workspaceId: string): Promise<void> {
 
 // supabase/functions/send-reminders (pg_cron ile 15 dakikada bir) bu token'lara Expo Push
 // API üzerinden gönderir — bkz. services/pushToken.ts.
-export async function upsertPushToken(input: TablesInsert<'push_tokens'>): Promise<void> {
-  const { error } = await supabase.from('push_tokens').upsert(input, { onConflict: 'token' });
+// Token telefona özgüdür; aynı telefonda önce başka hesapla giriş yapıldıysa satır o hesapta kalır
+// ve istemci upsert'ü RLS'e takılır. register_push_token token'ı oturumdaki kullanıcıya taşır
+// (bkz. supabase/migrations/20261030140000_register_push_token.sql).
+export async function upsertPushToken(input: Pick<TablesInsert<'push_tokens'>, 'token' | 'platform'>): Promise<void> {
+  const { error } = await supabase.rpc('register_push_token', { p_token: input.token, p_platform: input.platform });
   if (error) throw error;
 }
 

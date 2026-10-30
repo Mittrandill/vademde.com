@@ -23,6 +23,7 @@ import { useThemePreferenceStore } from '@/store/themePreferenceStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { biometricLabel as resolveBiometricLabel } from '@/services/appLock';
 import { PLAN_LABELS } from '@/features/subscriptions/planLabels';
+import { useNotificationPermission } from '@/services/notificationPermission';
 import { t } from '@/i18n';
 
 const THEME_LABEL_KEYS = {
@@ -51,6 +52,7 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
   const { session } = useSession();
+  const notificationPermission = useNotificationPermission();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const themePreference = useThemePreferenceStore((s) => s.themePreference);
 
@@ -173,10 +175,21 @@ export default function SettingsScreen() {
             title={t('settings.categories')}
             onPress={() => router.push('/categories')}
           />
+          {/* Bildirim izni sistem ayarıdır (iOS uygulama içinden kapatmaya izin vermez); satır güncel
+              durumu gösterir ve telefonun bildirim ayarlarını açar. Bildirim listesi ana ekrandaki
+              zil ve Daha Fazla > Bildirimler'dedir. */}
           <GroupedRow
             leading={<GroupedRowIcon name="notifications-outline" />}
             title={t('settings.notifications')}
-            onPress={() => router.push('/notifications')}
+            subtitle={t('settings.notificationsHelp')}
+            value={
+              notificationPermission.status
+                ? notificationPermission.status.granted
+                  ? t('settings.notificationsOn')
+                  : t('settings.notificationsOff')
+                : undefined
+            }
+            onPress={() => void notificationPermission.openControls()}
           />
           <GroupedRow
             leading={<GroupedRowIcon name="people-outline" />}

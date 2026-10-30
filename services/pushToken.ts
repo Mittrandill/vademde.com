@@ -10,8 +10,9 @@ const EAS_PROJECT_ID = 'df8f055e-b6e1-4104-b0f8-885b80d4775b';
 let currentToken: string | null = null;
 
 // app/_layout.tsx'te oturum açıldığında çağrılır (configurePurchases ile aynı desen).
-// supabase/functions/send-reminders bu token'a Expo Push API üzerinden gönderir.
-export async function registerPushToken(userId: string): Promise<void> {
+// supabase/functions/send-reminders bu token'a Expo Push API üzerinden gönderir. Token, oturumdaki
+// kullanıcıya sunucuda (auth.uid()) bağlanır.
+export async function registerPushToken(): Promise<void> {
   try {
     const granted = await ensureNotificationPermission();
     if (!granted) return;
@@ -20,7 +21,6 @@ export async function registerPushToken(userId: string): Promise<void> {
     currentToken = data;
 
     await upsertPushToken({
-      user_id: userId,
       token: data,
       platform: Platform.OS === 'ios' ? 'ios' : 'android',
     });
