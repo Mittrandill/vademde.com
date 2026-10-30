@@ -8,6 +8,23 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.8 OTA — Bildirimler ekranında destek cevapları ayrı sekmede (2026-10-31)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.8) | Yayınlandı — update group `7dfab9b8-5cb1-4467-9fcc-889e46abd357` (iOS `01a18ece-6541-7709-ad08-7a65a07e11a9`, Android `01a18ece-6541-79a9-8f0e-4acf76c285b4`), kaynak commit `3d65c16` | 2026-10-31 |
+
+- **Sekmeler:** Bildirimler ekranı **Hatırlatmalar | Destek** olarak ayrıldı; destek cevapları vade
+  hatırlatmalarıyla karışmıyor. Okunmamış destek cevabı varsa sekme etiketinde sayı görünür ("Destek (1)").
+  "İşlemler" menüsü ve sayfalama yalnızca Hatırlatmalar sekmesinde. `/notifications?tab=support` doğrudan
+  Destek sekmesini açar.
+- **Hata düzeltmesi:** Destek önizlemesindeki boşluk temizleyen regex `/s+/` yazılmıştı ve metindeki "s"
+  harflerini siliyordu; `/\s+/` olarak düzeltildi.
+- Doğrulama: TypeScript ve değişen dosyalarda ESLint geçti. Gerçek cihazda henüz denenmedi.
+- [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/7dfab9b8-5cb1-4467-9fcc-889e46abd357).
+
+---
+
 ## 1.0.8 OTA — Push token hesap değişiminde kaydolmuyordu + Ayarlar > Bildirimler izin durumu (2026-10-30)
 
 | Platform | Kanal | Durum | Gönderim |
