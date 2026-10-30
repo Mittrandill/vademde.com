@@ -1069,6 +1069,21 @@ function ObligationForm({
                 }}
               />
               <TextField label={t('obligations.form.title')} placeholder={t('obligations.form.titlePlaceholder')} value={title} onChangeText={setTitle} />
+              {/* Vade sayısı tutar etiketini, "İlk vade" etiketini ve tutar modu seçimini
+                  belirler — formun alt kısmı buna göre şekillendiği için başlığın hemen altında
+                  sorulur (formun sonunda kalınca kullanıcı tek vadeli kaydedip geçiyordu).
+                  docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydı bu turda
+                  yalnızca tek seferlik borç/alacak olarak tutulur (bkz. yukarıdaki
+                  installmentCount hesaplaması); taksitlendirme yalnızca fiat'ta gösterilir. */}
+              {isEditing || !isFiatUnit ? null : (
+                <TextField
+                  label={periodLabels.countLabel}
+                  placeholder="1"
+                  keyboardType="number-pad"
+                  value={installmentCountStr}
+                  onChangeText={setInstallmentCountStr}
+                />
+              )}
               {isPlanEditing ? (
                 <FormRow
                   label={t('obligations.form.amount')}
@@ -1291,19 +1306,6 @@ function ObligationForm({
                 </Text>
               </Stack>
             ) : null}
-
-            {/* docs/01-finansal-kayit-modeli.md §3.5 — kıymetli maden/döviz kaydı bu turda
-                yalnızca tek seferlik borç/alacak olarak tutulur (bkz. yukarıdaki
-                installmentCount hesaplaması); taksitlendirme yalnızca fiat'ta gösterilir. */}
-            {isEditing || !isFiatUnit ? null : (
-              <TextField
-                label={periodLabels.countLabel}
-                placeholder="1"
-                keyboardType="number-pad"
-                value={installmentCountStr}
-                onChangeText={setInstallmentCountStr}
-              />
-            )}
 
             {saveMutation.error ? (
               <Text variant="caption" color="danger">

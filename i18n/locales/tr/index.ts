@@ -36,6 +36,7 @@ import { serverErrors } from './serverErrors';
 import { settings } from './settings';
 import { subscription } from './subscription';
 import { subscriptionsList } from './subscriptionsList';
+import { support } from './support';
 import { transactions } from './transactions';
 import { ui } from './ui';
 import { widgets } from './widgets';
@@ -80,6 +81,7 @@ export const tr = {
   settings,
   subscription,
   subscriptionsList,
+  support,
   transactions,
   ui,
   widgets,

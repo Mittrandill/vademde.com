@@ -1,0 +1,23 @@
+// Uygulama içi destek: talepler ve destek ekibiyle sohbet.
+export const support = {
+  title: 'Destek',
+  newRequest: 'Yeni talep',
+  emptyTitle: 'Henüz destek talebin yok',
+  emptyBody: 'Bir sorun ya da önerin varsa bize yaz; cevabımız burada ve bildirim olarak gelir.',
+  loadFailed: 'Destek talepleri yüklenemedi.',
+  newReply: 'Yeni cevap',
+  fromWeb: 'Web',
+  newTitle: 'Yeni destek talebi',
+  subject: 'Konu',
+  subjectPlaceholder: 'Örn. Abonelik takvimde görünmüyor',
+  message: 'Mesaj',
+  messagePlaceholder: 'Sorunu ya da önerini olabildiğince ayrıntılı yaz.',
+  send: 'Gönder',
+  sendFailed: 'Mesaj gönderilemedi. Lütfen tekrar deneyin.',
+  threadLoadFailed: 'Sohbet yüklenemedi.',
+  you: 'Sen',
+  supportTeam: 'Vademde Destek',
+  replyPlaceholder: 'Cevap yaz',
+  sendA11y: 'Gönder',
+  awaitingReply: 'Mesajın bize ulaştı. Cevabımız burada ve bildirim olarak gelecek.',
+};

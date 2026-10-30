@@ -133,7 +133,9 @@ export type Database = {
           id: string
           message: string
           name: string
+          source: string
           subject: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -141,7 +143,9 @@ export type Database = {
           id?: string
           message: string
           name: string
+          source?: string
           subject: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -149,7 +153,9 @@ export type Database = {
           id?: string
           message?: string
           name?: string
+          source?: string
           subject?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1128,6 +1134,41 @@ export type Database = {
           will_renew?: boolean
         }
         Relationships: []
+      }
+      support_replies: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          message_id: string
+          read_at: string | null
+          sender: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          message_id: string
+          read_at?: string | null
+          sender: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          message_id?: string
+          read_at?: string | null
+          sender?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_replies_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "contact_messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {

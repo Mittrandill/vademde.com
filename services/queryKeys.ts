@@ -68,6 +68,9 @@ export const queryKeys = {
   workspaceInvites: (workspaceId: string) => [workspaceId, 'invites'] as const,
   myWorkspaceRole: (workspaceId: string) => [workspaceId, 'my-role'] as const,
   profile: () => ['profile'] as const,
+  // Destek sohbeti kullanıcıya aittir, çalışma alanına bağlı değildir.
+  supportThreads: () => ['support', 'threads'] as const,
+  supportThread: (messageId: string) => ['support', 'threads', messageId] as const,
   subscription: () => ['subscription'] as const,
   planLimits: () => ['plan-limits'] as const,
   planEnforcement: () => ['plan-enforcement'] as const,

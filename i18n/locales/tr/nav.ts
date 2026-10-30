@@ -33,5 +33,8 @@ export const nav = {
     appearance: 'Görünüm',
     notifications: 'Bildirimler',
     subscriptionSettings: 'Abonelik ayarları',
+    support: 'Destek',
+    supportUnread_one: '{{count}} yeni cevap',
+    supportUnread_other: '{{count}} yeni cevap',
   },
 };

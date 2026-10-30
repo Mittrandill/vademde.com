@@ -13,6 +13,7 @@ import { listCounterparties } from '@/features/counterparties/api';
 import { getObligationTotalsByType, ACTIVE_OBLIGATION_STATUSES } from '@/features/obligations/api';
 import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
 import { getMyProfile } from '@/features/profile/api';
+import { listSupportThreads } from '@/features/support/api';
 import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
 import { useSession } from '@/features/auth/useSession';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -45,6 +46,12 @@ export default function MoreScreen() {
     queryKey: queryKeys.subscription(),
     queryFn: getMySubscription,
   });
+
+  const supportQuery = useQuery({
+    queryKey: queryKeys.supportThreads(),
+    queryFn: listSupportThreads,
+  });
+  const supportUnread = (supportQuery.data ?? []).reduce((sum, thread) => sum + thread.unread, 0);
 
   const accountsQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.accounts(activeWorkspaceId) : ['accounts', 'disabled'],
@@ -202,6 +209,12 @@ export default function MoreScreen() {
           <MenuRow icon="contrast" label={t('nav.more.appearance')} href="/settings/appearance" />
           <MenuRow icon="notifications" label={t('nav.more.notifications')} href="/notifications" />
           <MenuRow icon="ribbon" label={t('nav.more.subscriptionSettings')} detail={planLabel} href="/subscription" />
+          <MenuRow
+            icon="chatbubbles"
+            label={t('nav.more.support')}
+            detail={supportUnread > 0 ? t('nav.more.supportUnread', { count: supportUnread }) : undefined}
+            href="/destek"
+          />
         </MenuGroup>
       </ScrollView>
     </SafeAreaView>

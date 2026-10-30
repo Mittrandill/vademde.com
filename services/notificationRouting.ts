@@ -5,6 +5,7 @@ import { router, type Href } from 'expo-router';
 // - send-cash-alerts: { type: 'cash_alert', accountId } — accountId bir hesap kimliği ya da 'toplam'
 // - send-reminders (borç/alacak): { obligationId, stage }
 // - send-reminders (kredi kartı): { accountId, stage }
+// - support-reply: { type: 'support', messageId }
 // Bildirim verisi dışarıdan geldiği için yalnızca dize alanlar kabul edilir ve yol parçası kodlanır.
 const str = (value: unknown): string | null => (typeof value === 'string' && value.length > 0 ? value : null);
 
@@ -12,6 +13,8 @@ export function routeForNotificationData(data: Record<string, unknown> | undefin
   if (!data) return null;
   const accountId = str(data.accountId);
   const obligationId = str(data.obligationId);
+  const messageId = str(data.messageId);
+  if (data.type === 'support' && messageId) return `/destek/${encodeURIComponent(messageId)}` as Href;
   if (data.type === 'cash_alert' && accountId) return `/cash-alert/${encodeURIComponent(accountId)}` as Href;
   if (obligationId) return `/obligations/${encodeURIComponent(obligationId)}` as Href;
   if (accountId) return `/accounts/${encodeURIComponent(accountId)}` as Href;

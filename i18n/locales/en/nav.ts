@@ -35,5 +35,8 @@ export const nav: Messages<typeof tr> = {
     appearance: 'Appearance',
     notifications: 'Notifications',
     subscriptionSettings: 'Subscription settings',
+    support: 'Support',
+    supportUnread_one: '{{count}} new reply',
+    supportUnread_other: '{{count}} new replies',
   },
 };
