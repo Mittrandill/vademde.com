@@ -8,6 +8,36 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.8 OTA — Uygulama içi destek sohbeti + vade sayısı alanı başlığın altında (2026-10-30)
+
+| Platform | Kanal | Durum | Gönderim |
+|---|---|---|---|
+| iOS + Android | production (runtime 1.0.8) | Yayınlandı — update group `3ee44f3d-7613-4560-a644-6e4eb42b6a92` (iOS `01a18e05-f06b-735e-a33f-ce9565026b27`, Android `01a18e05-f06b-7759-8bb2-8c2923fc51c2`), kaynak commit `3cfee51` | 2026-10-30 |
+
+- **Destek sohbeti:** Daha Fazla > Destek altında talep listesi, yeni talep formu ve sohbet ekranı.
+  Talepler web iletişim formuyla aynı `contact_messages` tablosundadır (yeni `user_id`, `source` kolonları);
+  cevaplar yeni `support_replies` tablosunda. Web'den gönderilen talepler, doğrulanmış e-postası eşleşen
+  hesaba bağlanır. Okunmamış destek cevabı Daha Fazla satırında sayı olarak görünür.
+- **Admin cevabı + push:** vademde.app admin konsolunda (commit `19fb4b6`, main'e push ile canlı) mesaj
+  penceresine sohbet geçmişi ve cevap kutusu eklendi. Cevap `support-reply` Edge Function'ı (Supabase sürüm 1,
+  `verify_jwt=true`) üzerinden yazılır; admin + MFA kontrolü `admin_support_reply` RPC'sindedir. Talep sahibinin
+  cihazlarına "Destek talebi hakkında" push'u gider; dokununca `/destek/[id]` açılır.
+- **Veritabanı (production, uygulandı):** `support_threads` (vademde.com
+  `supabase/migrations/20261030120000_support_threads.sql`) ve `admin_support_replies` (vademde.app
+  `supabase/migrations/20261030121000_admin_support_replies.sql`). Anonim web formu artık `user_id` taşıyan
+  talep oluşturamaz. RLS, geri alınan bir işlem içinde sahte kullanıcılarla doğrulandı: başkasının talebi
+  görünmüyor, kullanıcı `support` cevabı yazamıyor, başkası adına talep açamıyor.
+- **Yeni kayıt formu:** KAÇ AY / TAKSİT SAYISI alanı Başlık'ın hemen altına taşındı. Alan formun sonundayken
+  kullanıcılar varsayılan 1 ile kaydedip aboneliği tek vadeli bırakıyordu (destek talebi: Spotify aboneliği
+  sonraki ay takvimde görünmüyor).
+- Doğrulama: TypeScript (mobil + web) ve değişen dosyalarda ESLint geçti (`app/obligations/new.tsx`'teki
+  `set-state-in-effect` hatası bu değişiklikten önce de vardı). Ekranlar gerçek cihazda henüz denenmedi.
+- `eas update --channel production --environment production` ile yayınlandı.
+  Runtime `appVersion`: yalnızca 1.0.8 uygulamalar alır. Yeni native bağımlılık yok, mağaza incelemesi gerekmez.
+- [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/3ee44f3d-7613-4560-a644-6e4eb42b6a92).
+
+---
+
 ## 1.0.8 OTA — Kayıt sırasında realtime yenilemelerini birleştirme (2026-10-29)
 
 | Platform | Kanal | Durum | Gönderim |
