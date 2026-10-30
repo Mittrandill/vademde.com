@@ -71,6 +71,7 @@ export const queryKeys = {
   // Destek sohbeti kullanıcıya aittir, çalışma alanına bağlı değildir.
   supportThreads: () => ['support', 'threads'] as const,
   supportThread: (messageId: string) => ['support', 'threads', messageId] as const,
+  supportReplyNotifications: () => ['support', 'reply-notifications'] as const,
   subscription: () => ['subscription'] as const,
   planLimits: () => ['plan-limits'] as const,
   planEnforcement: () => ['plan-enforcement'] as const,

@@ -34,4 +34,12 @@ export const notifications: Messages<typeof tr> = {
   markPaid: 'Mark as paid',
   markCollected: 'Mark as collected',
   check: 'Review',
+  supportSection: 'Support',
+  supportReplyTitle: 'About your support request',
+  permissionBanner: {
+    title: 'Notifications are off',
+    body: 'Due-date reminders and support replies are not reaching your phone. Turn on notifications so you never miss a payment.',
+    enable: 'Turn on notifications',
+    later: 'Not now',
+  },
 };

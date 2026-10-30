@@ -32,4 +32,12 @@ export const notifications = {
   markPaid: 'Ödendi işaretle',
   markCollected: 'Tahsil edildi işaretle',
   check: 'Kontrol et',
+  supportSection: 'Destek',
+  supportReplyTitle: 'Destek talebi hakkında',
+  permissionBanner: {
+    title: 'Bildirimler kapalı',
+    body: 'Vade hatırlatmaları ve destek cevapları telefonuna gelmiyor. Ödemeleri kaçırmamak için bildirimleri aç.',
+    enable: 'Bildirimleri aç',
+    later: 'Şimdi değil',
+  },
 };

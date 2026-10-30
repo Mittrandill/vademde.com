@@ -19,6 +19,7 @@ import {
   REMINDERS_PAGE_SIZE,
   type DeliveredReminder,
 } from '@/features/reminders/api';
+import { listSupportReplyNotifications, type SupportReplyNotification } from '@/features/support/api';
 import { addObligationToCalendar, createObligationReminder, type CalendarExportObligation } from '@/services/calendarReminders';
 import { buildObligationReminderMessage } from '@/utils/reminderMessage';
 import { showSuccessAlert, friendlyErrorMessage } from '@/utils/alerts';
@@ -112,6 +113,14 @@ export default function NotificationsScreen() {
     placeholderData: keepPreviousData,
   });
 
+  // Destek cevapları çalışma alanına değil kullanıcıya aittir; hatırlatma listesinin üstünde ayrı
+  // bir bölümde gösterilir (bkz. supabase/functions/support-reply).
+  const supportQuery = useQuery({
+    queryKey: queryKeys.supportReplyNotifications(),
+    queryFn: () => listSupportReplyNotifications(),
+  });
+  const supportItems = supportQuery.data ?? [];
+
   const markReadMutation = useMutation({
     mutationFn: (id: string) => markReminderRead(id),
     onSuccess: invalidateReminders,
@@ -178,13 +187,26 @@ export default function NotificationsScreen() {
           rightLabel={{ label: t('notifications.actions'), onPress: () => setBulkMenuOpen(true) }}
         />
 
+        {supportItems.length > 0 ? (
+          <View style={{ marginTop: theme.spacing.lg }}>
+            <Text variant="label" color="textSecondary" style={{ marginBottom: 10 }}>
+              {t('notifications.supportSection')}
+            </Text>
+            <Group inset={62}>
+              {supportItems.map((item) => (
+                <SupportNotificationRow key={item.id} item={item} />
+              ))}
+            </Group>
+          </View>
+        ) : null}
+
         {remindersQuery.isLoading ? (
           <Stack gap="sm" style={{ paddingTop: theme.spacing.lg }}>
             <Skeleton height={64} borderRadius={theme.radius.group} />
             <Skeleton height={64} borderRadius={theme.radius.group} />
             <Skeleton height={64} borderRadius={theme.radius.group} />
           </Stack>
-        ) : sections.length === 0 && remindersQuery.isSuccess ? (
+        ) : sections.length === 0 && remindersQuery.isSuccess && supportItems.length === 0 ? (
           <EmptyState
             icon="notifications-outline"
             title={t('notifications.emptyTitle')}
@@ -344,5 +366,33 @@ function NotificationRow({ item, onMarkRead, onDismiss, onAddToCalendar, onCreat
 
       <ActionSheet visible={sheetOpen} title={content.title} onClose={() => setSheetOpen(false)} options={options} />
     </>
+  );
+}
+
+// Destek cevabı satırı: dokununca sohbet açılır, sohbet ekranı cevapları okundu işaretler.
+function SupportNotificationRow({ item }: { item: SupportReplyNotification }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={() => router.push(`/destek/${item.messageId}`)}
+      style={{ paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}
+    >
+      <GroupedRowIcon name="chatbubbles" tone="brandSoft" />
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={{ fontWeight: '600' }}>{t('notifications.supportReplyTitle')}</Text>
+        <Text color="textSecondary" numberOfLines={1} style={{ fontSize: 15, lineHeight: 20 }}>
+          {item.subject}
+        </Text>
+        <Text color="textSecondary" numberOfLines={2} style={{ fontSize: 15, lineHeight: 20 }}>
+          {item.body.replace(/s+/g, ' ').trim()}
+        </Text>
+        <Text variant="caption" color="textSecondary" style={{ marginTop: 4 }}>
+          {timeFormatter.format(new Date(item.createdAt))}
+        </Text>
+      </View>
+      {!item.read ? (
+        <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, backgroundColor: theme.colors.brandPrimary }} />
+      ) : null}
+    </Pressable>
   );
 }

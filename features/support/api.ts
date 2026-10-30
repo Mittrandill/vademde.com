@@ -69,6 +69,35 @@ export async function replyToSupportMessage(messageId: string, body: string): Pr
   if (error) throw error;
 }
 
+export interface SupportReplyNotification {
+  id: string;
+  messageId: string;
+  subject: string;
+  body: string;
+  createdAt: string;
+  read: boolean;
+}
+
+// Bildirimler ekranındaki "Destek" bölümü: destek ekibinin son cevapları (push ile aynı içerik).
+// Okundu durumu cevabın kendisindedir; sohbet açılınca okundu işaretlenir.
+export async function listSupportReplyNotifications(limit = 20): Promise<SupportReplyNotification[]> {
+  const { data, error } = await supabase
+    .from('support_replies')
+    .select('id, message_id, body, created_at, read_at, contact_messages(subject)')
+    .eq('sender', 'support')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    messageId: row.message_id,
+    subject: row.contact_messages?.subject ?? '',
+    body: row.body,
+    createdAt: row.created_at,
+    read: !!row.read_at,
+  }));
+}
+
 export async function markSupportRepliesRead(messageId: string): Promise<void> {
   const { error } = await supabase
     .from('support_replies')

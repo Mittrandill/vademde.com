@@ -46,7 +46,7 @@ export default function SupportThreadScreen() {
   useEffect(() => {
     if (!hasUnread) return;
     markSupportRepliesRead(messageId)
-      .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.supportThreads() }))
+      .then(() => queryClient.invalidateQueries({ queryKey: ['support'] }))
       .catch(() => {});
   }, [hasUnread, messageId, queryClient]);
 

@@ -32,6 +32,8 @@ import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features
 import { getMySubscription } from '@/features/subscriptions/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
+import { NotificationPermissionBanner } from '@/components/notifications/NotificationPermissionBanner';
+import { useSession } from '@/features/auth/useSession';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -49,6 +51,7 @@ const PAYWALL_REMINDER_INTERVAL_MS = 5 * 24 * 60 * 60 * 1000;
 export default function HomeScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const { session } = useSession();
   const { activeWorkspaceId, setActiveWorkspaceId, balanceHidden, toggleBalanceHidden } = useWorkspaceStore();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   // Sistem yazı boyutu ekran açıkken değişirse (bkz. services/reflow.ts), bu ekranın
@@ -399,6 +402,7 @@ export default function HomeScreen() {
           {/* Borç/Alacak özeti ile Bu Ay Gelir-Gider artık ayrı kartlarda tekrarlanmıyor —
               hero'nun kendi iki sayfası (sağa kaydırarak geçilir) bu ikisini gösteriyor. */}
           <PlanLimitBanner state={planEnforcementQuery.data} />
+          <NotificationPermissionBanner userId={session?.user?.id} />
 
           <HomeHero
             totalBalanceMinor={totalBalanceMinor}
