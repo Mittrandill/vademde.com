@@ -1,3 +1,4 @@
+import { AssetPicker } from '@/components/finance/AssetPicker';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -71,8 +72,9 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; readonly label: string }> =
 export default function NewTransactionScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, accountId, direction, description, counterpartyId, paymentMethod } = useLocalSearchParams<{
+  const { id, assetId, accountId, direction, description, counterpartyId, paymentMethod } = useLocalSearchParams<{
     id?: string;
+    assetId?: string;
     accountId?: string;
     direction?: string;
     description?: string;
@@ -120,6 +122,7 @@ export default function NewTransactionScreen() {
       id={isEditing ? (id as string) : null}
       initial={existingQuery.data ?? null}
       initialAccountId={typeof accountId === 'string' ? accountId : undefined}
+      initialAssetId={typeof assetId === 'string' ? assetId : undefined}
       initialDirection={DIRECTIONS.some((d) => d.value === direction) ? (direction as Direction) : undefined}
       initialDescription={typeof description === 'string' ? description : undefined}
       initialCounterpartyId={typeof counterpartyId === 'string' ? counterpartyId : undefined}
@@ -135,6 +138,7 @@ interface TransactionFormProps {
   initial: Transaction | null;
   /** Hesap detayından "Ek Hesap Faizi Ekle" gibi kısayollarla gelindiğinde hesabı/yönü/açıklamayı önceden doldurur. */
   initialAccountId?: string;
+  initialAssetId?: string;
   initialDirection?: Direction;
   initialDescription?: string;
   /** Cari detayından "Tahsilat/Ödeme Ekle" kısayoluyla gelindiğinde kişi/firmayı ve ödeme
@@ -147,6 +151,7 @@ function TransactionForm({
   id,
   initial,
   initialAccountId,
+  initialAssetId,
   initialDirection,
   initialDescription,
   initialCounterpartyId,
@@ -164,6 +169,7 @@ function TransactionForm({
   const [transferToAccountId, setTransferToAccountId] = useState<string | null>(
     initial?.transfer_to_account_id ?? null
   );
+  const [assetId, setAssetId] = useState<string | null>(initial?.asset_id ?? initialAssetId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   // Sikke birimli hesaplarda (ceyrek_altin vb.) minor = adet'tir; ÷100/×100 uygulanmaz.
   const initialPrecision = getValueUnit(initial?.currency_code).precision;
@@ -217,7 +223,8 @@ function TransactionForm({
   // dekont alanı gösterilmez (iki hesabı kapsayan tek kanıt anlamsız).
   const archive = useDocumentArchiveAccess();
   const [receipt, setReceipt] = useState<PendingReceipt | null>(null);
-  const { allowExit } = useExitGuard(!isEditing && (amount.trim() !== '' || description.trim() !== ''));
+  const [assetDirty, setAssetDirty] = useState(false);
+  const { allowExit } = useExitGuard(assetDirty || !isEditing && (amount.trim() !== '' || description.trim() !== ''));
   const [removedExisting, setRemovedExisting] = useState(false);
   const existingReceiptQuery = useQuery({
     queryKey: ['transaction-receipt', id],
@@ -312,6 +319,7 @@ function TransactionForm({
           transfer_to_account_id: direction === 'transfer' ? transferToAccountId : null,
           direction,
           category_id: direction === 'transfer' ? null : categoryId,
+          asset_id: direction === 'transfer' ? null : assetId,
           counterparty_id: direction === 'transfer' ? null : counterpartyId,
           payment_method: direction === 'transfer' ? null : paymentMethod || null,
           amount_minor: amountMinor,
@@ -341,6 +349,7 @@ function TransactionForm({
         account_id: accountId,
         direction,
         category_id: categoryId,
+        asset_id: assetId,
         counterparty_id: counterpartyId,
         payment_method: paymentMethod || null,
         amount_minor: amountMinor,
@@ -524,6 +533,7 @@ function TransactionForm({
             ) : (
             <FieldGroup>
               <TextField label={t('transactions.form.description')} placeholder={t('transactions.form.descriptionPlaceholder')} value={description} onChangeText={setDescription} />
+              <AssetPicker value={assetId} onChange={(value) => { setAssetId(value); setAssetDirty(true); }} />
               {categoriesQuery.isPending ? (
                 <FormRow label={t('transactions.form.category')} value={t('transactions.form.categoriesLoading')} />
               ) : categories.length === 0 ? (

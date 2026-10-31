@@ -279,12 +279,16 @@ async function check(name, fn) {
       });
       const calls = h.watch(['w', 'obligations']);
       module.useWorkspaceRealtime('w');
-      assert.equal(callbacks.size, 10);
+      assert.equal(callbacks.size, 12);
+      assert.ok(callbacks.has('owned_assets'));
+      assert.ok(callbacks.has('asset_valuations'));
       for (let i = 0; i < 36; i++) callbacks.get('installments')();
       await h.timer.tick(400); assert.equal(calls.length, 1);
+      callbacks.get('owned_assets')(); callbacks.get('asset_valuations')();
+      await h.timer.tick(400); assert.equal(calls.length, 2);
       callbacks.get('payments')(); cleanup();
       for (const callback of callbacks.values()) callback();
-      await h.timer.tick(2000); assert.equal(calls.length, 1); assert.equal(removed, true);
+      await h.timer.tick(2000); assert.equal(calls.length, 2); assert.equal(removed, true);
     } finally { h.close(); }
   });
 

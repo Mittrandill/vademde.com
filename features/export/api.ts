@@ -15,6 +15,8 @@ import { fetchAll } from '@/services/fetchAll';
 // verisi (tür, tutar, tarih, güven, storage yolu) dışa aktarılır.
 const EXPORTED_TABLES = [
   'accounts',
+  'owned_assets',
+  'asset_valuations',
   'categories',
   'counterparties',
   'transactions',

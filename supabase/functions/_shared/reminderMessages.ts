@@ -66,6 +66,19 @@ export const trnotifications = {
   markPaid: 'Ödendi işaretle',
   markCollected: 'Tahsil edildi işaretle',
   check: 'Kontrol et',
+  supportSection: 'Destek',
+  remindersTab: 'Hatırlatmalar',
+  supportTab: 'Destek',
+  supportTabUnread: 'Destek ({{count}})',
+  supportEmptyTitle: 'Destek bildirimi yok',
+  supportEmptyBody: 'Destek ekibi talebine cevap verdiğinde burada görünecek.',
+  supportReplyTitle: 'Destek talebi hakkında',
+  permissionBanner: {
+    title: 'Bildirimler kapalı',
+    body: 'Vade hatırlatmaları ve destek cevapları telefonuna gelmiyor. Ödemeleri kaçırmamak için bildirimleri aç.',
+    enable: 'Bildirimleri aç',
+    later: 'Şimdi değil',
+  },
 };
 
 export const enreminderMessages = {
@@ -136,4 +149,17 @@ export const ennotifications = {
   markPaid: 'Mark as paid',
   markCollected: 'Mark as collected',
   check: 'Review',
+  supportSection: 'Support',
+  remindersTab: 'Reminders',
+  supportTab: 'Support',
+  supportTabUnread: 'Support ({{count}})',
+  supportEmptyTitle: 'No support notifications',
+  supportEmptyBody: 'When the support team replies to your request, it will appear here.',
+  supportReplyTitle: 'About your support request',
+  permissionBanner: {
+    title: 'Notifications are off',
+    body: 'Due-date reminders and support replies are not reaching your phone. Turn on notifications so you never miss a payment.',
+    enable: 'Turn on notifications',
+    later: 'Not now',
+  },
 };

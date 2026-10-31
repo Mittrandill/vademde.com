@@ -8,6 +8,21 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.9 — Varlıklarım ve Android optimizasyonu (2026-10-31)
+
+Durum: yayın hazırlığı sürüyor. Kullanıcı web ve Android production yayınını ve App Store inceleme gönderimini onayladı. Sonuç ve build bağlantıları tamamlandığında bu kayda işlenecek.
+
+- Ortak Varlıklarım: taşınmaz/araç, manuel değer, sahiplik payı, değer geçmişi ve gelir/gider/kredi bağlantıları.
+- Mobil ve web tasarımları Hesaplarım ekranlarıyla uyumlu; dolu ikonlar, gruplu formlar, sekmeli detay ve işlem menüsü.
+- Canlı ortak Supabase migration’ı `20261031112137_owned_assets` uygulandı. Mevcut finansal tutarlar değiştirilmedi.
+- Android R8 minify, resource shrinking ve `proguard-android-optimize.txt` etkin. Paket metrikleri build sonrası doğrulanacak.
+- Play service account dosya yolu düzeltildi; tüm service-account anahtarları EAS paketinden dışlandı.
+- TR/EN sürüm notları ve mağaza metinleri `assets/appstore/release-1.0.9/` ve `whats-new-1.0.9.*.txt` altında.
+- Testler: web/mobil TypeScript; web üretim derlemesi; 81 finans regresyonu; 11 kart borcu, 22 kart vadesi; varlık domain ve PostgreSQL/RLS; tarayıcıda araç ekleme/bağlama/sekme/menü/dar ekran/İngilizce; profil dili, widget, sunucu dil, locale DB, 13 realtime, analitik ve RevenueCat kontrolleri.
+- Yeni varlık tabloları için realtime testi güncellendi; önceki destek ekranı değişikliğinden kalan sunucu bildirim sözlüğü eşitlendi.
+
+---
+
 ## 1.0.8 OTA — Bildirimler ekranında destek cevapları ayrı sekmede (2026-10-31)
 
 | Platform | Kanal | Durum | Gönderim |

@@ -1,3 +1,4 @@
+import { AssetPicker } from '@/components/finance/AssetPicker';
 import { useEffect, useState } from 'react';
 import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -93,9 +94,10 @@ export default function NewObligationScreen() {
   useLanguage();
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam } =
+  const { id, assetId, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam } =
     useLocalSearchParams<{
     id?: string;
+    assetId?: string;
     /** e-Fatura karekodundan gelen ön doldurma (bkz. app/(tabs)/tara.tsx) — kullanıcı onaylar. */
     title?: string;
     amountMinor?: string;
@@ -136,6 +138,7 @@ export default function NewObligationScreen() {
       hasInstallments={(existingQuery.data?.installments.length ?? 0) > 0}
       initialDocumentType={typeof type === 'string' ? type : undefined}
       initialAccountId={typeof accountId === 'string' ? accountId : undefined}
+      initialAssetId={typeof assetId === 'string' ? assetId : undefined}
       initialDueDate={typeof dueDate === 'string' ? dueDate : undefined}
       initialCounterpartyId={typeof counterpartyId === 'string' ? counterpartyId : undefined}
       initialDirection={direction === 'payable' || direction === 'receivable' ? direction : undefined}
@@ -155,6 +158,7 @@ interface ObligationFormProps {
   initialDocumentType?: string;
   /** Hesap detayından "Ekstre Ekle" gibi kısayollarla gelindiğinde hesabı önceden doldurur. */
   initialAccountId?: string;
+  initialAssetId?: string;
   /** Ekstre tablosunda belirli bir geçmiş ayın "Yüklenmedi" satırından gelindiğinde o ayın
    * beklenen son ödeme tarihini önceden doldurur (bkz. app/accounts/[id].tsx) — kullanıcı
    * her zaman elle değiştirebilir. */
@@ -176,6 +180,7 @@ function ObligationForm({
   hasInstallments,
   initialDocumentType,
   initialAccountId,
+  initialAssetId,
   initialDueDate,
   initialCounterpartyId,
   initialDirection,
@@ -208,7 +213,8 @@ function ObligationForm({
   );
   const [trialEndsOn, setTrialEndsOn] = useState(initial?.trial_ends_on ?? '');
   const [title, setTitle] = useState(initial?.title ?? initialTitle ?? '');
-  const { allowExit } = useExitGuard(!isEditing && title.trim() !== '');
+  const [assetDirty, setAssetDirty] = useState(false);
+  const { allowExit } = useExitGuard(assetDirty || !isEditing && title.trim() !== '');
   // docs/01-finansal-kayit-modeli.md §3.5 — birim, kayıt oluşturulduktan sonra
   // değiştirilemez; edit modda initial.currency_code sabit kalır (aşağıda salt-okunur
   // gösterilir). Yeni kayıtta workspace'in varsayılan birimi hazır olana kadar 'TRY' ile
@@ -232,6 +238,7 @@ function ObligationForm({
     initial?.counterparty_id ?? initialCounterpartyId ?? null
   );
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
+  const [assetId, setAssetId] = useState<string | null>(initial?.asset_id ?? initialAssetId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
   const [installmentCountStr, setInstallmentCountStr] = useState('1');
   const [interestRateStr, setInterestRateStr] = useState('');
@@ -671,6 +678,7 @@ function ObligationForm({
           counterparty_id: counterpartyIdForType,
           account_id: accountId,
           category_id: categoryId,
+          asset_id: assetId,
           bank_code: bankCodeForType,
           service_code: serviceCodeForType,
           billing_period: isSubscriptionType ? billingPeriod : null,
@@ -711,6 +719,7 @@ function ObligationForm({
         counterparty_id: counterpartyIdForType,
         account_id: accountId,
         category_id: categoryId,
+        asset_id: assetId,
         bank_code: bankCodeForType,
         service_code: serviceCodeForType,
         billing_period: isSubscriptionType ? billingPeriod : null,
@@ -1184,6 +1193,7 @@ function ObligationForm({
               {isSubscriptionType ? (
                 <ServicePicker label={t('obligations.form.service')} placeholder={t('obligations.form.optionalService')} selectedId={serviceCode} onSelect={setServiceCode} />
               ) : null}
+              <AssetPicker value={assetId} onChange={(value) => { setAssetId(value); setAssetDirty(true); }} />
               {categoriesQuery.isPending ? (
                 <FormRow label={t('obligations.form.category')} value={t('obligations.form.loadingCategories')} />
               ) : (categoriesQuery.data ?? []).length === 0 ? (

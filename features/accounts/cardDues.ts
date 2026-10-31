@@ -158,6 +158,7 @@ export function buildCardDueItems(
       items.push({
         id: `card-due:${account.id}:${dueDate ?? 'none'}`,
         card_due_account_id: account.id,
+        asset_id: null,
         workspace_id: account.workspace_id,
         direction: 'payable',
         document_type: 'kredi_karti_ekstresi',

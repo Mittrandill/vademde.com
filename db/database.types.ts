@@ -14,6 +14,106 @@ export type Database = {
   }
   public: {
     Tables: {
+owned_assets: {
+Row: {
+id: string;
+workspace_id: string;
+kind: string;
+name: string;
+currency_code: string;
+estimated_value_minor: number | null;
+valued_on: string | null;
+ownership_bps: number;
+purchased_on: string | null;
+purchase_price_minor: number | null;
+location: string | null;
+area_m2: number | null;
+parcel: string | null;
+plate: string | null;
+make_model: string | null;
+notes: string | null;
+is_archived: boolean;
+created_at: string;
+updated_at: string;
+};
+Insert: {
+id?: string;
+workspace_id: string;
+kind: string;
+name: string;
+currency_code?: string;
+estimated_value_minor?: number | null;
+valued_on?: string | null;
+ownership_bps?: number;
+purchased_on?: string | null;
+purchase_price_minor?: number | null;
+location?: string | null;
+area_m2?: number | null;
+parcel?: string | null;
+plate?: string | null;
+make_model?: string | null;
+notes?: string | null;
+is_archived?: boolean;
+created_at?: string;
+updated_at?: string;
+};
+Update: {
+id?: string;
+workspace_id?: string;
+kind?: string;
+name?: string;
+currency_code?: string;
+estimated_value_minor?: number | null;
+valued_on?: string | null;
+ownership_bps?: number;
+purchased_on?: string | null;
+purchase_price_minor?: number | null;
+location?: string | null;
+area_m2?: number | null;
+parcel?: string | null;
+plate?: string | null;
+make_model?: string | null;
+notes?: string | null;
+is_archived?: boolean;
+created_at?: string;
+updated_at?: string;
+};
+Relationships: [];
+};
+asset_valuations: {
+Row: {
+id: string;
+workspace_id: string;
+asset_id: string;
+estimated_value_minor: number | null;
+currency_code: string;
+ownership_bps: number;
+valued_on: string | null;
+recorded_at: string;
+};
+Insert: {
+id?: string;
+workspace_id: string;
+asset_id: string;
+estimated_value_minor?: number | null;
+currency_code: string;
+ownership_bps: number;
+valued_on?: string | null;
+recorded_at?: string;
+};
+Update: {
+id?: string;
+workspace_id?: string;
+asset_id?: string;
+estimated_value_minor?: number | null;
+currency_code?: string;
+ownership_bps?: number;
+valued_on?: string | null;
+recorded_at?: string;
+};
+Relationships: [];
+};
+
       accounts: {
         Row: {
           bank_code: string | null
@@ -606,6 +706,7 @@ export type Database = {
       }
       obligations: {
         Row: {
+          asset_id: string | null;
           account_id: string | null
           bank_code: string | null
           category_id: string | null
@@ -633,6 +734,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          asset_id?: string | null;
           account_id?: string | null
           bank_code?: string | null
           category_id?: string | null
@@ -660,6 +762,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          asset_id?: string | null;
           account_id?: string | null
           bank_code?: string | null
           category_id?: string | null
@@ -1172,6 +1275,7 @@ export type Database = {
       }
       transactions: {
         Row: {
+          asset_id: string | null;
           account_id: string
           amount_minor: number
           category_id: string | null
@@ -1192,6 +1296,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          asset_id?: string | null;
           account_id: string
           amount_minor: number
           category_id?: string | null
@@ -1212,6 +1317,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          asset_id?: string | null;
           account_id?: string
           amount_minor?: number
           category_id?: string | null
@@ -1451,7 +1557,19 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+asset_activity: { Row: {
+transaction_id: string;
+workspace_id: string;
+asset_id: string;
+direction: string;
+description: string | null;
+currency_code: string;
+occurred_at: string;
+amount_minor: number;
+financing_minor: number;
+}; Relationships: []; };
+
+
     }
     Functions: {
       mark_instrument_bounced: {

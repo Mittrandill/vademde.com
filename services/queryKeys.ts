@@ -88,6 +88,7 @@ export const queryKeys = {
 // devam ediyordu. Bu yardımcı, bir ödeme değiştiğinde etkilenebilecek TÜM prefix'leri tek
 // yerden invalidate eder — yeni bir ödeme akışı eklendiğinde bir prefix'in unutulmasını önler.
 export function invalidatePaymentRelatedQueries(queryClient: QueryClient, workspaceId: string) {
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'assets'] });
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'obligations'] });
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'transactions'] });
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'account-balances'] });

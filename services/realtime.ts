@@ -7,6 +7,8 @@ import { createWorkspaceRefreshQueue } from '@/services/workspaceRefresh';
 
 const WORKSPACE_TABLES = [
   'accounts',
+  'owned_assets',
+  'asset_valuations',
   'categories',
   'counterparties',
   'transactions',

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vademde",
     "slug": "vademde",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "vademde",
@@ -164,7 +164,17 @@
       ],
       "expo-font",
       "@bacons/apple-targets",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      "./plugins/withAndroidOptimization"
     ],
     "extra": {
       "router": {},

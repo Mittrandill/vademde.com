@@ -1,3 +1,4 @@
+import { assetText as ta } from '@/features/assets/copy';
 import type { ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -187,6 +188,7 @@ export default function MoreScreen() {
         </MenuGroup>
 
         <MenuGroup title={t('nav.more.management')}>
+          <MenuRow icon="home" label={ta('Varlıklarım')} href="/assets" />
           <MenuRow icon="wallet" label={t('nav.more.accounts')} detail={countText(accounts.length)} href="/accounts" />
           <MenuRow icon="business" label={t('nav.more.banks')} href="/banks" />
           <MenuRow icon="logo-usd" label={t('nav.more.valueUnits')} href="/accounts/value-units" />
