@@ -1,0 +1,24 @@
+{
+  "packageName": "com.akintkaya.vademde",
+  "version": "1.0.9",
+  "versionCode": 20,
+  "track": "production",
+  "rollout": "100%",
+  "submittedAt": "2026-10-31T12:07:59.532Z",
+  "editId": "14036270186276683975",
+  "commit": {
+    "id": "14036270186276683975",
+    "expiryTimeSeconds": "1793452745"
+  },
+  "easBuildId": "d0b6c3b4-3e92-47b3-b825-d13892518f13",
+  "managedPublishing": false,
+  "reviewState": "Pre-review checks in progress; automatic submission after successful checks",
+  "locales": [
+    "tr-TR",
+    "en-US"
+  ],
+  "phoneScreenshotsPerLocale": 8,
+  "playConsoleAppId": "4974904725370365121",
+  "consoleVerifiedAt": "2026-10-31T12:16:52.245905+00:00",
+  "consoleUrl": "https://play.google.com/console/u/0/developers/8375250150471659647/app/4974904725370365121/publishing"
+}
