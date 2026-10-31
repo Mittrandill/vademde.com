@@ -12,15 +12,17 @@
   },
   "easBuildId": "d0b6c3b4-3e92-47b3-b825-d13892518f13",
   "managedPublishing": false,
-  "reviewState": "Pre-review checks in progress; automatic submission after successful checks",
+  "reviewState": "IN_REVIEW",
   "locales": [
     "tr-TR",
     "en-US"
   ],
   "phoneScreenshotsPerLocale": 8,
   "playConsoleAppId": "4974904725370365121",
-  "consoleVerifiedAt": "2026-10-31T12:16:52.245905+00:00",
+  "consoleVerifiedAt": "2026-10-31T12:23:10.615042+00:00",
   "consoleUrl": "https://play.google.com/console/u/0/developers/8375250150471659647/app/4974904725370365121/publishing",
   "bundleSha256": "63890c352f372e1ffe3f0b8e39c79dedf55dcae00ab91616377058b4b8855d4b",
-  "reviewDemoCredentialsVerified": true
+  "reviewDemoCredentialsVerified": true,
+  "preReviewChecksPassed": true,
+  "consoleStatusText": "Değişiklikleriniz şu anda inceleniyor."
 }

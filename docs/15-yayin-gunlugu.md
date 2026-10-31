@@ -10,7 +10,7 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ## 1.0.9 — Varlıklarım ve Android optimizasyonu (2026-10-31)
 
-Durum: web canlı; iOS 1.0.9 (52) App Store incelemesinde (`WAITING_FOR_REVIEW`, onay sonrası otomatik yayın). Android 1.0.9 (20) %100 production yayını için gönderildi; Vademde Console’da hızlı ön kontroller sürüyor ve ardından otomatik incelemeye aktarılacak. Kullanıcı her iki mağaza gönderimini ve web/Android canlı yayını onayladı.
+Durum: web canlı; iOS 1.0.9 (52) App Store incelemesinde (`WAITING_FOR_REVIEW`, onay sonrası otomatik yayın). Android 1.0.9 (20) %100 production yayını için gönderildi; Google hızlı ön kontrolleri geçti ve Console’da incelemede. Kullanıcı her iki mağaza gönderimini ve web/Android canlı yayını onayladı.
 
 - Ortak Varlıklarım: taşınmaz/araç, manuel değer, sahiplik payı, değer geçmişi ve gelir/gider/kredi bağlantıları.
 - Mobil ve web tasarımları Hesaplarım ekranlarıyla uyumlu; dolu ikonlar, gruplu formlar, sekmeli detay ve işlem menüsü.
@@ -25,8 +25,9 @@ Durum: web canlı; iOS 1.0.9 (52) App Store incelemesinde (`WAITING_FOR_REVIEW`,
 - App Store TR/EN iki boyutta toplam 40 ekran görüntüsü COMPLETE durumunda. iOS build 52 VALID; sürüme bağlandı ve incelemeye gönderildi. İnceleme kimliği `42e9e341-06c2-4f5d-a5a3-26d54ffce273`; sürüm kimliği `b12e1ec6-12a8-47a5-81d5-108cbcb5c814`.
 - iOS EAS build: https://expo.dev/accounts/akintkaya/projects/vademde/builds/a012cdfc-2837-46aa-b60b-a320d335840f
 - App Store Connect: https://appstoreconnect.apple.com/apps/6796449470/distribution/ios/version/b12e1ec6-12a8-47a5-81d5-108cbcb5c814
+- Google Play Console: https://play.google.com/console/u/0/developers/8375250150471659647/app/4974904725370365121/publishing
 - Android EAS build: https://expo.dev/accounts/akintkaya/projects/vademde/builds/d0b6c3b4-3e92-47b3-b825-d13892518f13
-- Google Play production kanalı: `1.0.9`, versionCode `20`, `completed` (%100). TR/EN açıklamalar, kısa açıklamalar, yenilikler, ikonlar, dil başına 8 telefon görseli ve kapak yüklendi. API edit doğrulaması ve commit başarılı. Vademde Console’da yönetilen yayınlama kapalı. Ön kontrollerden sonra otomatik inceleme, onaydan sonra otomatik yayın; kullanıcıdan ek yayın adımı beklenmiyor. Vademde Play inceleme hesabının e-posta ve şifresi verilen demo hesapla birebir doğrulandı; mevcut kayıt değiştirilmedi.
+- Google Play production kanalı: `1.0.9`, versionCode `20`, `completed` (%100). TR/EN açıklamalar, kısa açıklamalar, yenilikler, ikonlar, dil başına 8 telefon görseli ve kapak yüklendi. API edit doğrulaması ve commit başarılı. Vademde Console’da yönetilen yayınlama kapalı. Hızlı ön kontroller tamamlandı; “Değişiklikleriniz şu anda inceleniyor” durumu doğrulandı. Onaydan sonra otomatik yayın; kullanıcıdan ek yayın adımı beklenmiyor. Vademde Play inceleme hesabının e-posta ve şifresi verilen demo hesapla birebir doğrulandı; mevcut kayıt değiştirilmedi.
 - R8 AAB’den türetilen aynı Java/DEX/JS içeriğine sahip yerel debug imzalı APK, Android emülatörüne güncelleme olarak kuruldu. Giriş, varlık listesi/formu/detayı, gider ve kredi formuna varlık aktarımı, değer geçmişi ile takvim/çek/kart/kredi/rapor/OCR kamera ekranları açıldı. Soğuk açılışta oturum korunması ve kimlik başlatıldıktan sonra varlıklara geçiş de doğrulandı. Emülatörde Play Billing kullanılamadığı için gerçek satın alma yapılmadı; RevenueCat webhook 37 kontrolü geçti.
 - Demo hesabına mağaza incelemesi için iki örnek varlık bırakıldı (Demo Home, Demo Car); bunlar kasa hareketi veya borç oluşturmaz. Hesap bilgileri Git dışında tutulur.
 
