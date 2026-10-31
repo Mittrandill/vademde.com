@@ -7,6 +7,8 @@ const vm = require('node:vm');
 const { randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const ts = require('typescript');
+const i18next=require('i18next').createInstance();
+const i18nBridge={t:(...args)=>i18next.t(...args),getLanguage:()=>i18next.language,getLocaleTag:()=>i18next.language==='en'?'en-US':'tr-TR'};
 const root = path.resolve(__dirname,'..');
 const database = process.env.FINANCE_STAGE_DATABASE || 'vademde_release_stage_2';
 assert(['vademde_release_stage','vademde_release_stage_2','vademde_release_stage_3'].includes(database));
@@ -43,11 +45,14 @@ function load(relative) {
   const filename=path.join(root,relative);if(modules.has(filename))return modules.get(filename).exports;
   const module={exports:{}};modules.set(filename,module);
   const requireModule=(name)=>{
+    if(name==='@/i18n'||(name==='./index'&&relative==='i18n/format.ts'))return i18nBridge;
+    if(name==='expo-localization')return {getLocales:()=>[{languageCode:'tr',decimalSeparator:','}]};
     if(name==='@/services/supabase')return {supabase};
     if(name==='expo-crypto')return {randomUUID};
     if(name==='@react-native-async-storage/async-storage')return {__esModule:true,default:storage};
-    if(name.startsWith('@/'))return load(name.slice(2)+'.ts');
-    if(name.startsWith('.'))return load(path.relative(root,path.resolve(path.dirname(filename),name))+'.ts');
+    const loadLocal=base=>load(fs.existsSync(path.join(root,base+'.ts'))?base+'.ts':path.join(base,'index.ts'));
+    if(name.startsWith('@/'))return loadLocal(name.slice(2));
+    if(name.startsWith('.'))return loadLocal(path.relative(root,path.resolve(path.dirname(filename),name)));
     return require(name);
   };
   const code=ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -55,6 +60,7 @@ function load(relative) {
   return module.exports;
 }
 (async()=>{
+ await i18next.init({resources:{tr:{translation:load('i18n/locales/tr/index.ts').tr}},lng:'tr',fallbackLng:'tr',interpolation:{escapeValue:false}});
   sql(`begin;insert into auth.users(id,email,raw_user_meta_data) values(${quote(actor)},${quote(actor+'@example.invalid')},'{}');
     set local request.jwt.claim.sub=${quote(actor)};set local role authenticated;
     insert into public.workspaces(id,name,owner_id) values(${quote(workspace)},'Client integration',${quote(actor)});

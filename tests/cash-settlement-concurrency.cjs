@@ -2,11 +2,15 @@
 const {spawn}=require('node:child_process');
 const {randomUUID}=require('node:crypto');
 const assert=require('node:assert/strict');
-const executable='/usr/local/Cellar/postgresql@17/17.11/bin/psql';
+const executable=process.env.TEST_PSQL_BIN || '/usr/local/opt/postgresql@17/bin/psql';
+const host=process.env.TEST_PGHOST,port=process.env.TEST_PGPORT;
+if(!host?.startsWith('/private/tmp/vademde-pg-tests.') || !/^\d+$/.test(port??'')) {
+ throw Error('TEST_PGHOST must identify the disposable local test socket; TEST_PGPORT is required.');
+}
 const ws='00000000-0000-0000-0000-000000000010',actor='00000000-0000-0000-0000-000000000020';
 const cp='00000000-0000-0000-0000-000000000040',account='00000000-0000-0000-0000-000000000001';
 function sql(query){return new Promise(resolve=>{
- const child=spawn(executable,['-h','/private/tmp/vademde-pg-tests.6JZ7Fw','-p','55439','-d','vademde_finance_test','-v','ON_ERROR_STOP=1','-At','-c',query]);
+ const child=spawn(executable,['-h',host,'-p',port,'-d','vademde_finance_test','-v','ON_ERROR_STOP=1','-At','-c',query]);
  let out='',err='';child.stdout.on('data',x=>out+=x);child.stderr.on('data',x=>err+=x);
  child.on('error',e=>resolve({code:-1,out,err:String(e)}));child.on('close',code=>resolve({code,out:out.trim(),err}));
 });}

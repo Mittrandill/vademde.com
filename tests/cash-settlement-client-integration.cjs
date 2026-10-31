@@ -2,12 +2,19 @@
 // Real TS API/queue + real local PostgreSQL. Storage/auth are reduced mocks, NOT device/Supabase.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const {spawnSync}=require('node:child_process'),{randomUUID}=require('node:crypto'),assert=require('node:assert/strict');
+const executable=process.env.TEST_PSQL_BIN || '/usr/local/opt/postgresql@17/bin/psql';
+const host=process.env.TEST_PGHOST,port=process.env.TEST_PGPORT;
+if(!host?.startsWith('/private/tmp/vademde-pg-tests.') || !/^\d+$/.test(port??'')) {
+ throw Error('TEST_PGHOST must identify the disposable local test socket; TEST_PGPORT is required.');
+}
+const i18next=require('i18next').createInstance();
+const i18nBridge={t:(...args)=>i18next.t(...args),getLanguage:()=>i18next.language,getLocaleTag:()=>i18next.language==='en'?'en-US':'tr-TR'};
 const root=path.resolve(__dirname,'..'),modules=new Map(),storage=new Map();
 const actor='00000000-0000-0000-0000-000000000020',ws='00000000-0000-0000-0000-000000000010',cp='00000000-0000-0000-0000-000000000040';
 let loseResponse=false,rpcCalls=0;
 const quote=x=>x==null?'NULL':`'${String(x).replaceAll("'","''")}'`;
 function sql(query){
- const r=spawnSync('/usr/local/Cellar/postgresql@17/17.11/bin/psql',['-h','/private/tmp/vademde-pg-tests.6JZ7Fw','-p','55439','-d','vademde_finance_test','-v','ON_ERROR_STOP=1','-qAt','-c',query],{encoding:'utf8',timeout:20000});
+ const r=spawnSync(executable,['-h',host,'-p',port,'-d','vademde_finance_test','-v','ON_ERROR_STOP=1','-qAt','-c',query],{encoding:'utf8',timeout:20000});
  if(r.error||r.status!==0)throw Error(r.error?.message||r.stderr);return r.stdout.trim();
 }
 const session="SET ROLE authenticated; SET test.editor='true'; ";
@@ -37,17 +44,21 @@ function load(relative){
  const filename=path.join(root,relative);if(modules.has(filename))return modules.get(filename).exports;
  const module={exports:{}};modules.set(filename,module);
  const requireLocal=name=>{
-  if(name==='@/services/supabase')return {supabase};
+  if(name==='@/i18n'||(name==='./index'&&relative==='i18n/format.ts'))return i18nBridge;
+    if(name==='expo-localization')return {getLocales:()=>[{languageCode:'tr',decimalSeparator:','}]};
+    if(name==='@/services/supabase')return {supabase};
   if(name==='expo-crypto')return {randomUUID};
   if(name==='@react-native-async-storage/async-storage')return {__esModule:true,default:{getItem:async k=>storage.get(k)??null,setItem:async(k,v)=>storage.set(k,v),removeItem:async k=>storage.delete(k)}};
-  if(name.startsWith('@/'))return load(name.slice(2)+'.ts');
-  if(name.startsWith('.'))return load(path.relative(root,path.resolve(path.dirname(filename),name))+'.ts');
+  const loadLocal=base=>load(fs.existsSync(path.join(root,base+'.ts'))?base+'.ts':path.join(base,'index.ts'));
+    if(name.startsWith('@/'))return loadLocal(name.slice(2));
+  if(name.startsWith('.'))return loadLocal(path.relative(root,path.resolve(path.dirname(filename),name)));
   return require(name);
  };
  const code=ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  vm.runInThisContext(`(function(require,module,exports){${code}\n})`,{filename})(requireLocal,module,module.exports);return module.exports;
 }
 (async()=>{
+ await i18next.init({resources:{tr:{translation:load('i18n/locales/tr/index.ts').tr}},lng:'tr',fallbackLng:'tr',interpolation:{escapeValue:false}});
  assert.equal(sql('SELECT current_database();'),'vademde_finance_test');
  let queue=load('features/payments/cashSettlementQueue.ts');
  for(const [direction,unit,invoice] of [['payable','USD',true],['receivable','TRY',true],['receivable','TRY',false]]){
