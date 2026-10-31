@@ -386,7 +386,7 @@ export function AssetDetailScreen({ id }: { id: string }) {
               <View key={direction} style={{ flex: 1 }}>
                 <Button
                   label={ta(
-                    direction === "expense" ? "Gider ekle" : "Gelir ekle",
+                    direction === "expense" ? "Gider" : "Gelir",
                   )}
                   variant="secondary"
                   size="compact"
@@ -402,7 +402,7 @@ export function AssetDetailScreen({ id }: { id: string }) {
             ))}
             <View style={{ flex: 1 }}>
               <Button
-                label={ta("Kredi ekle")}
+                label={ta("Kredi")}
                 variant="secondary"
                 size="compact"
                 icon="add"

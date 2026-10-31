@@ -47,3 +47,8 @@ Vademde_Tam_Logo_Paketi_v2.0/
 Vademde_PRD_v1.3.pdf
 docs/
 assets/appstore/
+
+# Local history and agent configuration are not build inputs
+.git/
+.claude/
+.mcp.json
