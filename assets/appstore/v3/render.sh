@@ -2,14 +2,19 @@
 # Vademde App Store v3 ekran görüntülerini headless Chrome ile üretir.
 # Çıktı: out69 (6,9" 1320×2868), out65 (6,5" 1284×2778), out63 (6,3" 1206×2622; App Store Connect'in
 # zorunlu "iPhone with Dynamic Island (medium display)" yuvası). Hepsi 6,9'dan türetilir.
-# Dil: L=en ./render.sh → out69-en, out65-en, out63-en (yalnızca telefon dışındaki metinler çevrilir).
+# Dil: L=en ./render.sh → out69-en, out65-en, out63-en (İngilizce uygulama çekimleri ve pazarlama metinleri).
 # Belirli slaytlar: ./render.sh 2 9
 set -e
 cd "${0:A:h}"
 L=${L:-tr}; X=""; [[ $L == en ]] && X="-en"
+if [[ $L == en ]]; then
+  for name in tara rev_kredi home takvim instruments kredi card cari reports banks; do
+    [[ -s "src/shots-en/$name.png" ]] || { echo "İngilizce uygulama çekimi eksik: src/shots-en/$name.png" >&2; exit 1; }
+  done
+fi
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 mkdir -p out69$X out65$X out63$X
-list=($@); (( ${#list} )) || list=(1 2 3 4 5 6 7 8 9 10)
+list=($@); (( ${#list} )) || list=(1 2 3 4 5 6 7 8 9 10 11 12)
 for i in $list; do
   n=$(printf "%02d" $i)
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \

@@ -1,0 +1,24 @@
+{
+  "appId": "6796449470",
+  "version": "1.0.9",
+  "versionId": "b12e1ec6-12a8-47a5-81d5-108cbcb5c814",
+  "build": "52",
+  "buildId": "b6b7a5e1-bd6a-483f-bfb1-fed805dcff61",
+  "reviewSubmissionId": "42e9e341-06c2-4f5d-a5a3-26d54ffce273",
+  "state": "WAITING_FOR_REVIEW",
+  "releaseType": "AFTER_APPROVAL",
+  "submittedAt": "2026-10-31T11:48:35.740Z",
+  "screenshots": {
+    "locales": [
+      "tr",
+      "en-US"
+    ],
+    "perLocalePerSize": 10,
+    "displayTypes": [
+      "APP_IPHONE_61",
+      "APP_IPHONE_65"
+    ],
+    "processing": "COMPLETE"
+  },
+  "easBuildId": "a012cdfc-2837-46aa-b60b-a320d335840f"
+}

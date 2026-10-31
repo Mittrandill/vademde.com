@@ -1,0 +1,47 @@
+{
+  "version": "1.0.9",
+  "versionCode": 20,
+  "language": "tr",
+  "images": [
+    {
+      "file": "vademde-01.png",
+      "source": "../play/vademde-03.png",
+      "alt": "Ana sayfa"
+    },
+    {
+      "file": "vademde-02.png",
+      "source": "../play/vademde-02.png",
+      "alt": "Taranan kredi incelemesi"
+    },
+    {
+      "file": "vademde-03.png",
+      "source": "../play/vademde-04.png",
+      "alt": "Vade takvimi"
+    },
+    {
+      "file": "vademde-04.png",
+      "source": "../play/vademde-05.png",
+      "alt": "Çek ve senetler"
+    },
+    {
+      "file": "vademde-05.png",
+      "source": "../play/vademde-06.png",
+      "alt": "Kredi taksitleri"
+    },
+    {
+      "file": "vademde-06.png",
+      "source": "../play/vademde-07.png",
+      "alt": "Kredi kartı vadeleri"
+    },
+    {
+      "file": "vademde-07.png",
+      "source": "../play/vademde-11.png",
+      "alt": "Varlıklarım"
+    },
+    {
+      "file": "vademde-08.png",
+      "source": "../play/vademde-12.png",
+      "alt": "Varlık detayı"
+    }
+  ]
+}

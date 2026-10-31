@@ -1,0 +1,9 @@
+Vademde 1.0.9
+
+• Varlıklarım: Ev, arsa, tarla, iş yeri ve araçlarını kaydet; tahmini değerini ve sahiplik payını takip et.
+• Yakıt, sigorta, bakım, kira ve kredi kayıtlarını ilgili varlıkla ilişkilendir. Gelir-giderlerini, bağlı kredileri ve değer geçmişini aynı ekranda gör.
+• Varlık ekranları Hesaplarım ile aynı düzende: gruplu formlar, dolu ikonlar ve sekmeli detaylar.
+• Destek cevapları bildirimlerde ayrı sekmede. Bildirim izinleri ve destek sohbeti iyileştirildi.
+• İngilizce mağaza görselleri yenilendi; performans ve kararlılık iyileştirmeleri yapıldı.
+
+Varlık değerleri senin girdiğin tahminlerdir; kasa bakiyene eklenmez.

@@ -1,0 +1,5 @@
+• Varlıklarım: Ev, arsa, tarla, iş yeri ve araçlarını kaydet; tahmini değerini ve sahiplik payını takip et.
+• Yakıt, sigorta, kira ve kredi kayıtlarını varlıklarına bağla; gelir-gider ve değer geçmişini gör.
+• Hesaplarım ile uyumlu yeni ekranlar ve dolu ikonlar.
+• Destek cevapları bildirimlerde ayrı sekmede.
+• Android kod optimizasyonu, performans ve kararlılık iyileştirmeleri.

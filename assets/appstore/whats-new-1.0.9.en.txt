@@ -1,0 +1,9 @@
+Vademde 1.0.9
+
+• My Assets: Add homes, land, farmland, commercial property and vehicles. Track your estimated values and ownership shares.
+• Link fuel, insurance, maintenance, rent and loan records to an asset. See its income, expenses, linked loans and valuation history in one place.
+• Asset screens now follow the Accounts layout, with grouped forms, filled icons and tabbed details.
+• Support replies have their own notification tab. Notification permissions and support chat have been improved.
+• Updated English store screenshots, plus performance and stability improvements.
+
+Asset values are your own estimates and do not increase your cash balance.

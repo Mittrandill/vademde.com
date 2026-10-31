@@ -1,5 +1,5 @@
-// İngilizce mağaza seti: ?lang=en ile yalnızca telefon ekranı DIŞINDAKİ pazarlama metinleri çevrilir.
-// Uygulama yalnızca Türkçe olduğundan telefon içindeki (.screen) her şey Türkçe kalır.
+// İngilizce mağaza seti: pazarlama metinleri burada çevrilir.
+// Telefon içeriği locale-screens.js ile gerçek İngilizce uygulama çekimlerinden yüklenir.
 // Anahtarlar HTML'deki metinle birebir aynı olmalı (innerHTML parçası).
 const EN = [
   // shots.html

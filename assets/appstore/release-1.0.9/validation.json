@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-31",
+  "webProduction": "https://www.vademde.com",
+  "webCommit": "252ded3",
+  "mobileAppBuildCommit": "8c5b255",
+  "checks": {
+    "typescript": [
+      "web",
+      "mobile"
+    ],
+    "webProductionBuild": true,
+    "webAssetsBrowser": [
+      "create vehicle",
+      "asset-prefilled expense form",
+      "detail tabs and action menu",
+      "mobile form width",
+      "English module"
+    ],
+    "liveWeb": [
+      "demo login",
+      "1440px asset list",
+      "390px asset list",
+      "asset detail",
+      "no page errors"
+    ],
+    "financeRegressionChecks": 81,
+    "cardDebtChecks": 11,
+    "cardDuesChecks": 22,
+    "realtimeChecks": 13,
+    "analyticsChecks": 14,
+    "revenueCatWebhookChecks": 37,
+    "webAdminSecurityChecks": 32,
+    "webAdminAnalyticsChecks": 108,
+    "database": [
+      "assets/RLS/history/allocation/rounding",
+      "cash/card/offset/advance lifecycle",
+      "restored finance schema compatibility",
+      "instrument source lifecycle",
+      "six independent concurrent instrument sessions",
+      "TS queues with committed response loss"
+    ],
+    "translations": [
+      "profile locale",
+      "widget",
+      "server/edge compilation",
+      "locale database"
+    ],
+    "nativeIos": [
+      "asset list/form/detail in simulator",
+      "TR/EN screenshots"
+    ],
+    "nativeAndroid": [
+      "R8 production bundle installed as local debug-signed APK",
+      "demo login",
+      "assets list/form/detail",
+      "prefilled expense and loan asset",
+      "value history",
+      "cold restart and post-auth navigation",
+      "calendar/instruments/loan/card/ledger/reports/OCR camera",
+      "TR/EN native screenshots"
+    ]
+  },
+  "limits": [
+    "No real store purchase was made. Emulator Play Billing is unavailable.",
+    "Native Android smoke APK uses the production AAB code with a local debug signature.",
+    "Web assets interaction fixture tests mock HTTP; separate live checks use real demo login.",
+    "No real financial transaction was created during release verification."
+  ]
+}

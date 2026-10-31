@@ -10,16 +10,23 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ## 1.0.9 — Varlıklarım ve Android optimizasyonu (2026-10-31)
 
-Durum: yayın hazırlığı sürüyor. Kullanıcı web ve Android production yayınını ve App Store inceleme gönderimini onayladı. Sonuç ve build bağlantıları tamamlandığında bu kayda işlenecek.
+Durum: web canlı; iOS 1.0.9 (52) App Store incelemesinde (`WAITING_FOR_REVIEW`, onay sonrası otomatik yayın). Android production hazırlığı sürüyor. Kullanıcı her iki mağaza gönderimini ve web/Android canlı yayını onayladı.
 
 - Ortak Varlıklarım: taşınmaz/araç, manuel değer, sahiplik payı, değer geçmişi ve gelir/gider/kredi bağlantıları.
 - Mobil ve web tasarımları Hesaplarım ekranlarıyla uyumlu; dolu ikonlar, gruplu formlar, sekmeli detay ve işlem menüsü.
 - Canlı ortak Supabase migration’ı `20261031112137_owned_assets` uygulandı. Mevcut finansal tutarlar değiştirilmedi.
-- Android R8 minify, resource shrinking ve `proguard-android-optimize.txt` etkin. Paket metrikleri build sonrası doğrulanacak.
+- Android R8 minify, resource shrinking ve `proguard-android-optimize.txt` etkin. Üretim AAB içindeki `r8.json`: karartma %68,56; optimizasyon %68,22; küçültme %68,71 (her biri %25 eşiğinin üzerinde). DEX 69.756.948 bayttan 17.853.852 bayta düştü. Mapping dosyası AAB içinde. Ölçümler `assets/appstore/release-1.0.9/android-optimization.json` altında.
 - Play service account dosya yolu düzeltildi; tüm service-account anahtarları EAS paketinden dışlandı.
 - TR/EN sürüm notları ve mağaza metinleri `assets/appstore/release-1.0.9/` ve `whats-new-1.0.9.*.txt` altında.
 - Testler: web/mobil TypeScript; web üretim derlemesi; 81 finans regresyonu; 11 kart borcu, 22 kart vadesi; varlık domain ve PostgreSQL/RLS; tarayıcıda araç ekleme/bağlama/sekme/menü/dar ekran/İngilizce; profil dili, widget, sunucu dil, locale DB, 13 realtime, analitik ve RevenueCat kontrolleri.
 - Yeni varlık tabloları için realtime testi güncellendi; önceki destek ekranı değişikliğinden kalan sunucu bildirim sözlüğü eşitlendi.
+- İzole PostgreSQL finans testlerinin tamamı geçti: nakit/havale, kart, mahsup/geri alma, avans yaşam döngüsü; tam şema kopyasında finans uyumluluğu, 24 çek/senet senaryosu, 6 eşzamanlı ciro/karşılıksız işlem ve gerçek TS kuyruk/SQL yanıt kaybı kontrolleri. Nakit testleri sabit bilgisayar yolu yerine kontrollü test ortamı değişkenlerini kullanır; istemci testleri güncel i18n altyapısıyla çalışır.
+- Canlı web demo oturumuyla 1440/390 px liste ve detay kontrolü geçti. Web yönetim testleri (32 güvenlik, 108 analitik SQL, auth hata ayrımı, masaüstü/mobil ekranlar) ve ana sayfa animasyon/erişilebilirlik kontrolleri de geçti.
+- App Store TR/EN iki boyutta toplam 40 ekran görüntüsü COMPLETE durumunda. iOS build 52 VALID; sürüme bağlandı ve incelemeye gönderildi. İnceleme kimliği `42e9e341-06c2-4f5d-a5a3-26d54ffce273`; sürüm kimliği `b12e1ec6-12a8-47a5-81d5-108cbcb5c814`.
+- iOS EAS build: https://expo.dev/accounts/akintkaya/projects/vademde/builds/a012cdfc-2837-46aa-b60b-a320d335840f
+- App Store Connect: https://appstoreconnect.apple.com/apps/6796449470/distribution/ios/version/b12e1ec6-12a8-47a5-81d5-108cbcb5c814
+- R8 AAB’den türetilen aynı Java/DEX/JS içeriğine sahip yerel debug imzalı APK, Android emülatörüne güncelleme olarak kuruldu. Giriş, varlık listesi/formu/detayı, gider ve kredi formuna varlık aktarımı, değer geçmişi ile takvim/çek/kart/kredi/rapor/OCR kamera ekranları açıldı. Emülatörde Play Billing kullanılamadığı için gerçek satın alma yapılmadı; RevenueCat webhook 37 kontrolü geçti.
+- Demo hesabına mağaza incelemesi için iki örnek varlık bırakıldı (Demo Home, Demo Car); bunlar kasa hareketi veya borç oluşturmaz. Hesap bilgileri Git dışında tutulur.
 
 ---
 

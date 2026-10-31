@@ -1,0 +1,85 @@
+{
+  "buildId": "d0b6c3b4-3e92-47b3-b825-d13892518f13",
+  "version": "1.0.9",
+  "versionCode": 20,
+  "aabBytes": 99589083,
+  "dexBytes": 17853852,
+  "r8Version": "8.12.14",
+  "source": "BUNDLE-METADATA/com.android.tools/r8.json",
+  "percentages": {
+    "obfuscation": 68.56,
+    "optimization": 68.22,
+    "shrinking": 68.71
+  },
+  "r8": {
+    "options": {
+      "hasObfuscationDictionary": false,
+      "hasClassObfuscationDictionary": false,
+      "hasPackageObfuscationDictionary": false,
+      "keepAttributes": {
+        "isAnnotationDefaultKept": true,
+        "isEnclosingMethodKept": true,
+        "isExceptionsKept": false,
+        "isInnerClassesKept": true,
+        "isLocalVariableTableKept": false,
+        "isLocalVariableTypeTableKept": false,
+        "isMethodParametersKept": false,
+        "isPermittedSubclassesKept": false,
+        "isRuntimeInvisibleAnnotationsKept": true,
+        "isRuntimeInvisibleParameterAnnotationsKept": true,
+        "isRuntimeInvisibleTypeAnnotationsKept": true,
+        "isRuntimeVisibleAnnotationsKept": true,
+        "isRuntimeVisibleParameterAnnotationsKept": true,
+        "isRuntimeVisibleTypeAnnotationsKept": true,
+        "isSignatureKept": true,
+        "isSourceDebugExtensionKept": false,
+        "isSourceDirKept": false,
+        "isSourceFileKept": false,
+        "isStackMapTableKept": false
+      },
+      "isAccessModificationEnabled": true,
+      "isFlattenPackageHierarchyEnabled": false,
+      "isObfuscationEnabled": true,
+      "isOptimizationsEnabled": true,
+      "isProGuardCompatibilityModeEnabled": false,
+      "isProtoLiteOptimizationEnabled": false,
+      "isRepackageClassesEnabled": false,
+      "isShrinkingEnabled": true,
+      "apiModeling": {},
+      "minApiLevel": "24",
+      "isDebugModeEnabled": false
+    },
+    "baselineProfileRewriting": {},
+    "compilation": {
+      "buildTimeNs": 686208906604,
+      "numberOfThreads": 4
+    },
+    "dexFiles": [
+      {
+        "checksum": "41473d874ab6380fc08d9e46222813bb0dce6930bf7b4cd7559df35589dd52de",
+        "startup": false
+      },
+      {
+        "checksum": "95bc2d7642ad726fe446359968dea15a0175590ba9696958c3f082316a57089e",
+        "startup": false
+      }
+    ],
+    "stats": {
+      "noObfuscationPercentage": 31.44,
+      "noOptimizationPercentage": 31.78,
+      "noShrinkingPercentage": 31.29
+    },
+    "featureSplits": {
+      "featureSplits": [
+        {
+          "dexFiles": []
+        }
+      ],
+      "isolatedSplits": false
+    },
+    "resourceOptimization": {
+      "isOptimizedShrinkingEnabled": false
+    },
+    "version": "8.12.14"
+  }
+}

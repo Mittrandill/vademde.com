@@ -1,0 +1,5 @@
+• My Assets: Add property and vehicles, and track estimated values and ownership shares.
+• Link fuel, insurance, rent and loan records to your assets. View income, expenses and valuation history.
+• Asset screens now match Accounts, with filled icons and tabbed details.
+• Support replies have their own notification tab.
+• Android code optimization, performance and stability improvements.

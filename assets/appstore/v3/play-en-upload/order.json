@@ -1,0 +1,47 @@
+{
+  "version": "1.0.9",
+  "versionCode": 20,
+  "language": "en",
+  "images": [
+    {
+      "file": "vademde-01.png",
+      "source": "../play-en/vademde-03.png",
+      "alt": "Home dashboard"
+    },
+    {
+      "file": "vademde-02.png",
+      "source": "../play-en/vademde-02.png",
+      "alt": "Review scanned loan"
+    },
+    {
+      "file": "vademde-03.png",
+      "source": "../play-en/vademde-04.png",
+      "alt": "Due date calendar"
+    },
+    {
+      "file": "vademde-04.png",
+      "source": "../play-en/vademde-05.png",
+      "alt": "Cheques and notes"
+    },
+    {
+      "file": "vademde-05.png",
+      "source": "../play-en/vademde-06.png",
+      "alt": "Loan installments"
+    },
+    {
+      "file": "vademde-06.png",
+      "source": "../play-en/vademde-07.png",
+      "alt": "Credit card dues"
+    },
+    {
+      "file": "vademde-07.png",
+      "source": "../play-en/vademde-11.png",
+      "alt": "My Assets"
+    },
+    {
+      "file": "vademde-08.png",
+      "source": "../play-en/vademde-12.png",
+      "alt": "Asset Details"
+    }
+  ]
+}

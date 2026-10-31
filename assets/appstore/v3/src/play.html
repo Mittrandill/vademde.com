@@ -62,6 +62,9 @@ h1 em{font-style:normal;color:var(--saffron)}
 .phone .screen>img{display:block;width:100%;height:100%}
 .phone .screen::after{z-index:2;content:"";position:absolute;left:50%;top:1.55%;width:4.4%;aspect-ratio:1;transform:translateX(-50%);
   border-radius:50%;background:#050506;box-shadow:inset 0 0 0 3px #15161A}
+.native-android .slide .phone{width:780px;left:330px!important;top:790px!important}
+.native-android .phone .screen{aspect-ratio:1080/2400}
+.native-android .phone .screen::after{display:none}
 .phone .btn{position:absolute;right:-11px;width:7px;border-radius:4px;background:#3E4046}
 .pop{position:absolute;z-index:4;border-radius:36px;background-repeat:no-repeat;
   box-shadow:0 50px 110px rgba(0,0,0,.65),0 0 0 3px rgba(255,255,255,.08)}
@@ -100,7 +103,10 @@ h1 em{font-style:normal;color:var(--saffron)}
 .feature .phrase p{margin-top:18px;font-size:19px;line-height:1.4;font-weight:500;letter-spacing:-.005em;color:var(--text2)}
 .feature .phone{--pw:228px;padding:8px;border-radius:34px;box-shadow:0 0 0 2px #3A3C42,0 0 0 3.5px #17181C,0 40px 80px rgba(0,0,0,.6)}
 .feature .phone .screen{border-radius:27px}
-.feature .phone .btn{right:-5px;width:3px}
+.feature .native-android .slide .phone{width:780px;left:330px!important;top:790px!important}
+.native-android .phone .screen{aspect-ratio:1080/2400}
+.native-android .phone .screen::after{display:none}
+.phone .btn{right:-5px;width:3px}
 .doc{position:absolute;z-index:1;border-radius:8px;background:linear-gradient(160deg,#F8F4EA,#EAE4D3);color:#2A2B30;
   box-shadow:0 24px 50px rgba(0,0,0,.55);font-family:"Courier New",ui-monospace,monospace;padding:16px 18px}
 .doc .h{font-family:var(--font);font-weight:800;font-size:12px;letter-spacing:.02em;display:flex;justify-content:space-between;align-items:baseline}
@@ -286,6 +292,8 @@ h1 em{font-style:normal;color:var(--saffron)}
 </section>
 
 </div>
+<script src="asset-slides.js"></script>
+<script src="locale-screens.js"></script>
 <script>
   // Büyütülmüş parçalar: ham ekran görüntüsünden data-box (x,y,w,h) kırpılıp data-k ile ölçeklenir,
   // yatayda tuvale ortalanır, dikeyde telefondaki asıl yerinin üstüne oturur.
@@ -312,8 +320,9 @@ h1 em{font-style:normal;color:var(--saffron)}
     <svg viewBox="0 0 14 24"><rect x="3.5" y="0" width="7" height="2.5" rx="1" fill="#F6F5F1"/><rect x="0.5" y="2" width="13" height="21.5" rx="2.5" fill="#F6F5F1"/></svg>
   </span>`;
   document.querySelectorAll('.phone .screen').forEach(sc => {
+    if (document.documentElement.classList.contains('native-android')) return;
     const bar = document.createElement('div'); bar.className = 'sb'; bar.innerHTML = SB;
-    if (sc.querySelector('img')?.getAttribute('src') === 'shots/tara.png') bar.style.setProperty('--sbg', '#000');
+    if (sc.querySelector('img')?.getAttribute('src')?.endsWith('/tara.png')) bar.style.setProperty('--sbg', '#000');
     sc.insertBefore(bar, sc.firstChild.nextSibling);
   });
   // Android: güç ve ses tuşları sağ kenarda

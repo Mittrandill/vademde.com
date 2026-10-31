@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-31",
+  "source": "Native iOS simulator, current Expo app, real demo account, English locale",
+  "native_size": [
+    1320,
+    2868
+  ],
+  "normalized_size": [
+    1206,
+    2622
+  ],
+  "routes": {
+    "home": "/",
+    "takvim": "/takvim",
+    "instruments": "/instruments",
+    "kredi": "/obligations/6644dd02-c554-4668-b73d-c52080132a3a",
+    "card": "/accounts/eb2096c9-f9a7-45e4-b31c-d1dff1ca84b5",
+    "cari": "/counterparties/f6693447-0a18-477b-b4c7-635aacb64ca0",
+    "reports": "/reports",
+    "banks": "/banks",
+    "rev_kredi": "/documents/a1477e99-0af5-45e3-a3ee-c15638f272d5/review",
+    "tara": "/tara",
+    "assets": "/assets",
+    "asset-detail": "/assets/413e39be-f87e-4ea1-8404-f9840126fa2f"
+  },
+  "app_version": "1.0.9"
+}
