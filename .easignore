@@ -49,6 +49,6 @@ docs/
 assets/appstore/
 
 # Local history and agent configuration are not build inputs
-.git/
+.git
 .claude/
 .mcp.json
