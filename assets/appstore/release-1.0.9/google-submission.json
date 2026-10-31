@@ -20,5 +20,7 @@
   "phoneScreenshotsPerLocale": 8,
   "playConsoleAppId": "4974904725370365121",
   "consoleVerifiedAt": "2026-10-31T12:16:52.245905+00:00",
-  "consoleUrl": "https://play.google.com/console/u/0/developers/8375250150471659647/app/4974904725370365121/publishing"
+  "consoleUrl": "https://play.google.com/console/u/0/developers/8375250150471659647/app/4974904725370365121/publishing",
+  "bundleSha256": "63890c352f372e1ffe3f0b8e39c79dedf55dcae00ab91616377058b4b8855d4b",
+  "reviewDemoCredentialsVerified": true
 }
