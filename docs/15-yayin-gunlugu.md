@@ -8,6 +8,19 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.9 OTA + Web — Çalışma alanına özel premium ve hızlı geçiş (2026-11-04)
+
+- **iOS + Android:** `production`, runtime `1.0.9`, %100 OTA yayını tamamlandı. Update group `9a88d45b-1587-447f-ae20-0d823f6b36d4`; iOS `01a1a5ac-2067-7a21-a660-1556d2f1257b`, Android `01a1a5ac-2067-7d28-b9db-34660f804d0a`. Kaynak commit `91dcfa5`.
+- Paketler EAS `production` ortamındaki Supabase ve RevenueCat değişkenleriyle üretildi. İki platformun canlı update endpoint'inden yeni manifest sunulduğu ve indirilen Hermes paketlerinin SHA-256 değerlerinin manifest ile eşleştiği doğrulandı.
+- **Web:** `4a5b811` main'e gönderildi. Vercel deployment `dpl_9ruHiJRVTQ9bPHx61huaCPD9Ys5G` READY/production; `https://www.vademde.com` ve `https://vademde.com` bu yayına bağlı.
+- Premium özellikler davet edilen kullanıcının yalnızca ilgili çalışma alanında sahibinin planını kullanır. OCR kotası sahibin ortak kotasından ayrılır; eşzamanlı taramalar limit aşamaz. Kişisel abonelik ve satın alma ekranları kişinin kendi hesabını yönetir.
+- Dashboard başlığında küçük ok, seçili alan işareti ve çalışma alanları kısayolu. Webde sayfa yenilemesinde seçilen alanın korunması düzeltildi.
+- **Supabase (önceden bu çalışmada yayımlandı):** migration `20261104071113_workspace_entitlements`; `process-document` v25, `generate-insights` v5, `ai-ask` v3 ACTIVE. JWT kontrolleri açık. Yetkili RPC ve yetkisiz istek smoke kontrolleri geçti.
+- Doğrulama: mobil/web TypeScript, web production build, iOS export, izole PostgreSQL yetki/kota/eşzamanlılık testleri ve mobil ekran kodunun web önizlemesinde geçiş testi başarılı. Canlı web paketinde örnek verili mobil/masaüstü tarayıcı kontrolleri (alan değiştirme, 500 → 5 → 500 kota, seçimi koruma) geçti; gerçek kullanıcı verisi değiştirilmedi.
+- Özelleştirilebilir dashboard sonraki iş için planlandı; bu yayının kapsamına eklenmedi.
+
+---
+
 ## 1.0.9 — Varlıklarım ve Android optimizasyonu (2026-10-31)
 
 Durum: web canlı; iOS 1.0.9 (52) App Store incelemesinde (`WAITING_FOR_REVIEW`, onay sonrası otomatik yayın). Android 1.0.9 (20) %100 production yayını için gönderildi; Google hızlı ön kontrolleri geçti ve Console’da incelemede. Kullanıcı her iki mağaza gönderimini ve web/Android canlı yayını onayladı.
