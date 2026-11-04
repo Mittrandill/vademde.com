@@ -144,7 +144,7 @@ export default function WorkspacesScreen() {
                   const isOwner = w.owner_id === session?.user?.id;
                   const isActive = w.id === activeWorkspaceId;
                   const isPrimary = w.id === planState?.primaryWorkspaceId;
-                  const readOnly = isWorkspaceReadOnly(planState, w.id);
+                  const readOnly = isOwner && isWorkspaceReadOnly(planState, w.id);
 
                   if (editingWorkspaceId === w.id) {
                     return (

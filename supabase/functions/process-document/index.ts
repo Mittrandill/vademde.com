@@ -465,64 +465,35 @@ Deno.serve(async (req: Request) => {
   // Depolama ve yazma işlemleri için service role (RLS'yi atlar, yalnızca sunucu tarafında).
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // docs/10-abonelik-gelir-modeli.md §14.1 — aylık OCR kotası owner (workspace sahibi)
-  // bazında tutulur; kota dolduğunda Gemini hiç çağrılmaz.
-  const { data: workspace, error: workspaceError } = await adminClient
-    .from('workspaces')
-    .select('owner_id')
-    .eq('id', document.workspace_id)
-    .single();
-  if (workspaceError || !workspace) {
-    return new Response(JSON.stringify({ error: 'Çalışma alanı bulunamadı' }), { status: 404, headers: jsonHeaders });
+  // Resolve the document's workspace using the caller's JWT. No caller-supplied
+  // owner/plan is trusted, and the owner's private subscription remains hidden.
+  const { data: entitlements, error: entitlementError } = await authedClient.rpc('get_workspace_entitlements', {
+    p_workspace_id: document.workspace_id,
+  });
+  if (entitlementError || !entitlements) {
+    return new Response(JSON.stringify({ error: 'Çalışma alanı yetkileri okunamadı' }), { status: 403, headers: jsonHeaders });
   }
-  const ownerId = workspace.owner_id;
-  const periodMonth = new Date();
-  const periodMonthIso = new Date(
-    Date.UTC(periodMonth.getUTCFullYear(), periodMonth.getUTCMonth(), 1)
-  )
-    .toISOString()
-    .slice(0, 10);
-
-  const { data: subscription } = await adminClient
-    .from('subscriptions')
-    .select('plan')
-    .eq('owner_id', ownerId)
-    .maybeSingle();
-  const plan = subscription?.plan ?? 'free';
-
-  const { data: planLimits, error: planLimitsError } = await adminClient
-    .from('plan_limits')
-    .select('monthly_ocr_quota, document_archive')
-    .eq('plan', plan)
-    .single();
-  if (planLimitsError || !planLimits) {
-    return new Response(JSON.stringify({ error: 'Plan limitleri okunamadı' }), { status: 500, headers: jsonHeaders });
+  const planLimits = entitlements.limits;
+  const { data: reservationId, error: reservationError } = await authedClient.rpc('reserve_workspace_ocr', {
+    p_document_id: documentId,
+  });
+  if (reservationError || !reservationId) {
+    const quotaExceeded = reservationError?.message.includes('OCR_QUOTA_EXCEEDED') ?? false;
+    return new Response(JSON.stringify({
+      error: quotaExceeded ? 'Aylık OCR kotanız doldu' : 'Belge işleme başlatılamadı', quotaExceeded,
+    }), { status: quotaExceeded ? 402 : 409, headers: jsonHeaders });
   }
-
-  const { data: usage } = await adminClient
-    .from('ocr_usage')
-    .select('used_count')
-    .eq('owner_id', ownerId)
-    .eq('period_month', periodMonthIso)
-    .maybeSingle();
-  const usedCount = usage?.used_count ?? 0;
-
-  if (usedCount >= planLimits.monthly_ocr_quota) {
-    return new Response(
-      JSON.stringify({ error: 'Aylık OCR kotanız doldu', quotaExceeded: true }),
-      { status: 402, headers: jsonHeaders }
-    );
+  const { data: job, error: jobError } = await adminClient.from('document_processing_jobs').insert({
+    workspace_id: document.workspace_id, document_id: documentId,
+    status: 'processing', started_at: new Date().toISOString(),
+  }).select('id').single();
+  const { error: processingError } = jobError ? { error: jobError } : await adminClient
+    .from('financial_documents').update({ status: 'processing' }).eq('id', documentId);
+  if (processingError || !job) {
+    await adminClient.rpc('finish_workspace_ocr', { p_reservation_id: reservationId, p_success: false });
+    if (job) await adminClient.from('document_processing_jobs').update({ status: 'failed', last_error: processingError?.message }).eq('id', job.id);
+    return new Response(JSON.stringify({ error: 'Belge işleme başlatılamadı' }), { status: 500, headers: jsonHeaders });
   }
-
-  await adminClient
-    .from('document_processing_jobs')
-    .insert({
-      workspace_id: document.workspace_id,
-      document_id: documentId,
-      status: 'processing',
-      started_at: new Date().toISOString(),
-    });
-  await adminClient.from('financial_documents').update({ status: 'processing' }).eq('id', documentId);
 
   // İstemciyi 13-74 sn sürebilen Gemini çağrısından ayırıyoruz: ağır iş (indir → Gemini →
   // ayrıştır → yaz) EdgeRuntime.waitUntil ile arka planda çalışır, handler hemen 202 döner.
@@ -858,32 +829,30 @@ Deno.serve(async (req: Request) => {
         extracted_summary: Object.keys(extractedSummary).length > 0 ? extractedSummary : null,
         suggested_category_id: suggestedCategoryId,
       })
-      .eq('id', documentId);
+      .eq('id', documentId).throwOnError();
 
-    // Yalnızca başarılı taramada kota düşürülür (docs/10-abonelik-gelir-modeli.md §14.1) —
-    // yukarıdaki her throw bu satıra ulaşmadan catch'e düşer, ocr_usage değişmez.
-    await adminClient.rpc('increment_ocr_usage', {
-      target_owner: ownerId,
-      target_period: periodMonthIso,
+    // Commit the owner's reserved slot exactly once. Failed scans release it below.
+    await adminClient.rpc('finish_workspace_ocr', {
+      p_reservation_id: reservationId, p_success: true,
     }).throwOnError();
 
-    await adminClient
+    const { error: completionError } = await adminClient
       .from('document_processing_jobs')
       .update({ status: 'succeeded', completed_at: new Date().toISOString() })
-      .eq('document_id', documentId)
-      .eq('status', 'processing').throwOnError();
+      .eq('id', job.id);
+    if (completionError) console.error('Processing job completion failed', completionError.message);
 
     // Buraya ulaşıldıysa ham belge tercihe göre temizlenmiş, belge 'ready_for_review' ve
     // job 'succeeded' olarak yazılmıştır; istemci poll ile inceleme ekranına geçebilir.
    } catch (error) {
     const message = error instanceof Error ? error.message : 'Bilinmeyen hata';
+    await adminClient.rpc('finish_workspace_ocr', { p_reservation_id: reservationId, p_success: false });
 
     await adminClient.from('financial_documents').update({ status: 'failed' }).eq('id', documentId);
     await adminClient
       .from('document_processing_jobs')
       .update({ status: 'failed', last_error: message, completed_at: new Date().toISOString() })
-      .eq('document_id', documentId)
-      .eq('status', 'processing');
+      .eq('id', job.id);
     await deleteOriginalBestEffort();
    }
   };

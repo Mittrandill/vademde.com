@@ -411,8 +411,11 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   if (!member) return json({ error: 'forbidden' }, 403);
 
-  const { data: subscription } = await userClient.from('subscriptions').select('plan').maybeSingle();
-  if (!subscription || subscription.plan === 'free') return json({ error: 'plus_required' }, 403);
+  const { data: entitlements, error: entitlementError } = await userClient.rpc('get_workspace_entitlements', {
+    p_workspace_id: workspaceId,
+  });
+  if (entitlementError) return json({ error: 'workspace_access_denied' }, 403);
+  if (!entitlements || entitlements.plan === 'free') return json({ error: 'plus_required' }, 403);
 
   const facts = [
     ...(await duplicateSubscriptions(userClient, workspaceId, locale)),

@@ -6,6 +6,7 @@ export const scan: Messages<typeof tr> = {
   consentText:
     "To extract the dates, amounts and payment details on your document, the document image will be sent over a secure connection to a smart document analysis service. The document won't become a financial record unless you approve it.",
   allowAndProcess: 'Allow and process',
+  sharedWorkspacePlan: "The owner's plan applies in this workspace. The scan quota is shared.",
   quotaFullTitle: 'Monthly scan quota used up',
   quotaFullBody: 'You can process this document when your quota renews.',
   processingTitle: 'Processing',

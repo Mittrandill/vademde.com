@@ -1,3 +1,4 @@
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,7 +13,6 @@ import {
   listDraftDocuments,
   startProcessing,
 } from '@/features/documents/api';
-import { getCurrentOcrUsage, currentPeriodMonth } from '@/features/subscriptions/api';
 import { queryKeys } from '@/services/queryKeys';
 import { OCR_CONSENT_KEY } from '@/utils/storageKeys';
 import { friendlyErrorMessage } from '@/utils/alerts';
@@ -34,10 +34,7 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
     queryFn: () => listDraftDocuments(workspaceId),
   });
 
-  const usageQuery = useQuery({
-    queryKey: queryKeys.ocrUsage(currentPeriodMonth()),
-    queryFn: getCurrentOcrUsage,
-  });
+  const usageQuery = useWorkspaceEntitlements(workspaceId);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboardDraftDocuments(workspaceId) });

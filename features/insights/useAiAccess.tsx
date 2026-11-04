@@ -1,9 +1,8 @@
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery } from '@tanstack/react-query';
 
-import { getMySubscription } from '@/features/subscriptions/api';
-import { queryKeys } from '@/services/queryKeys';
+
 import { t } from '@/i18n';
 
 // docs/07-guvenlik-gizlilik.md §11.2 — kayıt özetleri yapay zekâ hizmetine gönderilmeden önce
@@ -28,7 +27,7 @@ export interface AiAccess {
 }
 
 export function useAiAccess(): AiAccess {
-  const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
+  const subscriptionQuery = useWorkspaceEntitlements();
   const [consent, setConsent] = useState<boolean | null>(null);
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { useState } from 'react';
 import { Alert, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +10,7 @@ import { useReflowKey } from '@/services/reflow';
 import { GroupedRow, GroupedRowAvatar, GroupedRowIcon, GroupedSection, GroupedToggleRow } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
-import { getMySubscription, getPlanLimits } from '@/features/subscriptions/api';
+
 import { exportWorkspaceJson } from '@/features/export/api';
 import { setAnalyticsConsent } from '@/services/analytics';
 import { useAnalyticsConsentStore } from '@/store/analyticsConsentStore';
@@ -56,10 +57,7 @@ export default function SettingsScreen() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const themePreference = useThemePreferenceStore((s) => s.themePreference);
 
-  const subscriptionQuery = useQuery({
-    queryKey: queryKeys.subscription(),
-    queryFn: getMySubscription,
-  });
+  const subscriptionQuery = useWorkspaceEntitlements();
 
   const profileQuery = useQuery({
     queryKey: queryKeys.profile(),
@@ -82,12 +80,8 @@ export default function SettingsScreen() {
   const biometricSupportQuery = useQuery({ queryKey: ['biometric-support'], queryFn: getBiometricSupport });
   const biometricSupport = biometricSupportQuery.data;
   const biometricLabel = resolveBiometricLabel(biometricSupport?.kind);
-  const planLimitsQuery = useQuery({
-    queryKey: [...queryKeys.planLimits(), planCode],
-    queryFn: () => getPlanLimits(planCode as 'free' | 'plus' | 'isletme'),
-    enabled: subscriptionQuery.isSuccess,
-  });
-  const planAllowsLock = planLimitsQuery.data?.face_id ?? false;
+  const planLimits = subscriptionQuery.data?.limits;
+  const planAllowsLock = planLimits?.face_id ?? false;
 
   // Kilidi AÇARKEN bir kez doğrulama istenir: doğrulayamayan kullanıcı kilidi açarsa bir
   // daha uygulamaya giremezdi. Kapatırken de istenir ki telefonu eline geçiren biri kilidi

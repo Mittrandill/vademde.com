@@ -980,7 +980,7 @@ function PaymentForm({
   );
   // Dekont (Plus): yeni seçilen dosya ya da düzenlemede mevcut bağlantı. removedExisting,
   // kullanıcı kayıtlı dekontu ödemeden ayırdıysa true olur.
-  const archive = useDocumentArchiveAccess();
+  const archive = useDocumentArchiveAccess(obligation.workspace_id);
   const [receipt, setReceipt] = useState<PendingReceipt | null>(null);
   const [removedExisting, setRemovedExisting] = useState(false);
   const existingReceiptId = removedExisting ? null : (editingPayment?.receipt_document_id ?? null);

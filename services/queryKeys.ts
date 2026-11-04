@@ -72,6 +72,7 @@ export const queryKeys = {
   supportThreads: () => ['support', 'threads'] as const,
   supportThread: (messageId: string) => ['support', 'threads', messageId] as const,
   supportReplyNotifications: () => ['support', 'reply-notifications'] as const,
+  workspaceEntitlements: (workspaceId: string | null) => [workspaceId, 'entitlements'] as const,
   subscription: () => ['subscription'] as const,
   planLimits: () => ['plan-limits'] as const,
   planEnforcement: () => ['plan-enforcement'] as const,

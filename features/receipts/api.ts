@@ -1,10 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
 import { t } from '@/i18n';
 import type { ReceiptMatchReason } from './matchReasons';
 
 import { supabase } from '@/services/supabase';
-import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import {
   getDocument,
   getSignedUrl,
@@ -33,17 +32,9 @@ export interface PendingReceipt {
 // Dekont ekleme ve arşivleme "Belge arşivi"dir (plan_limits.document_archive: Plus, İşletme).
 // Bu yalnızca arayüz yönlendirmesidir; gerçek kapı sunucudaki payments tetikleyicisidir
 // (RECEIPT_ARCHIVE_PLAN_REQUIRED), bu yüzden burası yanlış "true" dönse bile veri sızmaz.
-export function useDocumentArchiveAccess(): { allowed: boolean; isLoading: boolean } {
-  const query = useQuery({
-    queryKey: ['document-archive-access'],
-    queryFn: async () => {
-      const subscription = await getMySubscription();
-      const plan = (subscription?.plan ?? 'free') as PlanCode;
-      const limits = await getPlanLimits(plan);
-      return limits.document_archive;
-    },
-  });
-  return { allowed: query.data === true, isLoading: query.isPending };
+export function useDocumentArchiveAccess(workspaceId?: string | null): { allowed: boolean; isLoading: boolean } {
+  const query = useWorkspaceEntitlements(workspaceId);
+  return { allowed: !query.isError && query.data?.limits.document_archive === true, isLoading: query.isPending };
 }
 
 export interface AttachReceiptFileInput extends PendingReceipt {

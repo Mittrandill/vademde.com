@@ -1,3 +1,4 @@
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { assetText as ta } from '@/features/assets/copy';
 import type { ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -15,7 +16,7 @@ import { getObligationTotalsByType, ACTIVE_OBLIGATION_STATUSES } from '@/feature
 import { DOCUMENT_TYPE_ICON } from '@/features/obligations/documentTypes';
 import { getMyProfile } from '@/features/profile/api';
 import { listSupportThreads } from '@/features/support/api';
-import { currentPeriodMonth, getCurrentOcrUsage, getMySubscription } from '@/features/subscriptions/api';
+
 import { useSession } from '@/features/auth/useSession';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
@@ -43,10 +44,7 @@ export default function MoreScreen() {
     queryFn: getMyProfile,
   });
 
-  const subscriptionQuery = useQuery({
-    queryKey: queryKeys.subscription(),
-    queryFn: getMySubscription,
-  });
+  const subscriptionQuery = useWorkspaceEntitlements();
 
   const supportQuery = useQuery({
     queryKey: queryKeys.supportThreads(),
@@ -85,10 +83,7 @@ export default function MoreScreen() {
     enabled: !!activeWorkspaceId,
   });
 
-  const ocrUsageQuery = useQuery({
-    queryKey: queryKeys.ocrUsage(currentPeriodMonth()),
-    queryFn: getCurrentOcrUsage,
-  });
+  const ocrUsageQuery = subscriptionQuery;
   const ocrUsage = ocrUsageQuery.data;
 
   const totalsByType = totalsQuery.data;
@@ -150,9 +145,14 @@ export default function MoreScreen() {
             {isFree ? (
               <MenuRow icon="star" tone="brand" label={t('nav.more.tryPlus')} href="/paywall" />
             ) : ocrUsage ? (
-              <MenuRow icon="scan" label={t('nav.more.scansLeft')} detail={`${ocrUsage.remaining} / ${ocrUsage.quota}`} href="/subscription" />
+              <MenuRow icon="scan" label={t('nav.more.scansLeft')} detail={`${ocrUsage.remaining} / ${ocrUsage.quota}`} href="/(tabs)/tara" />
             ) : null}
           </Group>
+          {subscriptionQuery.data?.inherited ? (
+            <Text variant="caption" color="textSecondary" style={{ marginTop: theme.spacing.xs }}>
+              {t('scan.sharedWorkspacePlan')}
+            </Text>
+          ) : null}
         </View>
 
         <MenuGroup title={t('nav.more.recordTypes')}>

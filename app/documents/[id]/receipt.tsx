@@ -89,7 +89,6 @@ export default function ReceiptResultScreen() {
   const reflowKey = useReflowKey();
   const queryClient = useQueryClient();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const archive = useDocumentArchiveAccess();
 
   const documentQuery = useQuery({
     queryKey: activeWorkspaceId ? queryKeys.document(activeWorkspaceId, id) : ['document', 'disabled'],
@@ -97,6 +96,7 @@ export default function ReceiptResultScreen() {
     enabled: !!activeWorkspaceId && !!id,
   });
   const document = documentQuery.data;
+  const archive = useDocumentArchiveAccess(document?.workspace_id ?? null);
   const summary = (document?.extracted_summary as { receipt?: ReceiptSummary } | null)?.receipt ?? null;
 
   const warningsQuery = useQuery({

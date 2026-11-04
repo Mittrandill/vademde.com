@@ -38,25 +38,33 @@ export interface OcrUsageStatus {
   remaining: number;
 }
 
+export interface WorkspaceEntitlements extends OcrUsageStatus {
+  workspaceId: string | null;
+  plan: PlanCode;
+  inherited: boolean;
+  limits: PlanLimits;
+  periodMonth: string;
+  readOnly: boolean;
+}
+
+// Only the authenticated user's own billing scope or an accessible workspace is accepted.
+// The RPC returns feature flags and shared usage, never the owner's subscription details.
+export async function getWorkspaceEntitlements(workspaceId: string | null): Promise<WorkspaceEntitlements> {
+  const { data, error } = await supabase.rpc('get_workspace_entitlements', {
+    p_workspace_id: workspaceId ?? undefined,
+  });
+  if (error) throw error;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid workspace entitlements');
+  return data as unknown as WorkspaceEntitlements;
+}
+
+export async function getWorkspaceOcrUsage(workspaceId: string): Promise<OcrUsageStatus> {
+  return getWorkspaceEntitlements(workspaceId);
+}
+
 // Tarama öncesi kalan OCR kotasını göstermek için (docs/10-abonelik-gelir-modeli.md §14.1).
 export async function getCurrentOcrUsage(): Promise<OcrUsageStatus> {
-  const subscription = await getMySubscription();
-  const plan: PlanCode = (subscription?.plan as PlanCode) ?? 'free';
-  const limits = await getPlanLimits(plan);
-
-  const { data: usage, error } = await supabase
-    .from('ocr_usage')
-    .select('used_count')
-    .eq('period_month', currentPeriodMonth())
-    .maybeSingle();
-  if (error) throw error;
-
-  const usedCount = usage?.used_count ?? 0;
-  return {
-    usedCount,
-    quota: limits.monthly_ocr_quota,
-    remaining: Math.max(limits.monthly_ocr_quota - usedCount, 0),
-  };
+  return getWorkspaceEntitlements(null);
 }
 
 // docs/10-abonelik-gelir-modeli.md — plan limitleri artık gerçekten uygulanıyor

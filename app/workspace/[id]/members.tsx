@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Share, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,7 +36,7 @@ import {
   type WorkspaceRole,
 } from '@/features/workspaces/members';
 import { getAllPlanLimits } from '@/features/subscriptions/api';
-import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { queryKeys } from '@/services/queryKeys';
 import { showErrorAlert } from '@/utils/alerts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -86,10 +86,6 @@ export default function WorkspaceDetailScreen() {
   });
   const workspace = (workspacesQuery.data ?? []).find((w) => w.id === workspaceId) ?? null;
 
-  useEffect(() => {
-    if (!isEditingName && workspace) setNameDraft(workspace.name);
-  }, [isEditingName, workspace]);
-
   const roleQuery = useQuery({
     queryKey: queryKeys.myWorkspaceRole(workspaceId),
     queryFn: () => getMyWorkspaceRole(workspaceId),
@@ -109,16 +105,9 @@ export default function WorkspaceDetailScreen() {
     enabled: !!workspaceId && isOwner,
   });
 
-  // docs/10-abonelik-gelir-modeli.md — ekip üyeliği Plus ve İşletme planlarının özelliğidir
-  // (plan_limits.max_team_members free'de null). Sunucu da reddeder
-  // (create_workspace_invite → TEAM_PLAN_REQUIRED); buradaki kontrol yalnızca kullanıcıyı
-  // hataya düşürmeden önce durdurmak ve neyin kilitli olduğunu göstermek içindir.
-  // planQuery.data null gelirse (RPC henüz uygulanmamış bir ortam) hiçbir şey kilitlenmez —
-  // limit bilgisi yokken kullanıcıyı yanlışlıkla engellemek, engellememekten daha kötüdür.
-  const planQuery = usePlanEnforcement();
-  const planState = planQuery.data ?? null;
-  const teamLimit = planState?.teamMemberLimit ?? null;
-  const teamLocked = !!planState && teamLimit === null;
+  const planQuery = useWorkspaceEntitlements(workspaceId);
+  const teamLimit = planQuery.data?.limits.max_team_members ?? null;
+  const teamLocked = planQuery.isSuccess && teamLimit === null;
 
   // Kilitli ekranda gösterilen plan başına üye sayıları sabit yazılmaz; paywall ile aynı
   // plan_limits kaynağından okunur ki limit değişince metin geride kalmasın.
@@ -301,7 +290,7 @@ export default function WorkspaceDetailScreen() {
                   </Row>
                 </Stack>
               ) : (
-                <Pressable onPress={() => isOwner && setIsEditingName(true)} disabled={!isOwner}>
+                <Pressable onPress={() => { if (isOwner && workspace) { setNameDraft(workspace.name); setIsEditingName(true); } }} disabled={!isOwner}>
                   <Row align="center" style={{ justifyContent: 'space-between' }}>
                     <Text variant="sectionTitle" numberOfLines={1} style={{ flex: 1 }}>
                       {workspace.name}

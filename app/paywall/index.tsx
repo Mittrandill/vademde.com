@@ -171,6 +171,7 @@ export default function PaywallScreen() {
     try {
       await purchasePackage(selectedPackage);
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
+      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[1] === 'entitlements' });
       // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
       await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
       await queryClient.invalidateQueries({ queryKey: ['document-archive-access'] });
@@ -190,6 +191,7 @@ export default function PaywallScreen() {
     try {
       await restorePurchases();
       await queryClient.invalidateQueries({ queryKey: queryKeys.subscription() });
+      await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[1] === 'entitlements' });
       // Plan değişince çalışma alanı/ekip limitleri de değişir; kilit anında kalkmalı.
       await queryClient.invalidateQueries({ queryKey: queryKeys.planEnforcement() });
       await queryClient.invalidateQueries({ queryKey: ['document-archive-access'] });

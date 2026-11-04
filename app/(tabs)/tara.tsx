@@ -1,3 +1,4 @@
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,7 +24,6 @@ import {
   startProcessing,
   uploadAndCreateDocument,
 } from '@/features/documents/api';
-import { currentPeriodMonth, getCurrentOcrUsage } from '@/features/subscriptions/api';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useMyWorkspaceRole } from '@/features/workspaces/useMyWorkspaceRole';
 import { queryKeys } from '@/services/queryKeys';
@@ -165,10 +165,7 @@ export default function TaraScreen() {
     return () => loop.stop();
   }, [localUri, scanAnim]);
 
-  const ocrUsageQuery = useQuery({
-    queryKey: queryKeys.ocrUsage(currentPeriodMonth()),
-    queryFn: getCurrentOcrUsage,
-  });
+  const ocrUsageQuery = useWorkspaceEntitlements();
   const quotaRemaining = ocrUsageQuery.data?.remaining;
 
   const documentQuery = useQuery({

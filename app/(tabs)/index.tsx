@@ -1,10 +1,11 @@
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { PAYWALL_LAST_SHOWN_KEY } from '@/utils/storageKeys';
 
@@ -29,7 +30,7 @@ import {
 import { listTransactions } from '@/features/transactions/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
-import { getMySubscription } from '@/features/subscriptions/api';
+
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
 import { NotificationPermissionBanner } from '@/components/notifications/NotificationPermissionBanner';
@@ -50,7 +51,6 @@ const PAYWALL_REMINDER_INTERVAL_MS = 5 * 24 * 60 * 60 * 1000;
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const queryClient = useQueryClient();
   const { session } = useSession();
   const { activeWorkspaceId, setActiveWorkspaceId, balanceHidden, toggleBalanceHidden } = useWorkspaceStore();
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -64,10 +64,7 @@ export default function HomeScreen() {
     queryFn: listMyWorkspaces,
   });
 
-  const subscriptionQuery = useQuery({
-    queryKey: queryKeys.subscription(),
-    queryFn: getMySubscription,
-  });
+  const subscriptionQuery = useWorkspaceEntitlements();
   // Plan limiti durumu. Bu sorgu aynı zamanda sunucuda limit aşımını ilk gördüğünde
   // 14 günlük lütuf süresini başlatır (sync_plan_enforcement) — bu yüzden uygulamanın
   // ilk açılan ekranında çağrılır: kullanıcı uyarıyı görmeden kilit devreye girmez.
@@ -330,8 +327,8 @@ export default function HomeScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('home.switchWorkspace')}
-                onPress={() => workspaces.length > 1 && setSwitcherOpen((open) => !open)}
-                disabled={workspaces.length <= 1}
+                onPress={() => setSwitcherOpen((open) => !open)}
+                accessibilityState={{ expanded: switcherOpen }}
                 style={{ flex: 1, gap: 2 }}
               >
                 <Text variant="caption" color="textSecondary">
@@ -341,9 +338,7 @@ export default function HomeScreen() {
                   <Text numberOfLines={1} style={{ fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.56, flexShrink: 1 }}>
                     {activeWorkspace?.name ?? '—'}
                   </Text>
-                  {workspaces.length > 1 ? (
-                    <Ionicons name={switcherOpen ? 'chevron-up' : 'chevron-down'} size={19} color={theme.colors.textSecondary} />
-                  ) : null}
+                  <Ionicons name={switcherOpen ? 'chevron-up' : 'chevron-down'} size={16} color={theme.colors.textSecondary} />
                 </Row>
               </Pressable>
               <Pressable
@@ -386,15 +381,27 @@ export default function HomeScreen() {
                 {workspaces.map((w) => (
                   <Pressable
                     key={w.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: w.id === activeWorkspaceId }}
                     onPress={() => {
                       setActiveWorkspaceId(w.id);
                       setSwitcherOpen(false);
                     }}
                     style={{ padding: theme.spacing.sm, minHeight: 44, justifyContent: 'center' }}
                   >
-                    <Text style={{ fontWeight: w.id === activeWorkspaceId ? '700' : '400' }}>{w.name}</Text>
+                    <Row style={{ justifyContent: 'space-between' }}>
+                      <Text numberOfLines={1} style={{ flex: 1, fontWeight: w.id === activeWorkspaceId ? '700' : '400' }}>{w.name}</Text>
+                      {w.id === activeWorkspaceId ? <Ionicons name="checkmark" size={18} color={theme.colors.textPrimary} /> : null}
+                    </Row>
                   </Pressable>
                 ))}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => { setSwitcherOpen(false); router.push('/workspace'); }}
+                  style={{ padding: theme.spacing.sm, minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text color="textSecondary">{t('workspace.list.title')}</Text>
+                </Pressable>
               </Stack>
             ) : null}
           </Stack>

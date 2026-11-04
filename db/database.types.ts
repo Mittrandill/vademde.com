@@ -1572,6 +1572,18 @@ financing_minor: number;
 
     }
     Functions: {
+      get_workspace_entitlements: {
+        Args: { p_workspace_id?: string }
+        Returns: Json
+      }
+      reserve_workspace_ocr: {
+        Args: { p_document_id: string }
+        Returns: string
+      }
+      finish_workspace_ocr: {
+        Args: { p_reservation_id: string; p_success: boolean }
+        Returns: undefined
+      }
       mark_instrument_bounced: {
         Args: { p_obligation_id: string }
         Returns: undefined

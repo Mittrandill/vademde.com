@@ -1,3 +1,4 @@
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, Share, View, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -58,7 +59,7 @@ import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/a
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { toCsv } from '@/utils/csv';
-import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
+
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { formatMinorAmount, fromMinorUnits } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
@@ -221,19 +222,11 @@ export default function ReportsScreen() {
   const periodKey = period === 'custom' && custom ? `custom:${custom.start}:${custom.end}` : period;
   const periodText = rangeLabel(period, custom);
 
-  const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
+  const subscriptionQuery = useWorkspaceEntitlements();
   const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces(), queryFn: listMyWorkspaces });
   const workspaceName = workspacesQuery.data?.find((w) => w.id === activeWorkspaceId)?.name ?? null;
-  const planCode: PlanCode = (subscriptionQuery.data?.plan as PlanCode) ?? 'free';
-  const planLimitsQuery = useQuery({
-    queryKey: [...queryKeys.planLimits(), planCode],
-    queryFn: () => getPlanLimits(planCode),
-    enabled: subscriptionQuery.isSuccess,
-  });
-  // Limit bilgisi henüz gelmediyse engellenmez (fail-open): plan sorgusu yüzünden raporun alınamaması
-  // sızdırmaktan daha kötü bir hata olurdu. Bu limit kullanıcının kendi verisini dışa aktarmasını
-  // engellemez (Ayarlar → Verilerimi Dışa Aktar her planda açık); yalnızca hazırlanmış analiz raporunu sınırlar.
-  const unlimitedExport = planLimitsQuery.data?.unlimited_export ?? true;
+  const planLimits = subscriptionQuery.data?.limits;
+  const unlimitedExport = planLimits?.unlimited_export ?? false;
   const canExportPeriod = unlimitedExport || period === 'month';
 
   const enabled = !!activeWorkspaceId;

@@ -9,8 +9,7 @@ import { Button, Pressable, Stack, Text } from '@/components/primitives';
 import { VademdeMark } from '@/components/brand/VademdeMark';
 import { useAppLockStore } from '@/store/appLockStore';
 import { authenticate, biometricLabel, getBiometricSupport } from '@/services/appLock';
-import { getMySubscription, getPlanLimits, type PlanCode } from '@/features/subscriptions/api';
-import { queryKeys } from '@/services/queryKeys';
+import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
 import { signOut } from '@/features/auth/api';
 import { useTranslation } from '@/i18n';
 
@@ -29,14 +28,8 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const enabled = useAppLockStore((s) => s.enabled);
 
-  const subscriptionQuery = useQuery({ queryKey: queryKeys.subscription(), queryFn: getMySubscription });
-  const plan: PlanCode = (subscriptionQuery.data?.plan as PlanCode) ?? 'free';
-  const limitsQuery = useQuery({
-    queryKey: [...queryKeys.planLimits(), plan],
-    queryFn: () => getPlanLimits(plan),
-    enabled: subscriptionQuery.isSuccess,
-  });
-  const planAllowsLock = limitsQuery.data?.face_id ?? false;
+  const entitlements = useWorkspaceEntitlements();
+  const planAllowsLock = entitlements.data?.limits.face_id ?? false;
 
   const supportQuery = useQuery({ queryKey: ['biometric-support'], queryFn: getBiometricSupport });
   const label = biometricLabel(supportQuery.data?.kind);

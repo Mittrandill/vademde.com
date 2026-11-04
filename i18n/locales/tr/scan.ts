@@ -4,6 +4,7 @@ export const scan = {
   consentText:
     'Belgenizdeki tarih, tutar ve ödeme bilgilerini çıkarmak için belge görüntüsü güvenli bağlantı üzerinden akıllı belge analiz hizmetine gönderilecektir. Belge, siz onaylamadan finansal kayda dönüştürülmez.',
   allowAndProcess: 'İzin ver ve işle',
+  sharedWorkspacePlan: 'Bu çalışma alanında sahibinin paketi geçerlidir. Tarama kotası ortak kullanılır.',
   quotaFullTitle: 'Aylık tarama kotan dolu',
   quotaFullBody: 'Kotan yenilenince bu belgeyi işleyebilirsin.',
   processingTitle: 'İşleniyor',
