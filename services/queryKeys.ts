@@ -94,6 +94,10 @@ export function invalidatePaymentRelatedQueries(queryClient: QueryClient, worksp
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'transactions'] });
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'account-balances'] });
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'reports'] });
+  // A card transfer can change multiple statement snapshots, even when the
+  // payment was allocated to just one of their stored rows.
+  queryClient.invalidateQueries({ queryKey: ['obligation'] });
+  queryClient.invalidateQueries({ queryKey: [workspaceId, 'reminders'] });
   // Ödemeye eklenen/kaldırılan dekont Belge arşivi'ni de etkiler (bkz. features/receipts/api.ts).
   queryClient.invalidateQueries({ queryKey: [workspaceId, 'receipt-archive'] });
   // counterpartyLedger/counterpartyObligations/counterpartyTransactions bu prefix altında

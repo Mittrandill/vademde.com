@@ -10,6 +10,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { contentFor, type ReminderRow } from '../_shared/reminderContent.ts';
 import { resolveLocale } from '../_shared/locale.ts';
+import { projectCardReminders } from '../_shared/cardReminderProjection.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -33,7 +34,7 @@ Deno.serve(async (_req: Request) => {
   const { data: dueReminders, error: fetchError } = await adminClient
     .from('reminders')
     .select(
-      '*, obligation:obligations(id, title, direction, status, remaining_amount_minor, currency_code, document_type, bank_code, service_code, counterparty:counterparties(name)), account:accounts(id, name)'
+      '*, obligation:obligations(id, account_id, title, direction, status, remaining_amount_minor, currency_code, document_type, bank_code, service_code, counterparty:counterparties(name)), account:accounts(id, name)'
     )
     .eq('status', 'scheduled')
     .is('dismissed_at', null)
@@ -47,13 +48,20 @@ Deno.serve(async (_req: Request) => {
     });
   }
 
-  const reminders = (dueReminders ?? []) as unknown as ReminderRow[];
+  let financialReminders;
+  try {
+    financialReminders = await projectCardReminders(adminClient, (dueReminders ?? []) as unknown as ReminderRow[]);
+  } catch (error) {
+    return Response.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
+  const reminders = financialReminders.reminders;
 
   // Vadesi geldiğinde obligation zaten terminal duruma geçmiş olabilir (client mutation'ı
   // syncObligationReminder'ı tetikleyip iptal etmeden önce bir kayıt işlenmiş olabilir) —
   // burada son bir güvenlik ağı: terminal olanları push göndermeden iptal et.
-  const toCancel: string[] = [];
+  const toCancel: string[] = [...financialReminders.cancelled];
   const toSend = reminders.filter((r) => {
+    if (financialReminders.cancelled.has(r.id)) return false;
     if (r.kind !== 'obligation_due' || !r.obligation) return true;
     const isTerminal =
       TERMINAL_OBLIGATION_STATUSES.has(r.obligation.status) || r.obligation.remaining_amount_minor <= 0;

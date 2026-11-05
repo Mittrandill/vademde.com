@@ -1,5 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
+import { getCardStatementProjectionMap } from '@/features/accounts/balances';
 
 export type Reminder = Tables<'reminders'>;
 
@@ -110,7 +111,13 @@ export async function listRecentReminders({
     .order('remind_at', { ascending: false })
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
-  return data as unknown as DeliveredReminder[];
+  const rows = data as unknown as DeliveredReminder[];
+  if (!rows.some((row) => row.obligation?.document_type === 'kredi_karti_ekstresi')) return rows;
+  const projections = await getCardStatementProjectionMap(workspaceId);
+  return rows.map((row) => {
+    const projection = row.obligation ? projections.get(row.obligation.id) : null;
+    return row.obligation && projection ? { ...row, obligation: { ...row.obligation, remaining_amount_minor: projection.remainingMinor } } : row;
+  });
 }
 
 export async function countRecentReminders(workspaceId: string): Promise<number> {

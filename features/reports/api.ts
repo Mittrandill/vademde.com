@@ -1,7 +1,7 @@
 import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import { fetchAll } from '@/services/fetchAll';
-import { computeCardDebt, type CardDebtCharge, type CardDebtStatement, type CardDebtTransaction, type CardStatementAnchor } from '@/utils/cardDebt';
+import { getAccountBalances, getCardFinancialContext } from '@/features/accounts/balances';
 import {
   ACTIVE_OBLIGATION_STATUSES,
   listAllObligations,
@@ -19,6 +19,9 @@ import { localeDateFormatter } from '@/i18n/format';
 // saymasın ve "Kategorisiz" kovasını şişirmesin diye analizden hariç tutulur.
 export const EXCLUDE_CARD_STATEMENT_LUMP = 'description.is.null,description.not.ilike.Kredi Kartı Ekstresi*';
 
+
+export { getAccountBalances };
+export type { AccountBalanceReportItem } from '@/features/accounts/balances';
 
 export interface DateRange {
   from?: string;
@@ -233,143 +236,18 @@ export async function getCounterpartyBreakdown(
   return Array.from(totals.values()).sort((a, b) => b.amountMinor - a.amountMinor);
 }
 
-export interface AccountBalanceReportItem {
-  accountId: string;
-  name: string;
-  type: string;
-  bankCode: string | null;
-  currencyCode: string;
-  balanceMinor: number;
-  /** Yalnızca kredi kartında: güncel borcun dayandığı en son ekstre (yoksa null). */
-  cardStatement?: CardStatementAnchor | null;
-  /** Yalnızca kredi kartında: ekstreyle karşılanmayan borcun kalemleri (son ödeme dağıtımı için). */
-  cardCharges?: CardDebtCharge[];
-}
-
-type BalanceTransactionRow = CardDebtTransaction;
-type StatementRow = {
-  id: string;
-  account_id: string | null;
-  total_amount_minor: number;
-  remaining_amount_minor: number;
-  due_date: string | null;
-  status: string;
-  created_at: string;
-  payments: { amount_minor: number; transaction: { transfer_to_account_id: string | null } | null }[] | null;
-};
-type CashAdvanceRow = { account_id: string | null; remaining_amount_minor: number; created_at: string; status: string };
-
-// docs/03-bilgi-mimarisi-ekranlar.md §5.10 — Hesap bakiyeleri: açılış bakiyesi + gelir/gider
-// + transferlerin hesap bazlı net etkisi (docs/01-finansal-kayit-modeli.md §8 — transfer
-// toplam varlığı değiştirmez ama kaynak/hedef hesabı etkiler). Kredi kartında borç, girilmiş
-// en son ekstreye dayanır (bkz. utils/cardDebt.ts — ekstre çapası).
-export async function getAccountBalances(workspaceId: string): Promise<AccountBalanceReportItem[]> {
-  const [{ data: accounts, error: accountsError }, transactions] = await Promise.all([
-    supabase
-      .from('accounts')
-      .select('id, name, type, bank_code, currency_code, opening_balance_minor, opening_balance_set_at, statement_day, payment_due_day, created_at')
-      .eq('workspace_id', workspaceId)
-      .eq('is_archived', false)
-      .order('created_at', { ascending: true }),
-    // 1.000 hareketi aşan çalışma alanlarında bakiye eksik hesaplanmasın diye sayfa sayfa okunur.
-    fetchAll<BalanceTransactionRow>((from, to) =>
-      supabase
-        .from('transactions')
-        .select('account_id, transfer_to_account_id, direction, amount_minor, occurred_at')
-        .eq('workspace_id', workspaceId)
-        .order('id')
-        .range(from, to)
-    ),
-  ]);
-
-  if (accountsError) throw accountsError;
-
-  const hasCards = accounts.some((a) => a.type === 'credit_card');
-  const [statements, cashAdvances] = hasCards
-    ? await Promise.all([
-        fetchAll<StatementRow>((from, to) =>
-          supabase
-            .from('obligations')
-            .select('id, account_id, total_amount_minor, remaining_amount_minor, due_date, status, created_at, payments(amount_minor, transaction:transactions(transfer_to_account_id))')
-            .eq('workspace_id', workspaceId)
-            .eq('document_type', 'kredi_karti_ekstresi')
-            .order('id')
-            .range(from, to) as unknown as PromiseLike<{ data: StatementRow[] | null; error: never }>
-        ),
-        fetchAll<CashAdvanceRow>((from, to) =>
-          supabase
-            .from('obligations')
-            .select('account_id, remaining_amount_minor, created_at, status')
-            .eq('workspace_id', workspaceId)
-            .eq('document_type', 'nakit_avans')
-            .order('id')
-            .range(from, to)
-        ),
-      ])
-    : [[] as StatementRow[], [] as CashAdvanceRow[]];
-
-  const deltas = new Map<string, number>();
-  const addDelta = (accountId: string, delta: number) => deltas.set(accountId, (deltas.get(accountId) ?? 0) + delta);
-
-  for (const tx of transactions) {
-    if (tx.direction === 'income') addDelta(tx.account_id, tx.amount_minor);
-    else if (tx.direction === 'expense') addDelta(tx.account_id, -tx.amount_minor);
-    else if (tx.direction === 'transfer') {
-      addDelta(tx.account_id, -tx.amount_minor);
-      if (tx.transfer_to_account_id) addDelta(tx.transfer_to_account_id, tx.amount_minor);
-    }
-  }
-
-  return accounts.map((account) => {
-    const base = {
-      accountId: account.id,
-      name: account.name,
-      type: account.type,
-      bankCode: account.bank_code,
-      currencyCode: account.currency_code,
-    };
-    if (account.type === 'credit_card') {
-      // Kredi kartı bir varlık değil borç hesabıdır: harcama borcu artırır, karta ödeme azaltır.
-      // opening_balance_minor kart için "güncel kart borcu" olarak pozitif girilir.
-      const cardTransactions = transactions.filter(
-        (tx) => tx.account_id === account.id || tx.transfer_to_account_id === account.id
-      );
-      const cardStatements: CardDebtStatement[] = statements
-        .filter((o) => o.account_id === account.id)
-        .map((o) => ({
-          id: o.id,
-          total_amount_minor: o.total_amount_minor,
-          remaining_amount_minor: o.remaining_amount_minor,
-          due_date: o.due_date,
-          status: o.status,
-          created_at: o.created_at,
-          off_card_paid_minor: (o.payments ?? [])
-            .filter((p) => p.transaction?.transfer_to_account_id !== account.id)
-            .reduce((sum, p) => sum + p.amount_minor, 0),
-        }));
-      const { debtMinor, anchor, charges } = computeCardDebt(
-        account,
-        cardTransactions,
-        cardStatements,
-        cashAdvances.filter((a) => a.account_id === account.id)
-      );
-      return { ...base, balanceMinor: debtMinor, cardStatement: anchor, cardCharges: charges };
-    }
-    return { ...base, balanceMinor: account.opening_balance_minor + (deltas.get(account.id) ?? 0) };
-  });
-}
-
 // docs/01-finansal-kayit-modeli.md §3.4 — Gecikme: vade geçmiş ve kalan tutar > 0.
 // Taksitli bir kredinin toplam bakiyesi yerine gecikmiş taksidin kendi tutarı
 // gösterilsin diye (bkz. app/(tabs)/takvim.tsx, app/(tabs)/index.tsx aynı desen) —
 // kredinin toplam borcu yalnızca /obligations/[id] detay sayfasında gösterilir.
 export async function getOverdueObligations(workspaceId: string): Promise<ObligationDueItem[]> {
   const todayStr = localIsoDate();
-  const [obligations, installmentItems] = await Promise.all([
+  const [obligations, installmentItems, cardContext] = await Promise.all([
     // Tüm sayfalar okunur: sabit 200 sınırı aşılınca taksitli bir kayıt "taksitsiz" sanılıp
     // kalan borcun tamamıyla hayalet bir gecikme satırı olarak görünebiliyordu.
     listAllObligations({ workspaceId, statuses: ACTIVE_OBLIGATION_STATUSES, dueTo: todayStr }),
     listAllInstallmentsDue({ workspaceId, statuses: ACTIVE_OBLIGATION_STATUSES, dueTo: todayStr }),
+    getCardFinancialContext(workspaceId),
   ]);
 
   const overdueInstallments = installmentItems.filter(
@@ -393,7 +271,7 @@ export async function getOverdueObligations(workspaceId: string): Promise<Obliga
       o.remaining_amount_minor > 0
   );
 
-  return [...overdueObligations, ...overdueInstallments];
+  return [...overdueObligations, ...overdueInstallments, ...cardContext.unbilledDues.filter((row) => !!row.due_date && row.due_date < todayStr && row.remaining_amount_minor > 0)];
 }
 
 export interface ReportTransactionRow {
@@ -474,7 +352,7 @@ export async function getCashFlowForecast(workspaceId: string, daysAhead = 30): 
   limit.setDate(limit.getDate() + daysAhead);
   const limitStr = localIsoDate(limit);
 
-  const [obligations, installmentItems, rates] = await Promise.all([
+  const [obligations, installmentItems, rates, cardContext] = await Promise.all([
     listAllObligations({
       workspaceId,
       statuses: ACTIVE_OBLIGATION_STATUSES,
@@ -488,13 +366,14 @@ export async function getCashFlowForecast(workspaceId: string, daysAhead = 30): 
       dueTo: limitStr,
     }),
     listValueUnitRates(),
+    getCardFinancialContext(workspaceId),
   ]);
   const info = await getDueInfoByObligation(workspaceId, obligations);
   const plain = obligations.filter((o) => !info[o.id]?.hasInstallments);
 
   const buckets: CashFlowBucket[] = CASH_FLOW_BUCKET_DEFS.map((def) => ({ ...def, payableMinor: 0, receivableMinor: 0 }));
 
-  for (const obligation of [...plain, ...installmentItems]) {
+  for (const obligation of [...plain, ...installmentItems, ...cardContext.unbilledDues]) {
     if (!obligation.due_date || obligation.remaining_amount_minor <= 0) continue;
     const [y, m, d] = obligation.due_date.split('-').map(Number);
     const diffDays = Math.round((new Date(y, m - 1, d).getTime() - todayMidnight.getTime()) / 86_400_000);

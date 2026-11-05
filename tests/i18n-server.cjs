@@ -1,3 +1,4 @@
+/* global __dirname */
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -26,7 +27,7 @@ function environment(tables, userId = 'u-en') {
       return Promise.resolve({data:this.one?rows[0]??null:rows,error:null}).then(resolve,reject);
     }
   }
-  const db={from:(table)=>new Query(table),auth:{getUser:async()=>({data:{user:userId?{id:userId}:null}})}};
+  const db={from:(table)=>new Query(table),rpc:async(name)=>({data:name==='get_workspace_entitlements'?{plan:'plus'}:null,error:null}),auth:{getUser:async()=>({data:{user:userId?{id:userId}:null}})}};
   const cache=new Map();
   let handler;
   function load(relative) {
@@ -83,6 +84,27 @@ async function main() {
   }
   assert.equal(content.contentFor({...reminder,kind:'card_payment_due',account:{id:'card',name:'My Card'}},undefined,'en').title,'Credit card payment due');
   assert.equal(content.contentFor({...reminder,kind:'statement_upload',account:{id:'card',name:'My Card'}},undefined,'tr').title,'Ekstre yüklemeyi unutmayın');
+  const cardAccount={id:'card',workspace_id:'w',type:'credit_card',statement_day:15,payment_due_day:25,opening_balance_minor:0,created_at:'2026-08-01T12:00:00Z',is_archived:false};
+  const cardStatement=(id,total,due,extra={})=>({id,workspace_id:'w',account_id:'card',document_type:'kredi_karti_ekstresi',total_amount_minor:total,remaining_amount_minor:total,status:'bekliyor',due_date:due,created_at:due+'T10:00:00Z',payments:[],...extra});
+  const cardRows=[cardStatement('old',2500000,'2026-09-25',{remaining_amount_minor:1500000,payments:[{id:'p',amount_minor:1000000,paid_at:'2026-10-20T10:00:00Z',transaction:{transfer_to_account_id:'card'}}]}),cardStatement('new',6000000,'2026-10-25')];
+  const cardReminder=(id,obligation)=>({...reminder,id,obligation_id:obligation.id,obligation:{...reminder.obligation,...obligation}});
+  const cardEnv=environment({...base,accounts:[cardAccount],transactions:[{id:'tx',workspace_id:'w',account_id:'bank',transfer_to_account_id:'card',direction:'transfer',amount_minor:1000000,occurred_at:'2026-10-20T10:00:00Z'}],obligations:cardRows});
+  const cardProjection=cardEnv.load('supabase/functions/_shared/cardReminderProjection.ts');
+  const projected=await cardProjection.projectCardReminders({from:(table)=>{throw Error(table);}},[],'2026-10-20');
+  assert.equal(projected.reminders.length,0);
+  // Execute the actual worker with a carried old statement, latest statement and unrelated loan.
+  const worker=environment({...base,accounts:[cardAccount],transactions:[{id:'tx',workspace_id:'w',account_id:'bank',transfer_to_account_id:'card',direction:'transfer',amount_minor:1000000,occurred_at:'2026-10-20T10:00:00Z'}],obligations:cardRows,reminders:[cardReminder('old-reminder',cardRows[0]),cardReminder('new-reminder',cardRows[1]),reminder]});
+  worker.load('supabase/functions/send-reminders/index.ts');
+  assert.equal((await worker.handle(new Request('http://local'))).status,200);
+  assert.equal(worker.pushes.length,4);
+  const cardPushes=worker.pushes.filter((p)=>p.data.obligationId==='new');
+  assert.equal(cardPushes.length,2);
+  assert.ok(cardPushes.find((p)=>p.to==='en-token').body.includes('50,000 TL'));
+  assert.ok(cardPushes.find((p)=>p.to==='tr-token').body.includes('50.000 TL'));
+  assert.ok(worker.writes.some((w)=>w.table==='reminders'&&w.update?.status==='cancelled'));
+  assert.ok(worker.writes.every((w)=>!['accounts','transactions','payments','obligations'].includes(w.table)));
+  assert.equal(cardProjection.bankDay('2026-10-19T21:30:00Z'),'2026-10-20');
+  assert.equal(cardProjection.bankDay('2026-10-19T20:30:00Z'),'2026-10-19');
   const cash=env.load('supabase/functions/_shared/cashAlertContent.ts');
   assert.ok(cash.cashAlertContent('en',null,'2026-11-01',-50000).body.includes('total TRY balance'));
   assert.ok(cash.cashAlertContent('tr','Kasa','2026-11-01',-50000).body.includes('Kasa 1 Kasım'));

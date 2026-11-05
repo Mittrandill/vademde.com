@@ -391,7 +391,14 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
     .join(' · ');
   const isClosed = item.status === 'odendi' || item.status === 'tahsil_edildi';
   const daysLeft = dueDate ? daysBetweenToday(dueDate) : null;
-  const tag: { label: string; tone: 'danger' | 'brand' | 'success' | 'neutral' } | null = isClosed
+  const projection = item.card_statement_projection;
+  const projectedTag: { label: string; tone: 'success' | 'neutral' } | null = projection?.isFuture
+    ? { label: t('accounts.statement.inProgress'), tone: 'neutral' }
+    : projection?.carriedIntoStatementId && item.remaining_amount_minor <= 0 && !isClosed
+      ? { label: t('accounts.statement.carried'), tone: 'neutral' }
+      : projection && item.remaining_amount_minor <= 0
+        ? { label: t('accounts.statement.noRemaining'), tone: 'success' } : null;
+  const tag: { label: string; tone: 'danger' | 'brand' | 'success' | 'neutral' } | null = projectedTag ?? (isClosed
     ? { label: statusLabel, tone: 'success' }
     : item.status === 'gecikti' || (daysLeft !== null && daysLeft < 0)
       ? { label: daysLeft !== null && daysLeft < 0 ? t('common.daysOverdue', { count: -daysLeft }) : OBLIGATION_STATUS_LABEL.gecikti, tone: 'danger' }
@@ -401,7 +408,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
           ? { label: daysLeft <= 0 ? t('common.today') : t('common.tomorrow'), tone: 'brand' }
           : daysLeft <= 10
             ? { label: t('common.inDays', { count: daysLeft }), tone: 'brand' }
-            : { label: t('common.inDays', { count: daysLeft }), tone: 'neutral' };
+            : { label: t('common.inDays', { count: daysLeft }), tone: 'neutral' });
 
   return (
     <>
@@ -446,7 +453,7 @@ function ObligationRowCard({ item, installmentSummary, onDelete, deleting }: Obl
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.68}
-            overdue={item.status === 'gecikti'}
+            overdue={item.status === 'gecikti' && item.remaining_amount_minor > 0}
           />
           {tag ? <Tag label={tag.label} tone={tag.tone} /> : null}
         </View>

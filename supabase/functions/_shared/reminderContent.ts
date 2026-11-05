@@ -11,11 +11,13 @@ export interface ReminderRow {
   workspace_id: string;
   obligation_id: string | null;
   account_id: string | null;
+  period_key?: string | null;
   kind: 'obligation_due' | 'statement_upload' | 'card_payment_due';
   stage: string;
   remind_at: string;
   obligation: {
     id: string;
+    account_id?: string | null;
     title: string;
     direction: 'payable' | 'receivable';
     status: string;

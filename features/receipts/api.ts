@@ -204,6 +204,7 @@ export async function findReceiptMatches({
   counterpartyName,
 }: FindReceiptMatchesInput): Promise<ReceiptMatch[]> {
   const obligations = await listObligations({
+    cardView: 'raw',
     workspaceId,
     direction: direction === 'expense' ? 'payable' : 'receivable',
     statuses: ACTIVE_OBLIGATION_STATUSES,

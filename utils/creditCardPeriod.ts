@@ -66,3 +66,12 @@ export function periodKeyForDueDate(account: CreditCardPeriodAccount, dueDateStr
   // yine de due_date'in kendi ayıdır.
   return periodKeyFor(due);
 }
+
+/** Explicit cutoffs remain stable when card settings change; legacy rows keep their original mapping. */
+export function periodKeyForStatement(
+  account: CreditCardPeriodAccount,
+  statement: { statement_date?: string | null; due_date: string | null },
+): string | null {
+  if (statement.statement_date) return statement.statement_date.slice(0, 7);
+  return statement.due_date ? periodKeyForDueDate(account, statement.due_date) : null;
+}

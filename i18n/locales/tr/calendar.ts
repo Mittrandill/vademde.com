@@ -16,6 +16,7 @@ export const calendar = {
   legendReceivable: 'Tahsil Edilecek',
   legendInstruments: 'Çek / Senet',
   legendLoan: 'Kredi',
+  legendCreditCard: 'Kredi Kartı',
   currentCardDebt: 'Güncel kart borcu',
   pay: 'Öde',
   collect: 'Tahsil Et',

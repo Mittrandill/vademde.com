@@ -1,7 +1,7 @@
 import { supabase } from '@/services/supabase';
 import { getCardPaymentDueReminders, getStatementUploadReminders, upsertAccountReminder } from '@/features/reminders/api';
 import { reconcileReminders, type ReminderTarget } from '@/services/reminderSync';
-import { periodKeyForDueDate, type CreditCardPeriodAccount } from '@/utils/creditCardPeriod';
+import { periodKeyForStatement, type CreditCardPeriodAccount } from '@/utils/creditCardPeriod';
 import type { Account } from '@/features/accounts/api';
 
 // notifications.ts'teki reconcileReminders ile aynı paylaşılan mekanizma: hedef hatırlatma
@@ -31,14 +31,15 @@ function periodKeyFor(date: Date): string {
 async function getFulfilledPeriods(account: CreditCardPeriodAccount & { id: string }): Promise<Set<string>> {
   const { data, error } = await supabase
     .from('obligations')
-    .select('due_date')
+    .select('due_date, statement_date')
     .eq('account_id', account.id)
     .eq('document_type', 'kredi_karti_ekstresi');
   if (error) throw error;
 
   const periods = new Set<string>();
   for (const row of data ?? []) {
-    if (row.due_date) periods.add(periodKeyForDueDate(account, row.due_date));
+    const key = periodKeyForStatement(account, row);
+    if (key) periods.add(key);
   }
   return periods;
 }

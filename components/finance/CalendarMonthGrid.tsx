@@ -7,6 +7,7 @@ import { getMonthGridWeeks, isSameDay, isSameMonth, toDateKey } from '@/utils/ca
 import type { ObligationDueItem } from '@/features/obligations/api';
 import { localeDateFormatter } from '@/i18n/format';
 import { t } from '@/i18n';
+import { calendarMarkerColor, calendarMarkerKinds } from '@/utils/calendarMarker';
 
 export interface CalendarMonthGridProps {
   monthDate: Date;
@@ -18,10 +19,8 @@ export interface CalendarMonthGridProps {
 }
 
 const monthLabelFormatter = localeDateFormatter({ month: 'long', year: 'numeric' });
-const STRONG_DOCUMENT_TYPES = new Set(['cek', 'senet']);
 // Seçili gün sarı dolu; sarı (kredi) noktası da kaybolmasın diye noktalar ince koyu halkayla çizilir.
 const selectedDotRing = { borderWidth: 1, borderColor: 'rgba(0,0,0,0.55)' } as const;
-const LOAN_DOCUMENT_TYPES = new Set(['kredi']);
 
 export function CalendarMonthGrid({
   monthDate,
@@ -93,10 +92,8 @@ export function CalendarMonthGrid({
               {week.map((day) => {
                 const dateKey = toDateKey(day);
                 const items = obligationsByDay.get(dateKey) ?? [];
-                const hasPayable = items.some((o) => o.direction === 'payable');
-                const hasReceivable = items.some((o) => o.direction === 'receivable');
-                const hasStrong = items.some((o) => STRONG_DOCUMENT_TYPES.has(o.document_type));
-                const hasLoan = items.some((o) => LOAN_DOCUMENT_TYPES.has(o.document_type));
+                const markerKinds = calendarMarkerKinds(items);
+                const markerColor = calendarMarkerColor(markerKinds, theme.colors);
                 const inCurrentMonth = isSameMonth(day, monthDate);
                 const isSelected = isSameDay(day, selectedDate);
                 const isToday = isSameDay(day, today);
@@ -128,53 +125,9 @@ export function CalendarMonthGrid({
                       >
                         {day.getDate()}
                       </Text>
-                      {hasPayable || hasReceivable || hasStrong || hasLoan ? (
-                        <Row gap="xxs" style={{ marginTop: 3 }}>
-                          {hasPayable ? (
-                            <View
-                              style={{
-                                width: 5,
-                                height: 5,
-                                borderRadius: 3,
-                                backgroundColor: theme.colors.danger,
-                                ...(isSelected ? selectedDotRing : null),
-                              }}
-                            />
-                          ) : null}
-                          {hasReceivable ? (
-                            <View
-                              style={{
-                                width: 5,
-                                height: 5,
-                                borderRadius: 3,
-                                backgroundColor: theme.colors.success,
-                                ...(isSelected ? selectedDotRing : null),
-                              }}
-                            />
-                          ) : null}
-                          {hasStrong ? (
-                            <View
-                              style={{
-                                width: 5,
-                                height: 5,
-                                borderRadius: 3,
-                                backgroundColor: theme.colors.accentViolet,
-                                ...(isSelected ? selectedDotRing : null),
-                              }}
-                            />
-                          ) : null}
-                          {hasLoan ? (
-                            <View
-                              style={{
-                                width: 5,
-                                height: 5,
-                                borderRadius: 3,
-                                backgroundColor: theme.colors.attentionMarker,
-                                ...(isSelected ? selectedDotRing : null),
-                              }}
-                            />
-                          ) : null}
-                        </Row>
+                      {markerColor ? (
+                        <View accessible accessibilityLabel={markerKinds.map((kind) => t(`calendar.legend${kind}`)).join(' · ')}
+                          style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: markerColor, marginTop: 3, ...(isSelected ? selectedDotRing : null) }} />
                       ) : (
                         <View style={{ height: 5, marginTop: 3 }} />
                       )}
@@ -188,12 +141,13 @@ export function CalendarMonthGrid({
 
         <Divider />
 
-        <Row align="center" style={{ justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 8 }}>
           {[
             { label: t('calendar.legendPayable'), color: theme.colors.danger },
             { label: t('calendar.legendReceivable'), color: theme.colors.success },
             { label: t('calendar.legendInstruments'), color: theme.colors.accentViolet },
             { label: t('calendar.legendLoan'), color: theme.colors.attentionMarker },
+            { label: t('calendar.legendCreditCard'), color: theme.colors.accentAqua },
           ].map((item) => (
             <Row key={item.label} gap="xxs" align="center">
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: item.color }} />
@@ -202,7 +156,7 @@ export function CalendarMonthGrid({
               </Text>
             </Row>
           ))}
-        </Row>
+        </View>
       </Stack>
     </Card>
   );

@@ -18,6 +18,7 @@ export const calendar: Messages<typeof tr> = {
   legendReceivable: 'To collect',
   legendInstruments: 'Cheque / Note',
   legendLoan: 'Loan',
+  legendCreditCard: 'Credit Card',
   currentCardDebt: 'Current card debt',
   pay: 'Pay',
   collect: 'Collect',

@@ -1,14 +1,18 @@
 import { t } from '@/i18n';
+import { ACTIVE_OBLIGATION_STATUSES, CLOSED_OBLIGATION_STATUSES } from './statuses';
 import { supabase } from '@/services/supabase';
 import { fetchAll } from '@/services/fetchAll';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import { installmentTotalMatches } from '@/utils/validation';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
+import { applyStatementProjection, getCardFinancialContext, getCardStatementProjectionMap } from '@/features/accounts/balances';
+import type { StatementProjection } from '@/supabase/functions/_shared/cardLedger';
 
 export type Obligation = Tables<'obligations'>;
 export type Installment = Tables<'installments'>;
 
 export type ObligationWithRelations = Obligation & {
+  card_statement_projection?: StatementProjection;
   category: { name: string } | null;
   counterparty: { name: string } | null;
   account: { name: string } | null;
@@ -34,19 +38,17 @@ export type ObligationDueItem = ObligationWithRelations & {
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
 export const OBLIGATIONS_PAGE_SIZE = 30;
 
+async function projectFinancialCardRows<T extends { id: string; document_type?: string; remaining_amount_minor: number; total_amount_minor?: number }>(
+  workspaceId: string, rows: T[], view: 'due' | 'snapshot' = 'due',
+): Promise<T[]> {
+  if (!rows.some((row) => row.document_type === 'kredi_karti_ekstresi')) return rows;
+  const projections = await getCardStatementProjectionMap(workspaceId);
+  return rows.map((row) => applyStatementProjection(row, projections, view));
+}
+
 // docs/01-finansal-kayit-modeli.md §3.4 — 'odendi', 'tahsil_edildi' ve 'iptal_edildi'
 // terminal durumlardır; dashboard'daki aktif borç/alacak widget'ları bunları hariç tutar.
-export const ACTIVE_OBLIGATION_STATUSES: Obligation['status'][] = [
-  'taslak',
-  'inceleme_gerekli',
-  'bekliyor',
-  'kismen_odendi',
-  'gecikti',
-  'kismen_tahsil_edildi',
-];
-
-// docs/01-finansal-kayit-modeli.md §3.4 — terminal (kapanmış) durumlar.
-export const CLOSED_OBLIGATION_STATUSES: Obligation['status'][] = ['odendi', 'tahsil_edildi', 'iptal_edildi'];
+export { ACTIVE_OBLIGATION_STATUSES, CLOSED_OBLIGATION_STATUSES } from './statuses';
 
 export interface ListObligationsFilter {
   workspaceId: string;
@@ -69,6 +71,8 @@ export interface ListObligationsFilter {
   dueBefore?: string;
   /** Vade tarihine göre sıralama yönü; varsayılan artan (en yakın vade önce). */
   ascending?: boolean;
+  /** Financial lists count only each snapshot's new contribution; card history shows full snapshots. */
+  cardView?: 'due' | 'snapshot' | 'raw';
 }
 
 export async function listObligations({
@@ -87,6 +91,7 @@ export async function listObligations({
   page = 0,
   pageSize = OBLIGATIONS_PAGE_SIZE,
   ascending = true,
+  cardView = 'due',
 }: ListObligationsFilter): Promise<ObligationWithRelations[]> {
   if (ids && ids.length === 0) return [];
   let query = supabase
@@ -111,7 +116,10 @@ export async function listObligations({
     .order('id')
     .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) throw error;
-  return data as unknown as ObligationWithRelations[];
+  const rows = data as unknown as ObligationWithRelations[];
+  if (cardView === 'raw' || !rows.some((row) => row.document_type === 'kredi_karti_ekstresi')) return rows;
+  const projection = await getCardStatementProjectionMap(workspaceId);
+  return rows.map((row) => applyStatementProjection(row, projection, cardView));
 }
 
 // Gecikme ve "en yakın vade" bilgisi. obligations.due_date taksitli kayıtta İLK taksidin tarihidir ve
@@ -183,7 +191,7 @@ export async function getOverdueObligationIds({
 }): Promise<string[]> {
   let query = supabase
     .from('obligations')
-    .select('id, due_date, remaining_amount_minor')
+    .select('id, document_type, due_date, remaining_amount_minor')
     .eq('workspace_id', workspaceId)
     .in('status', ACTIVE_OBLIGATION_STATUSES)
     .neq('document_type', 'avans')
@@ -194,8 +202,9 @@ export async function getOverdueObligationIds({
   const { data: candidates, error } = await query;
   if (error) throw error;
   if (!candidates?.length) return [];
-  const info = await getDueInfoByObligation(workspaceId, candidates);
-  return candidates.filter((c) => (info[c.id]?.overdueCount ?? 0) > 0).map((c) => c.id);
+  const projected = await projectFinancialCardRows(workspaceId, candidates);
+  const info = await getDueInfoByObligation(workspaceId, projected);
+  return projected.filter((c) => (info[c.id]?.overdueCount ?? 0) > 0).map((c) => c.id);
 }
 
 // Yerel takvim günü (YYYY-MM-DD). toISOString() UTC'dir: Türkiye'de 00:00–03:00 arasında dünü verirdi.
@@ -321,7 +330,12 @@ export async function getDueBreakdown({
   const settlingInstrumentIds = counterpartyId
     ? await getSettlingInstrumentIds(workspaceId, obligationRows)
     : new Set<string>();
-  const obligations = obligationRows.filter((o) => !settlingInstrumentIds.has(o.id));
+  const includeUnbilledCards = !counterpartyId && (!documentType || documentType === 'kredi_karti_ekstresi');
+  const cardContext = includeUnbilledCards || obligationRows.some((row) => row.document_type === 'kredi_karti_ekstresi')
+    ? await getCardFinancialContext(workspaceId) : null;
+  const projectedRows = cardContext ? obligationRows.map((row) => applyStatementProjection(row, cardContext.projections)) : obligationRows;
+  const obligations = [...projectedRows.filter((o) => !settlingInstrumentIds.has(o.id)),
+    ...(includeUnbilledCards ? cardContext?.unbilledDues ?? [] : [])];
   if (obligations.length === 0) {
     return { payable: { ...EMPTY_BREAKDOWN }, receivable: { ...EMPTY_BREAKDOWN } };
   }
@@ -423,12 +437,13 @@ export async function getObligationSummary({
     currency_code: string;
     status: string;
     due_date: string | null;
+    document_type: string;
   };
   const [rows, rates, overdueIds] = await Promise.all([
     fetchAll<SummaryRow>((from, to) => {
       let query = supabase
         .from('obligations')
-        .select('id, direction, remaining_amount_minor, total_amount_minor, currency_code, status, due_date')
+        .select('id, document_type, direction, remaining_amount_minor, total_amount_minor, currency_code, status, due_date')
         .eq('workspace_id', workspaceId);
       if (ids) query = query.in('id', ids);
       if (direction) query = query.eq('direction', direction);
@@ -444,10 +459,13 @@ export async function getObligationSummary({
   ]);
 
   const overdueIdSet = new Set(overdueIds);
-  const payableRows = rows.filter((r) => r.direction === 'payable');
-  const receivableRows = rows.filter((r) => r.direction === 'receivable');
+  const projectedRows = await projectFinancialCardRows(workspaceId, rows);
+  const effectiveRows = projectedRows.filter((row) => row.document_type !== 'kredi_karti_ekstresi' || row.remaining_amount_minor > 0 ||
+    !statuses?.length || statuses.some((status) => CLOSED_OBLIGATION_STATUSES.includes(status)));
+  const payableRows = effectiveRows.filter((r) => r.direction === 'payable');
+  const receivableRows = effectiveRows.filter((r) => r.direction === 'receivable');
   return {
-    count: rows.length,
+    count: effectiveRows.length,
     payableMinor: sumToReferenceMinor(
       payableRows.map((r) => ({ amountMinor: r.remaining_amount_minor, unitCode: r.currency_code })),
       rates
@@ -464,7 +482,7 @@ export async function getObligationSummary({
       receivableRows.map((r) => ({ amountMinor: r.total_amount_minor, unitCode: r.currency_code })),
       rates
     ),
-    overdueCount: rows.filter((r) => overdueIdSet.has(r.id)).length,
+    overdueCount: effectiveRows.filter((r) => overdueIdSet.has(r.id)).length,
   };
 }
 
@@ -484,10 +502,10 @@ export async function getObligationTotalsByType(
   statuses: Obligation['status'][] = ACTIVE_OBLIGATION_STATUSES
 ): Promise<Record<string, ObligationTypeTotal>> {
   const [data, rates] = await Promise.all([
-    fetchAll<{ document_type: string; remaining_amount_minor: number; currency_code: string }>((from, to) =>
+    fetchAll<{ id: string; document_type: string; remaining_amount_minor: number; currency_code: string }>((from, to) =>
       supabase
         .from('obligations')
-        .select('document_type, remaining_amount_minor, currency_code')
+        .select('id, document_type, remaining_amount_minor, currency_code')
         .eq('workspace_id', workspaceId)
         .in('status', statuses)
         .order('id')
@@ -497,7 +515,7 @@ export async function getObligationTotalsByType(
   ]);
 
   const totals: Record<string, ObligationTypeTotal> = {};
-  for (const row of data) {
+  for (const row of await projectFinancialCardRows(workspaceId, data)) {
     if (!row.document_type) continue;
     const current = totals[row.document_type] ?? { count: 0, totalMinor: 0 };
     totals[row.document_type] = {
@@ -582,11 +600,11 @@ export async function listAllObligations(
 ): Promise<ObligationWithRelations[]> {
   const all: ObligationWithRelations[] = [];
   for (let page = 0; page < ALL_PAGES_LIMIT; page += 1) {
-    const rows = await listObligations({ ...filter, page, pageSize: ALL_PAGES_SIZE });
+    const rows = await listObligations({ ...filter, cardView: 'raw', page, pageSize: ALL_PAGES_SIZE });
     all.push(...rows);
     if (rows.length < ALL_PAGES_SIZE) break;
   }
-  return all;
+  return filter.cardView === 'raw' ? all : await projectFinancialCardRows(filter.workspaceId, all, filter.cardView ?? 'due');
 }
 
 export async function listAllInstallmentsDue(
@@ -608,7 +626,8 @@ export async function getObligation(id: string): Promise<Obligation> {
 }
 
 export async function getObligationWithInstallments(
-  id: string
+  id: string,
+  options: { raw?: boolean } = {},
 ): Promise<{ obligation: ObligationWithRelations; installments: Installment[] }> {
   const [{ data: obligation, error: obligationError }, { data: installments, error: installmentsError }] =
     await Promise.all([
@@ -626,7 +645,10 @@ export async function getObligationWithInstallments(
 
   if (obligationError) throw obligationError;
   if (installmentsError) throw installmentsError;
-  return { obligation: obligation as unknown as ObligationWithRelations, installments };
+  const row = obligation as unknown as ObligationWithRelations;
+  const projected = !options.raw && installments.length === 0
+    ? (await projectFinancialCardRows(row.workspace_id, [row], 'snapshot'))[0] : row;
+  return { obligation: projected, installments };
 }
 
 // docs/12-mvp-kabul-kriterleri.md — taksitli borçlarda bildirim, ödenmiş taksitlerin

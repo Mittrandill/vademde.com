@@ -257,6 +257,7 @@ function TransactionForm({
         : ['open-obligations', 'disabled'],
     queryFn: () =>
       listObligations({
+        cardView: 'raw',
         workspaceId: activeWorkspaceId as string,
         counterpartyId: counterpartyId as string,
         direction: obligationDirection as 'payable' | 'receivable',

@@ -239,6 +239,7 @@ function SettlementForm({
         : ['settlement-open', 'disabled'],
     queryFn: () =>
       listObligations({
+        cardView: 'raw',
         workspaceId: activeWorkspaceId as string,
         counterpartyId: counterpartyId as string,
         direction,
@@ -257,6 +258,7 @@ function SettlementForm({
         : ['settlement-open-opposite', 'disabled'],
     queryFn: () =>
       listObligations({
+        cardView: 'raw',
         workspaceId: activeWorkspaceId as string,
         counterpartyId: counterpartyId as string,
         direction: oppositeDirection,

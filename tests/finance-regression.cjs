@@ -537,5 +537,49 @@ async function check(name,run){await run();passed++;console.log(`PASS ${name}`);
   m.state.status='success';cache.assertNoPendingFinancialWrites();
  });
  await check('loan principal is excluded from profit/loss',()=>assert.equal(reports.profitAndLossMinor({amount_minor:1000000,financing_minor:800000}),200000));
+ await check('card rollover: account, financial lists, summaries and detail agree without rewriting legacy rows',async()=>{
+  const card={id:'card',workspace_id:'w',name:'Card',type:'credit_card',bank_code:null,currency_code:'TRY',opening_balance_minor:0,
+    opening_balance_set_at:null,statement_day:15,payment_due_day:25,created_at:'2026-08-01T12:00:00',is_archived:false};
+  const old={...base,id:'old-statement',direction:'payable',document_type:'kredi_karti_ekstresi',account_id:'card',counterparty_id:'bank-cp',
+    total_amount_minor:2500000,remaining_amount_minor:1500000,due_date:'2026-09-25',created_at:'2026-09-16T12:00:00',
+    payments:[{id:'p1',amount_minor:1000000,paid_at:'2026-10-20T12:00:00',transaction:{transfer_to_account_id:'card'}}]};
+  const latest={...old,id:'latest-statement',total_amount_minor:6000000,remaining_amount_minor:6000000,due_date:'2026-10-25',created_at:'2026-10-16T12:00:00',payments:[]};
+  const invoice={...base,id:'invoice',document_type:'fatura',direction:'payable',total_amount_minor:500000,remaining_amount_minor:500000};
+  const transfer={id:'t1',workspace_id:'w',account_id:'bank',transfer_to_account_id:'card',direction:'transfer',amount_minor:1000000,occurred_at:'2026-10-20T12:00:00'};
+  tables={accounts:[card,{...card,id:'bank',type:'bank',opening_balance_minor:10000000}],transactions:[transfer],obligations:[old,latest,invoice],installments:[],value_unit_rates:[]};
+  insertCalls=[];const before=JSON.stringify(tables);
+  const balance=(await reports.getAccountBalances('w')).find(row=>row.accountId==='card');
+  assert.equal(balance.balanceMinor,5000000);assert.equal(balance.cardPaymentStatement.statementRemainingMinor,5000000);
+  const rows=await obligations.listAllObligations({workspaceId:'w',statuses:obligations.ACTIVE_OBLIGATION_STATUSES});
+  assert.equal(rows.reduce((sum,row)=>sum+row.remaining_amount_minor,0),5500000);
+  const summary=await obligations.getObligationSummary({workspaceId:'w',statuses:obligations.ACTIVE_OBLIGATION_STATUSES});
+  assert.equal(summary.payableMinor,5500000);
+  const breakdown=await obligations.getDueBreakdown({workspaceId:'w'});assert.equal(breakdown.payable.remainingTotalMinor,5500000);
+  const snapshots=await obligations.listObligations({workspaceId:'w',documentType:'kredi_karti_ekstresi',cardView:'snapshot'});
+  assert.equal(snapshots.find(row=>row.id==='latest-statement').remaining_amount_minor,5000000);
+  const detail=await obligations.getObligationWithInstallments('latest-statement');assert.equal(detail.obligation.remaining_amount_minor,5000000);
+  const edit=await obligations.getObligationWithInstallments('latest-statement',{raw:true});assert.equal(edit.obligation.remaining_amount_minor,6000000);
+  const ledger=await load('features/counterparties/api.ts').getCounterpartyLedger('w','bank-cp');assert.equal(ledger.payableMinor,5000000);
+  assert.equal(JSON.stringify(tables),before);assert.equal(insertCalls.length,0);
+ });
+ await check('card unbilled spending joins overdue/current totals once and remains outside statement balance',async()=>{
+  tables.transactions.push({id:'purchase',workspace_id:'w',account_id:'card',transfer_to_account_id:null,direction:'expense',amount_minor:3500000,occurred_at:'2026-10-21T12:00:00'});
+  const balance=(await reports.getAccountBalances('w')).find(row=>row.accountId==='card');
+  assert.equal(balance.balanceMinor,8500000);assert.equal(balance.cardPaymentStatement.statementRemainingMinor,5000000);
+  const breakdown=await obligations.getDueBreakdown({workspaceId:'w'});assert.equal(breakdown.payable.remainingTotalMinor,9000000);
+ });
+ await check('historical installment statements retain their original account calculation and raw plan amounts',async()=>{
+  const card=tables.accounts.find((row)=>row.id==='card');
+  const rows=tables.obligations.filter((row)=>row.account_id==='card');
+  rows[0].installments=[{id:'legacy-plan'}];
+  const before=JSON.stringify(tables);
+  const original=load('utils/cardDebt.ts').computeCardDebt(card,tables.transactions,rows.map((row)=>({...row,payments:undefined,off_card_paid_minor:0})),[]);
+  const balance=(await reports.getAccountBalances('w')).find((row)=>row.accountId==='card');
+  assert.equal(balance.balanceMinor,original.debtMinor);
+  assert.equal(balance.cardStatementProjections,undefined);
+  const snapshots=await obligations.listObligations({workspaceId:'w',documentType:'kredi_karti_ekstresi',cardView:'snapshot'});
+  assert.equal(snapshots.find((row)=>row.id==='latest-statement').remaining_amount_minor,6000000);
+  assert.equal(JSON.stringify(tables),before);
+ });
  console.log(`${passed} regression checks passed. No live database writes.`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

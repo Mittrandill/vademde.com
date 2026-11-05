@@ -676,6 +676,7 @@ export default function DocumentReviewScreen() {
         : ['settlement-open', 'disabled'],
     queryFn: () =>
       listObligations({
+        cardView: 'raw',
         workspaceId: activeWorkspaceId as string,
         counterpartyId: counterpartyId as string,
         direction: direction as 'payable' | 'receivable',

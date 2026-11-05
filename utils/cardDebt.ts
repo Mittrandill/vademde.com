@@ -12,6 +12,7 @@
 // Nakit avans karta hareket yazmaz (borç kaydı olarak tutulur): kesimden sonra çekilen nakit
 // avansın kalanı güncel borca eklenir; kesimden öncekiler ekstrenin içindedir.
 import { computeStatementPeriod, periodKeyForDueDate, type CreditCardPeriodAccount } from '@/utils/creditCardPeriod';
+import { projectCardLedger, type LedgerPayment, type StatementProjection } from '@/supabase/functions/_shared/cardLedger';
 
 export interface CardDebtAccount extends CreditCardPeriodAccount {
   id: string;
@@ -38,10 +39,13 @@ export interface CardDebtStatement {
   status: string;
   /** Ekstrenin uygulamaya girildiği an — tahmini kesim, bu günden sonra olamaz. */
   created_at: string;
+  /** New statements can pin their actual closing date. Legacy rows omit it. */
+  statement_date?: string | null;
   /** Ekstreye yapılan ve karta transfer olarak YANSIMAYAN ödemelerin toplamı (hesapsız
    * "ödendi" işareti ya da ekstre detayından bankadan gider olarak ödeme). Karta transferle
    * yapılan ödemeler zaten hareket olarak düşülür; burada sayılmaz. */
   off_card_paid_minor: number;
+  payments?: LedgerPayment[];
 }
 
 export interface CardDebtCashAdvance {
@@ -75,6 +79,9 @@ export interface CardDebtResult {
   debtMinor: number;
   anchor: CardStatementAnchor | null;
   charges: CardDebtCharge[];
+  /** Payment/statement summaries remain available even when a newer opening snapshot anchors the account. */
+  paymentAnchor?: CardStatementAnchor | null;
+  statementProjections?: StatementProjection[];
 }
 
 const CANCELLED = 'iptal_edildi';
@@ -143,10 +150,15 @@ export function computeCardDebt(
   cashAdvances: CardDebtCashAdvance[],
   today: string = localDay(new Date())
 ): CardDebtResult {
+  if (statements.some((statement) => statement.payments !== undefined)) {
+    return projectCardLedger(account, transactions, statements, cashAdvances, today);
+  }
   let anchor: (CardStatementAnchor & { offCardPaidMinor: number }) | null = null;
   for (const statement of statements) {
     if (statement.status === CANCELLED || !statement.due_date) continue;
-    const cutoff = statementCutoff(account, statement.due_date, statement.created_at);
+    const cutoff = statement.statement_date
+      ? { date: statement.statement_date, estimated: false }
+      : statementCutoff(account, statement.due_date, statement.created_at);
     if (cutoff.date > today) continue;
     if (!anchor || cutoff.date > anchor.cutoffDate) {
       anchor = {

@@ -249,7 +249,7 @@ export default function HomeScreen() {
     const installmentItems = dueInstallmentsQuery.data ?? [];
     const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
     const plainObligations = (activeObligationsQuery.data ?? []).filter(
-      (o) => !obligationIdsWithInstallments.has(o.id)
+      (o) => !obligationIdsWithInstallments.has(o.id) && o.remaining_amount_minor > 0
     );
     return [...plainObligations, ...installmentItems, ...cardDues.items];
   }, [activeObligationsQuery.data, dueInstallmentsQuery.data, cardDues.items]);

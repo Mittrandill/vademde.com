@@ -1,9 +1,9 @@
 import { AssetPicker } from '@/components/finance/AssetPicker';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, InteractionManager, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
@@ -111,7 +111,7 @@ export default function NewObligationScreen() {
 
   const existingQuery = useQuery({
     queryKey: ['obligation', id, 'edit'],
-    queryFn: () => getObligationWithInstallments(id as string),
+    queryFn: () => getObligationWithInstallments(id as string, { raw: true }),
     enabled: isEditing,
   });
 
@@ -127,6 +127,16 @@ export default function NewObligationScreen() {
         </Stack>
       </SafeAreaView>
     );
+  }
+
+  // Historical plans retain their original editor. Plain statements get their own form.
+  if ((!isEditing && type === 'kredi_karti_ekstresi') ||
+      (existingQuery.data?.obligation.document_type === 'kredi_karti_ekstresi' &&
+       existingQuery.data.obligation.account_id && existingQuery.data.installments.length === 0 &&
+       existingQuery.data.obligation.statement_date)) {
+    return <Redirect href={{ pathname: '/accounts/statement', params: {
+      ...(id ? { id } : {}), ...(accountId ? { accountId } : {}),
+    } }} />;
   }
 
   return (
@@ -309,13 +319,11 @@ function ObligationForm({
   // ağ isteği yaratmaz.
   const workspacesQuery = useQuery({ queryKey: queryKeys.workspaces(), queryFn: listMyWorkspaces });
 
-  useEffect(() => {
-    if (valueUnitDefaulted) return;
-    const activeWorkspace = workspacesQuery.data?.find((w) => w.id === activeWorkspaceId);
-    if (!activeWorkspace) return;
-    setValueUnitCode(activeWorkspace.default_value_unit_code);
+  const defaultWorkspace = workspacesQuery.data?.find((w) => w.id === activeWorkspaceId);
+  if (!valueUnitDefaulted && defaultWorkspace) {
+    setValueUnitCode(defaultWorkspace.default_value_unit_code);
     setValueUnitDefaulted(true);
-  }, [valueUnitDefaulted, workspacesQuery.data, activeWorkspaceId]);
+  }
 
   const valueUnit = getValueUnit(valueUnitCode);
 
@@ -1055,6 +1063,12 @@ function ObligationForm({
                 label={t('obligations.form.documentType')}
                 selectedId={documentType}
                 onSelect={(value) => {
+                  if (value === 'kredi_karti_ekstresi' && !isEditing) {
+                    router.push({ pathname: '/accounts/statement', params: {
+                      ...(accountId && creditCardAccounts.some((card) => card.id === accountId) ? { accountId } : {}),
+                    } });
+                    return;
+                  }
                   setDocumentType(value);
                   // Tutar modu belge türünün doğal anlamını izler (kredide toplam, maaş/kirada
                   // her vade) — kullanıcı seçimi elle değiştirmediyse tür değişince güncellenir.

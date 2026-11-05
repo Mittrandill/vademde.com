@@ -249,7 +249,11 @@ export default function ObligationDetailScreen() {
   const { obligation, installments } = detailQuery.data;
   const payments = paymentsQuery.data ?? [];
   const isPayable = obligation.direction === 'payable';
-  const isOverdue = obligation.status === 'gecikti';
+  const cardProjection = obligation.card_statement_projection;
+  const cardFuture = !!cardProjection?.isFuture;
+  const cardCarried = !!cardProjection?.carriedIntoStatementId && obligation.status !== 'odendi';
+  const cardNoRemaining = !!cardProjection && obligation.remaining_amount_minor <= 0;
+  const isOverdue = obligation.status === 'gecikti' && !cardFuture && !cardNoRemaining;
   const isClosed = obligation.status === 'odendi' || obligation.status === 'tahsil_edildi';
   const progress =
     obligation.total_amount_minor > 0
@@ -298,9 +302,10 @@ export default function ObligationDetailScreen() {
   const heroPrimaryName = bankName ?? serviceName ?? obligation.title;
   const dueDateValue = obligation.due_date ? new Date(obligation.due_date) : null;
   const daysToDue = dueDateValue ? Math.ceil((dueDateValue.getTime() - new Date().getTime()) / 86400000) : null;
-  const statusLabel = OBLIGATION_STATUS_LABEL[obligation.status as keyof typeof OBLIGATION_STATUS_LABEL] ?? obligation.status;
+  const projectedStatusLabel = cardFuture ? t('accounts.statement.inProgress') : cardCarried ? t('accounts.statement.carried') : cardNoRemaining ? t('accounts.statement.noRemaining') : null;
+  const statusLabel = projectedStatusLabel ?? OBLIGATION_STATUS_LABEL[obligation.status as keyof typeof OBLIGATION_STATUS_LABEL] ?? obligation.status;
   const statusTagLabel =
-    isClosed || daysToDue === null
+    projectedStatusLabel || isClosed || daysToDue === null
       ? statusLabel
       : daysToDue < 0
         ? t('obligations.detail.statusOverdue', { status: statusLabel, count: -daysToDue })
@@ -507,11 +512,13 @@ export default function ObligationDetailScreen() {
               <Tag
                 large
                 label={statusTagLabel}
-                tone={isClosed ? 'success' : isOverdue ? 'danger' : daysToDue !== null && daysToDue <= 10 ? 'brand' : 'neutral'}
+                tone={cardFuture || cardCarried ? 'neutral' : cardNoRemaining || isClosed ? 'success' : isOverdue ? 'danger' : daysToDue !== null && daysToDue <= 10 ? 'brand' : 'neutral'}
               />
             </View>
           </Stack>
         )}
+
+        {cardCarried ? <Text variant="caption" color="textSecondary">{t('accounts.statement.carriedHint')}</Text> : null}
 
         {canRecordPayment ? (
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -750,7 +757,11 @@ export default function ObligationDetailScreen() {
             label: t('common.edit'),
             description: t('obligations.detail.editBody'),
             icon: 'create-outline',
-            onPress: () => router.push({ pathname: '/obligations/new', params: { id: obligation.id } }),
+            onPress: () => router.push({
+              pathname: obligation.document_type === 'kredi_karti_ekstresi' && obligation.account_id &&
+                obligation.statement_date && !hasInstallments ? '/accounts/statement' : '/obligations/new',
+              params: { id: obligation.id },
+            }),
           },
           {
             key: 'delete',

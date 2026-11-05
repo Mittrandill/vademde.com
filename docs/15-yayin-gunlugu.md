@@ -8,6 +8,21 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.9 OTA — Kredi kartı ekstresi, asgari ödeme ve takvim (2026-11-05)
+
+Durum: yayın hazırlanıyor; aşağıdaki doğrulamalar tamamlandı. Canlı migration/servis/OTA kimlikleri uygulandıktan sonra bu kayda eklenecek.
+
+- Ekstre için ayrı form: dönem → mevcut hareket formundaki büyük tutar → otomatik dolu, değiştirilebilir başlık. Tarihler ve banka karttan alınır; kategori/taksit sorulmaz. Türkçe/İngilizce, açık/koyu tema mevcut tasarımla aynı bileşenleri kullanır.
+- Yeni kartta açılış borcu sorulmaz; asgari ödeme oranı isteğe bağlıdır. Ekstre/ oran yoksa asgari uydurulmaz. Bankanın bildirdiği tutarın esas olduğu ve güncel borcun yalnızca kayıtlı verilerden hesaplandığı açıklanır.
+- Normal aylık ekstrelerde devreden borç çift sayılmaz. Eski 25.000 / yeni toplam 60.000 / yeni kesim sonrası ödeme 10.000 senaryosunda kart ve finansal özetler 50.000 gösterir. Ekstre sonrası alışveriş dönem ekstresini veya asgarisini artırmaz.
+- Geçmiş finansal kayıtlar silinmez veya ödeme yapılmış gibi değiştirilmez. Eski taksit planı bulunan kartlar mevcut hesap/takvim/hatırlatma işleyişini korur. Eski cari ödeme/ciro ve dekont akışlarının gerçek kayıt tutarlarıyla çalışan kontrolleri korunur.
+- Takvim ay/hafta görünümüne Kredi Kartı açıklaması ve aynı gündeki türler için tek karışık renkli belirteç eklendi. `3.500` gibi tutarların bulanıklık sonrasında son hanesinin kırpılması giderildi; kaydedilen değerler doğrulandı.
+- Doğrulama: 84 finans, 33 kart borcu, 22 kart vadesi, 12 ekstre/takvim ve 13 realtime testi; iki migration için yerel PostgreSQL uyumluluğu; TR/EN açık/koyu gerçek ekran önizlemesi; tutar kaydı ve ay/hafta belirteçleri. TypeScript, beş Edge Function tip kontrolü ve iOS/Android/web export geçti. Native cihazda ayrıca yeni görsel test yapılmadı.
+- Canlı ön kontrol: ilgili tablolarda RLS etkin. Git dışında özel erişimli yedek alındı; arşiv listesi ve SHA-256 doğrulandı. İki migration canlı şemada tek transaction içinde denenip geri alındı; finansal satırların özetleri değişmedi. Eski migration geçmişi yeniden oynatılmayacak.
+- Ayrıntılı model, uyumluluk sınırları ve kaynaklar: [Kredi kartı / ekstre model incelemesi](21-kredi-karti-ekstre-modeli.md).
+
+---
+
 ## 1.0.9 OTA + Web — Çalışma alanına özel premium ve hızlı geçiş (2026-11-04)
 
 - **iOS + Android:** `production`, runtime `1.0.9`, %100 OTA yayını tamamlandı. Update group `9a88d45b-1587-447f-ae20-0d823f6b36d4`; iOS `01a1a5ac-2067-7a21-a660-1556d2f1257b`, Android `01a1a5ac-2067-7d28-b9db-34660f804d0a`. Kaynak commit `91dcfa5`.

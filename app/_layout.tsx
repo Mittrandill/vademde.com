@@ -126,6 +126,7 @@ function AppNavigatorStack() {
         <Stack.Screen name="assets/[id]" />
         <Stack.Screen name="accounts" />
         <Stack.Screen name="accounts/new" />
+        <Stack.Screen name="accounts/statement" />
         <Stack.Screen name="accounts/[id]" />
         <Stack.Screen name="accounts/credit-cards" />
         <Stack.Screen name="accounts/[id]/installments" />

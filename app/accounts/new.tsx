@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -23,8 +23,9 @@ import { syncCreditCardStatementReminder } from '@/services/creditCardReminders'
 import { amountPlaceholder, getInputDecimalSeparator } from '@/i18n/format';
 import { t } from '@/i18n';
 import { ACCOUNT_TYPE_LABEL } from '@/features/accounts/accountTypes';
+import { parseMinimumPaymentRate } from '@/utils/cardMinimumPayment';
 
-const TYPES: Array<{ value: Account['type']; readonly label: string }> = (
+const TYPES: { value: Account['type']; readonly label: string }[] = (
   ['cash', 'bank', 'wallet', 'credit_card', 'pos'] as const
 ).map((value) => ({
   value,
@@ -60,6 +61,7 @@ export default function NewAccountScreen() {
   const [paymentDueDay, setPaymentDueDay] = useState('');
   const [cardLastFour, setCardLastFour] = useState('');
   const [creditLimit, setCreditLimit] = useState('');
+  const [minimumPaymentRate, setMinimumPaymentRate] = useState('');
   const [overdraftLimit, setOverdraftLimit] = useState('');
   const [valueUnitCode, setValueUnitCode] = useState('TRY');
   const [commissionRate, setCommissionRate] = useState('');
@@ -75,9 +77,10 @@ export default function NewAccountScreen() {
     enabled: isEditing,
   });
 
-  useEffect(() => {
-    const account = accountQuery.data;
-    if (!account || initialized) return;
+  // Hydrate the editable draft once, before committing a render with loaded data.
+  // Refetches must not overwrite unsaved edits.
+  const account = accountQuery.data;
+  if (account && !initialized) {
     setName(account.name);
     setType(account.type as Account['type']);
     setBankCode(account.bank_code);
@@ -102,12 +105,17 @@ export default function NewAccountScreen() {
         ? formatAmountInput((account.overdraft_limit_minor / 100).toFixed(2).replace('.', getInputDecimalSeparator()))
         : ''
     );
+    setMinimumPaymentRate(
+      account.minimum_payment_rate != null
+        ? String(account.minimum_payment_rate).replace('.', getInputDecimalSeparator())
+        : ''
+    );
     setValueUnitCode(account.currency_code);
     setCommissionRate(
       account.pos_commission_rate != null ? String(account.pos_commission_rate).replace('.', getInputDecimalSeparator()) : ''
     );
     setInitialized(true);
-  }, [accountQuery.data, initialized]);
+  }
 
   const openingPrecision = getValueUnit(valueUnitCode).precision;
   const normalizedIban = normalizeIban(iban);
@@ -120,11 +128,16 @@ export default function NewAccountScreen() {
         type,
         bank_code: type === 'bank' || isCreditCard || isPos ? bankCode : null,
         iban: type === 'bank' && normalizedIban ? normalizedIban : null,
-        opening_balance_minor: parseValueUnitAmountToMinor(openingBalance, isCash ? valueUnitCode : 'TRY') ?? 0,
+        // New cards start with statements/transactions. Editing card settings must
+        // preserve legacy opening debt and its timestamp, even though the field is hidden.
+        ...(isCreditCard
+          ? isEditing ? {} : { opening_balance_minor: 0 }
+          : { opening_balance_minor: parseValueUnitAmountToMinor(openingBalance, isCash ? valueUnitCode : 'TRY') ?? 0 }),
         statement_day: isCreditCard && statementDay ? Number(statementDay) : null,
         payment_due_day: isCreditCard && paymentDueDay ? Number(paymentDueDay) : null,
         card_last_four: isCreditCard && cardLastFour ? cardLastFour : null,
         credit_limit_minor: isCreditCard ? parseAmountToMinor(creditLimit) : null,
+        minimum_payment_rate: isCreditCard ? parseMinimumPaymentRate(minimumPaymentRate) : null,
         overdraft_limit_minor: isBank ? parseAmountToMinor(overdraftLimit) : null,
         currency_code: isCash ? valueUnitCode : 'TRY',
         pos_commission_rate: isPos ? parseAmount(commissionRate) : null,
@@ -137,7 +150,13 @@ export default function NewAccountScreen() {
       allowExit();
       showSaveSuccess(
         isEditing ? t('accounts.form.updated') : t('accounts.form.created'),
-        () => router.back(),
+        () => {
+          if (!isEditing && isCreditCard) {
+            router.replace(`/accounts/${account.id}`);
+          } else {
+            router.back();
+          }
+        },
         () => {
           if (activeWorkspaceId) {
             queryClient.invalidateQueries({ queryKey: queryKeys.accounts(activeWorkspaceId) });
@@ -175,12 +194,15 @@ export default function NewAccountScreen() {
   const parsedCommissionRate = commissionRate.trim() ? parseAmount(commissionRate) : null;
   const commissionRateHasError =
     commissionRate.trim().length > 0 && (parsedCommissionRate === null || parsedCommissionRate < 0 || parsedCommissionRate > 100);
+  const minimumPaymentRateHasError = isCreditCard && minimumPaymentRate.trim().length > 0 &&
+    parseMinimumPaymentRate(minimumPaymentRate) === null;
   const canSubmit =
     !!name.trim() &&
     !statementDayHasError &&
     !paymentDueDayHasError &&
     !cardLastFourHasError &&
     !commissionRateHasError &&
+    !minimumPaymentRateHasError &&
     (!isCreditCard || isValidDayOfMonth(statementDay));
 
   function handleSubmit() {
@@ -279,16 +301,24 @@ export default function NewAccountScreen() {
 
                 <View style={{ gap: 10 }}>
                   <Text variant="label" color="textSecondary">
-                    {t('accounts.form.limitAndBalance')}
+                    {t('accounts.form.limitAndMinimum')}
                   </Text>
                   <View>
                     <FieldGroup>
                       <AmountField label={t('accounts.form.creditLimit')} placeholder={amountPlaceholder()} value={creditLimit} onChangeText={setCreditLimit} />
-                      <AmountField label={t('accounts.form.currentCardDebt')} placeholder={amountPlaceholder()} value={openingBalance} onChangeText={setOpeningBalance} />
+                      <TextField
+                        label={t('accounts.form.minimumRate')}
+                        placeholder={t('accounts.form.minimumRatePlaceholder')}
+                        keyboardType="decimal-pad"
+                        value={minimumPaymentRate}
+                        onChangeText={setMinimumPaymentRate}
+                        error={minimumPaymentRateHasError ? t('accounts.form.minimumRateError') : undefined}
+                      />
                     </FieldGroup>
                     {foot(
-                      t('accounts.form.limitHint')
+                      t('accounts.form.minimumRateHint')
                     )}
+                    {foot(t('accounts.form.statementSetupHint'))}
                   </View>
                 </View>
               </>

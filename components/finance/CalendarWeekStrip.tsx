@@ -7,6 +7,7 @@ import { isSameDay, toDateKey } from '@/utils/calendar';
 import type { ObligationDueItem } from '@/features/obligations/api';
 import { localeDateFormatter } from '@/i18n/format';
 import { t } from '@/i18n';
+import { calendarMarkerColor, calendarMarkerKinds } from '@/utils/calendarMarker';
 
 export interface CalendarWeekStripProps {
   weekDays: Date[];
@@ -20,8 +21,6 @@ export interface CalendarWeekStripProps {
 // docs/03-bilgi-mimarisi-ekranlar.md §5.9 — "Çek ve senet vadeleri ... güçlü biçimde
 // öne çıkarılır"; CalendarMonthGrid'deki aynı vurgu kuralı (kalın çerçeve) burada da
 // kullanılır ki iki görünüm arasında tutarlı bir görsel dil korunsun.
-const STRONG_DOCUMENT_TYPES = new Set(['cek', 'senet']);
-const LOAN_DOCUMENT_TYPES = new Set(['kredi']);
 const weekRangeFormatter = localeDateFormatter({ day: 'numeric', month: 'long' });
 const weekRangeFormatterWithYear = localeDateFormatter({ day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -87,10 +86,8 @@ export function CalendarWeekStrip({
           {weekDays.map((day, index) => {
             const dateKey = toDateKey(day);
             const items = obligationsByDay.get(dateKey) ?? [];
-            const hasPayable = items.some((o) => o.direction === 'payable');
-            const hasReceivable = items.some((o) => o.direction === 'receivable');
-            const hasStrong = items.some((o) => STRONG_DOCUMENT_TYPES.has(o.document_type));
-            const hasLoan = items.some((o) => LOAN_DOCUMENT_TYPES.has(o.document_type));
+            const markerKinds = calendarMarkerKinds(items);
+            const markerColor = calendarMarkerColor(markerKinds, theme.colors);
             const isSelected = isSameDay(day, selectedDate);
             const isToday = isSameDay(day, today);
 
@@ -124,29 +121,9 @@ export function CalendarWeekStrip({
                       {day.getDate()}
                     </Text>
                   </View>
-                  {hasPayable || hasReceivable || hasStrong || hasLoan ? (
-                    <Row gap="xxs">
-                      {hasPayable ? (
-                        <View
-                          style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.danger }}
-                        />
-                      ) : null}
-                      {hasReceivable ? (
-                        <View
-                          style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.success }}
-                        />
-                      ) : null}
-                      {hasStrong ? (
-                        <View
-                          style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.accentViolet }}
-                        />
-                      ) : null}
-                      {hasLoan ? (
-                        <View
-                          style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.attentionMarker }}
-                        />
-                      ) : null}
-                    </Row>
+                  {markerColor ? (
+                    <View accessible accessibilityLabel={markerKinds.map((kind) => t(`calendar.legend${kind}`)).join(' · ')}
+                      style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: markerColor }} />
                   ) : (
                     <View style={{ height: 5 }} />
                   )}

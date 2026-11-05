@@ -17,6 +17,7 @@ import {
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { BankLogo } from '@/components/finance/BankLogo';
+import { CardMinimumPayment } from '@/components/finance/CardMinimumPayment';
 import { FinanceFilterCard } from '@/components/finance/FinanceFilterCard';
 import { FinanceListHero } from '@/components/finance/FinanceListHero';
 import { FinanceListEmptyState, FinanceListSurface } from '@/components/finance/FinanceListSurface';
@@ -27,7 +28,7 @@ import { listObligations, type ObligationWithRelations } from '@/features/obliga
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { queryKeys } from '@/services/queryKeys';
 import { matchesSearch, normalizeForSearch } from '@/utils/search';
-import { computeStatementPeriod, periodKeyForDueDate } from '@/utils/creditCardPeriod';
+import { computeStatementPeriod, periodKeyForStatement } from '@/utils/creditCardPeriod';
 import { formatMinorAmount } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
 import { localeDateFormatter } from '@/i18n/format';
@@ -84,7 +85,7 @@ export default function CreditCardsScreen() {
     enabled: !!activeWorkspaceId,
   });
   const balanceByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
-  const cardStatementByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.cardStatement ?? null]));
+  const cardStatementByAccountId = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.cardPaymentStatement ?? b.cardStatement ?? null]));
 
   const allCards = useMemo(
     () => (accountsQuery.data ?? []).filter((a) => a.type === 'credit_card'),
@@ -100,6 +101,7 @@ export default function CreditCardsScreen() {
       listObligations({
         workspaceId: activeWorkspaceId as string,
         documentType: 'kredi_karti_ekstresi',
+        cardView: 'snapshot',
         pageSize: 100,
         ascending: false,
       }),
@@ -130,7 +132,7 @@ export default function CreditCardsScreen() {
       const statements = statementsByAccount.get(a.id) ?? [];
       const hasCurrentStatement =
         !!currentPeriod &&
-        statements.some((o) => o.due_date && periodKeyForDueDate(a, o.due_date) === currentPeriod.periodKey);
+        statements.some((o) => o.status !== 'iptal_edildi' && periodKeyForStatement(a, o) === currentPeriod.periodKey);
       map.set(a.id, { hasCurrentStatement, nextDueDate: currentPeriod?.dueDate ?? null });
     }
     return map;
@@ -291,16 +293,16 @@ const dueDayFormatter = localeDateFormatter({ day: 'numeric', month: 'short' });
 
 // Tuval KrediKartlari: kart başına .card — banka logosu + ad/•••• son4 + kalan gün etiketi,
 // dönem borcu / son ödeme, limit kullanım çubuğu ve Ödeme yap / Ekstreyi tara butonları.
-// Asgari ödeme tutarı veri modelinde tutulmadığı için bilerek gösterilmiyor.
 function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, nextDueDate: periodDueDate }: CreditCardRowCardProps) {
   const theme = useTheme();
-  const latestStatement = statements[0] ?? null;
-  const periodDebtMinor = cardStatement?.statementRemainingMinor ?? latestStatement?.remaining_amount_minor ?? balanceMinor;
+  const latestStatement = statements.find((row) => !row.card_statement_projection?.isFuture) ?? null;
+  const periodDebtMinor = cardStatement?.statementRemainingMinor ?? latestStatement?.remaining_amount_minor ?? null;
   // Ödenmemiş ekstre varsa onun son ödeme tarihi; yoksa kartın dönem takvimi.
-  const nextDueDate =
-    cardStatement && cardStatement.statementRemainingMinor > 0
-      ? new Date(`${cardStatement.dueDate}T12:00:00`)
-      : periodDueDate;
+  const earliestOutstanding = statements.filter((row) => row.card_statement_projection && row.card_statement_projection.dueMinor > 0)
+    .map((row) => row.card_statement_projection!.dueDate).sort()[0];
+  const nextDueDate = earliestOutstanding ? new Date(`${earliestOutstanding}T12:00:00`)
+    : cardStatement && cardStatement.statementRemainingMinor > 0
+      ? new Date(`${cardStatement.dueDate}T12:00:00`) : periodDueDate;
   const limitMinor = account.credit_limit_minor ?? 0;
   const utilization = limitMinor > 0 ? Math.min(1, Math.max(0, balanceMinor / limitMinor)) : 0;
   const daysLeft = nextDueDate ? Math.ceil((nextDueDate.getTime() - new Date().getTime()) / 86400000) : null;
@@ -333,7 +335,9 @@ function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, n
           <Stack gap="xxs" style={{ flex: 1 }}>
             <Text variant="caption" color="textSecondary">{t('accounts.cards.periodDebt')}</Text>
             <Text style={{ fontSize: 22, fontWeight: '700' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
-              {formatMinorAmount(Math.abs(periodDebtMinor), account.currency_code)}
+              {periodDebtMinor !== null
+                ? formatMinorAmount(Math.abs(periodDebtMinor), account.currency_code)
+                : t('accounts.detail.noStatement')}
             </Text>
           </Stack>
           <Stack gap="xxs" style={{ alignItems: 'flex-end' }}>
@@ -341,6 +345,12 @@ function CreditCardRowCard({ account, balanceMinor, statements, cardStatement, n
             <Text style={{ fontSize: 15, fontWeight: '600' }}>{nextDueDate ? dueDayFormatter.format(nextDueDate) : '—'}</Text>
           </Stack>
         </View>
+
+        <CardMinimumPayment
+          rate={account.minimum_payment_rate}
+          statement={cardStatement}
+          currencyCode={account.currency_code}
+        />
 
         {limitMinor > 0 ? (
           <Stack gap="xs">

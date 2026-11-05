@@ -240,6 +240,8 @@ export default function HareketlerScreen() {
       listObligations({
         workspaceId: activeWorkspaceId as string,
         direction: obligationDirection,
+        // Realized history uses the recorded payment progress, not a debt projection.
+        cardView: obligationDirection ? 'due' : 'raw',
         search: search || undefined,
         pageSize: FETCH_SIZE,
       }),

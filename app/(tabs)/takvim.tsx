@@ -95,7 +95,7 @@ export default function TakvimScreen() {
   const obligations = useMemo<ObligationDueItem[]>(() => {
     const installmentItems = installmentsQuery.data ?? [];
     const obligationIdsWithInstallments = new Set(installmentItems.map((i) => i.id));
-    const plainObligations = (obligationsQuery.data ?? []).filter((o) => !obligationIdsWithInstallments.has(o.id));
+    const plainObligations = (obligationsQuery.data ?? []).filter((o) => !obligationIdsWithInstallments.has(o.id) && o.remaining_amount_minor > 0);
     const from = toDateKey(gridStart);
     const to = toDateKey(gridEnd);
     const cardDues = cardDueItems.filter((c) => !!c.due_date && c.due_date >= from && c.due_date <= to);

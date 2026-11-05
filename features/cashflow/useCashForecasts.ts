@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { t } from '@/i18n';
+import { t, useLanguage } from '@/i18n';
 import { useQuery } from '@tanstack/react-query';
 
+import { buildCardDueItems } from '@/utils/cardDues';
 import { listAccounts } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import {
@@ -31,6 +32,7 @@ export interface AccountForecast {
 // Hesap bazlı 30 günlük tahmin. Kredi kartı (borç hesabı) ve TL dışı hesaplar dışarıda bırakılır.
 export function useCashForecasts(workspaceId: string | null) {
   const enabled = !!workspaceId;
+  const language = useLanguage();
 
   const accountsQuery = useQuery({
     queryKey: workspaceId ? queryKeys.accounts(workspaceId) : ['accounts', 'disabled'],
@@ -59,7 +61,8 @@ export function useCashForecasts(workspaceId: string | null) {
     const installmentItems = installmentsQuery.data ?? [];
     const withInstallments = new Set(installmentItems.map((i) => i.id));
     const plain = (obligationsQuery.data ?? []).filter((o) => !withInstallments.has(o.id));
-    const all: ObligationDueItem[] = [...plain, ...installmentItems];
+    const unbilledCards = buildCardDueItems(accountsQuery.data ?? [], balancesQuery.data ?? [], obligationsQuery.data ?? []);
+    const all: ObligationDueItem[] = [...plain, ...installmentItems, ...unbilledCards];
 
     const balanceById = new Map((balancesQuery.data ?? []).map((b) => [b.accountId, b.balanceMinor]));
     const horizon = new Date();
@@ -124,7 +127,9 @@ export function useCashForecasts(workspaceId: string | null) {
         forecast: projectBalance(totalBalanceMinor, forecastable.map(toItem), FORECAST_DAYS),
       },
     ];
-  }, [accountsQuery.data, balancesQuery.data, obligationsQuery.data, installmentsQuery.data]);
+  // Forecast titles depend on the current language.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountsQuery.data, balancesQuery.data, obligationsQuery.data, installmentsQuery.data, language]);
 
   const isLoading = accountsQuery.isLoading || balancesQuery.isLoading;
   return { forecasts, isLoading };

@@ -6,7 +6,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/colors';
 import {
   ActionSheet,
   Button,
@@ -26,15 +25,14 @@ import {
 } from '@/components/primitives';
 import { DetailScaffold } from '@/components/navigation/DetailScaffold';
 import {
-  FinanceDetailHero,
   FinanceDetailInfoCard,
   FinanceDetailTabs,
 } from '@/components/finance/FinanceDetailBlocks';
-import { Amount } from '@/components/finance/Amount';
 import { ReferenceValueRow } from '@/components/finance/ReferenceValueRow';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { ValueUnitBadge } from '@/components/finance/ValueUnitPicker';
 import { CardPaymentForm } from '@/components/finance/CardPaymentForm';
+import { CardMinimumPayment } from '@/components/finance/CardMinimumPayment';
 import { archiveAccount, getAccount, listAccounts, type Account } from '@/features/accounts/api';
 import { getAccountBalances } from '@/features/reports/api';
 import { listObligations, type ObligationWithRelations } from '@/features/obligations/api';
@@ -52,12 +50,11 @@ import { getValueUnit } from '@/features/valueUnits/units';
 import { queryKeys } from '@/services/queryKeys';
 import { showSaveSuccess, showSuccessAlert, showErrorAlert } from '@/utils/alerts';
 import { groupByDay } from '@/utils/groupByDay';
-import { computeStatementPeriod, periodKeyFor, periodKeyForDueDate } from '@/utils/creditCardPeriod';
-import type { ValueUnitType } from '@/features/valueUnits/units';
+import { computeStatementPeriod, periodKeyFor, periodKeyForStatement } from '@/utils/creditCardPeriod';
+import { localDay } from '@/utils/cardDebt';
 import { listValueUnitRates } from '@/features/valueUnits/api';
-import { capitalizeUi, localeDateFormatter } from '@/i18n/format';
+import { capitalizeUi, formatPercent, localeDateFormatter, localeNumberFormatter } from '@/i18n/format';
 import { t } from '@/i18n';
-import { formatPercent } from '@/i18n/format';
 import { ACCOUNT_TYPE_LABEL } from '@/features/accounts/accountTypes';
 
 const TYPE_ICON: Record<Account['type'], keyof typeof Ionicons.glyphMap> = {
@@ -89,6 +86,7 @@ interface StatementMonth {
    * yeni bir ekstre eklenirken tarih alanını akıllıca doldurmak için kullanılır. */
   dueDate: Date | null;
   obligation: ObligationWithRelations | null;
+  closed: boolean;
 }
 
 export default function AccountDetailScreen() {
@@ -161,6 +159,7 @@ export default function AccountDetailScreen() {
         workspaceId: activeWorkspaceId as string,
         accountId: id as string,
         documentType: 'kredi_karti_ekstresi',
+        cardView: 'snapshot',
         pageSize: 24,
         ascending: false,
       }),
@@ -215,6 +214,7 @@ export default function AccountDetailScreen() {
   const balanceMinor = balanceItem?.balanceMinor ?? account.opening_balance_minor;
   // Kredi kartında güncel borcun dayandığı en son ekstre (bkz. utils/cardDebt.ts).
   const cardStatement = balanceItem?.cardStatement ?? null;
+  const paymentStatement = balanceItem?.cardPaymentStatement ?? cardStatement;
   const overdraftLimitMinor = account.overdraft_limit_minor ?? 0;
   const hasOverdraft = type === 'bank' && overdraftLimitMinor > 0;
 
@@ -231,12 +231,13 @@ export default function AccountDetailScreen() {
         const period = computeStatementPeriod(account, monthDate);
         const periodKey = period?.periodKey ?? periodKeyFor(monthDate);
         const obligation =
-          (statementsQuery.data ?? []).find((o) => o.due_date && periodKeyForDueDate(account, o.due_date) === periodKey) ??
+          (statementsQuery.data ?? []).find((o) => o.status !== 'iptal_edildi' && periodKeyForStatement(account, o) === periodKey) ??
           null;
-        return { periodKey, monthDate, dueDate: period?.dueDate ?? null, obligation };
+        return { periodKey, monthDate, dueDate: period?.dueDate ?? null, obligation,
+          closed: !period || localDay(period.statementDate) <= localDay(now) };
       })
     : [];
-  const mostRecentUnfulfilled = statementMonths.find((m) => !m.obligation);
+  const mostRecentUnfulfilled = statementMonths.find((m) => !m.obligation && m.closed);
 
   // Ekran web'de doğrudan bu URL'e gidilerek (sayfa yenileme, deep link) açılırsa
   // stack'te geri gidilecek bir geçmiş olmayabilir — o durumda hesabın türüne uygun
@@ -259,7 +260,7 @@ export default function AccountDetailScreen() {
     const clampedUtilization = Math.max(0, Math.min(1, utilization));
     const availableMinor = hasLimit ? Math.max(0, (account.credit_limit_minor as number) - usedMinor) : 0;
     // Ekstre borcu: en son ekstreden ödenmesi gereken kalan. Ekstre yoksa gösterilmez.
-    const statementDebtMinor = cardStatement ? cardStatement.statementRemainingMinor : null;
+    const statementDebtMinor = paymentStatement ? paymentStatement.statementRemainingMinor : null;
     const stateAccent =
       balanceMinor <= 0 ? theme.colors.success : clampedUtilization >= 0.9 ? theme.colors.danger : theme.colors.brandPrimary;
     const loadedStatementCount = statementMonths.filter((m) => m.obligation).length;
@@ -287,9 +288,11 @@ export default function AccountDetailScreen() {
       { key: 'genel', label: t('accounts.detail.tabCardInfo') },
     ];
     // Son ödeme: ödenmemiş bir ekstre varsa onun son ödeme tarihi, yoksa kartın bir sonraki dönemi.
-    const nextDue =
-      cardStatement && cardStatement.statementRemainingMinor > 0
-        ? new Date(`${cardStatement.dueDate}T12:00:00`)
+    const earliestOutstanding = balanceItem?.cardStatementProjections?.filter((row) => row.dueMinor > 0)
+      .map((row) => row.dueDate).sort()[0];
+    const nextDue = earliestOutstanding ? new Date(`${earliestOutstanding}T12:00:00`)
+      : paymentStatement && paymentStatement.statementRemainingMinor > 0
+        ? new Date(`${paymentStatement.dueDate}T12:00:00`)
         : (computeStatementPeriod(account, new Date())?.dueDate ?? null);
     const daysLeft = nextDue ? Math.ceil((nextDue.getTime() - new Date().getTime()) / 86400000) : null;
 
@@ -325,6 +328,8 @@ export default function AccountDetailScreen() {
             </Text>
           </Stack>
         </View>
+
+        <Text variant="caption" color="textSecondary">{t('accounts.detail.calculatedBalanceHint')}</Text>
 
         <Card style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
@@ -391,6 +396,12 @@ export default function AccountDetailScreen() {
               </Text>
             </Stack>
           </View>
+          <Divider />
+          <CardMinimumPayment
+            rate={account.minimum_payment_rate}
+            statement={paymentStatement}
+            currencyCode={account.currency_code}
+          />
           {pendingInstallmentsMinor > 0 || cardStatement ? (
             <Text variant="caption" color="textSecondary">
               {[
@@ -449,6 +460,12 @@ export default function AccountDetailScreen() {
               ...(hasLimit
                 ? [{ label: t('accounts.detail.creditLimit'), value: formatMinorAmount(account.credit_limit_minor as number, account.currency_code) }]
                 : []),
+              {
+                label: t('accounts.minimum.rate'),
+                value: account.minimum_payment_rate != null
+                  ? formatPercent(localeNumberFormatter({ maximumFractionDigits: 2 }).format(account.minimum_payment_rate))
+                  : t('accounts.minimum.rateMissing'),
+              },
             ]}
           />
         ) : tab === 'taksitler' ? (
@@ -492,33 +509,46 @@ export default function AccountDetailScreen() {
             )}
           </Stack>
         ) : tab === 'ekstreler' ? (
-          <Group>
-            {statementMonths.map((m) => {
-              const monthLabel = monthFormatter.format(m.monthDate);
-              const o = m.obligation;
-              const paid = o ? o.remaining_amount_minor <= 0 : false;
-              return (
-                <GroupedRow
-                  key={m.periodKey}
-                  leading={<GroupedRowIcon name={paid ? 'checkmark' : 'document-text'} tone={paid ? 'success' : o ? 'brandSoft' : 'default'} />}
-                  title={capitalizeUi(monthLabel)}
-                  subtitle={o?.due_date ? t('accounts.detail.statementDue', { date: dueDayFormatter.format(new Date(o.due_date)) }) : undefined}
-                  chevron={false}
-                  trailing={
-                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                      {o ? (
-                        <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
-                          {formatMinorAmount(o.total_amount_minor, o.currency_code)}
-                        </Text>
-                      ) : null}
-                      <Tag label={paid ? t('accounts.detail.paid') : o ? t('accounts.detail.pending') : t('accounts.detail.notUploaded')} tone={paid ? 'success' : o ? 'brand' : 'neutral'} />
-                    </View>
-                  }
-                  onPress={() => (o ? router.push(`/obligations/${o.id}`) : setStatementSheetMonth(m))}
-                />
-              );
-            })}
-          </Group>
+          <Stack gap="md">
+            {statementsQuery.isSuccess && (statementsQuery.data ?? []).length === 0 && mostRecentUnfulfilled ? (
+              <EmptyState
+                icon="document-text-outline"
+                title={t('accounts.detail.firstStatementTitle')}
+                message={t('accounts.detail.firstStatementHint')}
+                actionLabel={t('accounts.detail.addStatement')}
+                onActionPress={() => setStatementSheetMonth(mostRecentUnfulfilled)}
+              />
+            ) : null}
+            <Group>
+              {statementMonths.map((m) => {
+                const monthLabel = monthFormatter.format(m.monthDate);
+                const o = m.obligation;
+                const carried = !!o?.card_statement_projection?.carriedIntoStatementId && o.status !== 'odendi';
+                const future = !!o?.card_statement_projection?.isFuture;
+                const paid = o ? o.remaining_amount_minor <= 0 && !carried && !future : false;
+                return (
+                  <GroupedRow
+                    key={m.periodKey}
+                    leading={<GroupedRowIcon name={paid ? 'checkmark' : 'document-text'} tone={paid ? 'success' : o ? 'brandSoft' : 'default'} />}
+                    title={capitalizeUi(monthLabel)}
+                    subtitle={o?.due_date ? t('accounts.detail.statementDue', { date: dueDayFormatter.format(new Date(o.due_date)) }) : undefined}
+                    chevron={false}
+                    trailing={
+                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                        {o ? (
+                          <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
+                            {formatMinorAmount(o.total_amount_minor, o.currency_code)}
+                          </Text>
+                        ) : null}
+                        <Tag label={future ? t('accounts.statement.inProgress') : carried ? t('accounts.statement.carried') : paid ? t('accounts.statement.noRemaining') : o ? t('accounts.detail.pending') : !m.closed ? t('accounts.statement.inProgress') : t('accounts.detail.notUploaded')} tone={paid ? 'success' : carried || future ? 'neutral' : o ? 'brand' : 'neutral'} />
+                      </View>
+                    }
+                    onPress={o ? () => router.push(`/obligations/${o.id}`) : m.closed ? () => setStatementSheetMonth(m) : undefined}
+                  />
+                );
+              })}
+            </Group>
+          </Stack>
         ) : (
           <Stack gap="md">
             {sections.length === 0 ? (
@@ -609,7 +639,7 @@ export default function AccountDetailScreen() {
             cardAccount={account}
             currencyCode={account.currency_code}
             currentDebtMinor={balanceMinor}
-            statementDebtMinor={cardStatement?.statementRemainingMinor ?? null}
+            statementDebtMinor={paymentStatement?.statementRemainingMinor ?? null}
             sourceAccounts={sourceAccounts}
             onClose={() => setPayingCard(false)}
             onSuccess={() => {
@@ -650,11 +680,10 @@ export default function AccountDetailScreen() {
               icon: 'create-outline',
               onPress: () =>
                 router.push({
-                  pathname: '/obligations/new',
+                  pathname: '/accounts/statement',
                   params: {
-                    type: 'kredi_karti_ekstresi',
                     accountId: account.id,
-                    ...(statementSheetMonth.dueDate ? { dueDate: toIsoDate(statementSheetMonth.dueDate) } : {}),
+                    period: statementSheetMonth.periodKey,
                   },
                 }),
             },

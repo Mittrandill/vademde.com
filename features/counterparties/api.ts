@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { applyStatementProjection, getCardStatementProjectionMap } from '@/features/accounts/balances';
 import { fetchAll } from '@/services/fetchAll';
 import type { Tables, TablesInsert, TablesUpdate } from '@/db/database.types';
 import {
@@ -154,7 +155,10 @@ export async function getCounterpartyLedger(
   // Faturayı kapatmış çek/senet cari bakiyesinden ayrılır (bkz. getSettlingInstrumentIds).
   const settlingInstrumentIds = await getSettlingInstrumentIds(workspaceId, data ?? []);
   const instruments = (data ?? []).filter((r) => settlingInstrumentIds.has(r.id));
-  const rows = (data ?? []).filter((r) => !settlingInstrumentIds.has(r.id));
+  const unprojected = (data ?? []).filter((r) => !settlingInstrumentIds.has(r.id));
+  const cardProjection = unprojected.some((row) => row.document_type === 'kredi_karti_ekstresi')
+    ? await getCardStatementProjectionMap(workspaceId) : new Map();
+  const rows = unprojected.map((row) => applyStatementProjection(row, cardProjection));
   const toRef = (r: { remaining_amount_minor: number; currency_code: string }) =>
     sumToReferenceMinor([{ amountMinor: r.remaining_amount_minor, unitCode: r.currency_code }], rates);
   // Kayıtlar farklı değer birimlerinde olabilir (TRY, USD, gram_altin, ...) — bkz.

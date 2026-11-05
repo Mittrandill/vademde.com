@@ -124,6 +124,7 @@ Relationships: [];
           iban: string | null
           id: string
           is_archived: boolean
+          minimum_payment_rate: number | null
           name: string
           opening_balance_minor: number
           opening_balance_set_at: string | null
@@ -144,6 +145,7 @@ Relationships: [];
           iban?: string | null
           id?: string
           is_archived?: boolean
+          minimum_payment_rate?: number | null
           name: string
           opening_balance_minor?: number
           opening_balance_set_at?: string | null
@@ -164,6 +166,7 @@ Relationships: [];
           iban?: string | null
           id?: string
           is_archived?: boolean
+          minimum_payment_rate?: number | null
           name?: string
           opening_balance_minor?: number
           opening_balance_set_at?: string | null
@@ -726,6 +729,7 @@ Relationships: [];
           service_code: string | null
           trial_ends_on: string | null
           billing_period: string | null
+          statement_date: string | null
           status: string
           title: string
           total_amount_minor: number
@@ -754,6 +758,7 @@ Relationships: [];
           service_code?: string | null
           trial_ends_on?: string | null
           billing_period?: string | null
+          statement_date?: string | null
           status?: string
           title: string
           total_amount_minor: number
@@ -782,6 +787,7 @@ Relationships: [];
           service_code?: string | null
           trial_ends_on?: string | null
           billing_period?: string | null
+          statement_date?: string | null
           status?: string
           title?: string
           total_amount_minor?: number
