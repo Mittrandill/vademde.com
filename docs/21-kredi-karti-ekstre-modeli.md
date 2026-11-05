@@ -1,6 +1,6 @@
 # 21 — Kredi kartı / ekstre model incelemesi
 
-Tarih: 2026-11-05. Durum: yayın hazırlığı. Canlı migration/Edge Function/OTA sonuçları yayın günlüğünde kaydedilir.
+Tarih: 2026-11-05. Durum: iki eklemeli migration, send-reminders v9 ve production iOS/Android OTA yayında. Kaynak commit `566638d`; runtime `1.0.9`. Ayrıntılı yayın kimlikleri [yayın günlüğünde](15-yayin-gunlugu.md).
 
 ## Arayüz
 
@@ -51,4 +51,4 @@ Ana sayfa, takvim, borç özetleri, cari/banka bakiyesi ve nakit tahmini aynı d
 - Finans regresyonu, kart borcu, kart vadesi ve yeni ekstre/takvim testleri; yerel PostgreSQL migration uyumluluğu; Türkçe/İngilizce açık/koyu tarayıcı kontrolleri kullanılır. Testler canlı kullanıcı verisine yazmaz.
 - Sunucu hatırlatma testi devreden eski 25.000 / yeni 60.000 / ödeme 10.000 senaryosunda iki dilde 50.000 tutarını doğrular; eski ekstre bildirimi gönderilmez. Finansal tabloya yazılmadığı ayrıca doğrulanır.
 - TypeScript ve iOS/Android/web export kontrol edilir. Projedeki eski OCR ekranının effect kaynaklı lint hataları bu çalışmada topluca düzenlenmez; değişen dosyalar HEAD ile karşılaştırılarak yeni lint hatası eklenmediği kontrol edilir. Tarayıcı görselleri native cihaz testi yerine geçmez.
-- Yayında önce eklemeli migration'lar, sonra ortak modeli kullanan send-reminders Edge Function, sonra uygulama/OTA gelmelidir. OTA uyumluluğu mevcut runtimeVersion ve hedef kanala bağlıdır. Canlı uygulama yapılmadı.
+- Yayında önce eklemeli migration'lar, sonra ortak modeli kullanan send-reminders Edge Function, sonra uygulama/OTA gelmelidir. Bu sırayla canlıya uygulandı. OTA grubu `d595dc64-f1c5-4681-be43-5b1bd9bd8e9c`, production kanalındaki 1.0.9 runtime kurulumlarına sunuluyor; iOS/Android manifest ve Hermes SHA-256 kontrolleri geçti. Diğer runtime sürümleri bu OTA kapsamına girmez.

@@ -10,7 +10,11 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ## 1.0.9 OTA — Kredi kartı ekstresi, asgari ödeme ve takvim (2026-11-05)
 
-Durum: yayın hazırlanıyor; aşağıdaki doğrulamalar tamamlandı. Canlı migration/servis/OTA kimlikleri uygulandıktan sonra bu kayda eklenecek.
+Durum: **iOS + Android production OTA %100 yayında**; runtime `1.0.9`. Kaynak commit `566638d` main'e gönderildi. Yayın zamanı 2026-11-05 17:20 (Europe/Istanbul).
+
+- **OTA grup:** `d595dc64-f1c5-4681-be43-5b1bd9bd8e9c`. iOS `01a1ac15-3131-7059-862b-bc7ca6d1ba18`; Android `01a1ac15-3131-7144-9ef5-e25fb8cd15e1`. [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/d595dc64-f1c5-4681-be43-5b1bd9bd8e9c).
+- EAS `production` ortamındaki Supabase ve RevenueCat değişkenleri kullanıldı. İki platformun canlı `production`/`1.0.9` manifesti doğru güncelleme kimliğini sunuyor; indirilen Hermes paketlerinin SHA-256 değerleri manifest ile eşleşti. Native sürüm veya bağımlılık değişmedi. Farklı runtime sürümleri bu OTA'yı almaz; 1.0.9 uygulama kurulumu gerekir.
+- **Supabase:** `20261105112411_card_minimum_payment_rate` ve `20261105114545_card_statement_dates` uygulandı. Yeni nullable alanlar ve benzersiz dönem indeksi canlıda doğrulandı. `send-reminders` v9 ACTIVE; JWT doğrulaması açık. Canlı API alan/ilişki kontrolleri kullanıcı satırı istenmeden geçti; yetkisiz servis isteği 401 ile reddedildi. Güvenlik danışmanı önce/sonra aynı sonucu verdi; var olan RLS/SECURITY DEFINER/Auth uyarıları bu yayında değiştirilmedi.
 
 - Ekstre için ayrı form: dönem → mevcut hareket formundaki büyük tutar → otomatik dolu, değiştirilebilir başlık. Tarihler ve banka karttan alınır; kategori/taksit sorulmaz. Türkçe/İngilizce, açık/koyu tema mevcut tasarımla aynı bileşenleri kullanır.
 - Yeni kartta açılış borcu sorulmaz; asgari ödeme oranı isteğe bağlıdır. Ekstre/ oran yoksa asgari uydurulmaz. Bankanın bildirdiği tutarın esas olduğu ve güncel borcun yalnızca kayıtlı verilerden hesaplandığı açıklanır.
@@ -18,7 +22,8 @@ Durum: yayın hazırlanıyor; aşağıdaki doğrulamalar tamamlandı. Canlı mig
 - Geçmiş finansal kayıtlar silinmez veya ödeme yapılmış gibi değiştirilmez. Eski taksit planı bulunan kartlar mevcut hesap/takvim/hatırlatma işleyişini korur. Eski cari ödeme/ciro ve dekont akışlarının gerçek kayıt tutarlarıyla çalışan kontrolleri korunur.
 - Takvim ay/hafta görünümüne Kredi Kartı açıklaması ve aynı gündeki türler için tek karışık renkli belirteç eklendi. `3.500` gibi tutarların bulanıklık sonrasında son hanesinin kırpılması giderildi; kaydedilen değerler doğrulandı.
 - Doğrulama: 84 finans, 33 kart borcu, 22 kart vadesi, 12 ekstre/takvim ve 13 realtime testi; iki migration için yerel PostgreSQL uyumluluğu; TR/EN açık/koyu gerçek ekran önizlemesi; tutar kaydı ve ay/hafta belirteçleri. TypeScript, beş Edge Function tip kontrolü ve iOS/Android/web export geçti. Native cihazda ayrıca yeni görsel test yapılmadı.
-- Canlı ön kontrol: ilgili tablolarda RLS etkin. Git dışında özel erişimli yedek alındı; arşiv listesi ve SHA-256 doğrulandı. İki migration canlı şemada tek transaction içinde denenip geri alındı; finansal satırların özetleri değişmedi. Eski migration geçmişi yeniden oynatılmayacak.
+- Canlı ön kontrol ve yayın sonrası: ilgili tablolarda RLS etkin. Git dışında özel erişimli yedek alındı; arşiv listesi ve SHA-256 doğrulandı. İki migration canlı şemada tek transaction içinde denenip geri alındı; finansal satırların özetleri değişmedi. Canlı uygulamada da aynı finansal özet eşitliği doğrulandı; eski migration geçmişi yeniden oynatılmadı.
+- Lint regresyon karşılaştırmasında yeni hata yok. Önceden var olan OCR effect ve Deno `jsr:` çözümleyici bulguları genel lintte devam ediyor; genel lintin tamamen temiz olduğu iddia edilmiyor.
 - Ayrıntılı model, uyumluluk sınırları ve kaynaklar: [Kredi kartı / ekstre model incelemesi](21-kredi-karti-ekstre-modeli.md).
 
 ---
