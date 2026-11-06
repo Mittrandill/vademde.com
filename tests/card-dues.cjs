@@ -193,4 +193,40 @@ check('hatırlatma için sıradaki son ödeme gecikmiş dönemi atlar', () => {
   assert.equal(nextCardDue(buildCardDueItems([card], [balWith(500000, [opening(500000, '2026-10-16')])], [], '2026-10-26'), 'c1', '2026-10-26'), null);
 });
 
+// Kasım 2026 geri bildirimi: ödemesi girilmeyen kartta borç ilk son ödemede "gecikti" kalıyor,
+// sonraki ayların son ödemesi takvimde hiç görünmüyordu.
+check('takvim: geciken kart borcu sonraki son ödemelere de devreder, toplamlar değişmez', () => {
+  const charges = [opening(500000, '2026-09-20')];
+  const totals = buildCardDueItems([card], [balWith(500000, charges)], [], '2026-11-06');
+  assert.deepEqual(totals.map((i) => [i.due_date, i.remaining_amount_minor]), [['2026-09-25', 500000]]);
+  const calendar = buildCardDueItems([card], [balWith(500000, charges)], [], '2026-11-06', { carryOverdue: true });
+  assert.deepEqual(calendar.map((i) => [i.due_date, i.remaining_amount_minor, i.card_due_carried_minor, i.status]), [
+    ['2026-09-25', 500000, null, 'gecikti'],
+    ['2026-10-25', 500000, 500000, 'gecikti'],
+    ['2026-11-25', 500000, 500000, 'bekliyor'],
+  ]);
+  assert.equal(nextCardDue(calendar, 'c1', '2026-11-06').due_date, '2026-11-25');
+});
+
+check('takvim: devreden borç sıradaki dönemin kendi borcuyla toplanır', () => {
+  const charges = [opening(500000, '2026-10-01'), spend(100000, '2026-10-20')];
+  const calendar = buildCardDueItems([card], [balWith(600000, charges)], [], '2026-11-06', { carryOverdue: true });
+  assert.deepEqual(calendar.map((i) => [i.due_date, i.remaining_amount_minor, i.card_due_carried_minor]), [
+    ['2026-10-25', 500000, null],
+    ['2026-11-25', 600000, 500000],
+  ]);
+});
+
+check('takvim: gecikme yoksa devretme yapılmaz; ekstresi girilen dönem atlanır', () => {
+  const charges = [spend(100000, '2026-10-20')];
+  const plain = buildCardDueItems([card], [balWith(100000, charges)], [], '2026-11-06');
+  assert.deepEqual(buildCardDueItems([card], [balWith(100000, charges)], [], '2026-11-06', { carryOverdue: true }), plain);
+  const overdueStatement = [{ account_id: 'c1', due_date: '2026-10-25', status: 'gecikti', remaining_amount_minor: 300000 }];
+  const novStatement = { account_id: 'c1', due_date: '2026-11-25', status: 'bekliyor', remaining_amount_minor: 0 };
+  const calendar = buildCardDueItems([card], [bal(300000)], [...overdueStatement, novStatement], '2026-11-06', { carryOverdue: true });
+  assert.deepEqual(calendar, []);
+  const carried = buildCardDueItems([card], [bal(300000)], overdueStatement, '2026-11-06', { carryOverdue: true });
+  assert.deepEqual(carried.map((i) => [i.due_date, i.remaining_amount_minor]), [['2026-11-25', 300000]]);
+});
+
 console.log(`\n${passed} test geçti`);

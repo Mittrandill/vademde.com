@@ -26,6 +26,7 @@ import type { ObligationDueItem } from '@/features/obligations/api';
 import { useLanguage } from '@/i18n';
 
 import { buildCardDueItems, type CardStatementRef } from '@/utils/cardDues';
+import { localDay } from '@/utils/cardDebt';
 
 export { buildCardDueItems, nextCardDue, statementPeriodKey } from '@/utils/cardDues';
 
@@ -43,7 +44,14 @@ async function listCardStatementRefs(workspaceId: string): Promise<CardStatement
 
 // Sorgu anahtarları Ana Sayfa/hesaplar ekranlarıyla aynıdır (önbellek paylaşılır); ekstre
 // listesi [ws, 'obligations', ...] altında olduğu için ödeme/kayıt değişikliklerinde tazelenir.
-export function useCardDueItems(workspaceId: string | null): { items: ObligationDueItem[]; isSuccess: boolean } {
+// items: toplam borç/yaklaşan vadeler için (kalemlerin toplamı güncel kart borcuna eşittir).
+// calendarItems: takvim ve son ödeme hatırlatmaları için — vadesi geçmiş borç sıradaki son ödemeye de
+// devreder, böylece kartın son ödeme günü her ay görünür (bkz. utils/cardDues.ts carryOverdueForward).
+export function useCardDueItems(workspaceId: string | null): {
+  items: ObligationDueItem[];
+  calendarItems: ObligationDueItem[];
+  isSuccess: boolean;
+} {
   const language = useLanguage();
   const accountsQuery = useQuery({
     queryKey: workspaceId ? queryKeys.accounts(workspaceId) : ['accounts', 'disabled'],
@@ -62,11 +70,17 @@ export function useCardDueItems(workspaceId: string | null): { items: Obligation
     enabled: !!workspaceId && hasCards,
   });
 
-  const items = useMemo(
-    () =>
-      hasCards && balancesQuery.data && statementsQuery.data
-        ? buildCardDueItems(accountsQuery.data ?? [], balancesQuery.data, statementsQuery.data)
-        : [],
+  const { items, calendarItems } = useMemo(
+    () => {
+      if (!hasCards || !balancesQuery.data || !statementsQuery.data) return { items: [], calendarItems: [] };
+      const today = localDay(new Date());
+      return {
+        items: buildCardDueItems(accountsQuery.data ?? [], balancesQuery.data, statementsQuery.data, today),
+        calendarItems: buildCardDueItems(accountsQuery.data ?? [], balancesQuery.data, statementsQuery.data, today, {
+          carryOverdue: true,
+        }),
+      };
+    },
     // Titles come from the active i18n language; recompute on a language change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hasCards, accountsQuery.data, balancesQuery.data, statementsQuery.data, language]
@@ -74,6 +88,7 @@ export function useCardDueItems(workspaceId: string | null): { items: Obligation
 
   return {
     items,
+    calendarItems,
     isSuccess: accountsQuery.isSuccess && (!hasCards || (balancesQuery.isSuccess && statementsQuery.isSuccess)),
   };
 }

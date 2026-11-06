@@ -90,7 +90,7 @@ export default function TakvimScreen() {
   });
 
   // Kredi kartlarının sıradaki son ödemesi (ekstre kaydı olmayan kart borcu) — bkz. cardDues.ts.
-  const { items: cardDueItems } = useCardDueItems(activeWorkspaceId);
+  const { calendarItems: cardDueItems } = useCardDueItems(activeWorkspaceId);
 
   const obligations = useMemo<ObligationDueItem[]>(() => {
     const installmentItems = installmentsQuery.data ?? [];

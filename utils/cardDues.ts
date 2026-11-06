@@ -105,11 +105,57 @@ export function allocateCardDebt(
   return result.sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'));
 }
 
+// Takvim/hatırlatma görünümü: vadesi geçmiş ve ödenmemiş kart borcu (sanal kalem ya da ekstre kaydı)
+// bankadaki gibi sonraki ekstrelere devreder. Geciken dönem "gecikti" olarak yerinde kalır; ödenmemiş
+// tutar ondan sonraki her son ödeme gününde (sıradaki gecikmemiş son ödeme dahil) de görünür. Böylece
+// kartın son ödeme günü hiçbir ay takvimden kaybolmaz ve hatırlatma sıradaki son ödemeye kurulur
+// (Kasım 2026 kullanıcı geri bildirimi). Toplam borç hesaplarında KULLANILMAZ — orada iki kez sayılır.
+type DueRow = { dueDate: string | null; amountMinor: number; carriedMinor?: number };
+
+function carryOverdueForward(
+  account: CardAccount,
+  allocation: DueRow[],
+  overdueStatements: { dueDate: string; amountMinor: number }[],
+  coveredPeriods: Set<string>,
+  today: string
+): DueRow[] {
+  const overdue = [
+    ...allocation.filter((r): r is { dueDate: string; amountMinor: number } => !!r.dueDate && r.dueDate < today),
+    ...overdueStatements,
+  ].filter((r) => r.amountMinor > 0);
+  if (!overdue.length) return allocation;
+
+  // En eski gecikmeden sonraki tüm son ödeme günleri, sıradaki gecikmemiş son ödemeye kadar.
+  const firstOverdue = overdue.reduce((min, r) => (r.dueDate < min ? r.dueDate : min), overdue[0].dueDate);
+  const slots: DueSlot[] = [];
+  let cursor = firstOverdue;
+  for (let guard = 0; guard < 36; guard += 1) {
+    const next = duesFrom(account, cursor).find((d) => d.dueDate > cursor);
+    if (!next) break;
+    slots.push(next);
+    if (next.dueDate >= today) break;
+    cursor = next.dueDate;
+  }
+
+  const result: DueRow[] = allocation.map((r) => ({ ...r }));
+  for (const slot of slots) {
+    // O dönemin ekstresi girildiyse ekstre kaydı (bankanın devreden bakiye dahil tutarıyla) zaten görünür.
+    if (coveredPeriods.has(slot.periodKey)) continue;
+    const carriedMinor = overdue.filter((r) => r.dueDate < slot.dueDate).reduce((sum, r) => sum + r.amountMinor, 0);
+    if (carriedMinor <= 0) continue;
+    const same = result.find((r) => r.dueDate === slot.dueDate);
+    if (same) Object.assign(same, { amountMinor: same.amountMinor + carriedMinor, carriedMinor });
+    else result.push({ dueDate: slot.dueDate, amountMinor: carriedMinor, carriedMinor });
+  }
+  return result.sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'));
+}
+
 export function buildCardDueItems(
   accounts: CardAccount[],
   balances: AccountBalanceReportItem[],
   statements: CardStatementRef[],
-  today: string = localDay(new Date())
+  today: string = localDay(new Date()),
+  options: { carryOverdue?: boolean } = {}
 ): ObligationDueItem[] {
   const balanceByAccount = new Map(balances.map((b) => [b.accountId, b]));
   const items: ObligationDueItem[] = [];
@@ -123,23 +169,32 @@ export function buildCardDueItems(
       : cardStatements.filter((s) => (ACTIVE_OBLIGATION_STATUSES as string[]).includes(s.status))
         .reduce((sum, s) => sum + Math.max(0, s.remaining_amount_minor), 0);
     const residualMinor = (balance?.balanceMinor ?? 0) - openStatementsMinor;
-    if (residualMinor <= 0) continue;
 
     const coveredPeriods = new Set(balance?.cardStatementProjections
       ? balance.cardStatementProjections.filter((row) => !row.isFuture).map((row) =>
           account.statement_day ? row.cutoffDate.slice(0, 7) : statementPeriodKey(account, row.dueDate))
       : cardStatements.map((s) => periodKeyForStatement(account, s)).filter((key): key is string => !!key));
 
-    for (const { dueDate, amountMinor } of allocateCardDebt(
-      account,
-      residualMinor,
-      balance?.cardCharges ?? [],
-      coveredPeriods,
-      today
-    )) {
+    let allocation: DueRow[] =
+      residualMinor > 0
+        ? allocateCardDebt(account, residualMinor, balance?.cardCharges ?? [], coveredPeriods, today)
+        : [];
+    if (options.carryOverdue) {
+      const overdueStatements = balance?.cardStatementProjections
+        ? balance.cardStatementProjections
+            .filter((row) => !row.isFuture && row.dueDate.slice(0, 10) < today)
+            .map((row) => ({ dueDate: row.dueDate.slice(0, 10), amountMinor: Math.max(0, row.dueMinor) }))
+        : cardStatements
+            .filter((s) => (ACTIVE_OBLIGATION_STATUSES as string[]).includes(s.status) && !!s.due_date && (s.due_date as string).slice(0, 10) < today)
+            .map((s) => ({ dueDate: (s.due_date as string).slice(0, 10), amountMinor: Math.max(0, s.remaining_amount_minor) }));
+      allocation = carryOverdueForward(account, allocation, overdueStatements, coveredPeriods, today);
+    }
+
+    for (const { dueDate, amountMinor, carriedMinor } of allocation) {
       items.push({
         id: `card-due:${account.id}:${dueDate ?? 'none'}`,
         card_due_account_id: account.id,
+        card_due_carried_minor: carriedMinor ?? null,
         asset_id: null,
         workspace_id: account.workspace_id,
         direction: 'payable',

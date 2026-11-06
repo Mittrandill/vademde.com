@@ -237,13 +237,13 @@ export default function HomeScreen() {
     if (!activeWorkspaceId || !accountsQuery.data || !cardDues.isSuccess) return;
     for (const account of accountsQuery.data) {
       if (account.type !== 'credit_card') continue;
-      const due = nextCardDue(cardDues.items, account.id);
+      const due = nextCardDue(cardDues.calendarItems, account.id);
       const nextDue = due?.due_date
         ? { dueDate: due.due_date, periodKey: statementPeriodKey(account, due.due_date) }
         : null;
       syncCardPaymentDueReminders(activeWorkspaceId, account.id, nextDue).catch(() => {});
     }
-  }, [activeWorkspaceId, accountsQuery.data, cardDues.isSuccess, cardDues.items]);
+  }, [activeWorkspaceId, accountsQuery.data, cardDues.isSuccess, cardDues.calendarItems]);
 
   const activeObligations = useMemo<ObligationDueItem[]>(() => {
     const installmentItems = dueInstallmentsQuery.data ?? [];

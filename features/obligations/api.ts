@@ -33,6 +33,9 @@ export type ObligationDueItem = ObligationWithRelations & {
   /** Doluysa bu kalem bir kayıt değil, kartın sıradaki son ödemesidir (bkz. features/accounts/cardDues.ts);
    * id sanaldır, detay için /accounts/[card_due_account_id] açılır. */
   card_due_account_id?: string | null;
+  /** Yalnızca takvim/hatırlatma görünümünde: bu son ödemeye devreden, vadesi geçmiş kart borcu
+   * (tutarın içindedir; toplamlarda ayrıca sayılmaz — bkz. utils/cardDues.ts carryOverdue). */
+  card_due_carried_minor?: number | null;
 };
 
 // docs/06-teknik-mimari.md §10.6.2 — sayfa boyutu 30, .range() ile ofset tabanlı sayfalama.
