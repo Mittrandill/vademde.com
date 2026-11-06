@@ -8,6 +8,18 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.9 OTA + Web — Kart son ödemesi Kasım'da takvimde görünmüyordu (2026-11-06)
+
+Durum: **iOS + Android production OTA yayında**; runtime `1.0.9`. Kaynak commit `f3c8951`. Yayın zamanı 2026-11-06 15:07 (Europe/Istanbul).
+
+- **OTA grup:** `17445a9b-2711-4f7e-9577-679aae416a07`. iOS `01a1b0c3-c116-7a00-aaca-b98b2ff10bec`; Android `01a1b0c3-c116-7f1c-9071-59f99f90e35e`. [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/17445a9b-2711-4f7e-9577-679aae416a07). `eas update --channel production --environment production` robot token ile.
+- **Web:** `9f00f2b` main'e gönderildi (Vercel otomatik deploy; deployment durumu bu oturumdan doğrulanmadı).
+- **Sorun (kullanıcı geri bildirimi):** 2026-10-26'dan beri ödenmemiş görünen kart borcu ilk son ödemede "gecikti" kalıyor, sonraki son ödemelere yazılmıyordu; ödemesini girmeyen kullanıcıda Kasım'da hiçbir kart son ödemesi takvimde görünmüyor, hatırlatma da kurulmuyordu. Dünkü ekstre/asgari ödeme yayını neden değildi (aynı senaryolar önce/sonra aynı sonucu verdi).
+- **Çözüm:** takvim ve son ödeme hatırlatmaları `buildCardDueItems(..., { carryOverdue: true })` kullanır: geciken dönem yerinde kalır, ödenmemiş tutar sonraki her son ödemeye (sıradaki gecikmemiş dahil) devreder. Toplam borç/Ana Sayfa toplamları değişmedi (çift sayım yok).
+- Doğrulama: 25 kart vadesi (3 yeni), 33 kart borcu, 12 ekstre/takvim testi; mobil ve web TypeScript; değişen dosyalarda lint hatası yok. Supabase değişikliği yok.
+
+---
+
 ## 1.0.9 OTA — Kredi kartı ekstresi, asgari ödeme ve takvim (2026-11-05)
 
 Durum: **iOS + Android production OTA %100 yayında**; runtime `1.0.9`. Kaynak commit `566638d` main'e gönderildi. Yayın zamanı 2026-11-05 17:20 (Europe/Istanbul).
