@@ -8,6 +8,16 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## Supabase — RevenueCat webhook, hesabı olmayan kullanıcı olayları (2026-11-08)
+
+Durum: **`revenuecat-webhook` v10 ACTIVE**, JWT doğrulaması kapalı (webhook secret'ı doğrulanır). Uygulama yayını veya migration yok.
+
+- **Sorun:** 2026-11-08 15:56-16:44 arasında webhook 6 kez 500 döndü (`23503`, `subscriptions_owner_id_fkey`): olaydaki kullanıcı `auth.users` içinde yoktu. Mevcut kullanıcılar etkilenmedi. Olası neden silinmiş hesap; olay türü ve kullanıcı incelenmedi.
+- **Çözüm:** Satır yazacak olaylarda kullanıcı önce kontrol edilir. Hesap yoksa yazılmaz, defterde `ignored` kapatılır, 200 ve `unknown_user` döner. Kontrol başarısız olursa olay normal akışına devam eder.
+- Doğrulama: 49 webhook testi (sahte istemciyle). Gerçek RevenueCat olayıyla uçtan uca denenmedi.
+
+---
+
 ## 1.0.9 OTA + Web — Üretim hataları ve yönetim paneli hata izleme (2026-11-08)
 
 Durum: **iOS + Android production OTA yayında**; runtime `1.0.9`. Kaynak commit `70282ac`. Yayın zamanı 2026-11-08 15:53 civarı (Europe/Istanbul).

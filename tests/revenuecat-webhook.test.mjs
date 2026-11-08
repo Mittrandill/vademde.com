@@ -21,13 +21,23 @@ const DAY = 86_400_000;
 
 // Defter sözleşmesini taklit eder: aynı id'li uygulanmış olay "duplicate", daha yeni uygulanmış
 // olay varsa "stale". (Gerçek davranış tests/admin-analytics-database.mjs içinde SQL ile sınanır.)
-function fakeClient({ ledger = 'ok', failWrites = false } = {}) {
+function fakeClient({ ledger = 'ok', failWrites = false, userLookup = 'found' } = {}) {
   const log = { upserts: [], updates: [], rpcs: [] };
   const state = { failWrites };
   const store = new Map(); // event_id -> { ts, result }
   const client = {
     log,
     state,
+    auth: {
+      admin: {
+        getUserById: async () => {
+          if (userLookup === 'throws') throw new Error('network');
+          if (userLookup === 'missing') return { error: { status: 404 } };
+          if (userLookup === 'error') return { error: { status: 500 } };
+          return { error: null };
+        },
+      },
+    },
     rpc: async (fn, args) => {
       log.rpcs.push({ fn, args });
       if (ledger === 'throws') throw new Error('network');
@@ -172,5 +182,22 @@ ok(!c.log.rpcs.some((r) => r.fn === 'analytics_mark_rc_event'), 'a failed write 
 c.state.failWrites = false;
 eq(await processEvent(c, retried), 'applied', 'the retry of a failed event is applied (recorded-but-unapplied is not a duplicate)');
 eq(c.log.upserts.length, 1, 'the retry writes the subscription exactly once');
+
+// --- an event for a deleted account must not fail or write, and must not be retried forever
+for (const type of ['RENEWAL', 'EXPIRATION']) {
+  c = fakeClient({ userLookup: 'missing' });
+  const orphan = ev({ id: `orphan-${type}`, type });
+  eq(await processEvent(c, orphan), 'unknown_user', `${type} for a missing account is skipped without an error`);
+  eq(c.log.upserts.length, 0, `${type} for a missing account writes nothing`);
+  ok(c.log.rpcs.some((r) => r.fn === 'analytics_mark_rc_event' && r.args.p_result === 'ignored'), `${type} for a missing account is closed in the ledger`);
+  eq(await processEvent(c, orphan), 'duplicate', `a repeated ${type} for a missing account is a duplicate`);
+}
+
+// --- a failed lookup must never block a real subscription
+for (const mode of ['throws', 'error']) {
+  c = fakeClient({ userLookup: mode });
+  eq(await processEvent(c, ev()), 'applied', `user lookup ${mode}: the purchase is still applied`);
+  eq(c.log.upserts.length, 1, `user lookup ${mode}: the subscription is still written`);
+}
 
 console.log(`\n${checks} checks passed`);

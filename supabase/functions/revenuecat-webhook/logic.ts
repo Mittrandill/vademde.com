@@ -30,6 +30,11 @@ export interface RevenueCatEvent {
 type DbResult = { data: unknown; error: { message: string } | null };
 export interface DbClient {
   rpc(fn: string, args: Record<string, unknown>): PromiseLike<DbResult>;
+  auth: {
+    admin: {
+      getUserById(id: string): PromiseLike<{ error: { status?: number } | null }>;
+    };
+  };
   from(table: 'subscriptions'): {
     upsert(
       row: Record<string, unknown>,
@@ -41,7 +46,17 @@ export interface DbClient {
   };
 }
 
-export type Outcome = 'applied' | 'ignored' | 'duplicate' | 'stale_skipped';
+export type Outcome = 'applied' | 'ignored' | 'duplicate' | 'stale_skipped' | 'unknown_user';
+
+// subscriptions.owner_id auth.users'a bağlıdır; bu olaylar hesabı yoksa satır yazmaya çalışır.
+const UPSERT_TYPES = new Set([
+  'INITIAL_PURCHASE',
+  'NON_RENEWING_PURCHASE',
+  'RENEWAL',
+  'PRODUCT_CHANGE',
+  'UNCANCELLATION',
+  'EXPIRATION',
+]);
 
 const ISLETME_ENTITLEMENT = 'isletme';
 const STATE_TYPES = new Set([
@@ -146,6 +161,17 @@ async function mark(client: DbClient, event: RevenueCatEvent, result: string): P
   }
 }
 
+// Yalnızca "kullanıcı yok" yanıtı true döner. Kontrol başarısız olursa olay normal akışa devam
+// eder; geçici bir hata gerçek bir aboneliğin yazılmasını engellemez.
+async function ownerMissing(client: DbClient, ownerId: string): Promise<boolean> {
+  try {
+    const { error } = await client.auth.admin.getUserById(ownerId);
+    return error?.status === 404;
+  } catch {
+    return false;
+  }
+}
+
 export async function processEvent(client: DbClient, event: RevenueCatEvent): Promise<Outcome> {
   const ledger = await record(client, event);
   if (ledger.recorded && ledger.duplicate) return 'duplicate';
@@ -155,6 +181,13 @@ export async function processEvent(client: DbClient, event: RevenueCatEvent): Pr
   }
 
   const ownerId = event.app_user_id;
+  // Silinmiş hesabın olayı yazılamaz; hata dönmek yalnızca RevenueCat'in boşuna yeniden denemesine yol açar.
+  if (UPSERT_TYPES.has(event.type) && (await ownerMissing(client, ownerId))) {
+    console.warn('[revenuecat-webhook] hesabı olmayan kullanıcı için olay atlandı', event.type);
+    if (ledger.recorded) await mark(client, event, 'ignored');
+    return 'unknown_user';
+  }
+
   const now = new Date().toISOString();
   let outcome: Outcome = 'applied';
   switch (event.type) {
