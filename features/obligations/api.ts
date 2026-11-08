@@ -140,14 +140,20 @@ export interface ObligationDueInfo {
   hasInstallments: boolean;
 }
 
+/** Kart son ödemesi gibi veritabanında karşılığı olmayan kalemler (bkz. utils/cardDues.ts). */
+export function isVirtualObligationId(id: string): boolean {
+  return id.startsWith('card-due:');
+}
+
 export async function getDueInfoByObligation(
   workspaceId: string,
   rows: { id: string; due_date: string | null; remaining_amount_minor: number }[]
 ): Promise<Record<string, ObligationDueInfo>> {
   const todayIso = localIsoDate();
   const installmentsByObligation: Record<string, { due_date: string; remaining_amount_minor: number }[]> = {};
-  for (let i = 0; i < rows.length; i += 100) {
-    const chunk = rows.slice(i, i + 100).map((r) => r.id);
+  const realIds = rows.filter((r) => !isVirtualObligationId(r.id)).map((r) => r.id);
+  for (let i = 0; i < realIds.length; i += 100) {
+    const chunk = realIds.slice(i, i + 100);
     const data = await fetchAll((from, to) => supabase
       .from('installments')
       .select('obligation_id, due_date, remaining_amount_minor, status')
@@ -345,8 +351,11 @@ export async function getDueBreakdown({
 
   // .in() listesi URL'ye yazıldığı için çok sayıda kayıtta parçalara bölünür.
   const installmentRows: { obligation_id: string; due_date: string; remaining_amount_minor: number; status: string }[] = [];
-  for (let i = 0; i < obligations.length; i += 100) {
-    const chunk = obligations.slice(i, i + 100).map((o) => o.id);
+  // Ekstresiz kart borcu sanal kalemdir (id: card-due:...): toplama girer ama taksiti yoktur; uuid
+  // kolonuna giden listeye konursa Postgres isteğin tamamını reddeder (22P02).
+  const realObligationIds = obligations.filter((o) => !isVirtualObligationId(o.id)).map((o) => o.id);
+  for (let i = 0; i < realObligationIds.length; i += 100) {
+    const chunk = realObligationIds.slice(i, i + 100);
     const rows = await fetchAll<{ obligation_id: string; due_date: string; remaining_amount_minor: number; status: string }>((from, to) =>
       supabase
         .from('installments')

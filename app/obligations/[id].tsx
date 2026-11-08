@@ -108,10 +108,13 @@ export default function ObligationDetailScreen() {
   // sayfa akıllı varsayılan olarak gösterilir (aşağıda hesaplanır).
   const [historyPage, setHistoryPage] = useState(0);
 
+  // Silme başarılı olunca ekran, onay kutusu kapanana kadar açık kalır; bu sırada odak/realtime
+  // yenilemesi artık olmayan kaydı sorup 406 üretiyordu.
+  const [recordDeleted, setRecordDeleted] = useState(false);
   const detailQuery = useQuery({
     queryKey: ['obligation', id],
     queryFn: () => getObligationWithInstallments(id as string),
-    enabled: !!id,
+    enabled: !!id && !recordDeleted,
   });
 
   const paymentsQuery = useQuery({
@@ -189,6 +192,7 @@ export default function ObligationDetailScreen() {
   const deleteObligationMutation = useMutation({
     mutationFn: () => deleteObligation(id as string),
     onSuccess: () => {
+      setRecordDeleted(true);
       const documentType = detailQuery.data?.obligation.document_type;
       showSuccessAlert(t('obligations.list.deleted'), () => {
         if (documentType) {

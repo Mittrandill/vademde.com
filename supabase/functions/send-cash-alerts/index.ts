@@ -122,7 +122,18 @@ function project(startBalance: number, items: DueItem[]): { firstNegativeDate: s
   return { firstNegativeDate, lowest };
 }
 
+// Beklenmeyen hata yanıtsız 500 yerine nedeniyle loglanır (bkz. functions/collect-error-logs).
 Deno.serve(async (_req: Request) => {
+  try {
+    return await runCashAlerts();
+  } catch (error) {
+    const detail = error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error);
+    console.error('[send-cash-alerts] başarısız', detail);
+    return Response.json({ success: false, error: 'cash_alerts_failed' }, { status: 500 });
+  }
+});
+
+async function runCashAlerts(): Promise<Response> {
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const todayIso = isoDay(new Date());
   const limit = new Date();
@@ -130,19 +141,28 @@ Deno.serve(async (_req: Request) => {
   const limitIso = isoDay(limit);
 
   // Yalnızca push token'ı olan çalışma alanları işlenir.
-  const { data: tokenRows } = await db.from('push_tokens').select('user_id, token');
+  const { data: tokenRows, error: tokensError } = await db.from('push_tokens').select('user_id, token');
+  if (tokensError) throw tokensError;
   const tokensByUser = new Map<string, string[]>();
   for (const t of tokenRows ?? []) tokensByUser.set(t.user_id, [...(tokensByUser.get(t.user_id) ?? []), t.token]);
   if (tokensByUser.size === 0) return Response.json({ success: true, alerts: 0 });
-  const { data: profiles, error: profilesError } = await db.from('profiles').select('id, locale').in('id', [...tokensByUser.keys()]);
-  if (profilesError) return Response.json({ success: false, error: profilesError.message }, { status: 500 });
+  // Günde tek çalıştığı için geçici bir ağ hatası o günün uyarılarını kaybettirmesin: bir kez daha denenir.
+  const loadProfiles = () => db.from('profiles').select('id, locale').in('id', [...tokensByUser.keys()]);
+  let { data: profiles, error: profilesError } = await loadProfiles();
+  if (profilesError) {
+    console.error('[send-cash-alerts] profiller okunamadı, yeniden deneniyor', profilesError.message);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    ({ data: profiles, error: profilesError } = await loadProfiles());
+  }
+  if (profilesError) throw profilesError;
   const localeByUser = new Map((profiles ?? []).map((p) => [p.id, resolveLocale(p.locale)]));
 
 
-  const { data: members } = await db
+  const { data: members, error: membersError } = await db
     .from('workspace_members')
     .select('workspace_id, user_id')
     .in('user_id', [...tokensByUser.keys()]);
+  if (membersError) throw membersError;
   const usersByWorkspace = new Map<string, string[]>();
   for (const m of members ?? []) usersByWorkspace.set(m.workspace_id, [...(usersByWorkspace.get(m.workspace_id) ?? []), m.user_id]);
 
@@ -267,4 +287,4 @@ Deno.serve(async (_req: Request) => {
   if (logRows.length > 0) await db.from('cash_alert_log').insert(logRows);
 
   return Response.json({ success: true, alerts: logRows.length, pushMessages: messages.length });
-});
+}
