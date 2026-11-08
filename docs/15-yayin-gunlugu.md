@@ -8,6 +8,23 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.0.9 OTA + Web — Üretim hataları ve yönetim paneli hata izleme (2026-11-08)
+
+Durum: **iOS + Android production OTA yayında**; runtime `1.0.9`. Kaynak commit `70282ac`. Yayın zamanı 2026-11-08 15:53 civarı (Europe/Istanbul).
+
+- **OTA grup:** `104788d6-5e84-422e-ae34-8199c0316071`. iOS `01a1bb39-e18b-7d00-9175-9ea45b91d6fa`; Android `01a1bb39-e18b-7026-b7f6-5179863260c0`. [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/104788d6-5e84-422e-ae34-8199c0316071).
+- **Web:** `bbd8442` main'e gönderildi; GitHub'daki Vercel production durumu `success`.
+- **`22P02` (`card-due:` uuid hatası):** 2026-11-05 OTA'sından beri `getDueBreakdown`, sanal kart son ödemesi kimliklerini `installments` sorgusuna gönderiyordu; 5-8 Kasım arasında 176 kez görüldü. Sanal kalemler sorgudan çıkarıldı; toplamda ve takvimde kalmaya devam eder, `carryOverdue` davranışı değişmedi.
+- **`27000` (kayıt silme):** Ödemesi olan kayıt silinirken bağlı hareketin silinmesi, silinmekte olan kaydın ilerleme hesabını tetikliyordu. Silinen kayıt için hesaplama atlanır; PGlite üzerinde hata üretilip düzeltme doğrulandı.
+- **`obligations` 406:** Silme başarılı olduktan sonra açık kalan detay ekranı kaydı yeniden soruyordu; silme sonrası sorgu kapatıldı.
+- **`send-cash-alerts` 500 (2026-11-08 09:00):** Kesin neden loglanmamıştı; kodda log yazmadan 500 dönen tek yol profil okuma hatasıdır, istek loglarında başarısız HTTP yoktur, geçici ağ hatası olası görünüyor. Profil okuma bir kez yeniden denenir, hatalar artık loglanır. O günün uyarıları yeniden gönderilmedi.
+- **Hata izleme:** `collect-error-logs` 5 dakikada bir veritabanı, API 5xx ve fonksiyon hatalarını okur; yalnızca maskelenmiş metin ve sayıları `admin_private.error_groups`'a yazar. `vademde.app /admin` → "Hata kayıtları". Yeni, çözülüp geri dönen veya ani artan hatalar admin cihazlarına push gider. Secret: `VADEMDE_LOGS_TOKEN` (Supabase Edge Function secret'larında `SUPABASE_` öneki yasaktır).
+- **Supabase:** `fix_obligation_delete_self_update` ve `admin_error_monitoring` uygulandı (depoda `20261108120000` ve `20261108121000`); `collect-error-logs` v3 ve `send-cash-alerts` v4 ACTIVE, JWT doğrulaması açık. Toplayıcının Log API okuması canlıda başarılı.
+- Doğrulama: 84 finans ve 25 kart vadesi testi; maskeleme testi; bildirim kuralları ve yetki sınırları PGlite'ta; mobil ve web TypeScript. Admin push'unun gerçek cihaza ulaşması, panelde ilk hata oluşana kadar uçtan uca doğrulanmadı.
+- OTA öncesi yerel `node_modules` eksikti (`expo-build-properties`); `npm ci` ile kilit dosyasına göre kuruldu.
+
+---
+
 ## 1.0.9 OTA + Web — Kart son ödemesi Kasım'da takvimde görünmüyordu (2026-11-06)
 
 Durum: **iOS + Android production OTA yayında**; runtime `1.0.9`. Kaynak commit `f3c8951`. Yayın zamanı 2026-11-06 15:07 (Europe/Istanbul).
