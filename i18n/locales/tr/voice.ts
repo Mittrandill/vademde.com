@@ -29,6 +29,7 @@ export const voice = {
   heard: 'Duyduğum',
   checkFields: 'Kaydetmeden kontrol edin: {{fields}}',
   addCounterparty: '“{{name}}” carisini ekle',
+  showHeard: 'Duyduğumu göster',
   counterpartyFailed: 'Cari eklenemedi.',
   fields: {
     accounts: 'hesaplar',

@@ -196,6 +196,7 @@ export function buildCardDueItems(
         card_due_account_id: account.id,
         card_due_carried_minor: carriedMinor ?? null,
         asset_id: null,
+        document_number: null,
         workspace_id: account.workspace_id,
         direction: 'payable',
         document_type: 'kredi_karti_ekstresi',

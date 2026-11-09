@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { VoiceDraftNotice } from '@/components/voice/VoiceDraftNotice';
+import { VoiceDraftBubble } from '@/components/voice/VoiceDraftBubble';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import {
@@ -761,8 +761,8 @@ function SettlementForm({
               inline
               title={isPayable ? t('payments.payTitle') : t('payments.collectTitle')}
               leftLabel={{ label: t('payments.cancel'), onPress: () => router.back() }}
+              rightAccessory={<VoiceDraftBubble />}
             />
-            <VoiceDraftNotice />
 
             {/* Tuval OdemeKaydet: bağlam satırı, ortada büyük tutar, Tamamı / Kısmi tutar. */}
             <Stack gap="sm" align="center">

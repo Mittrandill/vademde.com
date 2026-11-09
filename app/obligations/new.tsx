@@ -9,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useExitGuard } from '@/utils/useExitGuard';
 import { InstallmentPlanTable } from '@/components/finance/InstallmentPlanTable';
-import { VoiceDraftNotice } from '@/components/voice/VoiceDraftNotice';
+import { VoiceDraftBubble } from '@/components/voice/VoiceDraftBubble';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { AmountField, BottomSheet, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
@@ -95,7 +95,7 @@ export default function NewObligationScreen() {
   useLanguage();
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, assetId, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam, currency, categoryId, bankCode, installmentCount, notes } =
+  const { id, assetId, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam, currency, categoryId, bankCode, installmentCount, documentNumber } =
     useLocalSearchParams<{
     id?: string;
     assetId?: string;
@@ -112,7 +112,7 @@ export default function NewObligationScreen() {
     categoryId?: string;
     bankCode?: string;
     installmentCount?: string;
-    notes?: string;
+    documentNumber?: string;
   }>();
   const isEditing = !!id;
 
@@ -165,7 +165,7 @@ export default function NewObligationScreen() {
       initialCategoryId={typeof categoryId === 'string' ? categoryId : undefined}
       initialBankCode={typeof bankCode === 'string' ? bankCode : undefined}
       initialInstallmentCount={typeof installmentCount === 'string' && /^\d+$/.test(installmentCount) ? installmentCount : undefined}
-      initialNotes={typeof notes === 'string' ? notes : undefined}
+      initialDocumentNumber={typeof documentNumber === 'string' ? documentNumber : undefined}
     />
   );
 }
@@ -195,7 +195,7 @@ interface ObligationFormProps {
   initialCategoryId?: string;
   initialBankCode?: string;
   initialInstallmentCount?: string;
-  initialNotes?: string;
+  initialDocumentNumber?: string;
   /** TRY kuruşu; yalnızca yeni kayıtta ön doldurma. */
   initialAmountMinor?: number;
 }
@@ -217,7 +217,7 @@ function ObligationForm({
   initialCategoryId,
   initialBankCode,
   initialInstallmentCount,
-  initialNotes,
+  initialDocumentNumber,
 }: ObligationFormProps) {
   useLanguage();
   const theme = useTheme();
@@ -245,6 +245,7 @@ function ObligationForm({
   );
   const [trialEndsOn, setTrialEndsOn] = useState(initial?.trial_ends_on ?? '');
   const [title, setTitle] = useState(initial?.title ?? initialTitle ?? '');
+  const [documentNumberValue, setDocumentNumberValue] = useState(initial?.document_number ?? initialDocumentNumber ?? '');
   const [assetDirty, setAssetDirty] = useState(false);
   const { allowExit } = useExitGuard(assetDirty || !isEditing && title.trim() !== '');
   // docs/01-finansal-kayit-modeli.md §3.5 — birim, kayıt oluşturulduktan sonra
@@ -710,6 +711,7 @@ function ObligationForm({
           category_id: categoryId,
           asset_id: assetId,
           bank_code: bankCodeForType,
+          document_number: documentNumberValue.trim() || null,
           service_code: serviceCodeForType,
           billing_period: isSubscriptionType ? billingPeriod : null,
           trial_ends_on: isSubscriptionType && /^\d{4}-\d{2}-\d{2}$/.test(trialEndsOn.trim()) ? trialEndsOn.trim() : null,
@@ -752,7 +754,7 @@ function ObligationForm({
         asset_id: assetId,
         bank_code: bankCodeForType,
         service_code: serviceCodeForType,
-        notes: initialNotes ?? null,
+        document_number: documentNumberValue.trim() || null,
         billing_period: isSubscriptionType ? billingPeriod : null,
         trial_ends_on: isSubscriptionType && /^\d{4}-\d{2}-\d{2}$/.test(trialEndsOn.trim()) ? trialEndsOn.trim() : null,
       });
@@ -1022,8 +1024,8 @@ function ObligationForm({
               inline
               title={isEditing ? t('obligations.form.edit') : t('obligations.form.newRecord')}
               leftLabel={{ label: t('obligations.form.cancel'), onPress: () => router.back() }}
+              rightAccessory={!isEditing ? <VoiceDraftBubble onCounterpartyCreated={setCounterpartyId} /> : undefined}
             />
-            {!isEditing ? <VoiceDraftNotice onCounterpartyCreated={setCounterpartyId} /> : null}
 
             {!isEditing ? (
               <ScanPromptBanner description={t('obligations.form.scanHelp')} />
@@ -1116,6 +1118,15 @@ function ObligationForm({
                 }}
               />
               <TextField label={t('obligations.form.title')} placeholder={t('obligations.form.titlePlaceholder')} value={title} onChangeText={setTitle} />
+              {documentType === 'cek' || documentType === 'senet' ? (
+                <TextField
+                  label={documentType === 'cek' ? t('obligations.form.chequeNumber') : t('obligations.form.noteNumber')}
+                  placeholder={t('obligations.form.documentNumberPlaceholder')}
+                  value={documentNumberValue}
+                  onChangeText={setDocumentNumberValue}
+                  autoCapitalize="characters"
+                />
+              ) : null}
               {/* Vade sayısı tutar etiketini, "İlk vade" etiketini ve tutar modu seçimini
                   belirler — formun alt kısmı buna göre şekillendiği için başlığın hemen altında
                   sorulur (formun sonunda kalınca kullanıcı tek vadeli kaydedip geçiyordu).

@@ -102,13 +102,14 @@ assert.equal(guessCounterpartyType('Delta Hırdavat Ltd. Şti.'), 'company');
 assert.equal(guessCounterpartyType('Ahmet Şahin'), 'individual');
 
 // Taslak doğru ekrana gider; boş alan parametreye yazılmaz
-const chequeRoute = voiceDraftRoute(cheque, { bankCode: 'garanti', title: 'Çek', notes: 'Belge no: 0123456' });
+const chequeRoute = voiceDraftRoute(cheque, { bankCode: 'garanti', title: 'Çek' });
 assert.equal(chequeRoute.pathname, '/obligations/new');
 assert.deepEqual(
   { type: chequeRoute.params.type, direction: chequeRoute.params.direction, amountMinor: chequeRoute.params.amountMinor, dueDate: chequeRoute.params.dueDate, counterpartyId: chequeRoute.params.counterpartyId, bankCode: chequeRoute.params.bankCode, voice: chequeRoute.params.voice },
   { type: 'cek', direction: 'receivable', amountMinor: '20000000', dueDate: '2026-12-12', counterpartyId: 'c1', bankCode: 'garanti', voice: '1' }
 );
 assert.equal('assetId' in chequeRoute.params, false);
+assert.equal(chequeRoute.params.documentNumber, '0123456');
 assert.equal(voiceDraftRoute(fuel).pathname, '/transactions/new');
 assert.equal(voiceDraftRoute(fuel).params.categoryId, 'k1');
 assert.equal(voiceDraftRoute(twin).pathname, '/payments/new');

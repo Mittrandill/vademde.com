@@ -32,6 +32,7 @@ export const voice: Messages<typeof tr> = {
   heard: 'I heard',
   checkFields: 'Check before saving: {{fields}}',
   addCounterparty: 'Add “{{name}}” as a counterparty',
+  showHeard: 'Show what I heard',
   counterpartyFailed: 'The counterparty could not be added.',
   fields: {
     accounts: 'accounts',

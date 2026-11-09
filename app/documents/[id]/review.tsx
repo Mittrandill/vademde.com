@@ -783,7 +783,7 @@ export default function DocumentReviewScreen() {
           // Harcamalar satır satır kategorize edildiyse kart borcunun kendisi kategorisizdir.
           category_id: splitsCardSpending ? null : categoryId,
           bank_code: BANK_DOCUMENT_TYPES.has(documentType) ? bankCode : null,
-          notes: documentNumber.trim() ? t('documentReview.documentNumberNote', { number: documentNumber.trim() }) : null,
+          document_number: documentNumber.trim() || null,
         });
         await linkDocumentObligation(id as string, obligation.id);
 

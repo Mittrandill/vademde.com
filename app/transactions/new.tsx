@@ -7,7 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
-import { VoiceDraftNotice } from '@/components/voice/VoiceDraftNotice';
+import { VoiceDraftBubble } from '@/components/voice/VoiceDraftBubble';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useExitGuard } from '@/utils/useExitGuard';
 import { useReflowKey } from '@/services/reflow';
@@ -460,6 +460,7 @@ function TransactionForm({
                   : t('transactions.form.newTitle')
             }
             leftLabel={{ label: t('common.cancel'), onPress: () => router.back() }}
+            rightAccessory={!isEditing ? <VoiceDraftBubble onCounterpartyCreated={setCounterpartyId} /> : undefined}
             rightLabel={{
               label: isEditing ? t('transactions.form.update') : t('common.save'),
               bold: true,
@@ -467,7 +468,6 @@ function TransactionForm({
               onPress: () => saveMutation.mutate(),
             }}
           />
-          {!isEditing ? <VoiceDraftNotice onCounterpartyCreated={setCounterpartyId} /> : null}
 
           <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
             {transferOnly ? null : (

@@ -721,6 +721,7 @@ Relationships: [];
           due_date: string | null
           fx_rate_try_minor: number | null
           id: string
+          document_number: string | null
           notes: string | null
           instrument_status: string | null
           instrument_status_changed_at: string | null
@@ -750,6 +751,7 @@ Relationships: [];
           due_date?: string | null
           fx_rate_try_minor?: number | null
           id?: string
+          document_number?: string | null
           notes?: string | null
           instrument_status?: string | null
           instrument_status_changed_at?: string | null
@@ -779,6 +781,7 @@ Relationships: [];
           due_date?: string | null
           fx_rate_try_minor?: number | null
           id?: string
+          document_number?: string | null
           notes?: string | null
           instrument_status?: string | null
           instrument_status_changed_at?: string | null

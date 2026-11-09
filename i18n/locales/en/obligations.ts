@@ -42,6 +42,9 @@ export const obligations: Messages<typeof tr> = {
     noRate: "No current exchange rate found",
     documentType: "Document type",
     title: "Title",
+    chequeNumber: "Cheque serial no.",
+    noteNumber: "Note no.",
+    documentNumberPlaceholder: "e.g. 0123456",
     titlePlaceholder: "e.g. January rent check",
     firstDue: "First due date",
     totalAmount: "Total amount",
@@ -119,6 +122,7 @@ export const obligations: Messages<typeof tr> = {
     extendHelp: "If the amount is left blank, the last {{unit}} amount ({{amount}}) is used.",
   },
   detail: {
+    documentNumber: 'Serial no.',
     paymentDeleted: 'The payment was deleted.',
     deletePaymentTitle: 'Delete Payment',
     deletePaymentBody: 'This payment will be permanently deleted. Are you sure?',

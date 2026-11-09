@@ -289,7 +289,6 @@ function VoiceAssistant() {
     const route = voiceDraftRoute(draft, {
       bankCode: draft.bank ? matchBankByName(draft.bank) : null,
       title: [typeLabel, draft.counterpartyName ?? draft.bank].filter(Boolean).join(' — ') || null,
-      notes: draft.documentNumber ? t('documentReview.documentNumberNote', { number: draft.documentNumber }) : null,
     });
     if (!route) return;
     setStoredDraft(draft);

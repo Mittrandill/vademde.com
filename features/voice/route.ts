@@ -45,7 +45,7 @@ export function isForeignAmountWithheld(draft: VoiceDraft): boolean {
 
 export function voiceDraftRoute(
   draft: VoiceDraft,
-  options: { bankCode?: string | null; title?: string | null; notes?: string | null } = {}
+  options: { bankCode?: string | null; title?: string | null } = {}
 ): VoiceRoute | null {
   const description = draft.transcript.slice(0, 200);
   const amountMinor = isForeignAmountWithheld(draft) ? null : draft.amountMinor;
@@ -64,7 +64,7 @@ export function voiceDraftRoute(
         bankCode: options.bankCode,
         installmentCount: draft.installments,
         title: options.title,
-        notes: options.notes,
+        documentNumber: draft.documentNumber,
       }),
     };
   }

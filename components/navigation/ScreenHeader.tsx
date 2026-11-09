@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -31,6 +32,8 @@ export interface ScreenHeaderProps {
   right?: ScreenHeaderAction | null;
   /** Sağdaki metin düğmesi ("Kaydet", "Düzenle"); `right`'ın yerine geçer. */
   rightLabel?: ScreenHeaderTextAction;
+  /** Sağ düğmenin solunda gösterilecek özel öğe. */
+  rightAccessory?: ReactNode;
   /** true: başlık gezinme çubuğunun ortasında küçük (17 pt/600) gösterilir; false: altında büyük başlık. */
   inline?: boolean;
 }
@@ -43,7 +46,7 @@ const DEFAULT_LEFT: ScreenHeaderAction = {
 
 // vademde.css .nav + .lt: 44 pt gezinme çubuğu (solda geri/vazgeç, sağda daire düğme ya da metin) ve altında
 // 34 pt/700 büyük başlık. Ekranlar arası tekrarlanan başlığın tek kaynağı.
-export function ScreenHeader({ title, left = DEFAULT_LEFT, leftLabel, right, rightLabel, inline }: ScreenHeaderProps) {
+export function ScreenHeader({ title, left = DEFAULT_LEFT, leftLabel, right, rightLabel, rightAccessory, inline }: ScreenHeaderProps) {
   const theme = useTheme();
 
   return (
@@ -53,12 +56,15 @@ export function ScreenHeader({ title, left = DEFAULT_LEFT, leftLabel, right, rig
         {inline ? (
           <Text
             numberOfLines={1}
-            style={{ position: 'absolute', left: 80, right: 80, textAlign: 'center', fontSize: 17, fontWeight: '600' }}
+            style={{ position: 'absolute', left: rightAccessory ? 116 : 80, right: rightAccessory ? 116 : 80, textAlign: 'center', fontSize: 17, fontWeight: '600' }}
           >
             {title}
           </Text>
         ) : null}
-        {rightLabel ? <TextAction action={rightLabel} /> : right ? <CircleButton action={right} /> : <View style={{ width: 44 }} />}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          {rightAccessory}
+          {rightLabel ? <TextAction action={rightLabel} /> : right ? <CircleButton action={right} /> : rightAccessory ? null : <View style={{ width: 44 }} />}
+        </View>
       </View>
       {inline ? null : (
         <Text variant="pageTitle" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ marginTop: theme.spacing.xxs }}>

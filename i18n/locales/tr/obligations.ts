@@ -39,6 +39,9 @@ export const obligations = {
     noRate: "Güncel kur bulunamadı",
     documentType: "Belge türü",
     title: "Başlık",
+    chequeNumber: "Çek seri no",
+    noteNumber: "Senet no",
+    documentNumberPlaceholder: "Örn. 0123456",
     titlePlaceholder: "Örn. Ocak ayı kira çeki",
     firstDue: "İlk vade",
     totalAmount: "Toplam tutar",
@@ -116,6 +119,7 @@ export const obligations = {
     extendHelp: "Tutar boş bırakılırsa son {{unit}} tutarı ({{amount}}) devam eder.",
   },
   detail: {
+    documentNumber: 'Seri no',
     paymentDeleted: 'Ödeme kaydı silindi.',
     deletePaymentTitle: 'Ödemeyi Sil',
     deletePaymentBody: 'Bu ödeme kaydı kalıcı olarak silinecek. Emin misiniz?',

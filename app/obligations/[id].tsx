@@ -358,6 +358,7 @@ export default function ObligationDetailScreen() {
           },
         ]
       : []),
+    ...(obligation.document_number ? [{ label: t('obligations.detail.documentNumber'), value: obligation.document_number }] : []),
     ...(obligation.notes ? [{ label: t('obligations.detail.note'), value: obligation.notes }] : []),
     ...(settledQuery.data ?? []).map((settled) => ({
       label: t('obligations.detail.settles'),
