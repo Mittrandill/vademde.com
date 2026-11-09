@@ -1,0 +1,5 @@
+• Sesle kayıt: Anlatın, asistan formu doldursun, siz onaylayın (Plus ve İşletme).
+• Eksik tutar, vade veya hesabı asistan sorar.
+• Yeni + düğmesi: Belge tara ya da sesle kaydet.
+• Çek ve senet seri numarası ayrı alanda.
+• Daha hızlı ve daha doğru belge okuma.

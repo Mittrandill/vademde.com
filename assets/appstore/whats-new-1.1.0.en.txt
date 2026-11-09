@@ -1,0 +1,9 @@
+Vademde 1.1.0
+
+• Voice entry: Describe it and the assistant recognizes cheques, invoices, loans, expenses, collections or transfers between accounts, then fills in the form for you to approve.
+• The assistant asks for what is missing, such as the amount, due date, account or related vehicle.
+• New + button: Scan a document or record by voice.
+• Cheque and promissory note serial numbers now have their own field.
+• Faster document scanning, with more accurate drawer, payee, buyer and seller detection.
+
+Voice entry is available on Plus and Business plans. A record is created only when you approve it, and Vademde does not store voice recordings.

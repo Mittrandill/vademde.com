@@ -1,0 +1,5 @@
+• Voice entry: Describe it, the assistant fills in the form, you approve (Plus and Business).
+• The assistant asks for a missing amount, due date or account.
+• New + button: Scan a document or record by voice.
+• Cheque and note serial numbers have their own field.
+• Faster, more accurate document scanning.

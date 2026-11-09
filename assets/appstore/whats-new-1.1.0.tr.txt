@@ -1,0 +1,9 @@
+Vademde 1.1.0
+
+• Sesle kayıt: Anlatın, asistan çek, fatura, kredi, gider, tahsilat veya hesaplar arası transferi anlasın; formu doldursun, siz onaylayın.
+• Eksik bilgiyi asistan sorar: tutar, vade, hesap veya ilgili araç gibi.
+• Yeni + düğmesi: Belge tara ya da sesle kaydet.
+• Çek ve senet seri numarası artık ayrı alan olarak kaydedilir.
+• Belge okuma daha hızlı. Çekte keşideci ve lehtar, faturada alıcı ve satıcı daha doğru ayrılır.
+
+Sesli kayıt Plus ve İşletme planlarında sunulur. Kayıt yalnızca siz onaylayınca oluşur; ses kaydı Vademde'de saklanmaz.
