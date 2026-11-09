@@ -12,7 +12,7 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 Durum: **iOS build TestFlight için gönderildi; mağazaya gönderilmedi.** Mikrofon ve ses modülü eklendiği için OTA ile dağıtılamaz.
 
-- **Sesli kayıt:** Merkez + düğmesi Belge tara / Sesle kaydet menüsünü açar. `voice-intake` sesi `gemini-3.5-flash-lite` ile taslağa çevirir, eksik alanları sorar, mevcut formu doldurur. Kaydı kullanıcı yapar. Plus/İşletme, aylık 300 komut (`VOICE_MONTHLY_LIMIT`). Ses saklanmaz.
+- **Sesli kayıt:** Merkez + düğmesi Belge tara / Sesle kaydet menüsünü açar. `voice-intake` sesi `gemini-3.5-flash-lite` ile taslağa çevirir, eksik alanları sorar, mevcut formu doldurur. Kaydı kullanıcı yapar. Plus/İşletme; bir sesli kayıt oturumu aylık OCR kotasından 1 hak kullanır (oturum başına en fazla 5 sesli takip yanıtı ek hak harcamaz). Ses saklanmaz.
 - **OCR:** Çek/senet tarafları ayrı okunur, yön ve cari çalışma alanının adlarıyla belirlenir (`_shared/documentParties.ts`). Çek bankası ayrı alan, cari vergi no ile de eşleşir, yeni cari firma/kişi olarak açılır.
 - **Model:** `process-document`, `ai-ask`, `generate-insights` varsayılanı `gemini-3.5-flash-lite`, OCR yedeği `gemini-3.8-flash` (2.5 Flash 2026-12-01'de kapanıyor).
 - **Doğrulama:** `scripts/ocr-eval` 28 sentetik belge (yön 25/25, cari 27/28, ort. $0,0045, p50 3,1 sn). `scripts/voice-eval` 30 sentetik Türkçe komut 25/30, tutar 29/29; 5 İngilizce komut. Gerçek cihazda ve gerçek belgelerle TestFlight'ta doğrulanacak.

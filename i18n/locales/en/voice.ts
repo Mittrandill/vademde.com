@@ -26,7 +26,7 @@ export const voice: Messages<typeof tr> = {
   allow: 'Allow',
   permissionDenied: 'Allow microphone access in Settings to use voice entry.',
   unavailable: 'Voice entry is unavailable right now. Try again or enter it manually.',
-  quotaExceeded: 'You have reached this month’s voice entry limit. You can still enter records manually.',
+  quotaExceeded: 'Your monthly scan quota is used up. Voice entry uses the same quota; you can still enter records manually.',
   tooLong: 'The recording was too long. Try a shorter description.',
   foreignAmount: 'You said {{amount}}. Enter the amount in the selected account’s unit.',
   heard: 'I heard',

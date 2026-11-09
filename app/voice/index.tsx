@@ -12,9 +12,9 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
-import * as Crypto from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as Speech from 'expo-speech';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { AiGate } from '@/components/finance/AiGate';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
@@ -28,6 +28,7 @@ import { voiceDraftRoute, type VoiceDraft } from '@/features/voice/route';
 import { useVoiceDraftStore } from '@/features/voice/store';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { getLanguage, t } from '@/i18n';
+import { queryKeys } from '@/services/queryKeys';
 import { useReflowKey } from '@/services/reflow';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useTheme } from '@/theme';
@@ -99,7 +100,8 @@ function VoiceAssistant() {
   const [question, setQuestion] = useState<VoiceQuestion | null>(null);
   const draftRef = useRef<VoiceDraft | null>(null);
   const answeredRef = useRef<string[]>([]);
-  const requestIdRef = useRef<string>(Crypto.randomUUID());
+  const sessionIdRef = useRef<string | undefined>(undefined);
+  const queryClient = useQueryClient();
   const stoppingRef = useRef(false);
   const mountedRef = useRef(true);
   const speechDoneRef = useRef(false);
@@ -169,6 +171,13 @@ function VoiceAssistant() {
   }, [setStoredDraft, speak, stopSpeech]);
 
   const handleResult = useCallback((result: VoiceResult) => {
+    if (result.sessionId) {
+      if (result.sessionId !== sessionIdRef.current) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaceEntitlements(workspaceId) }).catch(() => undefined);
+        queryClient.invalidateQueries({ queryKey: ['ocr-usage'] }).catch(() => undefined);
+      }
+      sessionIdRef.current = result.sessionId;
+    }
     draftRef.current = result.draft;
     answeredRef.current = result.answered;
     setMessage(result.acknowledgement);
@@ -196,7 +205,7 @@ function VoiceAssistant() {
     });
     setQuestion(null);
     setPhase('assembling');
-  }, [speak]);
+  }, [queryClient, speak, workspaceId]);
 
   const fail = useCallback((failure: unknown) => {
     setAssemblyComplete(false);
@@ -239,7 +248,7 @@ function VoiceAssistant() {
       const followUpField = draftRef.current && question?.type === 'voice' ? question.field : undefined;
       const result = await submitVoice({
         workspaceId,
-        requestId: requestIdRef.current,
+        sessionId: sessionIdRef.current,
         audioBase64,
         mimeType: 'audio/mp4',
         durationSeconds,
@@ -266,7 +275,7 @@ function VoiceAssistant() {
     try {
       handleResult(await submitVoice({
         workspaceId,
-        requestId: requestIdRef.current,
+        sessionId: sessionIdRef.current,
         draft: draftRef.current,
         field: question.field,
         value,

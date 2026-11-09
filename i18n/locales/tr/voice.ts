@@ -23,7 +23,7 @@ export const voice = {
   allow: 'İzin ver',
   permissionDenied: 'Sesli kayıt için ayarlardan mikrofon izni verin.',
   unavailable: 'Sesli kayıt şu anda yapılamadı. Tekrar deneyin veya elle girin.',
-  quotaExceeded: 'Bu ayki sesli kayıt limitine ulaştınız. Kayıtları elle girebilirsiniz.',
+  quotaExceeded: 'Aylık tarama kotan doldu. Sesli kayıt da bu kotadan kullanır; kayıtları elle girebilirsin.',
   tooLong: 'Kayıt çok uzun oldu. Daha kısa anlatmayı deneyin.',
   foreignAmount: '{{amount}} söylediniz. Tutarı seçtiğiniz hesabın birimine göre girin.',
   heard: 'Duyduğum',

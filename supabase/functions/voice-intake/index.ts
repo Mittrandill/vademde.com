@@ -24,7 +24,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
 const VOICE_MODEL = Deno.env.get('VOICE_MODEL') ?? 'gemini-3.5-flash-lite';
 const VOICE_FALLBACK_MODEL = Deno.env.get('VOICE_FALLBACK_MODEL') ?? 'gemini-3.8-flash';
-const MONTHLY_LIMIT = Number(Deno.env.get('VOICE_MONTHLY_LIMIT') ?? '300');
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_CLIENT_DATE_DRIFT_MS = 2 * 24 * 60 * 60 * 1000;
 const MAX_AUDIO_BASE64 = 4 * 1024 * 1024;
 const MAX_SECONDS = 65;
 const ALLOWED_MIME = new Set(['audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/wav', 'audio/mpeg']);
@@ -74,7 +75,11 @@ Deno.serve(async (req: Request) => {
   const workspaceId = typeof body.workspaceId === 'string' ? body.workspaceId : null;
   if (!workspaceId) return json({ error: 'bad_request' }, 400);
   const locale: VoiceLocale = body.locale === 'en' ? 'en' : 'tr';
-  const today = typeof body.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.today) ? body.today : new Date().toISOString().slice(0, 10);
+  // İstemci tarihi yalnızca modele verilen bağlamdır (saat dilimi için); kota hesabında kullanılmaz.
+  const clientToday = typeof body.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.today) ? body.today : null;
+  const today = clientToday && Math.abs(Date.parse(`${clientToday}T00:00:00Z`) - Date.now()) <= MAX_CLIENT_DATE_DRIFT_MS
+    ? clientToday
+    : new Date().toISOString().slice(0, 10);
   const answered = Array.isArray(body.answered) ? body.answered.filter((item): item is string => typeof item === 'string').slice(0, 8) : [];
   const field: VoiceField | null = isVoiceField(body.field) ? body.field : null;
   const previous = body.draft && typeof body.draft === 'object' ? (body.draft as VoiceDraft) : null;
@@ -92,8 +97,9 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'ai_unavailable' }, 502);
   }
 
-  const respond = (draft: VoiceDraft, nextAnswered: string[]) =>
+  const respond = (draft: VoiceDraft, nextAnswered: string[], sessionId?: string) =>
     json({
+      sessionId,
       draft,
       answered: nextAnswered,
       question: nextVoiceQuestion(draft, context, nextAnswered, locale),
@@ -112,14 +118,29 @@ Deno.serve(async (req: Request) => {
   if (audio.length > MAX_AUDIO_BASE64 || (audioSeconds !== null && audioSeconds > MAX_SECONDS)) return json({ error: 'audio_too_long' }, 413);
 
   const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const monthStart = `${today.slice(0, 7)}-01T00:00:00Z`;
-  const { data: used, error: usageError } = await service.rpc('ai_usage_count', { p_workspace_id: workspaceId, p_feature: 'voice', p_since: monthStart });
-  if (usageError) console.warn('Sesli kullanım sayısı okunamadı:', usageError.message);
-  else if ((used as number) >= MONTHLY_LIMIT) return json({ error: 'voice_quota_exceeded' }, 429);
-
   const followUp = field && previous ? { field, draft: previous } : null;
   const prompt = buildVoicePrompt(context, followUp);
-  const requestId = typeof body.requestId === 'string' && /^[0-9a-f-]{36}$/i.test(body.requestId) ? body.requestId : crypto.randomUUID();
+
+  // Bir oturum bir OCR hakkı kullanır. Geçerli oturumun takip yanıtı ek hak harcamaz; aksi halde yeni hak ayrılır.
+  let sessionId: string | null = null;
+  if (followUp && typeof body.sessionId === 'string' && UUID_PATTERN.test(body.sessionId)) {
+    const { data: followUpAllowed } = await db.rpc('use_workspace_voice_follow_up', { p_session_id: body.sessionId, p_workspace_id: workspaceId });
+    if (followUpAllowed === true) sessionId = body.sessionId;
+  }
+  const reserved = sessionId === null;
+  if (reserved) {
+    const { data: reservationId, error: reservationError } = await db.rpc('reserve_workspace_voice_ocr', { p_workspace_id: workspaceId });
+    if (reservationError?.message.includes('OCR_QUOTA_EXCEEDED')) return json({ error: 'voice_quota_exceeded' }, 402);
+    if (reservationError?.code === '42501') return json({ error: 'forbidden' }, 403);
+    if (reservationError || !reservationId) return json({ error: 'ai_unavailable' }, 503);
+    sessionId = reservationId as string;
+  }
+  const requestId = sessionId as string;
+  const finishReservation = async (success: boolean) => {
+    if (!reserved) return;
+    const { error } = await service.rpc('finish_workspace_ocr', { p_reservation_id: requestId, p_success: success });
+    if (error) console.warn('Sesli kota rezervasyonu kapatılamadı:', error.message);
+  };
 
   const call = async (model: string, isFallback: boolean): Promise<Record<string, unknown>> => {
     const startedAt = Date.now();
@@ -163,10 +184,12 @@ Deno.serve(async (req: Request) => {
   try {
     raw = await call(VOICE_MODEL, false).catch(() => call(VOICE_FALLBACK_MODEL, true));
   } catch {
+    await finishReservation(false);
     return json({ error: 'ai_unavailable' }, 502);
   }
+  await finishReservation(true);
 
   const parsedDraft = normalizeVoiceDraft(raw, context);
-  if (followUp) return respond(mergeFollowUp(followUp.draft, parsedDraft, followUp.field), [...answered, followUp.field]);
-  return respond(parsedDraft, answered);
+  if (followUp) return respond(mergeFollowUp(followUp.draft, parsedDraft, followUp.field), [...answered, followUp.field], requestId);
+  return respond(parsedDraft, answered, requestId);
 });

@@ -13,6 +13,7 @@ export interface VoiceQuestion {
 }
 
 export interface VoiceResult {
+  sessionId?: string;
   draft: VoiceDraft;
   answered: string[];
   question: VoiceQuestion | null;
@@ -21,7 +22,7 @@ export interface VoiceResult {
 
 interface VoiceRequest {
   workspaceId: string;
-  requestId: string;
+  sessionId?: string;
   audioBase64?: string;
   mimeType?: string;
   durationSeconds?: number;
