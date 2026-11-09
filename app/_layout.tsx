@@ -121,6 +121,7 @@ function AppNavigatorStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workspace-setup" />
         <Stack.Screen name="reset-password" />
+        <Stack.Screen name="voice/index" />
         <Stack.Screen name="assets/index" />
         <Stack.Screen name="assets/new" />
         <Stack.Screen name="assets/[id]" />

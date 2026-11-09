@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { VoiceDraftNotice } from '@/components/voice/VoiceDraftNotice';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useExitGuard } from '@/utils/useExitGuard';
 import { useReflowKey } from '@/services/reflow';
@@ -72,7 +73,7 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; readonly label: string }> =
 export default function NewTransactionScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, assetId, accountId, direction, description, counterpartyId, paymentMethod } = useLocalSearchParams<{
+  const { id, assetId, accountId, direction, description, counterpartyId, paymentMethod, amountMinor, date, categoryId } = useLocalSearchParams<{
     id?: string;
     assetId?: string;
     accountId?: string;
@@ -80,6 +81,10 @@ export default function NewTransactionScreen() {
     description?: string;
     counterpartyId?: string;
     paymentMethod?: string;
+    /** Sesli taslaktan gelen ön doldurma (bkz. features/voice/route.ts). */
+    amountMinor?: string;
+    date?: string;
+    categoryId?: string;
   }>();
   const isEditing = !!id;
 
@@ -126,6 +131,9 @@ export default function NewTransactionScreen() {
       initialDirection={DIRECTIONS.some((d) => d.value === direction) ? (direction as Direction) : undefined}
       initialDescription={typeof description === 'string' ? description : undefined}
       initialCounterpartyId={typeof counterpartyId === 'string' ? counterpartyId : undefined}
+      initialAmountMinor={typeof amountMinor === 'string' && /^\d+$/.test(amountMinor) ? Number(amountMinor) : undefined}
+      initialDate={typeof date === 'string' ? date : undefined}
+      initialCategoryId={typeof categoryId === 'string' ? categoryId : undefined}
       initialPaymentMethod={
         PAYMENT_METHODS.some((m) => m.value === paymentMethod) ? (paymentMethod as PaymentMethod) : undefined
       }
@@ -134,6 +142,9 @@ export default function NewTransactionScreen() {
 }
 
 interface TransactionFormProps {
+  initialAmountMinor?: number;
+  initialDate?: string;
+  initialCategoryId?: string;
   id: string | null;
   initial: Transaction | null;
   /** Hesap detayından "Ek Hesap Faizi Ekle" gibi kısayollarla gelindiğinde hesabı/yönü/açıklamayı önceden doldurur. */
@@ -156,6 +167,9 @@ function TransactionForm({
   initialDescription,
   initialCounterpartyId,
   initialPaymentMethod,
+  initialAmountMinor,
+  initialDate,
+  initialCategoryId,
 }: TransactionFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -170,7 +184,7 @@ function TransactionForm({
     initial?.transfer_to_account_id ?? null
   );
   const [assetId, setAssetId] = useState<string | null>(initial?.asset_id ?? initialAssetId ?? null);
-  const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
+  const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? initialCategoryId ?? null);
   // Sikke birimli hesaplarda (ceyrek_altin vb.) minor = adet'tir; ÷100/×100 uygulanmaz.
   const initialPrecision = getValueUnit(initial?.currency_code).precision;
   const [amount, setAmount] = useState(
@@ -179,10 +193,12 @@ function TransactionForm({
           (initial.amount_minor / 10 ** initialPrecision).toFixed(initialPrecision).replace('.', getInputDecimalSeparator()),
           initialPrecision
         )
-      : ''
+      : initialAmountMinor !== undefined
+        ? formatAmountInput((initialAmountMinor / 100).toFixed(2).replace('.', getInputDecimalSeparator()), 2)
+        : ''
   );
   const [dateStr, setDateStr] = useState(
-    initial ? initial.occurred_at.slice(0, 10) : localIsoDate()
+    initial ? initial.occurred_at.slice(0, 10) : initialDate ?? localIsoDate()
   );
   const [description, setDescription] = useState(initial?.description ?? initialDescription ?? '');
   const [counterpartyId, setCounterpartyId] = useState<string | null>(
@@ -447,6 +463,7 @@ function TransactionForm({
               onPress: () => saveMutation.mutate(),
             }}
           />
+          {!isEditing ? <VoiceDraftNotice onCounterpartyCreated={setCounterpartyId} /> : null}
 
           <View style={{ gap: theme.spacing.md, marginTop: theme.spacing.xs }}>
             {transferOnly ? null : (

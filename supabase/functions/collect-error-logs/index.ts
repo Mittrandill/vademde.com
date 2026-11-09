@@ -1,5 +1,5 @@
-// Üretim hatalarını yönetim paneline taşır (vademde.app /admin → Hata kayıtları). pg_cron 5 dakikada
-// bir çağırır. Loglar Supabase Management API'sinden okunur; yalnızca maskelenmiş metin ve sayılar
+// Üretim hatalarını yönetim paneline taşır (vademde.app /admin → Hata kayıtları). pg_cron saatte bir
+// uyandırır, error_monitor_claim yalnızca 20 saatte bir okumaya izin verir. Loglar Supabase Management API'sinden okunur; yalnızca maskelenmiş metin ve sayılar
 // saklanır, kullanıcı veya finans verisi saklanmaz. Yeni, yeniden açılan ya da ani artan hata
 // yöneticinin cihazlarına push olarak gider.
 // Gerekli secret: VADEMDE_LOGS_TOKEN (Supabase kişisel erişim jetonu; SUPABASE_ öneki yasaktır).

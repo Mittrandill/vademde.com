@@ -8,6 +8,18 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ---
 
+## 1.1.0 — Sesli kayıt ve OCR iyileştirmeleri (2026-11-09)
+
+Durum: **iOS build TestFlight için gönderildi; mağazaya gönderilmedi.** Mikrofon ve ses modülü eklendiği için OTA ile dağıtılamaz.
+
+- **Sesli kayıt:** Merkez + düğmesi Belge tara / Sesle kaydet menüsünü açar. `voice-intake` sesi `gemini-3.5-flash-lite` ile taslağa çevirir, eksik alanları sorar, mevcut formu doldurur. Kaydı kullanıcı yapar. Plus/İşletme, aylık 300 komut (`VOICE_MONTHLY_LIMIT`). Ses saklanmaz.
+- **OCR:** Çek/senet tarafları ayrı okunur, yön ve cari çalışma alanının adlarıyla belirlenir (`_shared/documentParties.ts`). Çek bankası ayrı alan, cari vergi no ile de eşleşir, yeni cari firma/kişi olarak açılır.
+- **Model:** `process-document`, `ai-ask`, `generate-insights` varsayılanı `gemini-3.5-flash-lite`, OCR yedeği `gemini-3.8-flash` (2.5 Flash 2026-12-01'de kapanıyor).
+- **Doğrulama:** `scripts/ocr-eval` 28 sentetik belge (yön 25/25, cari 27/28, ort. $0,0045, p50 3,1 sn). `scripts/voice-eval` 30 sentetik Türkçe komut 25/30, tutar 29/29; 5 İngilizce komut. Gerçek cihazda ve gerçek belgelerle TestFlight'ta doğrulanacak.
+- **Maliyet ölçümü:** `admin_private.ai_usage_costs`. `collect-error-logs` 20 saatte bir okur.
+
+---
+
 ## Supabase — RevenueCat webhook, hesabı olmayan kullanıcı olayları (2026-11-08)
 
 Durum: **`revenuecat-webhook` v10 ACTIVE**, JWT doğrulaması kapalı (webhook secret'ı doğrulanır). Uygulama yayını veya migration yok.
@@ -28,7 +40,7 @@ Durum: **iOS + Android production OTA yayında**; runtime `1.0.9`. Kaynak commit
 - **`27000` (kayıt silme):** Ödemesi olan kayıt silinirken bağlı hareketin silinmesi, silinmekte olan kaydın ilerleme hesabını tetikliyordu. Silinen kayıt için hesaplama atlanır; PGlite üzerinde hata üretilip düzeltme doğrulandı.
 - **`obligations` 406:** Silme başarılı olduktan sonra açık kalan detay ekranı kaydı yeniden soruyordu; silme sonrası sorgu kapatıldı.
 - **`send-cash-alerts` 500 (2026-11-08 09:00):** Kesin neden loglanmamıştı; kodda log yazmadan 500 dönen tek yol profil okuma hatasıdır, istek loglarında başarısız HTTP yoktur, geçici ağ hatası olası görünüyor. Profil okuma bir kez yeniden denenir, hatalar artık loglanır. O günün uyarıları yeniden gönderilmedi.
-- **Hata izleme:** `collect-error-logs` 5 dakikada bir veritabanı, API 5xx ve fonksiyon hatalarını okur; yalnızca maskelenmiş metin ve sayıları `admin_private.error_groups`'a yazar. `vademde.app /admin` → "Hata kayıtları". Yeni, çözülüp geri dönen veya ani artan hatalar admin cihazlarına push gider. Secret: `VADEMDE_LOGS_TOKEN` (Supabase Edge Function secret'larında `SUPABASE_` öneki yasaktır).
+- **Hata izleme:** `collect-error-logs` 20 saatte bir (2026-11-09 öncesi 5 dakikada bir) veritabanı, API 5xx ve fonksiyon hatalarını okur; yalnızca maskelenmiş metin ve sayıları `admin_private.error_groups`'a yazar. `vademde.app /admin` → "Hata kayıtları". Yeni, çözülüp geri dönen veya ani artan hatalar admin cihazlarına push gider. Secret: `VADEMDE_LOGS_TOKEN` (Supabase Edge Function secret'larında `SUPABASE_` öneki yasaktır).
 - **Supabase:** `fix_obligation_delete_self_update` ve `admin_error_monitoring` uygulandı (depoda `20261108120000` ve `20261108121000`); `collect-error-logs` v3 ve `send-cash-alerts` v4 ACTIVE, JWT doğrulaması açık. Toplayıcının Log API okuması canlıda başarılı.
 - Doğrulama: 84 finans ve 25 kart vadesi testi; maskeleme testi; bildirim kuralları ve yetki sınırları PGlite'ta; mobil ve web TypeScript. Admin push'unun gerçek cihaza ulaşması, panelde ilk hata oluşana kadar uçtan uca doğrulanmadı.
 - OTA öncesi yerel `node_modules` eksikti (`expo-build-properties`); `npm ci` ile kilit dosyasına göre kuruldu.

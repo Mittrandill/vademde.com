@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useExitGuard } from '@/utils/useExitGuard';
 import { InstallmentPlanTable } from '@/components/finance/InstallmentPlanTable';
+import { VoiceDraftNotice } from '@/components/voice/VoiceDraftNotice';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useReflowKey } from '@/services/reflow';
 import { AmountField, BottomSheet, Button, Card, DateField, FieldGroup, FormRow, Pressable, Row, SegmentedControl, Stack, Text, TextField } from '@/components/primitives';
@@ -94,7 +95,7 @@ export default function NewObligationScreen() {
   useLanguage();
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, assetId, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam } =
+  const { id, assetId, type, accountId, dueDate, counterpartyId, direction, title: titleParam, amountMinor: amountParam, currency, categoryId, bankCode, installmentCount, notes } =
     useLocalSearchParams<{
     id?: string;
     assetId?: string;
@@ -106,6 +107,12 @@ export default function NewObligationScreen() {
     dueDate?: string;
     counterpartyId?: string;
     direction?: string;
+    /** Sesli taslaktan gelen ön doldurma (bkz. features/voice/route.ts). */
+    currency?: string;
+    categoryId?: string;
+    bankCode?: string;
+    installmentCount?: string;
+    notes?: string;
   }>();
   const isEditing = !!id;
 
@@ -154,6 +161,11 @@ export default function NewObligationScreen() {
       initialDirection={direction === 'payable' || direction === 'receivable' ? direction : undefined}
       initialTitle={typeof titleParam === 'string' ? titleParam : undefined}
       initialAmountMinor={typeof amountParam === 'string' && /^\d+$/.test(amountParam) ? Number(amountParam) : undefined}
+      initialCurrency={typeof currency === 'string' && !isEditing ? currency : undefined}
+      initialCategoryId={typeof categoryId === 'string' ? categoryId : undefined}
+      initialBankCode={typeof bankCode === 'string' ? bankCode : undefined}
+      initialInstallmentCount={typeof installmentCount === 'string' && /^\d+$/.test(installmentCount) ? installmentCount : undefined}
+      initialNotes={typeof notes === 'string' ? notes : undefined}
     />
   );
 }
@@ -179,6 +191,11 @@ interface ObligationFormProps {
   /** Aynı kısayollarda borç/alacak yönünü önceden doldurur. */
   initialDirection?: Direction;
   initialTitle?: string;
+  initialCurrency?: string;
+  initialCategoryId?: string;
+  initialBankCode?: string;
+  initialInstallmentCount?: string;
+  initialNotes?: string;
   /** TRY kuruşu; yalnızca yeni kayıtta ön doldurma. */
   initialAmountMinor?: number;
 }
@@ -196,6 +213,11 @@ function ObligationForm({
   initialDirection,
   initialTitle,
   initialAmountMinor,
+  initialCurrency,
+  initialCategoryId,
+  initialBankCode,
+  initialInstallmentCount,
+  initialNotes,
 }: ObligationFormProps) {
   useLanguage();
   const theme = useTheme();
@@ -215,7 +237,7 @@ function ObligationForm({
   const [documentType, setDocumentType] = useState<string | null>(
     initial?.document_type ?? initialDocumentType ?? null
   );
-  const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? null);
+  const [bankCode, setBankCode] = useState<string | null>(initial?.bank_code ?? initialBankCode ?? null);
   const [serviceCode, setServiceCode] = useState<string | null>(initial?.service_code ?? null);
   // Aboneliklere özel iki isteğe bağlı alan; NULL billing_period bugünkü aylık plandır.
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>(
@@ -229,8 +251,8 @@ function ObligationForm({
   // değiştirilemez; edit modda initial.currency_code sabit kalır (aşağıda salt-okunur
   // gösterilir). Yeni kayıtta workspace'in varsayılan birimi hazır olana kadar 'TRY' ile
   // başlar, aşağıdaki efekt bir kez gerçek varsayımla günceller.
-  const [valueUnitCode, setValueUnitCode] = useState(initial?.currency_code ?? 'TRY');
-  const [valueUnitDefaulted, setValueUnitDefaulted] = useState(!!initial);
+  const [valueUnitCode, setValueUnitCode] = useState(initial?.currency_code ?? initialCurrency ?? 'TRY');
+  const [valueUnitDefaulted, setValueUnitDefaulted] = useState(!!initial || !!initialCurrency);
   const [totalAmount, setTotalAmount] = useState(() => {
     if (!initial) {
       return initialAmountMinor ? formatAmountInput((initialAmountMinor / 100).toFixed(2).replace('.', getInputDecimalSeparator()), 2) : '';
@@ -249,8 +271,8 @@ function ObligationForm({
   );
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
   const [assetId, setAssetId] = useState<string | null>(initial?.asset_id ?? initialAssetId ?? null);
-  const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
-  const [installmentCountStr, setInstallmentCountStr] = useState('1');
+  const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? initialCategoryId ?? null);
+  const [installmentCountStr, setInstallmentCountStr] = useState(initialInstallmentCount ?? '1');
   const [interestRateStr, setInterestRateStr] = useState('');
   // TUTAR alanının anlamı: 'total' → girilen tutar toplam borçtur ve vadelere bölünür
   // (kredi, çek, senet…); 'per_installment' → girilen tutar HER VADENİN tutarıdır ve
@@ -730,6 +752,7 @@ function ObligationForm({
         asset_id: assetId,
         bank_code: bankCodeForType,
         service_code: serviceCodeForType,
+        notes: initialNotes ?? null,
         billing_period: isSubscriptionType ? billingPeriod : null,
         trial_ends_on: isSubscriptionType && /^\d{4}-\d{2}-\d{2}$/.test(trialEndsOn.trim()) ? trialEndsOn.trim() : null,
       });
@@ -1000,6 +1023,7 @@ function ObligationForm({
               title={isEditing ? t('obligations.form.edit') : t('obligations.form.newRecord')}
               leftLabel={{ label: t('obligations.form.cancel'), onPress: () => router.back() }}
             />
+            {!isEditing ? <VoiceDraftNotice onCounterpartyCreated={setCounterpartyId} /> : null}
 
             {!isEditing ? (
               <ScanPromptBanner description={t('obligations.form.scanHelp')} />

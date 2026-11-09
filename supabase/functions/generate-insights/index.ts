@@ -4,13 +4,14 @@
 // Sorgular kullanıcının JWT'siyle (RLS) yapılır; yazma yalnızca service role ile ve yalnızca
 // üyelik + Plus plan doğrulandıktan sonra. Gemini anahtarı sunucuda kalır (process-document ile aynı secret).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { recordAiUsage } from '../_shared/aiUsage.ts';
 import { userLocale, localeTag, formatTry, type Locale } from '../_shared/locale.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash-lite';
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -328,7 +329,11 @@ async function rateImpact(db: ReturnType<typeof createClient<any>>, workspaceId:
 }
 
 // Gemini'den kısa, doğal Türkçe başlık/gövde ister; sayı doğrulaması başarısızsa null döner.
-async function polish(facts: Fact[], locale: Locale): Promise<Map<string, { title: string; body: string }> | null> {
+async function polish(
+  facts: Fact[],
+  locale: Locale,
+  track: (ok: boolean, httpStatus: number | null, durationMs: number, response?: unknown) => Promise<void>
+): Promise<Map<string, { title: string; body: string }> | null> {
   if (facts.length === 0) return new Map();
   const prompt = `Aşağıdaki finansal olguları kullanıcıya kısa, sade, yargılamayan ${locale === 'en' ? 'İngilizce' : 'Türkçe'} öneri metnine çevir. İsimler dışındaki tüm metin bu dilde olmalı.
 KURALLAR: Yalnızca verilen olguları ve rakamları kullan; hiçbir rakam uydurma veya değiştirme. Yatırım, kredi veya hukuki tavsiye verme.
@@ -336,6 +341,8 @@ Başlık en fazla 60 karakter, gövde en fazla 2 cümle. Olgulardaki metinleri t
 OLGULAR:
 ${JSON.stringify(facts.map((f) => ({ key: f.key, facts: f.facts })))}`;
 
+  const startedAt = Date.now();
+  let tracked = false;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -362,8 +369,15 @@ ${JSON.stringify(facts.map((f) => ({ key: f.key, facts: f.facts })))}`;
       }
     );
     clearTimeout(timeout);
-    if (!response.ok) return null;
-    const out = JSON.parse((await response.json()).candidates?.[0]?.content?.parts?.[0]?.text ?? 'null');
+    if (!response.ok) {
+      await track(false, response.status, Date.now() - startedAt);
+      return null;
+    }
+    const geminiJson = await response.json();
+    const outputText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;
+    tracked = true;
+    await track(Boolean(outputText), response.status, Date.now() - startedAt, geminiJson);
+    const out = JSON.parse(outputText ?? 'null');
     if (!Array.isArray(out)) return null;
 
     const result = new Map<string, { title: string; body: string }>();
@@ -378,6 +392,7 @@ ${JSON.stringify(facts.map((f) => ({ key: f.key, facts: f.facts })))}`;
     }
     return result;
   } catch {
+    if (!tracked) await track(false, null, Date.now() - startedAt);
     return null;
   }
 }
@@ -434,7 +449,20 @@ Deno.serve(async (req: Request) => {
   const fresh = facts.filter((f) => !existingKeys.has(`${f.key}:${locale}`) && !(locale === 'tr' && existingKeys.has(f.key)));
   if (fresh.length === 0) return json({ created: 0 });
 
-  const polished = await polish(fresh, locale);
+  const usageRequestId = crypto.randomUUID();
+  const polished = await polish(fresh, locale, (ok, httpStatus, durationMs, response) =>
+    recordAiUsage(service, {
+      feature: 'insights',
+      workspaceId: workspaceId as string,
+      plan: entitlements.plan,
+      requestId: usageRequestId,
+      model: GEMINI_MODEL,
+      ok,
+      httpStatus,
+      durationMs,
+      response,
+    })
+  );
   const rows = fresh.map((f) => ({
     workspace_id: workspaceId,
     kind: f.kind,

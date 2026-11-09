@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 
+import { router } from 'expo-router';
+
+import { ActionSheet } from '@/components/primitives';
 import { useTheme } from '@/theme';
 import { useQuickAddStore } from '@/store/quickAddStore';
 import { t } from '@/i18n';
@@ -10,7 +14,7 @@ import { t } from '@/i18n';
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   index: 'home',
   hareketler: 'swap-horizontal',
-  tara: 'scan',
+  tara: 'add',
   takvim: 'calendar',
   'daha-fazla': 'grid',
 };
@@ -34,6 +38,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const showQuickAdd = useQuickAddStore((s) => s.show);
+  const [captureMenuOpen, setCaptureMenuOpen] = useState(false);
 
   const taraIndex = state.routes.findIndex((route) => route.name === 'tara');
   const taraRoute = taraIndex >= 0 ? state.routes[taraIndex] : null;
@@ -143,9 +148,9 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={LABELS.tara}
+            accessibilityLabel={t('voice.addA11y')}
             hitSlop={8}
-            onPress={() => navigateTo(taraRoute, state.index === taraIndex)}
+            onPress={() => setCaptureMenuOpen(true)}
             // Uzun basış: Hızlı ekle sheet'i.
             onLongPress={showQuickAdd}
             accessibilityHint={t('ui.quickAddHint')}
@@ -168,6 +173,29 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             <Ionicons name={ICONS.tara} size={26} color={theme.colors.brandPrimaryText} />
           </Pressable>
         </View>
+      ) : null}
+      {taraRoute ? (
+        <ActionSheet
+          visible={captureMenuOpen}
+          title={t('voice.menuTitle')}
+          onClose={() => setCaptureMenuOpen(false)}
+          options={[
+            {
+              key: 'scan',
+              icon: 'scan-outline',
+              label: t('voice.menuScan'),
+              description: t('voice.menuScanHint'),
+              onPress: () => navigateTo(taraRoute, state.index === taraIndex),
+            },
+            {
+              key: 'voice',
+              icon: 'mic-outline',
+              label: t('voice.menuVoice'),
+              description: t('voice.menuVoiceHint'),
+              onPress: () => router.push('/voice'),
+            },
+          ]}
+        />
       ) : null}
     </View>
   );

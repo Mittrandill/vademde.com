@@ -41,6 +41,7 @@ import { subscriptionsList } from './subscriptionsList';
 import { support } from './support';
 import { transactions } from './transactions';
 import { ui } from './ui';
+import { voice } from './voice';
 import { widgets } from './widgets';
 import { workspace } from './workspace';
 
@@ -86,6 +87,7 @@ export const en: Messages<typeof tr> = {
   support,
   transactions,
   ui,
+  voice,
   widgets,
   workspace,
 };

@@ -21,11 +21,11 @@ import {
 } from '@/features/documents/api';
 import { createAccount, listAccounts } from '@/features/accounts/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
+import { guessCounterpartyType, matchCounterparty } from '@/features/counterparties/match';
 import { recordPayment } from '@/features/payments/api';
 import { createTransaction } from '@/features/transactions/api';
 import {
   findReceiptMatches,
-  normalizeName,
   useDocumentArchiveAccess,
   type ReceiptMatch,
 } from '@/features/receipts/api';
@@ -201,19 +201,8 @@ export default function ReceiptResultScreen() {
   useEffect(() => {
     if (!counterpartyName || !counterpartiesQuery.isSuccess || counterpartyResolved) return;
     setCounterpartyResolved(true);
-    const target = normalizeName(counterpartyName);
-    if (!target) return;
-    const exact = counterpartiesQuery.data.find((c) => normalizeName(c.name) === target);
-    if (exact) {
-      setCounterpartyId(exact.id);
-      return;
-    }
-    if (target.length < 3) return;
-    const similar = counterpartiesQuery.data.filter((c) => {
-      const normalizedName = normalizeName(c.name);
-      return normalizedName.length >= 3 && (normalizedName.includes(target) || target.includes(normalizedName));
-    });
-    if (similar.length === 1) setCounterpartyId(similar[0]!.id);
+    const matchedId = matchCounterparty({ name: counterpartyName }, counterpartiesQuery.data);
+    if (matchedId) setCounterpartyId(matchedId);
   }, [counterpartyName, counterpartiesQuery.isSuccess, counterpartiesQuery.data, counterpartyResolved]);
 
   const matchesQuery = useQuery({
@@ -299,7 +288,7 @@ export default function ReceiptResultScreen() {
         const created = await createCounterparty({
           workspace_id: activeWorkspaceId,
           name: counterpartyName.trim(),
-          type: 'individual',
+          type: guessCounterpartyType(counterpartyName),
         });
         resolvedCounterpartyId = created.id;
         queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });

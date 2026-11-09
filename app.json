@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vademde",
     "slug": "vademde",
-    "version": "1.0.9",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "vademde",
@@ -174,7 +174,13 @@
           }
         }
       ],
-      "./plugins/withAndroidOptimization"
+      "./plugins/withAndroidOptimization",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Kayıtlarınızı konuşarak oluşturabilmeniz için mikrofona erişim gerekir."
+        }
+      ]
     ],
     "extra": {
       "router": {},

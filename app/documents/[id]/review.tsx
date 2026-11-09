@@ -32,6 +32,7 @@ import {
 import { createAccount, listAccounts } from '@/features/accounts/api';
 import { listCategories, createCategory } from '@/features/categories/api';
 import { listCounterparties, createCounterparty } from '@/features/counterparties/api';
+import { guessCounterpartyType, matchCounterparty } from '@/features/counterparties/match';
 import {
   ACTIVE_OBLIGATION_STATUSES,
   createObligation,
@@ -97,18 +98,6 @@ const CURRENCY_CODES = new Set(CURRENCY_OPTIONS.map((o) => o.key));
 // farklarını yok sayarak karşılaştırılabilir hale getirir — "Migros Ticaret A.Ş." OCR
 // metniyle kayıtlı "Migros" kişi/firmasını eşleştirebilmek için (bkz. docs/04-ocr-belge-isleme.md
 // §6.6 "isim benzerliği", aşağıdaki kişi/firma eşleştirme efekti).
-const LEGAL_SUFFIX_PATTERN =
-  /\b(a\.?ş\.?|ltd\.?|şti\.?|limited|anonim|tic\.?|ticaret|san\.?|sanayi|paz\.?|pazarlama|co\.?|inc\.?)\b/g;
-
-function normalizeCounterpartyName(name: string): string {
-  return name
-    .toLocaleLowerCase('tr-TR')
-    .replace(/[.,]/g, ' ')
-    .replace(LEGAL_SUFFIX_PATTERN, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 // OCR'dan gelen tarihler her zaman geçerli ISO olmayabiliyor (model 'YYYY-AA-GG' yerine
 // serbest metin döndürebilir, kullanıcı da alanı elle düzenleyebilir). new Date(bozuk)
 // → Invalid Date → .toISOString() RangeError fırlatır ve onay akışının tamamını düşürürdü;
@@ -343,13 +332,17 @@ export default function DocumentReviewScreen() {
           interestRatePercent?: number | null;
         };
         card?: { bankName?: string | null; cardLastFourDigits?: string | null; statementDate?: string | null };
+        instrument?: { bankName?: string | null };
       } | null;
       // Gemini prompt'u installmentPlan/cardStatement.bankName alanını doldurmayı her zaman
       // garanti etmiyor, ama bu iki türde "kişi/firma" olarak okunan counterparty_name aslında
       // zaten bankanın adıdır (bkz. aşağıdaki COUNTERPARTY_LESS_DOCUMENT_TYPES efekti) ve BAŞLIK
       // bunu her zaman kullanır (bkz. altdaki setTitle). Yapılandırılmış alan boşsa aynı isme
       // buradan da düşülür — aksi halde başlıkta görünen banka adı BANKA alanıyla eşleşmiyordu.
-      const ocrBankName = summary?.loan?.bankName ?? summary?.card?.bankName ?? document.counterparty_name ?? null;
+      // Çekte counterparty_name banka değil keşidecidir; banka adı ayrı alandan okunur.
+      const ocrBankName = document.document_type === 'cek'
+        ? summary?.instrument?.bankName ?? null
+        : summary?.loan?.bankName ?? summary?.card?.bankName ?? document.counterparty_name ?? null;
       setExtractedBankName(ocrBankName);
 
       if (summary?.card?.cardLastFourDigits) setCardLastFourFromOcr(summary.card.cardLastFourDigits);
@@ -423,25 +416,12 @@ export default function DocumentReviewScreen() {
     }
     setCounterpartyResolved(true);
 
-    const normalizedTarget = normalizeCounterpartyName(document.counterparty_name);
-    if (!normalizedTarget) return;
-    // Önce tam (unvan eki/noktalama farkı yok sayılarak) eşleşme aranır; yoksa "Migros
-    // Ticaret A.Ş." OCR'ı ile kayıtlı "Migros" gibi bir kısmi/benzer eşleşme denenir — ama
-    // yalnızca TEK bir aday varsa otomatik seçilir; birden fazla belirsiz aday varsa yanlış
-    // birleştirme riskine girmemek için hiçbiri seçilmez, kullanıcı elle seçer.
-    const exact = counterpartiesQuery.data.find(
-      (c) => normalizeCounterpartyName(c.name) === normalizedTarget
+    const summary = document.extracted_summary as { counterpartyTaxNumber?: string | null } | null;
+    const matchedId = matchCounterparty(
+      { name: document.counterparty_name, taxNumber: summary?.counterpartyTaxNumber },
+      counterpartiesQuery.data
     );
-    if (exact) {
-      setCounterpartyId(exact.id);
-      return;
-    }
-    if (normalizedTarget.length < 3) return;
-    const similar = counterpartiesQuery.data.filter((c) => {
-      const normalizedName = normalizeCounterpartyName(c.name);
-      return normalizedName.length >= 3 && (normalizedName.includes(normalizedTarget) || normalizedTarget.includes(normalizedName));
-    });
-    if (similar.length === 1) setCounterpartyId(similar[0]!.id);
+    if (matchedId) setCounterpartyId(matchedId);
   }, [documentQuery.data, counterpartiesQuery.isSuccess, counterpartiesQuery.data, counterpartyResolved]);
 
   // Kredi kartı ekstresi son 4 hane ↔ mevcut kredi kartı hesabı eşleştirmesi (bkz. yukarıdaki
@@ -723,7 +703,8 @@ export default function DocumentReviewScreen() {
         const created = existing ?? await createCounterparty({
           workspace_id: activeWorkspaceId,
           name: rawCounterpartyName,
-          type: 'individual',
+          type: guessCounterpartyType(rawCounterpartyName),
+          tax_number: (documentQuery.data?.extracted_summary as { counterpartyTaxNumber?: string | null } | null)?.counterpartyTaxNumber ?? null,
         });
         resolvedCounterpartyId = created.id;
         queryClient.invalidateQueries({ queryKey: queryKeys.counterparties(activeWorkspaceId) });

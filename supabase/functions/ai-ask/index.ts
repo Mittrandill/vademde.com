@@ -5,11 +5,14 @@
 // Gemini anahtarı sunucuda kalır (process-document ile aynı secret). Plus plan kapısı vardır.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { userLocale, localeTag, formatTry } from '../_shared/locale.ts';
+import { recordAiUsage } from '../_shared/aiUsage.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+// Yalnızca maliyet ölçümü (record_ai_usage) için; finans verisine bu istemciyle erişilmez.
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash-lite';
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -145,6 +148,20 @@ ${JSON.stringify(context)}
 SORU: ${JSON.stringify(question)}`;
 
   let parsed: { answer?: string; period?: Period } | null = null;
+  const startedAt = Date.now();
+  let tracked = false;
+  const track = (ok: boolean, httpStatus: number | null, response?: unknown) =>
+    recordAiUsage(createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY), {
+      feature: 'ask',
+      workspaceId: workspaceId as string,
+      plan: entitlements.plan,
+      requestId: crypto.randomUUID(),
+      model: GEMINI_MODEL,
+      ok,
+      httpStatus,
+      durationMs: Date.now() - startedAt,
+      response,
+    });
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45_000);
@@ -171,9 +188,16 @@ SORU: ${JSON.stringify(question)}`;
       }
     );
     clearTimeout(timeout);
-    if (!response.ok) return json({ error: 'ai_unavailable' }, 502);
-    parsed = JSON.parse((await response.json()).candidates?.[0]?.content?.parts?.[0]?.text ?? 'null');
+    if (!response.ok) {
+      await track(false, response.status);
+      return json({ error: 'ai_unavailable' }, 502);
+    }
+    const geminiJson = await response.json();
+    tracked = true;
+    await track(Boolean(geminiJson.candidates?.[0]?.content?.parts?.[0]?.text), response.status, geminiJson);
+    parsed = JSON.parse(geminiJson.candidates?.[0]?.content?.parts?.[0]?.text ?? 'null');
   } catch {
+    if (!tracked) await track(false, null);
     return json({ error: 'ai_unavailable' }, 502);
   }
   if (!parsed?.answer) return json({ error: 'ai_unavailable' }, 502);

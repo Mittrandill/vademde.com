@@ -4,21 +4,21 @@
 // docs/06-teknik-mimari.md §10.3 — Gemini API anahtarı istemcide bulunmaz,
 // OCR işi bu Edge Function üzerinden yürütülür.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { recordAiUsage } from '../_shared/aiUsage.ts';
+import { resolveDocumentParties } from '../_shared/documentParties.ts';
 import { categoryNameVariants } from '../_shared/categoryNames.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
-// gemini-2.5-flash, gemini-3.5-flash'a göre ~4-4.5x daha ucuz (input $0.30 vs $1.50,
-// output $2.50 vs $9.00 / 1M token) ve responseSchema zorlaması sayesinde çoğu belgede
-// yeterli. gemini-3.5-flash-lite aynı fiyatla A/B test edilebilir — bu env var'ı
-// değiştirmek yeterli, kod değişikliği gerekmez.
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+// 2.5 Flash 2026-12-01'de kapanıyor. 3.5 Flash-Lite, scripts/ocr-eval karşılaştırmasında aynı
+// doğrulukla yaklaşık yarı maliyet ve 3 kat hız verdi. Model bu env var ile değiştirilebilir.
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash-lite';
 // Primary model katı bir hatayla (bozuk JSON, boş çıktı, HTTP hatası) başarısız olursa
 // tek seferlik denenir. Yalnızca gerçekten zor/sorunlu belgelerde tetiklenmesi beklenir;
 // tetiklenme oranı document_extractions.model üzerinden izlenmelidir.
-const GEMINI_FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') ?? 'gemini-3.5-flash';
+const GEMINI_FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') ?? 'gemini-3.8-flash';
 
 // Gemini inline_data ile gönderilen istek toplam ~20 MB ile sınırlıdır; base64 ham dosyayı
 // ~%33 şişirir, ayrıca prompt + şema da yer kaplar. Çok sayfalı ekstre bu sınırı aşınca
@@ -189,6 +189,16 @@ const RESPONSE_SCHEMA = {
         transactionDateTime: { type: 'STRING', nullable: true },
       },
     },
+    // Çek ve senedin tarafları ayrı okunur; yön ve cariyi documentParties.ts belirler.
+    instrumentDetails: {
+      type: 'OBJECT',
+      nullable: true,
+      properties: {
+        bankName: { type: 'STRING', nullable: true },
+        payerName: { type: 'STRING', nullable: true },
+        payeeName: { type: 'STRING', nullable: true },
+      },
+    },
     // docs §7.5 — fatura özel alanları.
     invoiceDetails: {
       type: 'OBJECT',
@@ -235,12 +245,14 @@ Genel kurallar:
 Belge türüne özel kurallar:
 - documentType "cek" ise: ÇEKİ DÜZENLEYEN/İMZALAYAN/KAŞELEYEN taraf (hesap sahibi, "keşideci") ÖDEMEYİ YAPACAK taraftır — borçludur. "___ emrine ödeyiniz" ibaresinden SONRA EL YAZISIYLA yazılan isim ise ÖDEMEYİ ALACAK taraftır (lehtar/alacaklı) — bu iki ismi ASLA birbirine karıştırma. Belgeyi tarayan kullanıcı, fiziksel çek genellikle tahsil edecek kişide bulunduğu için varsayılan olarak LEHTAR (alacaklı) kabul edilir: direction'ı "receivable" yap ve counterpartyName alanına KEŞİDECİNİN adını (imza/kaşe/hesap sahibi bilgisi, "emrine"deki el yazısı isim DEĞİL) yaz. Belgede kullanıcının kendi imzası/kaşesi keşideci olarak görünüyorsa (yani kullanıcı çeki kendisi düzenlemişse) bunun yerine direction "payable", counterpartyName ise "emrine" kısmındaki lehtar adı olmalıdır — ama bu yalnızca kullanıcının kendi adı/işletmesi keşideci tarafında açıkça görünüyorsa geçerlidir, aksi halde varsayılan (receivable + keşideci adı) kullanılır. Kullanıcı yön ve tarafı onay ekranında düzeltebilir.
 - documentType "senet" ise aynı ayrım geçerlidir: senedi İMZALAYAN taraf borçludur (ödeyecek), senette adı geçen alacaklı ise tahsil edecek taraftır. Aynı varsayım: tarayan kullanıcı genellikle alacaklıdır (direction "receivable"), counterpartyName borçlunun adıdır — kullanıcının kendisi borçlu tarafında açıkça görünmedikçe.
+- documentType "cek" ise instrumentDetails alanını doldur: bankName çeki basan bankadır (hesap sahibi veya lehtar değil); payerName keşidecidir; payeeName "emrine" ifadesinin yanındaki lehtardır. Tarafları önce konuma ve etikete göre ayır: "Keşideci", "Hesap Sahibi", imza/kaşe bölgesindeki ad payerName; "emrine ödeyiniz" yanındaki ad payeeName. Genelde keşideci bilgisayar yazısıyla basılı, lehtar el yazısıyladır, ama lehtar da basılı olabilir; yazı tipi yalnızca destekleyici işarettir. Okuyamadığın adı tahmin etme, null bırak.
+- documentType "senet" ise instrumentDetails alanını doldur: payerName senedi imzalayan borçlu, payeeName alacaklıdır; bankName null kalır.
 - documentType "kredi" ise installmentPlan alanını doldur: her taksit satırı için vade, anapara, faiz, vergi, taksit tutarı ve kalan anapara. installmentPlan.totalRepayment toplam geri ödemedir, totalAmount kredi anaparasıdır. Belgede krediyi veren bankanın adı geçiyorsa (logo, başlık, "... Bankası A.Ş." ibaresi vb.) bunu HEM installmentPlan.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz — kredide "kişi/firma" tarafı zaten bankanın kendisidir, bu iki alan farklı bankalar veya biri dolu diğeri boş olacak şekilde ASLA tutarsız olmamalı.
 - documentType "kredi_karti_ekstresi" ise cardStatement alanını doldur: dönem borcu totalAmount'a, asgari ödeme minimumPayment'a yazılır; işlem satırlarını transactions dizisine ekle. Her satıra transactionType ata: normal alışveriş "purchase"; "ÖDEME", "KART ÖDEMESİ", "TAHSİLAT", "ÖDEME - TEŞEKKÜRLER" benzeri geçmiş dönem borç kapatma satırları "payment"; işyeri/ürün iadesi "refund"; üyelik/yıllık kart/komisyon/BSMV gibi ücretler "fee"; akdi/gecikme faizi "interest"; nakit çekim/avans "cash_advance"; güvenle ayıramadığın satır "unknown". Ödeme ve iadeleri ASLA purchase olarak sınıflandırma. Her purchase/fee/interest/cash_advance satırının category alanına, işyeri adına bakarak (ör. "STARBUCKS" -> kafe, "SHELL"/"OPET" -> yakıt, "MIGROS"/"A101" -> market, "NETFLIX"/"SPOTIFY" -> abonelik, "TURKCELL" -> telefon, "TRENDYOL"/"HEPSIBURADA" -> alışveriş, eczane -> sağlık, kart aidatı/BSMV/faiz -> banka/kart ücretleri) prompt sonunda verilen KATEGORİ LİSTESİNDEN en uygun adı BİREBİR yaz; listede uygun olan yoksa veya işyerini tanımıyorsan null bırak. payment ve refund satırlarında category null olsun. Satır amount değerlerini işaret kullanmadan pozitif sayı döndür; yön transactionType ile belirlenir. Ekstrelerde tutarlar sık sık binlik ayıraçlı yazılır ("1.250,75") — ayıraçları ondalık sanma. dueDate ekstrenin SON ÖDEME TARİHİDİR (kesim/ekstre tarihi değil) — bu tarih, uygulamanın hangi ayın ekstresi olduğunu otomatik belirlemesi için kullanılır, bu yüzden doğru tarih alanının seçilmesi kritiktir; kesim tarihiyle karıştırma. Kesim tarihi varsa (statementDate alanı) onu cardStatement.statementDate'e yaz. Ekstreyi veren bankanın adını HEM cardStatement.bankName HEM DE counterpartyName alanına, birebir aynı şekilde yaz (kredi kartı ekstresinde de "kişi/firma" tarafı bankadır).
-- documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur; counterpartyName alanına SATICI (invoiceDetails.sellerName ile birebir aynı) adını yaz — alıcı değil.
+- documentType "fatura" ise invoiceDetails ve lineItems alanlarını doldur; counterpartyName alanına SATICI (invoiceDetails.sellerName ile birebir aynı) adını yaz — alıcı değil. invoiceDetails.buyerName alanına alıcıyı yaz. Fatura veya abonelik faturasında üzerinde açıkça "ödendi", "tahsil edildi" ya da ödeme kaydı yoksa direction "expense" değil "payable" olmalıdır.
 - documentType "makbuz_fis" ise lineItems alanını doldur (varsa); counterpartyName alanına fişi/makbuzu düzenleyen İŞLETMENİN (market, mağaza, restoran vb. — fişin başlığında/kaşesinde geçen ad) adını yaz, alıcı/müşteri değil.
 - documentType "banka_dekontu" ise receiptDetails alanını doldur: bankName dekontu düzenleyen banka; senderName/senderIban parayı GÖNDEREN (hesabından çıkan) taraf; recipientName/recipientIban parayı ALAN taraf; transferType havale/eft/fast (belirtilmemişse "diger"); referenceNo dekontun referans/işlem/sıra numarası; description gönderim açıklaması; fee varsa işlem masrafı (ana para biriminde); transactionDateTime işlem tarihi ve saati (ISO 8601, saat yoksa yalnızca tarih). totalAmount gönderilen tutardır (masraf HARİÇ). direction: dekont gerçekleşmiş bir para hareketidir; belgeyi tarayan kullanıcının parayı GÖNDEREN taraf olduğu varsayılır ve direction "expense" olur; kullanıcının parayı ALDIĞI belli ise (alıcı olarak kendi adı/IBAN'ı görünüyorsa) "income". Hesaplar arası kendi hesapları arasındaki transferde "transfer". counterpartyName karşı tarafın adıdır (gönderen değil alıcı; kullanıcı alıcıysa gönderen). Dekont bir borç DEĞİLDİR: dueDate'i null bırak ve issueDate'e işlem tarihini yaz. Bu bir dekonttur, makbuz/fiş veya fatura ile karıştırma: "gönderen", "alıcı", "IBAN", "EFT/Havale/FAST", "referans no" ibareleri dekonta işaret eder.
-- Diğer türlerde installmentPlan, cardStatement, lineItems, invoiceDetails, receiptDetails alanlarını null/boş bırak.
+- Diğer türlerde installmentPlan, cardStatement, lineItems, invoiceDetails, receiptDetails, instrumentDetails alanlarını null/boş bırak.
 - Yalnızca şemaya uyan JSON döndür, başka açıklama ekleme.`;
 
 interface ProcessRequest {
@@ -301,9 +313,18 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // Tek bir Gemini generateContent çağrısını yürütür; timeout, HTTP hata, boş çıktı ve
 // bozuk JSON durumlarında fırlatır. runProcessing bunu önce primary sonra (gerekirse)
 // fallback modeliyle çağırır — bkz. GEMINI_FALLBACK_MODEL notu yukarıda.
-async function callGemini(model: string, mimeType: string, base64Data: string, promptSuffix = ''): Promise<any> {
+type TrackAttempt = (result: { ok: boolean; httpStatus: number | null; durationMs: number; response?: unknown }) => Promise<void>;
+
+async function callGemini(
+  model: string,
+  mimeType: string,
+  base64Data: string,
+  promptSuffix: string,
+  track: TrackAttempt
+): Promise<any> {
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => abortController.abort(), GEMINI_TIMEOUT_MS);
+  const startedAt = Date.now();
   let geminiResponse: Response;
   try {
     geminiResponse = await fetch(
@@ -329,6 +350,7 @@ async function callGemini(model: string, mimeType: string, base64Data: string, p
       }
     );
   } catch (fetchError) {
+    await track({ ok: false, httpStatus: null, durationMs: Date.now() - startedAt });
     if (fetchError instanceof Error && fetchError.name === 'AbortError') {
       throw new Error('Belge analizi zaman aşımına uğradı. Lütfen tekrar deneyin veya daha küçük bir belge yükleyin.');
     }
@@ -338,16 +360,24 @@ async function callGemini(model: string, mimeType: string, base64Data: string, p
   }
 
   if (!geminiResponse.ok) {
+    await track({ ok: false, httpStatus: geminiResponse.status, durationMs: Date.now() - startedAt });
     throw new Error(`Gemini API hatası: ${geminiResponse.status} ${await geminiResponse.text()}`);
   }
 
   const geminiJson = await geminiResponse.json();
+  const durationMs = Date.now() - startedAt;
   const outputText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!outputText) throw new Error('Gemini yanıtı boş');
+  if (!outputText) {
+    await track({ ok: false, httpStatus: geminiResponse.status, durationMs, response: geminiJson });
+    throw new Error('Gemini yanıtı boş');
+  }
 
   try {
-    return JSON.parse(outputText);
+    const parsed = JSON.parse(outputText);
+    await track({ ok: true, httpStatus: geminiResponse.status, durationMs, response: geminiJson });
+    return parsed;
   } catch {
+    await track({ ok: false, httpStatus: geminiResponse.status, durationMs, response: geminiJson });
     // Model bazen (özellikle uzun ekstrelerde MAX_TOKENS ile kesilince) geçersiz/yarım JSON
     // döndürebiliyor; korumasız JSON.parse burada throw edip belgeyi genel 500 ile bozuyordu.
     throw new Error('Belge okunamadı: analiz sonucu beklenen biçimde değil. Lütfen tekrar deneyin.');
@@ -565,15 +595,26 @@ Deno.serve(async (req: Request) => {
     // GEMINI_FALLBACK_MODEL notu.
     let parsed: any;
     let modelUsed = GEMINI_MODEL;
+    const usageRequestId = crypto.randomUUID();
+    const trackAttempt = (model: string, isFallback: boolean): TrackAttempt => (result) =>
+      recordAiUsage(adminClient, {
+        ...result,
+        feature: 'ocr',
+        workspaceId: document.workspace_id,
+        plan: entitlements.plan,
+        requestId: usageRequestId,
+        model,
+        isFallback,
+      });
     try {
-      parsed = await callGemini(GEMINI_MODEL, document.mime_type, base64, categoryPrompt);
+      parsed = await callGemini(GEMINI_MODEL, document.mime_type, base64, categoryPrompt, trackAttempt(GEMINI_MODEL, false));
     } catch (primaryError) {
       console.warn(
         `Primary model (${GEMINI_MODEL}) başarısız, fallback deneniyor (${GEMINI_FALLBACK_MODEL}):`,
         primaryError instanceof Error ? primaryError.message : primaryError
       );
       modelUsed = GEMINI_FALLBACK_MODEL;
-      parsed = await callGemini(GEMINI_FALLBACK_MODEL, document.mime_type, base64, categoryPrompt);
+      parsed = await callGemini(GEMINI_FALLBACK_MODEL, document.mime_type, base64, categoryPrompt, trackAttempt(GEMINI_FALLBACK_MODEL, true));
     }
 
     // Toplam tutar iki bağımsız yoldan elde edilir: modelin verdiği ondalık sayı ve
@@ -585,6 +626,28 @@ Deno.serve(async (req: Request) => {
     const warningsEn: (string | null)[] = Array.isArray(parsed.warningsEn) && parsed.warningsEn.length === warnings.length
       ? [...parsed.warningsEn]
       : warnings.map(() => null);
+
+    // Tarafları kendi adlarımızla karşılaştırıp yön ve cariyi belirler. Ad okunamazsa modelin
+    // sonucu değişmeden kalır; bu adım OCR'ı hiçbir zaman başarısız yapmaz.
+    try {
+      const { data: workspaceRow } = await adminClient
+        .from('workspaces')
+        .select('name, owner_id')
+        .eq('id', document.workspace_id)
+        .maybeSingle();
+      const { data: ownerProfile } = workspaceRow?.owner_id
+        ? await adminClient.from('profiles').select('full_name').eq('id', workspaceRow.owner_id).maybeSingle()
+        : { data: null };
+      const parties = resolveDocumentParties(parsed, [workspaceRow?.name, ownerProfile?.full_name]);
+      parsed.direction = parties.direction ?? parsed.direction;
+      parsed.counterpartyName = parties.counterpartyName;
+      if (parties.warning) {
+        warnings.push(parties.warning.tr);
+        warningsEn.push(parties.warning.en);
+      }
+    } catch (partyError) {
+      console.warn('Taraf eşleştirmesi atlandı:', partyError instanceof Error ? partyError.message : partyError);
+    }
     const modelTotalMinor = toMinor(parsed.totalAmount);
     const rawTotalMinor = parseAmountTextToMinor(parsed.totalAmountRaw);
     let totalAmountMinor = rawTotalMinor ?? modelTotalMinor ?? 0;
@@ -739,6 +802,14 @@ Deno.serve(async (req: Request) => {
     // app/documents/[id]/review.tsx) bu adlarla okur ve değerler kuruş cinsindendir —
     // değişen yalnızca modelden hangi biçimde alındığıdır.
     const extractedSummary: Record<string, unknown> = {};
+    if (parsed.counterpartyTaxNumber) extractedSummary.counterpartyTaxNumber = parsed.counterpartyTaxNumber;
+    if (parsed.instrumentDetails && (parsed.documentType === 'cek' || parsed.documentType === 'senet')) {
+      extractedSummary.instrument = {
+        bankName: parsed.instrumentDetails.bankName ?? null,
+        payerName: parsed.instrumentDetails.payerName ?? null,
+        payeeName: parsed.instrumentDetails.payeeName ?? null,
+      };
+    }
     if (parsed.installmentPlan) {
       extractedSummary.loan = {
         bankName: parsed.installmentPlan.bankName,
