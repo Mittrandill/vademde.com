@@ -28,6 +28,8 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Dönüş kodu yalnızca akışı başlatan cihazdaki doğrulayıcıyla oturuma çevrilebilir.
+    flowType: 'pkce',
   },
 });
 

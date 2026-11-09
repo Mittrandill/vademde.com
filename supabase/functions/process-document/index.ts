@@ -328,10 +328,10 @@ async function callGemini(
   let geminiResponse: Response;
   try {
     geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
         signal: abortController.signal,
         body: JSON.stringify({
           contents: [
@@ -490,6 +490,10 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Bu belge mevcut durumunda yeniden işlenemez' }), {
       status: 409, headers: jsonHeaders,
     });
+  }
+  // Service role depolama RLS'ini atlar: yol, kaydın çalışma alanının klasöründe olmalı.
+  if (!String(document.storage_path ?? '').startsWith(`${document.workspace_id}/`)) {
+    return new Response(JSON.stringify({ error: 'Belge yolu geçersiz' }), { status: 400, headers: jsonHeaders });
   }
 
   // Depolama ve yazma işlemleri için service role (RLS'yi atlar, yalnızca sunucu tarafında).

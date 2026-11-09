@@ -41,19 +41,11 @@ export async function updatePassword(password: string) {
   if (error) throw error;
 }
 
-// Supabase, hem Google OAuth dönüşünde hem de şifre sıfırlama bağlantısında oturum
-// belirteçlerini yönlendirme URL'sinin hash parçasında döner (#access_token=...); bu
-// yüzden iki akış da aynı manuel ayrıştırmayı paylaşır (bkz. services/authDeepLinks.ts).
-export function extractSessionTokensFromUrl(
-  url: string
-): { accessToken: string; refreshToken: string } | null {
-  const hash = url.split('#')[1];
-  if (!hash) return null;
-  const params = new URLSearchParams(hash);
-  const accessToken = params.get('access_token');
-  const refreshToken = params.get('refresh_token');
-  if (!accessToken || !refreshToken) return null;
-  return { accessToken, refreshToken };
+// PKCE akışında Google dönüşü ve şifre sıfırlama bağlantısı tek kullanımlık kodu sorgu
+// parametresiyle getirir (bkz. services/authDeepLinks.ts).
+export function extractAuthCodeFromUrl(url: string): string | null {
+  const match = url.split('#')[0].match(/[?&]code=([^&]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 // App Store yönergesi 4.8 — Google gibi başka sosyal girişler sunulduğunda Apple ile
@@ -82,8 +74,8 @@ export async function signInWithApple() {
 }
 
 // Google için native SDK yerine Supabase'in tarayıcı tabanlı OAuth akışı kullanılır;
-// dönüş, uygulamanın "vademde://" şemasına yönlendirilip oturum belirteçleri URL'den
-// okunarak tamamlanır (bkz. Supabase Expo/React Native OAuth örneği).
+// dönüş, uygulamanın "vademde://" şemasına yönlendirilip URL'deki kod oturuma çevrilerek
+// tamamlanır (bkz. Supabase Expo/React Native OAuth örneği).
 export async function signInWithGoogle() {
   const redirectTo = Linking.createURL('auth/callback');
 
@@ -97,13 +89,10 @@ export async function signInWithGoogle() {
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success' || !result.url) return;
 
-  const tokens = extractSessionTokensFromUrl(result.url);
-  if (!tokens) return;
+  const code = extractAuthCodeFromUrl(result.url);
+  if (!code) return;
 
-  const { error: sessionError } = await supabase.auth.setSession({
-    access_token: tokens.accessToken,
-    refresh_token: tokens.refreshToken,
-  });
+  const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
   if (sessionError) throw sessionError;
 }
 

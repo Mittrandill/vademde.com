@@ -46,13 +46,14 @@ Deno.serve(async (req: Request) => {
     if (workspaceIds.length > 0) {
       const { data: documents, error: documentsError } = await adminClient
         .from('financial_documents')
-        .select('storage_path')
+        .select('storage_path, workspace_id')
         .in('workspace_id', workspaceIds);
       if (documentsError) throw documentsError;
 
+      // Yalnızca kaydın kendi çalışma alanı klasöründeki dosyalar silinir.
       const storagePaths = (documents ?? [])
-        .map((d) => d.storage_path)
-        .filter((p): p is string => !!p);
+        .filter((d) => typeof d.storage_path === 'string' && d.storage_path.startsWith(`${d.workspace_id}/`))
+        .map((d) => d.storage_path as string);
 
       if (storagePaths.length > 0) {
         const { error: removeError } = await adminClient.storage
@@ -61,6 +62,14 @@ Deno.serve(async (req: Request) => {
         if (removeError) throw removeError;
       }
     }
+
+    // Profil fotoğrafı silinemezse hesap silme engellenmez; hata loglanır.
+    const { data: avatarFiles, error: avatarListError } = await adminClient.storage.from('avatars').list(userId);
+    const avatarPaths = (avatarFiles ?? []).map((file) => `${userId}/${file.name}`);
+    const { error: avatarRemoveError } = avatarPaths.length > 0
+      ? await adminClient.storage.from('avatars').remove(avatarPaths)
+      : { error: null };
+    if (avatarListError || avatarRemoveError) console.error('Profil fotoğrafı silinemedi');
 
     const { error: shopierProcessedError } = await adminClient
       .from('shopier_processed_orders')

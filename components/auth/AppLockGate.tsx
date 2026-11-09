@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, AppState, View, type AppStateStatus } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,13 +28,23 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const enabled = useAppLockStore((s) => s.enabled);
 
+  const hydrated = useSyncExternalStore(
+    (onChange) => useAppLockStore.persist.onFinishHydration(onChange),
+    () => useAppLockStore.persist.hasHydrated()
+  );
+
+  // Sorgu hatası veya yükleme planı bilinmez kılar; kilit yalnızca sunucu izin vermediğini
+  // bildirdiyse kalkar. Son bilinen değer tutulur ki geçici ağ hatası oturumu kilitlemesin.
   const entitlements = useWorkspaceEntitlements();
-  const planAllowsLock = entitlements.data?.limits.face_id ?? false;
+  const currentFaceId = entitlements.data?.limits.face_id;
+  const [lastFaceId, setLastFaceId] = useState<boolean | null>(null);
+  if (currentFaceId !== undefined && currentFaceId !== lastFaceId) setLastFaceId(currentFaceId);
 
   const supportQuery = useQuery({ queryKey: ['biometric-support'], queryFn: getBiometricSupport });
   const label = biometricLabel(supportQuery.data?.kind);
+  const canPrompt = supportQuery.data?.available === true;
 
-  const active = enabled && planAllowsLock && (supportQuery.data?.available ?? false);
+  const active = enabled && lastFaceId !== false && supportQuery.data?.available !== false;
   const [unlocked, setUnlocked] = useState(false);
   const [checking, setChecking] = useState(false);
   const backgroundedAtRef = useRef<number | null>(null);
@@ -57,7 +67,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
   // istem otomatik açılır — kullanıcının önce bir butona basması gereksiz bir adım olurdu.
   // Buton yalnızca istem iptal edilirse tekrar denemek için kalır.
   useEffect(() => {
-    if (!active || unlocked || promptingRef.current) return;
+    if (!active || !canPrompt || unlocked || promptingRef.current) return;
     promptingRef.current = true;
     let cancelled = false;
     authenticate(t('ui.appLock.prompt'))
@@ -71,7 +81,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [active, unlocked, t]);
+  }, [active, canPrompt, unlocked, t]);
 
   useEffect(() => {
     if (!active) return;
@@ -90,6 +100,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [active]);
 
+  if (!hydrated) return <View style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }} />;
   if (!active || unlocked) return <>{children}</>;
 
   return (
