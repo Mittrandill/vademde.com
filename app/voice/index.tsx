@@ -30,6 +30,7 @@ import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
 import { getLanguage, t } from '@/i18n';
 import { queryKeys } from '@/services/queryKeys';
 import { useReflowKey } from '@/services/reflow';
+import { supabase } from '@/services/supabase';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useTheme } from '@/theme';
 import { friendlyErrorMessage } from '@/utils/alerts';
@@ -67,12 +68,19 @@ export default function VoiceScreen() {
 }
 
 function VoiceConsent({ children }: { children: React.ReactNode }) {
-  const [granted, setGranted] = useState<boolean | null>(null);
+  // Onay kişiye aittir: aynı cihazda başka hesaba geçen kullanıcıya yeniden sorulur.
+  const [consent, setConsent] = useState<{ key: string; granted: boolean } | null>(null);
   useEffect(() => {
-    AsyncStorage.getItem(VOICE_CONSENT_KEY).then((value) => setGranted(value === 'true')).catch(() => setGranted(false));
+    const fallbackKey = `${VOICE_CONSENT_KEY}:unknown`;
+    const load = async () => {
+      const { data } = await supabase.auth.getSession();
+      const key = data.session ? `${VOICE_CONSENT_KEY}:${data.session.user.id}` : fallbackKey;
+      setConsent({ key, granted: (await AsyncStorage.getItem(key)) === 'true' });
+    };
+    load().catch(() => setConsent({ key: fallbackKey, granted: false }));
   }, []);
-  if (granted === null) return null;
-  if (granted) return <>{children}</>;
+  if (consent === null) return null;
+  if (consent.granted) return <>{children}</>;
   return (
     <Stack gap="md" style={{ flex: 1, justifyContent: 'center' }}>
       <Text variant="sectionTitle">{t('voice.consentTitle')}</Text>
@@ -80,8 +88,8 @@ function VoiceConsent({ children }: { children: React.ReactNode }) {
       <Button
         label={t('voice.allow')}
         onPress={() => {
-          setGranted(true);
-          AsyncStorage.setItem(VOICE_CONSENT_KEY, 'true').catch(() => undefined);
+          setConsent({ key: consent.key, granted: true });
+          AsyncStorage.setItem(consent.key, 'true').catch(() => undefined);
         }}
       />
       <Button label={t('common.cancel')} variant="secondary" onPress={() => router.back()} />

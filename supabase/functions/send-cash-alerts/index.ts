@@ -23,6 +23,26 @@ const TOTAL_ALERT_ID = '00000000-0000-0000-0000-000000000000';
 const ACTIVE_STATUSES = ['taslak', 'inceleme_gerekli', 'bekliyor', 'kismen_odendi', 'gecikti', 'kismen_tahsil_edildi'];
 
 
+const USER_CHUNK_SIZE = 100;
+const MAX_ATTEMPTS = 3;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+// Günde tek çalıştığı için geçici ağ hatası o günün uyarılarını kaybettirmesin.
+async function withRetry<T>(label: string, run: () => PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T | null> {
+  for (let attempt = 1; ; attempt += 1) {
+    const { data, error } = await run();
+    if (!error) return data;
+    console.error(`[send-cash-alerts] ${label} okunamadı (deneme ${attempt}/${MAX_ATTEMPTS})`, error.message);
+    if (attempt >= MAX_ATTEMPTS) throw error;
+    await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+  }
+}
+
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -141,30 +161,30 @@ async function runCashAlerts(): Promise<Response> {
   const limitIso = isoDay(limit);
 
   // Yalnızca push token'ı olan çalışma alanları işlenir.
-  const { data: tokenRows, error: tokensError } = await db.from('push_tokens').select('user_id, token');
-  if (tokensError) throw tokensError;
+  const tokenRows = await withRetry('push_tokens', () => db.from('push_tokens').select('user_id, token'));
   const tokensByUser = new Map<string, string[]>();
   for (const t of tokenRows ?? []) tokensByUser.set(t.user_id, [...(tokensByUser.get(t.user_id) ?? []), t.token]);
   if (tokensByUser.size === 0) return Response.json({ success: true, alerts: 0 });
-  // Günde tek çalıştığı için geçici bir ağ hatası o günün uyarılarını kaybettirmesin: bir kez daha denenir.
-  const loadProfiles = () => db.from('profiles').select('id, locale').in('id', [...tokensByUser.keys()]);
-  let { data: profiles, error: profilesError } = await loadProfiles();
-  if (profilesError) {
-    console.error('[send-cash-alerts] profiller okunamadı, yeniden deneniyor', profilesError.message);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    ({ data: profiles, error: profilesError } = await loadProfiles());
+  // Kimlik listeleri URL'ye yazıldığı için parçalanır. Dil okunamazsa uyarı varsayılan dilde gider.
+  const userChunks = chunk([...tokensByUser.keys()], USER_CHUNK_SIZE);
+  const localeByUser = new Map<string, ReturnType<typeof resolveLocale>>();
+  for (const ids of userChunks) {
+    try {
+      const profiles = await withRetry('profiles', () => db.from('profiles').select('id, locale').in('id', ids));
+      for (const p of profiles ?? []) localeByUser.set(p.id, resolveLocale(p.locale));
+    } catch {
+      console.error('[send-cash-alerts] profil dilleri okunamadı, varsayılan dil kullanılacak');
+    }
   }
-  if (profilesError) throw profilesError;
-  const localeByUser = new Map((profiles ?? []).map((p) => [p.id, resolveLocale(p.locale)]));
 
-
-  const { data: members, error: membersError } = await db
-    .from('workspace_members')
-    .select('workspace_id, user_id')
-    .in('user_id', [...tokensByUser.keys()]);
-  if (membersError) throw membersError;
+  const members: { workspace_id: string; user_id: string }[] = [];
+  for (const ids of userChunks) {
+    members.push(...((await withRetry('workspace_members', () =>
+      db.from('workspace_members').select('workspace_id, user_id').in('user_id', ids)
+    )) ?? []));
+  }
   const usersByWorkspace = new Map<string, string[]>();
-  for (const m of members ?? []) usersByWorkspace.set(m.workspace_id, [...(usersByWorkspace.get(m.workspace_id) ?? []), m.user_id]);
+  for (const m of members) usersByWorkspace.set(m.workspace_id, [...(usersByWorkspace.get(m.workspace_id) ?? []), m.user_id]);
 
   const messages: { to: string; title: string; body: string; data: Record<string, unknown>; sound: 'default'; channelId: string }[] = [];
   const logRows: { workspace_id: string; account_id: string }[] = [];
