@@ -10,7 +10,11 @@ Yayın altyapısıyla ilgili sabit bilgiler için bu dosyanın sonundaki
 
 ## 1.1.0 — Sesli kayıt ve OCR iyileştirmeleri (2026-11-09)
 
-Durum: **iOS build TestFlight için gönderildi; mağazaya gönderilmedi.** Mikrofon ve ses modülü eklendiği için OTA ile dağıtılamaz.
+Durum: **iOS build TestFlight için gönderildi; mağazaya gönderilmedi.** Mikrofon ve ses modülü eklendiği için 1.0.9 kullanıcılarına OTA ile dağıtılamaz; runtime `1.1.0` olan build'ler OTA alabilir.
+
+- **OTA (sesli kayıt OCR kotası, 2026-11-09):** iOS + Android production kanalı, runtime `1.1.0`, kaynak commit `d959910`. Grup `36ef40b8-0a6b-4073-9a6a-b174582cf6dd`; iOS `01a1c19c-648a-70e3-9a60-4dc6640a5f29`; Android `01a1c19c-648a-7a68-a656-cfa7b209e7ff`. [Expo yayın kaydı](https://expo.dev/accounts/akintkaya/projects/vademde/updates/36ef40b8-0a6b-4073-9a6a-b174582cf6dd). 1.0.9 kullanıcılarına gitmez.
+- **Supabase:** `voice_uses_ocr_quota` uygulandı (depoda `20261109160000`); `voice-intake` v4 ACTIVE, JWT doğrulaması açık. Kota dönemi ve oturum kimliği sunucuda belirlenir, kota okunamazsa istek reddedilir. Bir oturum 15 dakika geçerli.
+- **Doğrulama (kota):** mobil TypeScript ve `tests/voice-intake.test.mjs` geçti; production'da kolonlar, fonksiyonlar ve yetkiler kontrol edildi. Gerçek sesli kayıtla uçtan uca denenmedi. Mağaza gönderiminden önce `main`'den yeni build alınmalı.
 
 - **Sesli kayıt:** Merkez + düğmesi Belge tara / Sesle kaydet menüsünü açar. `voice-intake` sesi `gemini-3.5-flash-lite` ile taslağa çevirir, eksik alanları sorar, mevcut formu doldurur. Kaydı kullanıcı yapar. Plus/İşletme; bir sesli kayıt oturumu aylık OCR kotasından 1 hak kullanır (oturum başına en fazla 5 sesli takip yanıtı ek hak harcamaz). Ses saklanmaz.
 - **OCR:** Çek/senet tarafları ayrı okunur, yön ve cari çalışma alanının adlarıyla belirlenir (`_shared/documentParties.ts`). Çek bankası ayrı alan, cari vergi no ile de eşleşir, yeni cari firma/kişi olarak açılır.
