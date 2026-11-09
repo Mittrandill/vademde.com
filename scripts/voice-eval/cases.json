@@ -33,6 +33,11 @@
     { "id": "v27", "text": "Mehmet Aslan diye yeni bir müşteriden 18 bin liralık senet aldım, vadesi 10 Ocak 2027.", "expected": { "kind": "obligation", "documentType": "senet", "direction": "receivable", "amountMinor": 1800000, "date": "2027-01-10", "counterparty": "Mehmet Aslan", "newCounterparty": true } },
     { "id": "v28", "text": "QNB çeki, numara dokuz sıfır üç dört beş altı yedi, 300 bin dolar değil 300 bin lira, Öztürk Otomotive verdim, vade 3 Şubat 2027.", "expected": { "kind": "obligation", "documentType": "cek", "direction": "payable", "amountMinor": 30000000, "date": "2027-02-03", "bank": "QNB", "documentNumber": "9034567", "counterparty": "Öztürk Otomotiv", "currency": "TRY" } },
     { "id": "v29", "text": "Akdeniz Gıdaya 2 bin euro fatura kestim, vadesi 20 Aralık.", "expected": { "kind": "obligation", "documentType": "fatura", "direction": "receivable", "amountMinor": 200000, "date": "2026-12-20", "counterparty": "Akdeniz Gıda", "currency": "EUR" } },
-    { "id": "v30", "text": "Yarın öğlen toplantım var, hatırlat bana.", "expected": { "kind": "unsupported" } }
+    { "id": "v30", "text": "Yarın öğlen toplantım var, hatırlat bana.", "expected": { "kind": "unsupported" } },
+    { "id": "v31", "text": "Yapı Kredi kartımın borcunu ödedim, 12 bin lira.", "expected": { "kind": "unsupported" } },
+    { "id": "v32", "text": "Ziraat kredimin bu ayki taksitini ödedim, 8 bin lira.", "expected": { "kind": "unsupported" } },
+    { "id": "v33", "text": "Vadesiz hesabımdan birikim hesabıma 20 bin lira aktardım.", "expected": { "kind": "transaction", "direction": "transfer", "amountMinor": 2000000 } },
+    { "id": "v34", "text": "Nakit hesabımdan En Para hesabına 550 TL transfer.", "expected": { "kind": "transaction", "direction": "transfer", "amountMinor": 55000, "fromAccount": "Nakit", "toAccount": "En Para" } },
+    { "id": "v35", "text": "En Para hesabımdan Garanti vadesizime bin lira attım.", "expected": { "kind": "transaction", "direction": "transfer", "amountMinor": 100000, "fromAccount": "En Para", "toAccount": "Garanti Vadesiz" } }
   ]
 }

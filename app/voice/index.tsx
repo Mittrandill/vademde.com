@@ -100,19 +100,48 @@ function VoiceAssistant() {
   const answeredRef = useRef<string[]>([]);
   const requestIdRef = useRef<string>(Crypto.randomUUID());
   const stoppingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const speechDoneRef = useRef(false);
+  const animationDoneRef = useRef(false);
+  const openFormRef = useRef<() => void>(() => undefined);
+  const [assemblyMs, setAssemblyMs] = useState(1400);
+  const [assemblyComplete, setAssemblyComplete] = useState(false);
   const seconds = Math.floor((recorderState.durationMillis ?? 0) / 1000);
 
-  const speak = useCallback((text: string) => {
+  const speak = useCallback((text: string, onDone?: () => void) => {
     Speech.stop();
-    Speech.speak(text, { language: getLanguage() === 'en' ? 'en-US' : 'tr-TR' });
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(fallback);
+      onDone?.();
+    };
+    // Ses motoru geri çağrı vermezse ekran takılı kalmasın.
+    const fallback = setTimeout(finish, text.length * 110 + 2500);
+    Speech.speak(text, {
+      language: getLanguage() === 'en' ? 'en-US' : 'tr-TR',
+      onDone: finish,
+      onStopped: finish,
+      onError: finish,
+    });
   }, []);
 
   useEffect(() => {
     setStoredDraft(null);
+    mountedRef.current = true;
+    let cancelled = false;
+    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) speak(t('voice.greeting'));
+      });
     return () => {
+      cancelled = true;
+      mountedRef.current = false;
       Speech.stop();
     };
-  }, [setStoredDraft]);
+  }, [setStoredDraft, speak]);
 
   const handleResult = useCallback((result: VoiceResult) => {
     draftRef.current = result.draft;
@@ -131,12 +160,21 @@ function VoiceAssistant() {
       speak(result.question.prompt);
       return;
     }
-    speak(result.acknowledgement);
+    // Sembol, asistan konuşurken tamamlanır; form ikisi de bitince açılır.
+    speechDoneRef.current = false;
+    animationDoneRef.current = false;
+    setAssemblyMs(Math.min(5000, Math.max(1400, result.acknowledgement.length * 70)));
+    setAssemblyComplete(true);
+    speak(result.acknowledgement, () => {
+      speechDoneRef.current = true;
+      if (animationDoneRef.current) openFormRef.current();
+    });
     setQuestion(null);
     setPhase('assembling');
   }, [speak]);
 
   const fail = useCallback((failure: unknown) => {
+    setAssemblyComplete(false);
     setError(friendlyErrorMessage(failure, t('voice.unavailable')));
     setPhase(draftRef.current ? 'question' : 'idle');
   }, []);
@@ -221,11 +259,11 @@ function VoiceAssistant() {
 
   const openForm = useCallback(() => {
     const draft = draftRef.current;
-    if (!draft) return;
+    if (!draft || !mountedRef.current) return;
     const typeLabel = draft.documentType ? DOCUMENT_TYPE_LABEL[draft.documentType] : null;
     const route = voiceDraftRoute(draft, {
       bankCode: draft.bank ? matchBankByName(draft.bank) : null,
-      title: [typeLabel, draft.counterpartyName].filter(Boolean).join(' — ') || null,
+      title: [typeLabel, draft.counterpartyName ?? draft.bank].filter(Boolean).join(' — ') || null,
       notes: draft.documentNumber ? t('documentReview.documentNumberNote', { number: draft.documentNumber }) : null,
     });
     if (!route) return;
@@ -233,13 +271,22 @@ function VoiceAssistant() {
     router.replace(route as never);
   }, [setStoredDraft]);
 
+  useEffect(() => {
+    openFormRef.current = openForm;
+  }, [openForm]);
+
+  const handleAssembled = useCallback(() => {
+    animationDoneRef.current = true;
+    if (speechDoneRef.current) openFormRef.current();
+  }, []);
+
   const recording = phase === 'recording';
   const showMic = phase === 'idle' || recording || (phase === 'question' && question?.type === 'voice');
 
   return (
     <Stack gap="xl" style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
       {phase === 'processing' || phase === 'assembling' ? (
-        <VoiceAssembly complete={phase === 'assembling'} onComplete={openForm} />
+        <VoiceAssembly complete={assemblyComplete} durationMs={assemblyMs} onComplete={handleAssembled} />
       ) : null}
 
       <Stack gap="xs" style={{ alignItems: 'center' }}>

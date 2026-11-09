@@ -15,8 +15,13 @@ export interface VoiceDraft {
   categoryName: string | null;
   assetId: string | null;
   assetName: string | null;
+  accountId?: string | null;
+  accountName?: string | null;
+  transferToAccountId?: string | null;
+  transferToAccountName?: string | null;
   installments: number | null;
   lowConfidence: string[];
+  unsupportedReason?: string | null;
 }
 
 export interface VoiceRoute {
@@ -32,18 +37,25 @@ function compact(params: Record<string, string | number | null | undefined>): Re
   return result;
 }
 
+// Hareket ve ödeme formları tutarı hesabın biriminde alır; yabancı para TL sayılmasın diye doldurulmaz.
+// Borç vermede de birim kaynak hesaba kilitlidir.
+export function isForeignAmountWithheld(draft: VoiceDraft): boolean {
+  return draft.currency !== 'TRY' && (draft.kind !== 'obligation' || draft.documentType === 'borc_verme');
+}
+
 export function voiceDraftRoute(
   draft: VoiceDraft,
   options: { bankCode?: string | null; title?: string | null; notes?: string | null } = {}
 ): VoiceRoute | null {
   const description = draft.transcript.slice(0, 200);
+  const amountMinor = isForeignAmountWithheld(draft) ? null : draft.amountMinor;
   if (draft.kind === 'obligation') {
     return {
       pathname: '/obligations/new',
       params: compact({
         type: draft.documentType,
         direction: draft.direction,
-        amountMinor: draft.amountMinor,
+        amountMinor,
         currency: draft.currency,
         dueDate: draft.date,
         counterpartyId: draft.counterpartyId,
@@ -61,11 +73,13 @@ export function voiceDraftRoute(
       pathname: '/transactions/new',
       params: compact({
         direction: draft.direction,
-        amountMinor: draft.amountMinor,
+        amountMinor,
         date: draft.date,
         counterpartyId: draft.counterpartyId,
         categoryId: draft.categoryId,
         assetId: draft.assetId,
+        accountId: draft.accountId,
+        transferToAccountId: draft.transferToAccountId,
         description,
       }),
     };
@@ -75,9 +89,10 @@ export function voiceDraftRoute(
       pathname: '/payments/new',
       params: compact({
         direction: draft.direction,
-        amountMinor: draft.amountMinor,
+        amountMinor,
         date: draft.date,
         counterpartyId: draft.counterpartyId,
+        accountId: draft.accountId,
         description,
       }),
     };

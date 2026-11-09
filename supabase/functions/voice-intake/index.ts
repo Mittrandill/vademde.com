@@ -39,17 +39,19 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 async function loadContext(db: ReturnType<typeof createClient<any>>, workspaceId: string, today: string): Promise<VoiceContext> {
-  const [counterparties, categories, assets] = await Promise.all([
+  const [counterparties, categories, assets, accounts] = await Promise.all([
     db.from('counterparties').select('id, name').eq('workspace_id', workspaceId).order('updated_at', { ascending: false }).limit(MAX_CONTEXT_ROWS),
     db.from('categories').select('id, name, kind').eq('workspace_id', workspaceId).limit(MAX_CONTEXT_ROWS),
     db.from('owned_assets').select('id, name, kind, plate').eq('workspace_id', workspaceId).limit(MAX_CONTEXT_ROWS),
+    db.from('accounts').select('id, name, currency_code').eq('workspace_id', workspaceId).eq('is_archived', false).limit(MAX_CONTEXT_ROWS),
   ]);
-  if (counterparties.error || categories.error || assets.error) throw new Error('context_failed');
+  if (counterparties.error || categories.error || assets.error || accounts.error) throw new Error('context_failed');
   return {
     today,
     counterparties: (counterparties.data ?? []) as VoiceContext['counterparties'],
     categories: (categories.data ?? []) as VoiceContext['categories'],
     assets: (assets.data ?? []) as VoiceContext['assets'],
+    accounts: (accounts.data ?? []) as NonNullable<VoiceContext['accounts']>,
   };
 }
 

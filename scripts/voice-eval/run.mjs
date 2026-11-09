@@ -32,6 +32,7 @@ function evalContext(data) {
     counterparties: data.counterparties.map((name) => ({ id: name, name })),
     categories: ['Yakıt', 'Market', 'Sigorta', 'Kırtasiye'].map((name) => ({ id: name, name, kind: 'expense' })),
     assets: data.assets.map((name) => ({ id: name, name, kind: 'vehicle', plate: null })),
+    accounts: ['Nakit', 'En Para', 'Garanti Vadesiz', 'Birikim Hesabı'].map((name) => ({ id: name, name, currency_code: 'TRY' })),
   };
 }
 
@@ -42,6 +43,8 @@ function evalActual(raw, context) {
     counterparty: draft.counterpartyName,
     category: draft.categoryName,
     asset: draft.assetName,
+    fromAccount: draft.accountName,
+    toAccount: draft.transferToAccountName,
     newCounterparty: Boolean(draft.counterpartyName && !draft.counterpartyId),
     missing: draft.amountMinor === null ? ['amount'] : [],
   };

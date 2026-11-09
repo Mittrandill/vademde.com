@@ -1,37 +1,42 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, View } from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
 
+import {
+  MARK_ARROW_PATH,
+  MARK_BAR_RADIUS,
+  MARK_BAR_WIDTH,
+  MARK_SAFFRON_BARS,
+  MARK_SAFFRON_PATH,
+  MARK_VIEWBOX,
+  MARK_VIOLET_BARS,
+} from '@/components/brand/VademdeMark';
 import { useTheme } from '@/theme';
 
-const WIDTH = 260;
-const HEIGHT = 170;
-const FRAGMENTS = 42;
+const SIZE = 180;
+const HEIGHT = SIZE * (MARK_VIEWBOX.height / MARK_VIEWBOX.width);
 
-// Hedefler kart satırlarını oluşturur: başlık, büyük tutar ve iki bilgi satırı.
-function fragmentLayout(index: number) {
-  const row = index % 4;
-  const column = Math.floor(index / 4);
-  const rowY = [34, 72, 112, 138][row]!;
-  const rowHeight = [8, 16, 6, 6][row]!;
-  const angle = (index * 137.5 * Math.PI) / 180;
-  const radius = 130 + (index % 5) * 18;
-  return {
-    targetX: 24 + column * 21,
-    targetY: rowY,
-    width: 17,
-    height: rowHeight,
-    startX: Math.cos(angle) * radius,
-    startY: Math.sin(angle) * radius,
-    delay: (index % 7) / 7,
-  };
+interface MarkPiece {
+  key: string;
+  shape: ReactNode;
+  fromX: number;
+  fromY: number;
+  rotate: string;
+  start: number;
 }
 
-// Veriler işlenirken dijital parçalar döner ve yanıt gelince kayıt kartına dönüşür.
-export function VoiceAssembly({ complete, onComplete }: { complete: boolean; onComplete?: () => void }) {
+// Vademde sembolünün parçaları ayrı ayrı gelip sembolü oluşturur; konuşma süresince tamamlanır.
+export function VoiceAssembly({
+  complete,
+  durationMs,
+  onComplete,
+}: {
+  complete: boolean;
+  durationMs: number;
+  onComplete?: () => void;
+}) {
   const theme = useTheme();
   const [progress] = useState(() => new Animated.Value(0));
-  const fragments = useMemo(() => Array.from({ length: FRAGMENTS }, (_, index) => fragmentLayout(index)), []);
-  const palette = [theme.colors.brandPrimary, theme.colors.payable, theme.colors.textSecondary, theme.colors.receivable];
 
   useEffect(() => {
     let cancelled = false;
@@ -41,8 +46,8 @@ export function VoiceAssembly({ complete, onComplete }: { complete: boolean; onC
       if (complete) {
         Animated.timing(progress, {
           toValue: 1,
-          duration: reduced ? 0 : theme.motion.chartEntryMs,
-          easing: Easing.out(Easing.cubic),
+          duration: reduced ? 0 : durationMs,
+          easing: Easing.inOut(Easing.cubic),
           useNativeDriver: true,
         }).start(({ finished }) => {
           if (finished) onComplete?.();
@@ -50,13 +55,13 @@ export function VoiceAssembly({ complete, onComplete }: { complete: boolean; onC
         return;
       }
       if (reduced) {
-        progress.setValue(0.75);
+        progress.setValue(1);
         return;
       }
       loop = Animated.loop(
         Animated.sequence([
-          Animated.timing(progress, { toValue: 0.72, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-          Animated.timing(progress, { toValue: 0.28, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(progress, { toValue: 0.62, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(progress, { toValue: 0.18, duration: 1000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
         ])
       );
       loop.start();
@@ -65,44 +70,49 @@ export function VoiceAssembly({ complete, onComplete }: { complete: boolean; onC
       cancelled = true;
       loop?.stop();
     };
-  }, [complete, onComplete, progress, theme.motion.chartEntryMs]);
+  }, [complete, durationMs, onComplete, progress]);
+
+  const bar = (item: { x: number; y: number; height: number }, fill: string) => (
+    <Rect fill={fill} x={item.x} y={item.y} width={MARK_BAR_WIDTH} height={item.height} rx={MARK_BAR_RADIUS} ry={MARK_BAR_RADIUS} />
+  );
+
+  const pieces: MarkPiece[] = [
+    { key: 'arrow', shape: <Path fill={theme.colors.textPrimary} d={MARK_ARROW_PATH} />, fromX: 0, fromY: 26, rotate: '0deg', start: 0 },
+    { key: 'saffron-left', shape: bar(MARK_SAFFRON_BARS[0], theme.colors.brandPrimary), fromX: -96, fromY: -112, rotate: '-34deg', start: 0.08 },
+    { key: 'saffron-center', shape: bar(MARK_SAFFRON_BARS[1], theme.colors.brandPrimary), fromX: 8, fromY: -142, rotate: '20deg', start: 0.16 },
+    { key: 'saffron-right', shape: <Path fill={theme.colors.brandPrimary} d={MARK_SAFFRON_PATH} />, fromX: 104, fromY: -104, rotate: '32deg', start: 0.24 },
+    { key: 'violet-left', shape: bar(MARK_VIOLET_BARS[2], theme.colors.accentViolet), fromX: -104, fromY: 104, rotate: '28deg', start: 0.14 },
+    { key: 'violet-center', shape: bar(MARK_VIOLET_BARS[0], theme.colors.accentViolet), fromX: -6, fromY: 132, rotate: '-18deg', start: 0.22 },
+    { key: 'violet-right', shape: bar(MARK_VIOLET_BARS[1], theme.colors.accentViolet), fromX: 100, fromY: 96, rotate: '-30deg', start: 0.3 },
+  ];
 
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={{ width: WIDTH, height: HEIGHT, alignSelf: 'center' }}
+      style={{ width: SIZE, height: HEIGHT, alignSelf: 'center', marginVertical: theme.spacing.xxxl }}
     >
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: WIDTH,
-          height: HEIGHT,
-          borderRadius: theme.radius.widget,
-          backgroundColor: theme.colors.surfacePrimary,
-          opacity: progress.interpolate({ inputRange: [0.6, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
-        }}
-      />
-      {fragments.map((fragment, index) => {
-        const entry = fragment.delay * 0.35;
+      {pieces.map((piece) => {
+        const inputRange = [piece.start, 1];
         return (
           <Animated.View
-            key={index}
+            key={piece.key}
             style={{
               position: 'absolute',
-              left: fragment.targetX,
-              top: fragment.targetY,
-              width: fragment.width,
-              height: fragment.height,
-              borderRadius: theme.radius.tag,
-              backgroundColor: palette[index % palette.length],
-              opacity: progress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0.15, 0.85, 1] }),
+              width: SIZE,
+              height: HEIGHT,
+              opacity: progress.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.25, 0.8, 1] }),
               transform: [
-                { translateX: progress.interpolate({ inputRange: [entry, 1], outputRange: [fragment.startX, 0], extrapolate: 'clamp' }) },
-                { translateY: progress.interpolate({ inputRange: [entry, 1], outputRange: [fragment.startY, 0], extrapolate: 'clamp' }) },
+                { translateX: progress.interpolate({ inputRange, outputRange: [piece.fromX, 0], extrapolate: 'clamp' }) },
+                { translateY: progress.interpolate({ inputRange, outputRange: [piece.fromY, 0], extrapolate: 'clamp' }) },
+                { rotate: progress.interpolate({ inputRange, outputRange: [piece.rotate, '0deg'], extrapolate: 'clamp' }) },
               ],
             }}
-          />
+          >
+            <Svg width={SIZE} height={HEIGHT} viewBox={`0 0 ${MARK_VIEWBOX.width} ${MARK_VIEWBOX.height}`} fill="none">
+              {piece.shape}
+            </Svg>
+          </Animated.View>
         );
       })}
     </View>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   applyChipAnswer, mergeFollowUp, nextVoiceQuestion, normalizeVoiceDraft, voiceAcknowledgement,
 } from '../supabase/functions/_shared/voiceIntake.ts';
-import { voiceDraftRoute } from '../features/voice/route.ts';
+import { isForeignAmountWithheld, voiceDraftRoute } from '../features/voice/route.ts';
 import { guessCounterpartyType, matchCounterparty, normalizeCounterpartyName } from '../features/counterparties/match.ts';
 
 const context = {
@@ -113,6 +113,60 @@ assert.equal(voiceDraftRoute(fuel).params.categoryId, 'k1');
 assert.equal(voiceDraftRoute(twin).pathname, '/payments/new');
 assert.equal(voiceDraftRoute(twin).params.date, '2026-11-09');
 assert.equal(voiceDraftRoute(draft({ kind: 'unsupported' })), null);
+
+// Kredi/kart borcu ödemesi yanlış ekrana gitmez
+const debtPayment = draft({ kind: 'payment', direction: 'payable', amountMinor: 100, counterparty: 'Yapı Kredi', settlesBankDebt: true });
+assert.equal(debtPayment.kind, 'unsupported');
+assert.equal(nextVoiceQuestion(debtPayment, context, [], 'tr'), null);
+assert.match(voiceAcknowledgement(debtPayment, 'tr'), /kart/);
+assert.match(voiceAcknowledgement(debtPayment, 'en'), /card/);
+assert.equal(voiceDraftRoute(debtPayment), null);
+
+// Transfer
+const transfer = draft({ kind: 'transaction', direction: 'transfer', amountMinor: 2000000, transcript: 'sigorta hesabıma aktardım' });
+assert.equal(transfer.direction, 'transfer');
+assert.equal(nextVoiceQuestion(transfer, context, [], 'tr'), null);
+assert.equal(voiceDraftRoute(transfer).params.direction, 'transfer');
+
+// Hesaplar arası transfer
+const accountContext = { ...context, accounts: [{ id: 'h1', name: 'Nakit', currency_code: 'TRY' }, { id: 'h2', name: 'En Para', currency_code: 'TRY' }, { id: 'h3', name: 'Euro Hesap', currency_code: 'EUR' }] };
+const movement = (raw) => normalizeVoiceDraft({ transcript: 'x', lowConfidence: [], kind: 'transaction', direction: 'transfer', amountMinor: 55000, ...raw }, accountContext);
+const both = movement({ fromAccount: 'Nakit', toAccount: 'En Para' });
+assert.equal(both.accountId, 'h1');
+assert.equal(both.transferToAccountId, 'h2');
+assert.equal(nextVoiceQuestion(both, accountContext, [], 'tr'), null);
+assert.equal(voiceDraftRoute(both).params.accountId, 'h1');
+assert.equal(voiceDraftRoute(both).params.transferToAccountId, 'h2');
+assert.equal(movement({ fromAccount: 'Nakit', toAccount: 'Euro Hesap' }).transferToAccountId, null, 'farklı birime transfer doldurulmaz');
+assert.equal(movement({ fromAccount: 'Nakit', toAccount: 'Nakit' }).transferToAccountId, null);
+assert.equal(movement({ fromAccount: 'Uydurma' }).accountId, null);
+const noSource = movement({ toAccount: 'En Para' });
+const sourceQuestion = nextVoiceQuestion(noSource, accountContext, [], 'tr');
+assert.equal(sourceQuestion.field, 'fromAccount');
+assert.equal(sourceQuestion.options.some((o) => o.value === 'h2'), false);
+const withSource = applyChipAnswer(noSource, accountContext, 'fromAccount', 'h1');
+assert.equal(withSource.accountId, 'h1');
+const noTarget = movement({ fromAccount: 'Nakit' });
+assert.deepEqual(nextVoiceQuestion(noTarget, accountContext, [], 'en').options.map((o) => o.value), ['h2']);
+assert.equal(applyChipAnswer(noTarget, accountContext, 'toAccount', 'yabanci').transferToAccountId, null);
+
+// Yabancı para hareket ve ödemede TL tutarı olarak doldurulmaz
+const euroSpend = draft({ kind: 'transaction', direction: 'expense', amountMinor: 200000, currency: 'EUR' });
+assert.equal(isForeignAmountWithheld(euroSpend), true);
+assert.equal('amountMinor' in voiceDraftRoute(euroSpend).params, false);
+assert.equal('amountMinor' in voiceDraftRoute(draft({ kind: 'payment', direction: 'payable', amountMinor: 1, currency: 'USD' })).params, false);
+assert.equal('amountMinor' in voiceDraftRoute(draft({ kind: 'obligation', documentType: 'borc_verme', direction: 'receivable', amountMinor: 1, currency: 'USD' })).params, false);
+const euroInvoice = voiceDraftRoute(draft({ kind: 'obligation', documentType: 'fatura', direction: 'receivable', amountMinor: 200000, currency: 'EUR' }));
+assert.equal(euroInvoice.params.amountMinor, '200000');
+assert.equal(euroInvoice.params.currency, 'EUR');
+
+// Kredide banka cari sayılmaz
+const bankLoan = draft({ kind: 'obligation', documentType: 'kredi', direction: 'payable', amountMinor: 1, counterparty: 'İş Bankası' });
+assert.equal(bankLoan.bank, 'İş Bankası');
+assert.equal(bankLoan.counterpartyName, null);
+assert.equal(bankLoan.counterpartyId, null);
+const namedLoan = draft({ kind: 'obligation', documentType: 'kredi', direction: 'payable', amountMinor: 1, bank: 'Garanti', counterparty: 'İş Bankası' });
+assert.equal(namedLoan.bank, 'Garanti');
 
 // İngilizce
 assert.equal(nextVoiceQuestion(bill, context, [], 'en').prompt, 'What is the amount? Tell me and I will add it.');

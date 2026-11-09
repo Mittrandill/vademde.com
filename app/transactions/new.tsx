@@ -73,7 +73,7 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; readonly label: string }> =
 export default function NewTransactionScreen() {
   const theme = useTheme();
   const reflowKey = useReflowKey();
-  const { id, assetId, accountId, direction, description, counterpartyId, paymentMethod, amountMinor, date, categoryId } = useLocalSearchParams<{
+  const { id, assetId, accountId, direction, description, counterpartyId, paymentMethod, amountMinor, date, categoryId, transferToAccountId } = useLocalSearchParams<{
     id?: string;
     assetId?: string;
     accountId?: string;
@@ -85,6 +85,7 @@ export default function NewTransactionScreen() {
     amountMinor?: string;
     date?: string;
     categoryId?: string;
+    transferToAccountId?: string;
   }>();
   const isEditing = !!id;
 
@@ -134,6 +135,7 @@ export default function NewTransactionScreen() {
       initialAmountMinor={typeof amountMinor === 'string' && /^\d+$/.test(amountMinor) ? Number(amountMinor) : undefined}
       initialDate={typeof date === 'string' ? date : undefined}
       initialCategoryId={typeof categoryId === 'string' ? categoryId : undefined}
+      initialTransferToAccountId={typeof transferToAccountId === 'string' ? transferToAccountId : undefined}
       initialPaymentMethod={
         PAYMENT_METHODS.some((m) => m.value === paymentMethod) ? (paymentMethod as PaymentMethod) : undefined
       }
@@ -145,6 +147,7 @@ interface TransactionFormProps {
   initialAmountMinor?: number;
   initialDate?: string;
   initialCategoryId?: string;
+  initialTransferToAccountId?: string;
   id: string | null;
   initial: Transaction | null;
   /** Hesap detayından "Ek Hesap Faizi Ekle" gibi kısayollarla gelindiğinde hesabı/yönü/açıklamayı önceden doldurur. */
@@ -170,6 +173,7 @@ function TransactionForm({
   initialAmountMinor,
   initialDate,
   initialCategoryId,
+  initialTransferToAccountId,
 }: TransactionFormProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -181,7 +185,7 @@ function TransactionForm({
   );
   const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? initialAccountId ?? null);
   const [transferToAccountId, setTransferToAccountId] = useState<string | null>(
-    initial?.transfer_to_account_id ?? null
+    initial?.transfer_to_account_id ?? initialTransferToAccountId ?? null
   );
   const [assetId, setAssetId] = useState<string | null>(initial?.asset_id ?? initialAssetId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? initialCategoryId ?? null);
