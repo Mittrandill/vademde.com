@@ -152,6 +152,24 @@ const noTarget = movement({ fromAccount: 'Nakit' });
 assert.deepEqual(nextVoiceQuestion(noTarget, accountContext, [], 'en').options.map((o) => o.value), ['h2']);
 assert.equal(applyChipAnswer(noTarget, accountContext, 'toAccount', 'yabanci').transferToAccountId, null);
 
+// Gerçekleşen işlemde hesap sorulur
+const spend = normalizeVoiceDraft({ transcript: 'dün yakıt aldım', lowConfidence: [], kind: 'transaction', direction: 'expense', amountMinor: 300000, date: '2026-11-08', category: 'Yakıt' }, accountContext);
+const accountQuestion = nextVoiceQuestion(spend, accountContext, [], 'tr');
+assert.equal(accountQuestion.field, 'fromAccount');
+assert.equal(accountQuestion.prompt, 'Hangi hesaptan ödediniz?');
+assert.deepEqual(accountQuestion.options.map((o) => o.value), ['h1', 'h2', ''], 'yalnızca aynı birim ve atlama');
+const paidSpend = applyChipAnswer(spend, accountContext, 'fromAccount', 'h2');
+assert.equal(paidSpend.accountId, 'h2');
+assert.equal(nextVoiceQuestion(paidSpend, accountContext, ['fromAccount'], 'tr').field, 'asset', 'hesaptan sonra varlık sorulur');
+assert.equal(applyChipAnswer(spend, accountContext, 'fromAccount', '').accountId, null);
+assert.equal(nextVoiceQuestion(spend, accountContext, ['fromAccount'], 'tr').field, 'asset', 'atlanınca tekrar sorulmaz');
+const income = normalizeVoiceDraft({ transcript: 'x', lowConfidence: [], kind: 'transaction', direction: 'income', amountMinor: 1 }, accountContext);
+assert.equal(nextVoiceQuestion(income, accountContext, [], 'en').prompt, 'Which account did it go into?');
+const singleAccount = { ...accountContext, accounts: [accountContext.accounts[0]] };
+assert.notEqual(nextVoiceQuestion(spend, singleAccount, [], 'tr')?.field, 'fromAccount', 'tek hesapta sorulmaz');
+assert.equal(voiceSpokenPhrases('tr').includes('Hangi hesaptan ödediniz?'), true);
+assert.equal(voiceSpokenPhrases('tr').includes('Şimdilik geç'), false);
+
 // Yabancı para hareket ve ödemede TL tutarı olarak doldurulmaz
 const euroSpend = draft({ kind: 'transaction', direction: 'expense', amountMinor: 200000, currency: 'EUR' });
 assert.equal(isForeignAmountWithheld(euroSpend), true);

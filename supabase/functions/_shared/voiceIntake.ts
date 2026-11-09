@@ -222,6 +222,9 @@ const TEXT = {
     documentNumber: 'Seri numarası nedir?',
     asset: 'Kayıtlı varlıklarınızdan biriyle ilişkilendireyim mi?',
     fromAccount: 'Hangi hesaptan aktarılacak?',
+    paidFrom: 'Hangi hesaptan ödediniz?',
+    receivedInto: 'Hangi hesaba geldi?',
+    skipAccount: 'Şimdilik geç',
     toAccount: 'Hangi hesaba aktarılacak?',
     none: 'Hayır',
     done: 'Tamam, kaydı hazırladım.',
@@ -241,6 +244,9 @@ const TEXT = {
     documentNumber: 'What is the serial number?',
     asset: 'Should I link this to one of your assets?',
     fromAccount: 'Which account should it come from?',
+    paidFrom: 'Which account did you pay from?',
+    receivedInto: 'Which account did it go into?',
+    skipAccount: 'Skip for now',
     toAccount: 'Which account should it go to?',
     none: 'No',
     done: 'Done, the record is ready.',
@@ -253,7 +259,7 @@ const TEXT = {
 // Önceden seslendirilecek cümleler (bkz. scripts/voice-clips/generate.mjs); seçenek etiketleri okunmaz.
 export function voiceSpokenPhrases(locale: VoiceLocale): string[] {
   const copy = TEXT[locale];
-  const { work, payable: _payable, receivable: _receivable, none: _none, ...spoken } = copy;
+  const { work, payable: _payable, receivable: _receivable, none: _none, skipAccount: _skipAccount, ...spoken } = copy;
   return [...Object.values(spoken), ...Object.values(work)];
 }
 
@@ -300,6 +306,19 @@ export function nextVoiceQuestion(
     if (!draft.transferToAccountId && open('toAccount')) {
       const question = options('toAccount', draft.accountId, source?.currency_code);
       if (question.options?.length) return question;
+    }
+  }
+  // Gerçekleşen işlemde hesap söylenmediyse sorulur; tek hesap varsa kullanıcı formda görür.
+  if ((draft.kind === 'transaction' || draft.kind === 'payment') && draft.direction !== 'transfer' && !draft.accountId && open('fromAccount')) {
+    const accounts = (context.accounts ?? []).filter((account) => account.currency_code === draft.currency);
+    if (accounts.length > 1) {
+      const outgoing = draft.direction === 'expense' || draft.direction === 'payable';
+      return {
+        field: 'fromAccount',
+        type: 'chips',
+        prompt: outgoing ? copy.paidFrom : copy.receivedInto,
+        options: [...accounts.map((account) => ({ value: account.id, label: account.name })), { value: '', label: copy.skipAccount }],
+      };
     }
   }
   if (!draft.assetId && open('asset') && draft.kind !== 'payment' && draft.direction !== 'transfer') {
