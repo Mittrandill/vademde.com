@@ -6,4 +6,4 @@ Vademde 1.1.0
 • Çek ve senet seri numarası artık ayrı alan olarak kaydedilir.
 • Belge okuma daha hızlı. Çekte keşideci ve lehtar, faturada alıcı ve satıcı daha doğru ayrılır.
 
-Sesli kayıt Plus ve İşletme planlarında sunulur. Kayıt yalnızca siz onaylayınca oluşur; ses kaydı Vademde'de saklanmaz.
+Sesli kayıt Plus ve İşletme planlarında sunulur; her sesli kayıt aylık tarama hakkınızdan 1 adet kullanır. Kayıt yalnızca siz onaylayınca oluşur; ses kaydı Vademde'de saklanmaz.

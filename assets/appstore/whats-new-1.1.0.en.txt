@@ -6,4 +6,4 @@ Vademde 1.1.0
 • Cheque and promissory note serial numbers now have their own field.
 • Faster document scanning, with more accurate drawer, payee, buyer and seller detection.
 
-Voice entry is available on Plus and Business plans. A record is created only when you approve it, and Vademde does not store voice recordings.
+Voice entry is available on Plus and Business plans, and each voice entry uses 1 of your monthly scans. A record is created only when you approve it, and Vademde does not store voice recordings.
