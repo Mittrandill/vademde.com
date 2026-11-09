@@ -1,5 +1,5 @@
 export const legal = {
-  "updated": "SON GÜNCELLEME · 11 AĞUSTOS 2026",
+  "updated": "SON GÜNCELLEME · 10 KASIM 2026",
   "contact": "Başvurular ve sorular için:",
   "privacy": {
     "title": "Gizlilik ve KVKK",
@@ -22,7 +22,7 @@ export const legal = {
       },
       "s5": {
         "title": "5. Verilerinizi Kimlerle Paylaşıyoruz",
-        "body": "Verilerinizi pazarlama amacıyla üçüncü taraflara satmayız. Hizmeti sunabilmek için aşağıdaki hizmet sağlayıcılarla sınırlı ve amacına uygun veri paylaşımı yapılır:\n• Supabase Inc. — veritabanı, kimlik doğrulama ve dosya depolama altyapısı; hesap ve finansal kayıt verileriniz, çalışma alanınıza özel erişim politikalarıyla (satır bazlı güvenlik) izole şekilde saklanır.\n• Google (Gemini API) — belge görüntüleriniz ve sesli kayıt özelliğini kullandığınızda sesiniz, yalnızca alan çıkarımı ve kayıt taslağı hazırlama amacıyla ve sizin onayınızdan sonra sunucu tarafından bu servise iletilir; ses kayıtları Vademde tarafından saklanmaz; erişim anahtarı hiçbir zaman mobil uygulamaya gömülmez.\n• RevenueCat ve Apple App Store — abonelik durumunuzu doğrulamak ve yönetmek için kullanılır.\n• Apple (Sign in with Apple, bildirimler) — giriş yapmayı ve size bildirim göndermeyi sağlar.\nBu hizmet sağlayıcılar Türkiye dışında sunucu barındırabilir; bu durumda aktarım KVKK m.9 kapsamındaki açık rızanıza dayanır. Yasal bir zorunluluk olmadıkça verileriniz bu listenin dışında üçüncü kişilerle paylaşılmaz."
+        "body": "Verilerinizi pazarlama amacıyla üçüncü taraflara satmayız. Hizmeti sunabilmek için aşağıdaki hizmet sağlayıcılarla sınırlı ve amacına uygun veri paylaşımı yapılır:\n• Supabase Inc. — veritabanı, kimlik doğrulama ve dosya depolama altyapısı; hesap ve finansal kayıt verileriniz, çalışma alanınıza özel erişim politikalarıyla (satır bazlı güvenlik) izole şekilde saklanır.\n• Google (Gemini API) — belge görüntüleriniz; sesli kayıt özelliğini kullandığınızda sesiniz ve eşleştirme için çalışma alanınızdaki cari, kategori, varlık ve hesap adları, yalnızca alan çıkarımı ve kayıt taslağı hazırlama amacıyla ve sizin onayınızdan sonra sunucu tarafından bu servise iletilir; ses kayıtları Vademde tarafından saklanmaz; erişim anahtarı hiçbir zaman mobil uygulamaya gömülmez.\n• RevenueCat ve Apple App Store — abonelik durumunuzu doğrulamak ve yönetmek için kullanılır.\n• Apple (Sign in with Apple, bildirimler) — giriş yapmayı ve size bildirim göndermeyi sağlar.\nBu hizmet sağlayıcılar Türkiye dışında sunucu barındırabilir; bu durumda aktarım KVKK m.9 kapsamındaki açık rızanıza dayanır. Yasal bir zorunluluk olmadıkça verileriniz bu listenin dışında üçüncü kişilerle paylaşılmaz."
       },
       "s6": {
         "title": "6. Veri Güvenliği",

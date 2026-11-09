@@ -19,7 +19,7 @@ export const voice = {
   skip: 'Atla',
   manual: 'Elle gir',
   consentTitle: 'Sesli kayıt izni',
-  consentBody: 'Söyledikleriniz kayıt taslağı hazırlamak için güvenli bağlantıyla Google Gemini hizmetine iletilir. Ses kaydı saklanmaz. Kayıt yalnızca siz onaylayınca oluşur.',
+  consentBody: 'Sesiniz ve eşleştirme için çalışma alanınızdaki cari, kategori, varlık ve hesap adları, kayıt taslağı hazırlamak üzere güvenli bağlantıyla Google Gemini hizmetine iletilir. Ses kaydı Vademde’de saklanmaz. Kayıt yalnızca siz onaylayınca oluşur.',
   allow: 'İzin ver',
   permissionDenied: 'Sesli kayıt için ayarlardan mikrofon izni verin.',
   unavailable: 'Sesli kayıt şu anda yapılamadı. Tekrar deneyin veya elle girin.',

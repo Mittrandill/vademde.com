@@ -22,7 +22,7 @@ export const voice: Messages<typeof tr> = {
   skip: 'Skip',
   manual: 'Enter manually',
   consentTitle: 'Voice entry permission',
-  consentBody: 'What you say is sent over a secure connection to Google Gemini to prepare a draft. The recording is not stored. A record is created only when you approve it.',
+  consentBody: 'Your voice and, for matching, the counterparty, category, asset and account names in your workspace are sent over a secure connection to Google Gemini to prepare a draft. Vademde does not store the recording. A record is created only when you approve it.',
   allow: 'Allow',
   permissionDenied: 'Allow microphone access in Settings to use voice entry.',
   unavailable: 'Voice entry is unavailable right now. Try again or enter it manually.',
