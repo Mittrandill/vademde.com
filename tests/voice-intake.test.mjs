@@ -1,5 +1,6 @@
 // Sesli kayıt kuralları ve cari eşleştirme. Gerekli: Node 22.18+.
 import assert from 'node:assert/strict';
+import { voiceSpokenPhrases } from '../supabase/functions/_shared/voiceIntake.ts';
 import {
   applyChipAnswer, mergeFollowUp, nextVoiceQuestion, normalizeVoiceDraft, voiceAcknowledgement,
 } from '../supabase/functions/_shared/voiceIntake.ts';
@@ -159,6 +160,15 @@ assert.equal('amountMinor' in voiceDraftRoute(draft({ kind: 'obligation', docume
 const euroInvoice = voiceDraftRoute(draft({ kind: 'obligation', documentType: 'fatura', direction: 'receivable', amountMinor: 200000, currency: 'EUR' }));
 assert.equal(euroInvoice.params.amountMinor, '200000');
 assert.equal(euroInvoice.params.currency, 'EUR');
+
+// Söylenen her cümle önceden seslendirilecek listede
+for (const locale of ['tr', 'en']) {
+  const spoken = voiceSpokenPhrases(locale);
+  assert.ok(spoken.includes(voiceAcknowledgement(cheque, locale)));
+  assert.ok(spoken.includes(voiceAcknowledgement(debtPayment, locale)));
+  assert.ok(spoken.includes(nextVoiceQuestion(bill, context, [], locale).prompt));
+  assert.equal(spoken.includes(locale === 'tr' ? 'Hayır' : 'No'), false);
+}
 
 // Kredide banka cari sayılmaz
 const bankLoan = draft({ kind: 'obligation', documentType: 'kredi', direction: 'payable', amountMinor: 1, counterparty: 'İş Bankası' });

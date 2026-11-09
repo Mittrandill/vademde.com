@@ -14,6 +14,8 @@ export const voice = {
   processing: 'Kaydınızı hazırlıyorum',
   start: 'Konuşmaya başla',
   stop: 'Konuşmayı bitir',
+  tapToTalk: 'Konuşmak için dokunun',
+  tapToFinish: 'Bitirmek için dokunun',
   skip: 'Atla',
   manual: 'Elle gir',
   consentTitle: 'Sesli kayıt izni',

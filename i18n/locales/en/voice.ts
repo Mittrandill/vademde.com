@@ -17,6 +17,8 @@ export const voice: Messages<typeof tr> = {
   processing: 'Preparing your record',
   start: 'Start speaking',
   stop: 'Finish speaking',
+  tapToTalk: 'Tap to speak',
+  tapToFinish: 'Tap to finish',
   skip: 'Skip',
   manual: 'Enter manually',
   consentTitle: 'Voice entry permission',

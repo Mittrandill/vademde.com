@@ -250,6 +250,13 @@ const TEXT = {
   },
 } as const;
 
+// Önceden seslendirilecek cümleler (bkz. scripts/voice-clips/generate.mjs); seçenek etiketleri okunmaz.
+export function voiceSpokenPhrases(locale: VoiceLocale): string[] {
+  const copy = TEXT[locale];
+  const { work, payable: _payable, receivable: _receivable, none: _none, ...spoken } = copy;
+  return [...Object.values(spoken), ...Object.values(work)];
+}
+
 export function voiceAcknowledgement(draft: VoiceDraft, locale: VoiceLocale): string {
   const copy = TEXT[locale];
   if (draft.kind === 'unsupported') return draft.unsupportedReason === 'bank_debt' ? copy.bankDebt : copy.unsupported;

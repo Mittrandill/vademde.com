@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AudioQuality,
+  createAudioPlayer,
   IOSOutputFormat,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
@@ -20,8 +20,10 @@ import { AiGate } from '@/components/finance/AiGate';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Button, Pressable, Stack, Text } from '@/components/primitives';
 import { VoiceAssembly } from '@/components/voice/VoiceAssembly';
+import { VoiceOrb } from '@/components/voice/VoiceOrb';
 import { matchBankByName } from '@/features/banks/banks';
 import { submitVoice, type VoiceQuestion, type VoiceResult } from '@/features/voice/api';
+import { VOICE_CLIPS } from '@/features/voice/clips';
 import { voiceDraftRoute, type VoiceDraft } from '@/features/voice/route';
 import { useVoiceDraftStore } from '@/features/voice/store';
 import { DOCUMENT_TYPE_LABEL } from '@/features/obligations/documentTypes';
@@ -33,12 +35,12 @@ import { friendlyErrorMessage } from '@/utils/alerts';
 
 const VOICE_CONSENT_KEY = 'vademde-voice-consent-granted';
 const MAX_SECONDS = 60;
-const MIC_SIZE = 88;
 const RECORDING_OPTIONS = {
   extension: '.m4a',
   sampleRate: 16000,
   numberOfChannels: 1,
   bitRate: 32000,
+  isMeteringEnabled: true,
   android: { outputFormat: 'mpeg4', audioEncoder: 'aac' },
   ios: { outputFormat: IOSOutputFormat.MPEG4AAC, audioQuality: AudioQuality.MEDIUM },
   web: {},
@@ -87,11 +89,10 @@ function VoiceConsent({ children }: { children: React.ReactNode }) {
 }
 
 function VoiceAssistant() {
-  const theme = useTheme();
   const workspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setStoredDraft = useVoiceDraftStore((s) => s.setDraft);
   const recorder = useAudioRecorder(RECORDING_OPTIONS as never);
-  const recorderState = useAudioRecorderState(recorder, 250);
+  const recorderState = useAudioRecorderState(recorder, 100);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -107,25 +108,49 @@ function VoiceAssistant() {
   const [assemblyMs, setAssemblyMs] = useState(1400);
   const [assemblyComplete, setAssemblyComplete] = useState(false);
   const seconds = Math.floor((recorderState.durationMillis ?? 0) / 1000);
+  const [speaking, setSpeaking] = useState(false);
+  const speechIdRef = useRef(0);
+  const playerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
+  const inputLevel = Math.max(0, Math.min(1, ((recorderState.metering ?? -60) + 50) / 42));
+
+  const stopSpeech = useCallback(() => {
+    Speech.stop();
+    playerRef.current?.remove();
+    playerRef.current = null;
+  }, []);
 
   const speak = useCallback((text: string, onDone?: () => void) => {
-    Speech.stop();
+    stopSpeech();
+    const speechId = ++speechIdRef.current;
+    setSpeaking(true);
     let finished = false;
     const finish = () => {
       if (finished) return;
       finished = true;
       clearTimeout(fallback);
+      if (speechIdRef.current === speechId) setSpeaking(false);
       onDone?.();
     };
     // Ses motoru geri çağrı vermezse ekran takılı kalmasın.
     const fallback = setTimeout(finish, text.length * 110 + 2500);
-    Speech.speak(text, {
-      language: getLanguage() === 'en' ? 'en-US' : 'tr-TR',
-      onDone: finish,
-      onStopped: finish,
-      onError: finish,
-    });
-  }, []);
+    const language = getLanguage() === 'en' ? 'en' : 'tr';
+    const clip = VOICE_CLIPS[`${language}:${text}`];
+    if (clip !== undefined) {
+      try {
+        const player = createAudioPlayer(clip);
+        playerRef.current = player;
+        player.addListener('playbackStatusUpdate', (status) => {
+          if (status.didJustFinish) finish();
+        });
+        player.play();
+        return;
+      } catch {
+        playerRef.current = null;
+      }
+    }
+    // Karşılığı olmayan veya oynatılamayan cümleler cihaz sesiyle okunur.
+    Speech.speak(text, { language: language === 'en' ? 'en-US' : 'tr-TR', onDone: finish, onStopped: finish, onError: finish });
+  }, [stopSpeech]);
 
   useEffect(() => {
     setStoredDraft(null);
@@ -139,9 +164,9 @@ function VoiceAssistant() {
     return () => {
       cancelled = true;
       mountedRef.current = false;
-      Speech.stop();
+      stopSpeech();
     };
-  }, [setStoredDraft, speak]);
+  }, [setStoredDraft, speak, stopSpeech]);
 
   const handleResult = useCallback((result: VoiceResult) => {
     draftRef.current = result.draft;
@@ -181,7 +206,7 @@ function VoiceAssistant() {
 
   const start = useCallback(async () => {
     setError(null);
-    Speech.stop();
+    stopSpeech();
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
@@ -196,7 +221,7 @@ function VoiceAssistant() {
     } catch (failure) {
       fail(failure);
     }
-  }, [fail, recorder]);
+  }, [fail, recorder, stopSpeech]);
 
   const stop = useCallback(async () => {
     if (stoppingRef.current) return;
@@ -317,17 +342,13 @@ function VoiceAssistant() {
           accessibilityRole="button"
           accessibilityLabel={recording ? t('voice.stop') : t('voice.start')}
           onPress={recording ? stop : start}
-          style={{
-            width: MIC_SIZE,
-            height: MIC_SIZE,
-            borderRadius: theme.radius.pill,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: recording ? theme.colors.danger : theme.colors.action,
-          }}
         >
-          <Ionicons name={recording ? 'stop' : 'mic'} size={34} color={recording ? theme.colors.backgroundPrimary : theme.colors.onAction} />
+          <VoiceOrb mode={recording ? 'listening' : speaking ? 'speaking' : 'idle'} level={inputLevel} />
         </Pressable>
+      ) : null}
+
+      {showMic ? (
+        <Text variant="caption" color="textSecondary">{recording ? t('voice.tapToFinish') : t('voice.tapToTalk')}</Text>
       ) : null}
 
       {phase === 'question' && question?.type === 'voice' ? (
