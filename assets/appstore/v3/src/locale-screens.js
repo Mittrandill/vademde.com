@@ -9,5 +9,5 @@
     img.setAttribute('src', img.getAttribute('src').replace(/^shots\//, folder));
   });
   // Historical crop coordinates and overlays do not describe the current native layout.
-  document.querySelectorAll('.pop, .screen .cheque, .screen .scanline, .chip').forEach((el) => el.remove());
+  document.querySelectorAll('.pop:not(.keep), .screen .cheque, .screen .scanline, .chip').forEach((el) => el.remove());
 })();

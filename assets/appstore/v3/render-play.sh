@@ -8,7 +8,7 @@
 set -e
 cd "$(dirname "$0")"
 L=${L:-tr}; X=""; [[ $L == en ]] && X="-en"
-for name in tara rev_kredi home takvim instruments kredi card cari reports banks assets asset-detail; do
+for name in tara rev_kredi home takvim instruments kredi card cari reports banks assets asset-detail voice-listen voice-form; do
   [[ -s "src/shots-$L-android/$name.png" ]] || { echo "Yerel uygulama çekimi eksik: src/shots-$L-android/$name.png" >&2; exit 1; }
 done
 CHROME=${CHROME:-}
@@ -26,7 +26,7 @@ shot() { # çıktı genişlik yükseklik ölçek sorgu
     --window-size=$2,$3 --virtual-time-budget=6000 \
     --screenshot="$(cd "$OUT" && (pwd -W 2>/dev/null || pwd))/$1" "file:///${SRC#/}/play.html?$5&lang=$L" >/dev/null 2>&1
 }
-list=("$@"); (( ${#list[@]} )) || list=(1 2 3 4 5 6 7 8 9 10 11 12)
+list=("$@"); (( ${#list[@]} )) || list=(1 2 3 4 5 6 7 8 9 10 11 12 13 14)
 for i in "${list[@]}"; do
   n=$(printf "%02d" "$i")
   shot "vademde-$n.png" 1440 2560 1 "s=$i"

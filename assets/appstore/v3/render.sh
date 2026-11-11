@@ -8,13 +8,13 @@ set -e
 cd "${0:A:h}"
 L=${L:-tr}; X=""; [[ $L == en ]] && X="-en"
 if [[ $L == en ]]; then
-  for name in tara rev_kredi home takvim instruments kredi card cari reports banks; do
+  for name in tara rev_kredi home takvim instruments kredi card cari reports banks assets asset-detail voice-listen voice-form; do
     [[ -s "src/shots-en/$name.png" ]] || { echo "İngilizce uygulama çekimi eksik: src/shots-en/$name.png" >&2; exit 1; }
   done
 fi
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 mkdir -p out69$X out65$X out63$X
-list=($@); (( ${#list} )) || list=(1 2 3 4 5 6 7 8 9 10 11 12)
+list=($@); (( ${#list} )) || list=(1 2 3 4 5 6 7 8 9 10 11 12 13 14)
 for i in $list; do
   n=$(printf "%02d" $i)
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
