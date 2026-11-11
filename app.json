@@ -65,6 +65,7 @@
     },
     "android": {
       "package": "com.akintkaya.vademde",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#F6F5F1",
         "foregroundImage": "./assets/adaptive-icon.png"

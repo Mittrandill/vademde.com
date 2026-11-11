@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1062763581241",
+    "project_id": "boltnew-443720",
+    "storage_bucket": "boltnew-443720.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062763581241:android:46a3150023e054bfbce2e8",
+        "android_client_info": {
+          "package_name": "com.akintkaya.vademde"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1062763581241-lqh13eqc5e6k3e08psdihuglhgd7vnrc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfnEz5rf9xo3kxNQyDqF6RJKj0XloM6gU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1062763581241-lqh13eqc5e6k3e08psdihuglhgd7vnrc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
