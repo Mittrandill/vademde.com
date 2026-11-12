@@ -2,6 +2,9 @@ import { t } from '@/i18n';
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/db/database.types';
 import { syncCurrentProfileLocale } from '@/services/profileLocale';
+import type { QueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/services/queryKeys';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export type Workspace = Tables<'workspaces'>;
 
@@ -65,4 +68,16 @@ export async function updateWorkspaceName(id: string, name: string): Promise<Wor
 export async function deleteWorkspace(id: string): Promise<void> {
   const { error } = await supabase.from('workspaces').delete().eq('id', id);
   if (error) throw error;
+}
+
+// Silme sonrası istemci temizliği. Silinen çalışma alanı önbellekteki listeden hemen
+// çıkarılır, sonra aktif seçim sıfırlanır. Yalnızca invalidate etmek yetmiyordu: yeniden
+// çekme sürerken eski liste "success" olarak kalıyor, Ana Sayfa'daki otomatik seçim silinen
+// ID'yi tekrar aktif yapıyordu. Sonuç: get_workspace_entitlements "Workspace access denied"
+// ve obligations insert'te RLS hatası (2026-11-11 üretim olayı).
+export function forgetDeletedWorkspace(queryClient: QueryClient, id: string): void {
+  queryClient.setQueryData<Workspace[]>(queryKeys.workspaces(), (old) => old?.filter((w) => w.id !== id));
+  const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore.getState();
+  if (activeWorkspaceId === id) setActiveWorkspaceId(null);
+  queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
 }

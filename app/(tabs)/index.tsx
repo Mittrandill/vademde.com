@@ -100,8 +100,12 @@ export default function HomeScreen() {
     if (!workspacesQuery.isSuccess) return;
     if ((!activeWorkspaceId || !activeWorkspace) && firstWorkspaceId) {
       setActiveWorkspaceId(firstWorkspaceId);
+    } else if (activeWorkspaceId && !activeWorkspace && !firstWorkspaceId && !workspacesQuery.isFetching) {
+      // Güncel liste boş ve seçili ID artık yok (ör. son çalışma alanı silindi): eski ID ile
+      // sorgu/yazma denemesi yapılmasın, onboarding yönlendirmesi devralsın.
+      setActiveWorkspaceId(null);
     }
-  }, [activeWorkspaceId, activeWorkspace, firstWorkspaceId, workspacesQuery.isSuccess, setActiveWorkspaceId]);
+  }, [activeWorkspaceId, activeWorkspace, firstWorkspaceId, workspacesQuery.isSuccess, workspacesQuery.isFetching, setActiveWorkspaceId]);
 
   // Oturum açmış ama hiç çalışma alanı olmayan kullanıcı (ör. yeni kayıt) buradan
   // onboarding'e yönlendirilir. Koşul kritik: React Query, AsyncStorage'a persist edilmiş

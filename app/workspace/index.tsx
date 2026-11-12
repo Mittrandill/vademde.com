@@ -10,7 +10,7 @@ import { useReflowKey } from '@/services/reflow';
 import { Button, Group, GroupedRow, GroupedRowIcon, Pressable, Row, Stack, Tag, Text, TextField } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
-import { deleteWorkspace, listMyWorkspaces, updateWorkspaceName, type Workspace } from '@/features/workspaces/api';
+import { deleteWorkspace, forgetDeletedWorkspace, listMyWorkspaces, updateWorkspaceName, type Workspace } from '@/features/workspaces/api';
 import { isWorkspaceReadOnly, setPrimaryWorkspace } from '@/features/subscriptions/api';
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
@@ -71,10 +71,7 @@ export default function WorkspacesScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteWorkspace(id),
-    onSuccess: (_data, id) => {
-      if (activeWorkspaceId === id) setActiveWorkspaceId(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
-    },
+    onSuccess: (_data, id) => forgetDeletedWorkspace(queryClient, id),
     onError: (error) => Alert.alert(t('workspace.deleteFailedTitle'), friendlyErrorMessage(error, t('workspace.genericError'))),
   });
 

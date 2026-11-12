@@ -22,7 +22,7 @@ import {
 } from '@/components/primitives';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { useSession } from '@/features/auth/useSession';
-import { deleteWorkspace, listMyWorkspaces, updateWorkspaceName } from '@/features/workspaces/api';
+import { deleteWorkspace, forgetDeletedWorkspace, listMyWorkspaces, updateWorkspaceName } from '@/features/workspaces/api';
 import {
   buildInviteLink,
   createWorkspaceInvite,
@@ -72,7 +72,7 @@ export default function WorkspaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const workspaceId = id as string;
   const myUserId = session?.user?.id ?? null;
-  const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore();
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
 
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
   const [inviteLabel, setInviteLabel] = useState('');
@@ -136,8 +136,7 @@ export default function WorkspaceDetailScreen() {
   const deleteWorkspaceMutation = useMutation({
     mutationFn: () => deleteWorkspace(workspaceId),
     onSuccess: () => {
-      if (activeWorkspaceId === workspaceId) setActiveWorkspaceId(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
+      forgetDeletedWorkspace(queryClient, workspaceId);
       router.back();
     },
     onError: (error) => showErrorAlert(error, t('workspace.deleteFailed')),
