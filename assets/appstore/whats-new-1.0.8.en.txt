@@ -1,0 +1,8 @@
+Vademde 1.0.8
+
+• English is here: Vademde is now available in Turkish and English. It follows your device language on first launch; switch between System, Türkçe and English in Settings. Notifications, PDF reports, widgets and legal texts follow your choice.
+• Credit card due dates on your calendar: Even without entering a statement, your card balance appears on the card's due date in the calendar, in upcoming dues and in your total debt. You'll get a reminder 3 days before and on the due date.
+• Unpaid card balances don't disappear: A past-due, unpaid period stays on the calendar as overdue and isn't added on top of next month's balance. Payments settle the oldest period first.
+• Team members: Plus now lets you invite 2 people to your team, and Business teams can grow to 50 members.
+• Optional usage analytics: Turn it on or off in Settings > Privacy; it's off by default.
+• Minor improvements and bug fixes.

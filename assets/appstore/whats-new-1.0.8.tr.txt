@@ -1,0 +1,8 @@
+Vademde 1.0.8
+
+• İngilizce dil desteği: Uygulama artık Türkçe ve İngilizce. İlk açılışta cihazının dilini kullanır; Ayarlar'dan Sistem, Türkçe ya da English seçebilirsin. Bildirimler, PDF raporlar, widget'lar ve yasal metinler de seçtiğin dilde.
+• Kredi kartı son ödemeleri takvimde: Ekstre girmesen de kart borcun, kartın son ödeme gününde takvimde, yaklaşan vadelerde ve toplam borçta görünür. Son ödemeden 3 gün önce ve son ödeme günü hatırlatma gelir.
+• Ödenmeyen kart borcu kaybolmaz: Son ödeme günü geçen ve ödenmeyen dönem takvimde "gecikti" olarak kalır; sonraki ayın borcuyla toplanmaz. Ödeme yaptıkça önce en eski dönem kapanır.
+• Ekip üyeleri: Plus planında artık 2 kişiyi ekibine davet edebilirsin; İşletme planında ekip 50 kişiye kadar büyür.
+• İsteğe bağlı kullanım analitiği: Ayarlar > Gizlilik'ten açıp kapatabilirsin; varsayılan olarak kapalıdır.
+• Küçük iyileştirmeler ve hata düzeltmeleri.

@@ -42,3 +42,6 @@ yarn-error.*
 
 # Supabase CLI local cache
 supabase/.temp/
+
+# Yerel değerlendirme/ekran çıktıları (ses kayıtları, OCR test belgeleri) — repoya girmez
+/output/
