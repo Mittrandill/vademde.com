@@ -17,9 +17,14 @@ export interface QuotaSheetProps {
   /** Verilirse "Belgeyi taslak olarak sakla" satırı çıkar. */
   onSaveDraft?: () => void;
   draftSaving?: boolean;
+  /** Ücretsiz plan: süresiz toplam hak (yenilenme ayı yazılmaz). */
+  lifetime?: boolean;
+  /** Plus'ın aylık hakkı (plan_limits'ten); lifetime metninde gösterilir. */
+  plusQuota?: number;
 }
 
-// Kota, takvim ayı bazında yenilenir (bkz. features/subscriptions/api.ts currentPeriodMonth).
+// Ücretli planlarda kota takvim ayı bazında yenilenir; ücretsiz planda süresiz toplam haktır
+// (bkz. supabase/migrations/20261114120000_free_plan_lifetime_ocr_quota.sql).
 export function QuotaExceededSheet({
   visible,
   onClose,
@@ -29,16 +34,20 @@ export function QuotaExceededSheet({
   onManual,
   onSaveDraft,
   draftSaving,
+  lifetime,
+  plusQuota,
 }: QuotaSheetProps) {
   const theme = useTheme();
   const now = new Date();
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={t('scan.quotaSheet.title')}>
+    <BottomSheet visible={visible} onClose={onClose} title={lifetime ? t('scan.quotaSheet.titleLifetime') : t('scan.quotaSheet.title')}>
       <Stack gap="md" style={{ paddingTop: theme.spacing.xs }}>
         <Text variant="body" color="textSecondary">
-          {t('scan.quotaSheet.body', { month: MONTH_NAMES[next.getMonth()] })}
+          {lifetime
+            ? t('scan.quotaSheet.bodyLifetime', { quota, plusQuota: plusQuota ?? 100 })
+            : t('scan.quotaSheet.body', { month: MONTH_NAMES[next.getMonth()] })}
         </Text>
         <View
           style={{
@@ -51,7 +60,7 @@ export function QuotaExceededSheet({
             borderColor: theme.colors.border,
           }}
         >
-          <Text variant="body">{t('scan.quotaSheet.usage')}</Text>
+          <Text variant="body">{lifetime ? t('scan.quotaSheet.usageLifetime') : t('scan.quotaSheet.usage')}</Text>
           <Text variant="body" tabular>
             {used} / {quota}
           </Text>

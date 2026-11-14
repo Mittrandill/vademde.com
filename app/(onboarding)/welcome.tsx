@@ -6,7 +6,7 @@ import { Link, router } from 'expo-router';
 
 import { useTheme, withAlpha } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Pressable, Tag, Text } from '@/components/primitives';
+import { Button, Pressable, Text } from '@/components/primitives';
 import {
   DueIntroScene,
   ScanIntroScene,
@@ -28,8 +28,6 @@ const SCENE_HEIGHT = Math.round(Math.min(400, Math.max(300, SCREEN_HEIGHT * 0.44
 interface OnboardingPage {
   Scene: (props: IntroSceneProps) => React.JSX.Element;
   key: 'scan' | 'voice' | 'due' | 'wealth';
-  /** Yalnızca Plus planında açık özellik (sesli kayıt AiGate arkasında). */
-  plus?: boolean;
 }
 
 // Tanışma (4 değer önerisi) + Hoş geldin (hesap seçimi: Apple / Google / e-posta / giriş).
@@ -38,7 +36,7 @@ interface OnboardingPage {
 // (başlıkta `titleAccent` vurgulu yazılan kısımdır — App Store v3 setiyle aynı başlık dili).
 const PAGES: OnboardingPage[] = [
   { Scene: ScanIntroScene, key: 'scan' },
-  { Scene: VoiceIntroScene, key: 'voice', plus: true },
+  { Scene: VoiceIntroScene, key: 'voice' },
   { Scene: DueIntroScene, key: 'due' },
   { Scene: WealthIntroScene, key: 'wealth' },
 ];
@@ -140,7 +138,7 @@ export default function WelcomeScreen() {
         onMomentumScrollEnd={handleScroll}
         style={{ flex: 1 }}
       >
-        {PAGES.map(({ Scene, key, plus }, index) => (
+        {PAGES.map(({ Scene, key }, index) => (
           <ScrollView
             key={key}
             style={{ width: SCREEN_WIDTH }}
@@ -149,7 +147,6 @@ export default function WelcomeScreen() {
           >
             <Scene active={page === index} height={SCENE_HEIGHT} />
             <View style={{ paddingHorizontal: theme.screenEdge.standard + 4, marginTop: 20, gap: 10 }}>
-              {plus ? <Tag label="Plus" tone="brand" /> : null}
               <Text accessibilityRole="header" variant="pageTitle">
                 {t(`onboarding.pages.${key}.title`)}
               </Text>

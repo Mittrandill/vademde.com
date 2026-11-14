@@ -331,7 +331,7 @@ export function DueIntroScene({ active, height }: IntroSceneProps) {
   );
 }
 
-// 4 — Tüm tablo: net varlık, hesaplar/kartlar/varlıklar ve ekip paylaşımı.
+// 4 — Tüm tablo (ikonlar Daha Fazla menüsündekiyle aynı: wallet/card/home): net varlık, hesaplar/kartlar/varlıklar ve ekip paylaşımı.
 export function WealthIntroScene({ active, height }: IntroSceneProps) {
   const theme = useTheme();
   return (
@@ -354,17 +354,17 @@ export function WealthIntroScene({ active, height }: IntroSceneProps) {
       <Rise active={active} delay={160}>
         <Group>
           <GroupedRow
-            leading={<GroupedRowIcon name="wallet-outline" tone="success" />}
+            leading={<GroupedRowIcon name="wallet" />}
             title={t('onboarding.scenes.accounts')}
             trailing={<Amount value={t('onboarding.scenes.accountsAmount')} />}
           />
           <GroupedRow
-            leading={<GroupedRowIcon name="card-outline" tone="violet" />}
+            leading={<GroupedRowIcon name="card" />}
             title={t('onboarding.scenes.cards')}
             trailing={<Amount value={t('onboarding.scenes.cardsAmount')} color={theme.colors.payable} />}
           />
           <GroupedRow
-            leading={<GroupedRowIcon name="home-outline" tone="aqua" />}
+            leading={<GroupedRowIcon name="home" />}
             title={t('onboarding.scenes.assets')}
             subtitle={t('onboarding.scenes.assetsSub')}
             trailing={<Amount value={t('onboarding.scenes.assetsAmount')} />}

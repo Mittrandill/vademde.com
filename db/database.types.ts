@@ -950,6 +950,7 @@ Relationships: [];
           max_personal_workspaces: number
           max_team_members: number | null
           monthly_ocr_quota: number
+          ocr_quota_period: string
           plan: string
           recurring_transactions: boolean
           unlimited_export: boolean
@@ -963,6 +964,7 @@ Relationships: [];
           max_personal_workspaces: number
           max_team_members?: number | null
           monthly_ocr_quota: number
+          ocr_quota_period?: string
           plan: string
           recurring_transactions?: boolean
           unlimited_export?: boolean
@@ -976,6 +978,7 @@ Relationships: [];
           max_personal_workspaces?: number
           max_team_members?: number | null
           monthly_ocr_quota?: number
+          ocr_quota_period?: string
           plan?: string
           recurring_transactions?: boolean
           unlimited_export?: boolean

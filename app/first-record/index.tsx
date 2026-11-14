@@ -5,7 +5,7 @@ import { router, type Href } from 'expo-router';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, GroupedRowIcon, Pressable, Row, Stack, Tag, Text } from '@/components/primitives';
+import { Button, GroupedRowIcon, Pressable, Row, Stack, Text } from '@/components/primitives';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { t } from '@/i18n';
 
@@ -13,14 +13,12 @@ interface FirstRecordOption {
   key: 'scan' | 'voice' | 'obligation' | 'transaction';
   icon: keyof typeof Ionicons.glyphMap;
   href: Href;
-  /** Sesli kayıt Plus özelliğidir (AiGate); ücretsiz kullanıcı o ekranda planları görür. */
-  plus?: boolean;
   primary?: boolean;
 }
 
 const OPTIONS: FirstRecordOption[] = [
   { key: 'scan', icon: 'scan-outline', href: '/(tabs)/tara', primary: true },
-  { key: 'voice', icon: 'mic-outline', href: '/voice', plus: true },
+  { key: 'voice', icon: 'mic-outline', href: '/voice' },
   { key: 'obligation', icon: 'document-text-outline', href: '/obligations/new' },
   { key: 'transaction', icon: 'swap-vertical-outline', href: '/transactions/new' },
 ];
@@ -83,7 +81,6 @@ export default function FirstRecordScreen() {
                   <Stack gap="xxs" style={{ flex: 1 }}>
                     <Row gap="xs" align="center">
                       <Text style={{ fontWeight: '600' }}>{t(`onboarding.firstRecord.${option.key}`)}</Text>
-                      {option.plus ? <Tag label="Plus" tone="brand" /> : null}
                     </Row>
                     <Text variant="caption" color="textSecondary">
                       {t(`onboarding.firstRecord.${option.key}Hint`)}

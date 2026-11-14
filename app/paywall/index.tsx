@@ -59,7 +59,14 @@ const TABLE_COLUMN_FLEX = 1;
 // Karşılaştırma tablosu plan_limits alanlarından türetilir (docs/10-abonelik-gelir-modeli.md);
 // etiketler kullanıcının tanıdığı adlarla yazılır (ör. "audit log" değil).
 const COMPARISON_ROWS: { readonly label: string; value: (limits: PlanLimits) => string }[] = [
-  { get label() { return t('subscription.paywall.rowScans'); }, value: (l) => String(l.monthly_ocr_quota) },
+  {
+    get label() { return t('subscription.paywall.rowScans'); },
+    // Ücretsiz plan süresiz toplam hak, ücretli planlar aylık (plan_limits.ocr_quota_period).
+    value: (l) =>
+      l.ocr_quota_period === 'lifetime'
+        ? t('subscription.paywall.scansTotal', { count: l.monthly_ocr_quota })
+        : t('subscription.paywall.scansPerMonth', { count: l.monthly_ocr_quota }),
+  },
   { get label() { return t('subscription.paywall.rowWorkspaces'); }, value: (l) => String(l.max_personal_workspaces) },
   { get label() { return t('subscription.paywall.rowTeam'); }, value: (l) => (l.max_team_members ? String(l.max_team_members) : '—') },
   { get label() { return t('subscription.paywall.rowReports'); }, value: (l) => (l.advanced_reports ? t('subscription.paywall.yes') : '—') },
@@ -280,7 +287,10 @@ export default function PaywallScreen() {
               <Text variant="body" color="textSecondary">
                 {PLAN_STATUS_LABELS[currentPlan] ?? PLAN_STATUS_LABELS.free}
                 {ocrUsageQuery.data
-                  ? t('subscription.paywall.usage', { used: ocrUsageQuery.data.usedCount, quota: ocrUsageQuery.data.quota })
+                  ? t(ocrUsageQuery.data.quotaPeriod === 'lifetime' ? 'subscription.paywall.usageLifetime' : 'subscription.paywall.usage', {
+                      used: ocrUsageQuery.data.usedCount,
+                      quota: ocrUsageQuery.data.quota,
+                    })
                   : ''}
               </Text>
             </Stack>

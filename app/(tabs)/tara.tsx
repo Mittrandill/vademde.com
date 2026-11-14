@@ -1,4 +1,5 @@
 import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
+import { getAllPlanLimits } from '@/features/subscriptions/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -167,6 +168,9 @@ export default function TaraScreen() {
 
   const ocrUsageQuery = useWorkspaceEntitlements();
   const quotaRemaining = ocrUsageQuery.data?.remaining;
+  // Ücretsiz plan kota penceresinde "Plus ile her ay N hak" yazmak için (plan_limits tek kaynak).
+  const planLimitsQuery = useQuery({ queryKey: queryKeys.planLimits(), queryFn: getAllPlanLimits, staleTime: 60 * 60 * 1000 });
+  const plusQuota = planLimitsQuery.data?.find((l) => l.plan === 'plus')?.monthly_ocr_quota;
 
   const documentQuery = useQuery({
     queryKey:
@@ -604,6 +608,8 @@ export default function TaraScreen() {
           onClose={() => setQuotaSheetOpen(false)}
           used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
           quota={ocrUsageQuery.data?.quota ?? 0}
+          lifetime={ocrUsageQuery.data?.quotaPeriod === 'lifetime'}
+          plusQuota={plusQuota}
           onSaveDraft={draftTarget ? saveAsDraft : undefined}
           draftSaving={draftSaving}
           onUpgrade={() => {
@@ -689,6 +695,8 @@ export default function TaraScreen() {
           onClose={() => setQuotaSheetOpen(false)}
           used={ocrUsageQuery.data ? ocrUsageQuery.data.quota - ocrUsageQuery.data.remaining : 0}
           quota={ocrUsageQuery.data?.quota ?? 0}
+          lifetime={ocrUsageQuery.data?.quotaPeriod === 'lifetime'}
+          plusQuota={plusQuota}
           onSaveDraft={draftTarget ? saveAsDraft : undefined}
           draftSaving={draftSaving}
           onUpgrade={() => {

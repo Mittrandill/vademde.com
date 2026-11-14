@@ -16,7 +16,6 @@ import { File } from 'expo-file-system';
 import * as Speech from 'expo-speech';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { AiGate } from '@/components/finance/AiGate';
 import { ScreenHeader } from '@/components/navigation/ScreenHeader';
 import { Button, Pressable, Stack, Text } from '@/components/primitives';
 import { VoiceAssembly } from '@/components/voice/VoiceAssembly';
@@ -57,11 +56,11 @@ export default function VoiceScreen() {
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
       <View style={{ flex: 1, padding: theme.screenEdge.standard }}>
         <ScreenHeader inline title={t('voice.title')} leftLabel={{ label: t('common.close'), onPress: () => router.back() }} />
-        <AiGate>
-          <VoiceConsent>
-            <VoiceAssistant />
-          </VoiceConsent>
-        </AiGate>
+        {/* Sesli kayıt tüm planlarda açık; hak belge taramayla ortak kotadan düşer (ücretsiz planda
+            süresiz toplam 5). Onay VoiceConsent'te alınır; Plus kapısı (AiGate) kaldırıldı. */}
+        <VoiceConsent>
+          <VoiceAssistant />
+        </VoiceConsent>
       </View>
     </SafeAreaView>
   );

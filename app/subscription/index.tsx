@@ -142,7 +142,7 @@ export default function SubscriptionScreen() {
           <View style={{ height: 1, backgroundColor: theme.colors.separator }} />
           <Stack gap="xs">
             <Row align="center" style={{ justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 15 }}>{t('subscription.monthScans')}</Text>
+              <Text style={{ fontSize: 15 }}>{usage?.quotaPeriod === 'lifetime' ? t('subscription.lifetimeScans') : t('subscription.monthScans')}</Text>
               <Text tabular style={{ fontSize: 15, fontWeight: '600' }}>
                 {usage ? `${usage.usedCount} / ${usage.quota}` : '—'}
               </Text>

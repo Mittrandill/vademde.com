@@ -36,6 +36,9 @@ export interface OcrUsageStatus {
   usedCount: number;
   quota: number;
   remaining: number;
+  /** 'lifetime': ücretsiz plan — süresiz toplam hak (her ay yenilenmez); 'month': aylık kota.
+   * Eski sunucu yanıtlarında olmayabilir; yoksa aylık kabul edilir. */
+  quotaPeriod?: 'month' | 'lifetime';
 }
 
 export interface WorkspaceEntitlements extends OcrUsageStatus {

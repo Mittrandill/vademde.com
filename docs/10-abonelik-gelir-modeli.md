@@ -7,9 +7,9 @@
 
 | Plan | Kapsam |
 |---|---|
-| Ücretsiz | 1 kişisel çalışma alanı, temel gelir-gider ve borç-alacak, sınırlı OCR, temel bildirim ve rapor |
-| Vademde Plus | Birden fazla çalışma alanı, 2 ekip üyesi, daha yüksek OCR kotası, gelişmiş rapor, sınırsız dışa aktarma, belge arşivi, düzenli işlemler, Face ID |
-| Vademde İşletme | 50 ekip üyesi, roller, audit log, gelişmiş cari rapor, yüksek dosya/OCR kotası ve işletme özellikleri |
+| Ücretsiz | 1 kişisel çalışma alanı, temel gelir-gider ve borç-alacak, belge tarama + sesli kayıt için **süresiz toplam 5 hak** (her ay yenilenmez), temel bildirim ve rapor |
+| Vademde Plus | Birden fazla çalışma alanı, 2 ekip üyesi, ayda 100 belge tarama + sesli kayıt, gelişmiş rapor, sınırsız dışa aktarma, belge arşivi, düzenli işlemler, Face ID |
+| Vademde İşletme | 50 ekip üyesi, roller, audit log, gelişmiş cari rapor, ayda 500 belge tarama + sesli kayıt ve işletme özellikleri |
 
 Ekip üyesi sayısı çalışma alanı sahibini içermez (Plus: sahip + 2 kişi). Limitler 2026-10-25'te
 Plus için `null → 2`, İşletme için `10 → 50` yapıldı (`20261025164706_team_member_limits_plus_isletme.sql`).
@@ -22,7 +22,7 @@ nerede zorunlu kılındığını kaydeder — yeni bir limit eklenirken bu tablo
 
 | Limit | Nerede uygulanır |
 |---|---|
-| `monthly_ocr_quota` | Sunucu — `supabase/functions/process-document/index.ts` |
+| `monthly_ocr_quota` + `ocr_quota_period` (`month` / `lifetime`) | Sunucu — `entitlement_private.ocr_quota_state` (reserve_ocr, reserve_voice_ocr, get_entitlements) |
 | `max_personal_workspaces` | Sunucu — `workspaces` üzerinde `enforce_workspace_plan_limit` trigger'ı + `setup_initial_workspaces`; istemcide `app/workspace/index.tsx` ve `app/workspace-setup/index.tsx` |
 | `max_team_members` | Sunucu — `create_workspace_invite` / `redeem_workspace_invite`; istemcide `app/workspace/[id]/members.tsx` |
 | `document_archive` | Yalnızca **ödeme dekontu arşivi** için: sunucu — `payments` üzerinde `enforce_payment_receipt_plan` trigger'ı (`RECEIPT_ARCHIVE_PLAN_REQUIRED`) + `process-document` dekont dosyasını yalnızca bu planda saklar; istemcide `features/receipts/api.ts` `useDocumentArchiveAccess`. Arşiv listesi `app/documents/archive.tsx` (Daha Fazla → Belge Arşivi; cari sayfasından `counterpartyId` filtresiyle de açılır). |
@@ -46,7 +46,7 @@ Salt-okunur kuralı RLS politikalarına dokunmadan, `workspace_id` taşıyan ver
 `enforce_write_access` trigger'ıyla uygulanır (bkz.
 `supabase/migrations/20260905130000_enforce_plan_limits.sql`). DELETE bilerek serbesttir.
 
-OCR maliyetleri nedeniyle ücretsiz planın aylık belge kotası olmalıdır. Kota bittiğinde manuel giriş açık kalır; kullanıcı belgesini taslak olarak saklayabilir veya ek paket/premium plan kullanabilir. İlk TestFlight döneminde premium özellikler manuel yetkiyle açılabilir.
+**Karar (2026-11-14):** Ücretsiz plan belge tarama ve sesli kayıt için hesap başına süresiz toplam 5 hak alır; her ay yenilenmez ve geçmiş kullanım sayılır (`20261114120000_free_plan_lifetime_ocr_quota`). Sesli kayıt tüm planlarda açıktır, hak taramayla ortaktır. Plus ve İşletme aylık kotayla devam eder. Kota bittiğinde manuel giriş açık kalır; kullanıcı belgesini taslak olarak saklayabilir veya ek paket/premium plan kullanabilir. İlk TestFlight döneminde premium özellikler manuel yetkiyle açılabilir.
 
 ## 14.1 Fiyatlama ilkeleri
 

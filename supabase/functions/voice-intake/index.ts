@@ -88,7 +88,10 @@ Deno.serve(async (req: Request) => {
   if (!member) return json({ error: 'forbidden' }, 403);
   const { data: entitlements, error: entitlementError } = await db.rpc('get_workspace_entitlements', { p_workspace_id: workspaceId });
   if (entitlementError) return json({ error: 'workspace_access_denied' }, 403);
-  if (!entitlements || entitlements.plan === 'free') return json({ error: 'plus_required' }, 403);
+  // Sesli kayıt tüm planlarda açıktır; hak, belge taramayla ortak kotadan düşer (ücretsiz planda
+  // süresiz toplam 5, bkz. 20261114120000_free_plan_lifetime_ocr_quota). Kota kontrolü
+  // reserve_workspace_voice_ocr içinde yapılır.
+  if (!entitlements) return json({ error: 'workspace_access_denied' }, 403);
 
   let context: VoiceContext;
   try {
