@@ -90,7 +90,7 @@ export const workspace = {
   setup: {
     both: 'Her ikisi',
     defaultPersonal: 'Kişisel Bütçe',
-    defaultBusiness: 'İşletme Bütçe',
+    defaultBusiness: 'İşletme Bütçesi',
     back: 'Geri',
     choiceTitle: 'Nerede takip edeceksin?',
     choiceBody: 'Kendi çalışma alanını oluştur veya seni davet eden bir ekibe davet koduyla katıl.',

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
@@ -15,6 +16,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { parseAmountToMinor } from '@/utils/money';
 import { queryKeys } from '@/services/queryKeys';
+import { PAYWALL_LAST_SHOWN_KEY } from '@/utils/storageKeys';
 import { showErrorAlert } from '@/utils/alerts';
 import { t } from '@/i18n';
 import { amountPlaceholder } from '@/i18n/format';
@@ -73,7 +75,9 @@ export default function WorkspaceSetupScreen() {
   const isBoth = mode === 'both';
   const trimmedName = name.trim();
   const modeLocked = isBoth ? bothLocked : singleLocked;
-  const canSubmit = !modeLocked && (isBoth || trimmedName.length > 0);
+  // Ad boş bırakılırsa alandaki örnek ad ("Kişisel Bütçe" / "İşletmem") kullanılır: buton ad
+  // yazılana kadar pasif kaldığında yeni kullanıcıların bir kısmı kurulumu yarıda bırakıyordu.
+  const canSubmit = !modeLocked;
 
   const setupMutation = useMutation({
     mutationFn: async () => {
@@ -82,7 +86,7 @@ export default function WorkspaceSetupScreen() {
       // modunda yarım kalma riski yoktur.
       return setupInitialWorkspaces({
         mode,
-        name: isBoth ? null : trimmedName,
+        name: isBoth ? null : trimmedName || DEFAULT_NAME[mode as 'personal' | 'business'],
         openingBalanceMinor: !isBoth && balance ? parseAmountToMinor(balance) ?? 0 : null,
       });
     },
@@ -91,13 +95,18 @@ export default function WorkspaceSetupScreen() {
       // review.tsx'teki aynı Fabric çakışması: invalidation ve navigasyon aynı anda/ters
       // sırada tetiklenirse ekran hâlâ mount'tayken arkadaki view çöküyor. Navigasyon hemen
       // (senkron), invalidation bir sonraki etkileşim turuna ertelenir.
-      setActiveWorkspaceId(primaryWorkspaceId);
-      router.replace('/(tabs)');
       // İlk kurulumdan (onboarding'den gelen yeni kullanıcı) sonra 7 gün ücretsiz deneme teklifi
       // bir kez sunulur. Mevcut kullanıcının ek çalışma alanı açması (skippedChoice) buna girmez.
       // Paywall, navigasyon ve önbellek işi bittikten sonra açılır — aynı Fabric çakışması.
       const showTrialOffer = !skippedChoice && !hasSeenTrialOffer;
-      if (showTrialOffer) setHasSeenTrialOffer(true);
+      if (showTrialOffer) {
+        setHasSeenTrialOffer(true);
+        // Ana Sayfa'daki yumuşak paywall hatırlatması (5 günde bir) aynı anda ikinci bir
+        // paywall açmasın: deneme teklifi gösterildiği için hatırlatma sayacı da başlatılır.
+        AsyncStorage.setItem(PAYWALL_LAST_SHOWN_KEY, String(Date.now())).catch(() => {});
+      }
+      setActiveWorkspaceId(primaryWorkspaceId);
+      router.replace('/(tabs)');
       InteractionManager.runAfterInteractions(() => {
         queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
         if (showTrialOffer) router.push('/paywall');

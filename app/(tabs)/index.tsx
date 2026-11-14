@@ -1,10 +1,10 @@
 import { useWorkspaceEntitlements } from '@/features/subscriptions/useWorkspaceEntitlements';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { PAYWALL_LAST_SHOWN_KEY } from '@/utils/storageKeys';
@@ -43,6 +43,7 @@ import { nextCardDue, statementPeriodKey, useCardDueItems } from '@/features/acc
 import { useReflowKey } from '@/services/reflow';
 import { useWidgetSnapshot } from '@/features/dashboard/useWidgetSnapshot';
 import { t } from '@/i18n';
+import { requestTrackingIfNeeded } from '@/services/metaAds';
 
 // Ücretsiz plandaki kullanıcıya ilk açılışta ve sonrasında en fazla 5 günde bir kez
 // gösterilen yumuşak paywall hatırlatması (kullanıcı kararı — Dashboard'da başka bir
@@ -82,6 +83,20 @@ export default function HomeScreen() {
       router.push('/paywall');
     });
   }, [subscriptionQuery.isSuccess, subscriptionQuery.data]);
+
+  // ATT izni (iOS) artık giriş ekranından önce değil, kullanıcı çalışma alanını kurup Ana
+  // Sayfa'yı gördükten sonra istenir. Kısa gecikme ve odak kontrolü: ilk kurulumda Ana Sayfa
+  // açılır açılmaz paywall üstüne açılıyor; ekran odağı kaybederse zamanlayıcı iptal olur ve
+  // istem paywall kapanıp Ana Sayfa'ya dönülünce gösterilir. Bir kez sorulduktan sonra no-op.
+  useFocusEffect(
+    useCallback(() => {
+      if (!activeWorkspaceId) return;
+      const timer = setTimeout(() => {
+        requestTrackingIfNeeded().catch(() => {});
+      }, 2500);
+      return () => clearTimeout(timer);
+    }, [activeWorkspaceId])
+  );
 
   const workspaces = workspacesQuery.data ?? [];
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
