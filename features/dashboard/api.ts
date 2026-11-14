@@ -94,3 +94,15 @@ export async function getPendingReviewDocuments(workspaceId: string): Promise<Pe
   if (error) throw error;
   return data;
 }
+
+// İlk kurulum sonrası deneme teklifinin zamanlaması için: çalışma alanında en az bir hareket ya
+// da vadeli kayıt var mı? (Yalnızca varlık kontrolü; satır okunmaz.)
+export async function workspaceHasAnyRecord(workspaceId: string): Promise<boolean> {
+  const [transactions, obligations] = await Promise.all([
+    supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('workspace_id', workspaceId),
+    supabase.from('obligations').select('id', { count: 'exact', head: true }).eq('workspace_id', workspaceId),
+  ]);
+  if (transactions.error) throw transactions.error;
+  if (obligations.error) throw obligations.error;
+  return (transactions.count ?? 0) + (obligations.count ?? 0) > 0;
+}

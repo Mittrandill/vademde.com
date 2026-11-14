@@ -1,26 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useTheme, withAlpha } from '@/theme';
-import { Text } from '@/components/primitives';
+import { useTheme } from '@/theme';
+import { Group, GroupedRow, GroupedRowIcon, Tag, Text } from '@/components/primitives';
 import { BankLogo } from '@/components/finance/BankLogo';
 import { VademdeMark } from '@/components/brand/VademdeMark';
+import { tabularNums } from '@/theme/typography';
 import { t } from '@/i18n';
 
-// Tanışma sahneleri: örnek veriyle çizilen sabit illüstrasyonlardır (gerçek veri okunmaz).
-// App Store v3 setiyle (assets/appstore/v3) aynı görsel dil: çerçevesiz, marka ışığı üzerinde yüzen öğeler.
-// Kâğıt belge renkleri bir "fiziksel kâğıt" illüstrasyonudur ve temadan bağımsızdır.
+// Tanışma sahneleri: örnek veriyle çizilen sabit önizlemelerdir (gerçek veri okunmaz).
+// Uygulamanın kendi bileşenleriyle (Group/GroupedRow/Tag, BankLogo) kurulur; böylece kullanıcı
+// kayıttan önce uygulamanın gerçekte nasıl göründüğünü görür (docs/08-tasarim-sistemi.md).
 export interface IntroSceneProps {
   active?: boolean;
   height: number;
 }
-
-const PAPER = '#F7F3E8';
-const PAPER_INK = '#2A2B30';
-const PAPER_MUTED = '#8F8D85';
-const PAPER_LINE = '#D6D1C2';
 
 function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
@@ -47,7 +43,7 @@ function useEntrance(active: boolean | undefined, delay = 0) {
     }
     const anim = Animated.timing(value, {
       toValue: 1,
-      duration: 520,
+      duration: 480,
       delay,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
@@ -58,17 +54,32 @@ function useEntrance(active: boolean | undefined, delay = 0) {
   return value;
 }
 
+/** Aşağıdan hafifçe kayarak beliren blok. */
+function Rise({ active, delay = 0, children }: { active?: boolean; delay?: number; children: ReactNode }) {
+  const v = useEntrance(active, delay);
+  return (
+    <Animated.View
+      style={{
+        opacity: v,
+        transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 function SceneGlow({ height }: { height: number }) {
   const theme = useTheme();
-  const strength = theme.scheme === 'dark' ? 0.26 : 0.2;
+  const strength = theme.scheme === 'dark' ? 0.2 : 0.14;
   return (
     <Svg style={{ position: 'absolute', left: 0, right: 0, top: 0 }} width="100%" height={height}>
       <Defs>
-        <RadialGradient id="glow" cx="50%" cy="48%" rx="58%" ry="50%">
+        <RadialGradient id="glow" cx="50%" cy="42%" rx="62%" ry="40%">
           <Stop offset="0" stopColor={theme.colors.brandPrimary} stopOpacity={strength} />
           <Stop offset="1" stopColor={theme.colors.brandPrimary} stopOpacity={0} />
         </RadialGradient>
-        <RadialGradient id="glow2" cx="10%" cy="100%" rx="55%" ry="45%">
+        <RadialGradient id="glow2" cx="6%" cy="66%" rx="50%" ry="30%">
           <Stop offset="0" stopColor={theme.colors.accentViolet} stopOpacity={strength * 0.8} />
           <Stop offset="1" stopColor={theme.colors.accentViolet} stopOpacity={0} />
         </RadialGradient>
@@ -79,360 +90,196 @@ function SceneGlow({ height }: { height: number }) {
   );
 }
 
-function FloatingCard({ children, style }: { children: React.ReactNode; style?: object }) {
+function SceneFrame({ height, label, children }: { height: number; label: string; children: ReactNode }) {
   const theme = useTheme();
   return (
     <View
-      style={[
-        {
-          borderRadius: 18,
-          backgroundColor: theme.colors.surfaceElevated,
-          shadowColor: '#000',
-          shadowOpacity: theme.scheme === 'dark' ? 0.4 : 0.12,
-          shadowRadius: 22,
-          shadowOffset: { width: 0, height: 12 },
-        },
-        style,
-      ]}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={label}
+      style={{ height, justifyContent: 'center', paddingHorizontal: theme.screenEdge.standard + 4 }}
     >
-      {children}
+      <SceneGlow height={height} />
+      <View style={{ gap: 12 }}>{children}</View>
     </View>
   );
 }
 
-function FieldTag({ label }: { label: string }) {
+function Amount({ value, color }: { value: string; color?: string }) {
   const theme = useTheme();
   return (
-    <View
-      style={{
-        position: 'absolute',
-        top: -22,
-        left: -2,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 5,
-        backgroundColor: theme.colors.brandPrimary,
-      }}
-    >
-      <Text style={{ fontSize: 10, lineHeight: 13, fontWeight: '700', color: theme.colors.onAction }}>{label}</Text>
-    </View>
+    <Text style={[{ fontSize: 15, fontWeight: '600', color: color ?? theme.colors.textPrimary }, tabularNums]}>{value}</Text>
   );
 }
 
-// 1 · Belgeyi çekin: vizör köşeleri içinde çek, akan tarama çizgisi, okunan alanlar ve oluşan kayıt.
+// 1 — Belge okuma + onay: kamera çerçevesindeki belge, okunan alanlar ve "kontrol et" işareti.
 export function ScanIntroScene({ active, height }: IntroSceneProps) {
   const theme = useTheme();
-  const reduce = useReduceMotion();
-  const [scan] = useState(() => new Animated.Value(0));
-  const result = useEntrance(active, 650);
-
-  useEffect(() => {
-    if (!active || reduce) {
-      scan.setValue(0.5);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scan, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(scan, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [active, reduce, scan]);
-
-  const finderTop = height * 0.08;
-  const finderHeight = Math.min(230, height * 0.56);
-  const corner = { position: 'absolute' as const, width: 30, height: 30, borderColor: theme.colors.brandPrimary };
-
+  const types = t('onboarding.scenes.docTypes').split(',');
   return (
-    <View accessible accessibilityLabel={t('onboarding.scenes.scanA11y')} style={{ height }}>
-      <SceneGlow height={height} />
-
-      <View style={{ position: 'absolute', left: 36, right: 36, top: finderTop, height: finderHeight }}>
-        <View style={[corner, { left: 0, top: 0, borderLeftWidth: 4, borderTopWidth: 4, borderTopLeftRadius: 12 }]} />
-        <View style={[corner, { right: 0, top: 0, borderRightWidth: 4, borderTopWidth: 4, borderTopRightRadius: 12 }]} />
-        <View style={[corner, { left: 0, bottom: 0, borderLeftWidth: 4, borderBottomWidth: 4, borderBottomLeftRadius: 12 }]} />
-        <View style={[corner, { right: 0, bottom: 0, borderRightWidth: 4, borderBottomWidth: 4, borderBottomRightRadius: 12 }]} />
-
+    <SceneFrame height={height} label={t('onboarding.scenes.scanA11y')}>
+      <Rise active={active}>
         <View
           style={{
-            position: 'absolute',
-            left: 22,
-            right: 22,
-            top: finderHeight * 0.16,
-            height: finderHeight * 0.68,
-            borderRadius: 8,
-            backgroundColor: PAPER,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            justifyContent: 'space-between',
-            transform: [{ rotate: '-4deg' }],
-            shadowColor: '#000',
-            shadowOpacity: 0.35,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 10 },
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            padding: 12,
+            borderRadius: theme.radius.widget,
+            backgroundColor: theme.colors.surfacePrimary,
           }}
         >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <Text style={{ fontSize: 12, fontWeight: '800', letterSpacing: 0.3, color: PAPER_INK }}>KUZEY BANK A.Ş.</Text>
-            <Text mono style={{ fontSize: 9, color: PAPER_MUTED }}>
-              No 0047219
-            </Text>
+          <View
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 12,
+              backgroundColor: theme.colors.fill,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="scan-outline" size={28} color={theme.colors.brandPrimary} />
           </View>
-          <View style={{ gap: 6 }}>
-            <View style={{ width: '64%', height: 4, borderRadius: 2, backgroundColor: PAPER_LINE }} />
-            <View style={{ width: '42%', height: 4, borderRadius: 2, backgroundColor: PAPER_LINE }} />
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-            <View style={{ paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.brandPrimary, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16) }}>
-              <FieldTag label={t('onboarding.scenes.dueTag')} />
-              <Text mono style={{ fontSize: 10, color: PAPER_INK }}>
-                {t('onboarding.scenes.sampleDate')}
-              </Text>
-            </View>
-            <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.brandPrimary, backgroundColor: withAlpha(theme.colors.brandPrimary, 0.16) }}>
-              <FieldTag label={t('onboarding.scenes.amountTag')} />
-              <Text mono style={{ fontSize: 13, fontWeight: '700', color: PAPER_INK }}>
-                {t('onboarding.scenes.sampleAmount')}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <Animated.View
-          style={{
-            position: 'absolute',
-            left: 14,
-            right: 14,
-            top: finderHeight * 0.1,
-            height: 3,
-            borderRadius: 2,
-            backgroundColor: theme.colors.brandPrimary,
-            shadowColor: theme.colors.brandPrimary,
-            shadowOpacity: 0.9,
-            shadowRadius: 10,
-            shadowOffset: { width: 0, height: 0 },
-            transform: [{ translateY: scan.interpolate({ inputRange: [0, 1], outputRange: [0, finderHeight * 0.8] }) }],
-          }}
-        />
-      </View>
-
-      <Animated.View
-        style={{
-          position: 'absolute',
-          left: 20,
-          right: 20,
-          bottom: height * 0.05,
-          opacity: result,
-          transform: [{ translateY: result.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-        }}
-      >
-        <FloatingCard style={{ minHeight: 64, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <BankLogo bankCode="turkiye-garanti-bankasi" size={38} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ fontWeight: '600' }}>{t('onboarding.scenes.receivedCheque')}</Text>
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {t('onboarding.scenes.sampleParty')}
+            <Text variant="caption" color="textSecondary">
+              {t('onboarding.scenes.readInSeconds')}
             </Text>
           </View>
-          <Text tabular color="receivable" style={{ fontWeight: '700' }}>
-            +{t('onboarding.scenes.sampleAmount')}
-          </Text>
-        </FloatingCard>
-      </Animated.View>
-    </View>
-  );
-}
-
-// 2 · Her kaydı siz onaylarsınız: alan alan "belgeden" / "kontrol edin" etiketleri ve güven rozeti.
-export function ConfirmIntroScene({ active, height }: IntroSceneProps) {
-  const theme = useTheme();
-  const reduce = useReduceMotion();
-  const [pulse] = useState(() => new Animated.Value(0));
-  const badge = useEntrance(active, 250);
-
-  useEffect(() => {
-    if (!active || reduce) {
-      pulse.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
-        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [active, reduce, pulse]);
-
-  const rows: { label: string; value: string; tag: string; warn?: boolean; big?: boolean }[] = [
-    { label: t('onboarding.scenes.amount'), value: t('onboarding.scenes.sampleAmount'), tag: t('onboarding.scenes.fromDocument'), big: true },
-    { label: t('onboarding.scenes.dueDate'), value: t('onboarding.scenes.sampleDueLong'), tag: t('onboarding.scenes.checkThis'), warn: true },
-    { label: t('onboarding.scenes.drawer'), value: 'Kuzey İnşaat Ltd.', tag: t('onboarding.scenes.fromDocument') },
-  ];
-  const warnBg = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [withAlpha(theme.colors.brandPrimary, 0.1), withAlpha(theme.colors.brandPrimary, 0.24)],
-  });
-
-  return (
-    <View accessible accessibilityLabel={t('onboarding.scenes.confirmA11y')} style={{ height, justifyContent: 'center', paddingHorizontal: 20 }}>
-      <SceneGlow height={height} />
-
-      <FloatingCard style={{ overflow: 'hidden' }}>
-        {rows.map((row, index) => {
-          const content = (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text variant="caption" color="textSecondary" style={{ fontSize: 13 }}>
-                  {row.label}
-                </Text>
-                <Ionicons
-                  name={row.warn ? 'alert-circle' : 'checkmark-circle'}
-                  size={13}
-                  color={row.warn ? theme.colors.attentionMarker : theme.colors.receivable}
-                />
-                <Text style={{ fontSize: 11, fontWeight: '600', color: row.warn ? theme.colors.attentionMarker : theme.colors.receivable }}>
-                  {row.tag}
-                </Text>
-              </View>
-              <Text tabular style={{ fontSize: row.big ? 24 : 17, fontWeight: row.big ? '700' : '400' }}>
-                {row.value}
-              </Text>
-            </>
-          );
-          const rowStyle = {
-            minHeight: 62,
-            paddingHorizontal: 16,
-            paddingVertical: 11,
-            justifyContent: 'center' as const,
-            gap: 3,
-            borderTopWidth: index === 0 ? 0 : 1,
-            borderTopColor: theme.colors.separator,
-          };
-          return row.warn ? (
-            <Animated.View key={row.label} style={[rowStyle, { backgroundColor: warnBg }]}>
-              {content}
-            </Animated.View>
-          ) : (
-            <View key={row.label} style={rowStyle}>
-              {content}
-            </View>
-          );
-        })}
-        <View style={{ padding: 12, paddingTop: 4 }}>
-          <View style={{ height: 46, borderRadius: 13, backgroundColor: theme.colors.action, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}>
-            <Ionicons name="checkmark" size={18} color={theme.colors.onAction} />
-            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.onAction }}>{t('onboarding.scenes.confirmAndSave')}</Text>
+          <View style={{ alignSelf: 'center' }}>
+            <Tag label={t('onboarding.scenes.confidence')} tone="success" />
           </View>
         </View>
-      </FloatingCard>
-
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: height * 0.04,
-          left: 12,
-          opacity: badge,
-          transform: [{ scale: badge.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }],
-        }}
-      >
-        <FloatingCard style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 2, borderColor: theme.colors.brandPrimary }}>
-          <Ionicons name="scan-outline" size={16} color={theme.colors.textPrimary} />
-          <Text style={{ fontSize: 15, fontWeight: '700' }}>{t('onboarding.scenes.confidence')}</Text>
-        </FloatingCard>
-      </Animated.View>
-    </View>
+      </Rise>
+      <Rise active={active} delay={140}>
+        <Group inset={16}>
+          <GroupedRow
+            title={t('onboarding.scenes.amount')}
+            trailing={
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <Amount value={t('onboarding.scenes.sampleAmount')} />
+                <Tag label={t('onboarding.scenes.fromDocument')} tone="success" />
+              </View>
+            }
+          />
+          <GroupedRow
+            title={t('onboarding.scenes.dueDate')}
+            trailing={
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <Amount value={t('onboarding.scenes.sampleDate')} />
+                <Tag label={t('onboarding.scenes.checkThis')} tone="brand" />
+              </View>
+            }
+          />
+          <GroupedRow title={t('onboarding.scenes.drawer')} value={t('onboarding.scenes.sampleParty')} />
+        </Group>
+      </Rise>
+      <Rise active={active} delay={280}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
+          {types.map((type) => (
+            <Tag key={type} label={type.trim()} />
+          ))}
+        </View>
+      </Rise>
+    </SceneFrame>
   );
 }
 
+// 2 — Sesle kayıt (Plus): söylenen cümle ve ondan doldurulan form.
+export function VoiceIntroScene({ active, height }: IntroSceneProps) {
+  const theme = useTheme();
+  const bars = [10, 18, 28, 16, 24, 34, 20, 12, 26, 18, 30, 14, 22, 10];
+  return (
+    <SceneFrame height={height} label={t('onboarding.scenes.voiceA11y')}>
+      <Rise active={active}>
+        <View
+          style={{
+            alignSelf: 'flex-end',
+            maxWidth: '88%',
+            padding: 14,
+            gap: 10,
+            borderRadius: 20,
+            borderBottomRightRadius: 6,
+            backgroundColor: theme.colors.surfaceElevated,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 34 }}>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                marginRight: 6,
+                backgroundColor: theme.colors.brandPrimary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="mic" size={16} color={theme.colors.onAction} />
+            </View>
+            {bars.map((h, i) => (
+              <View key={i} style={{ width: 3, height: h, borderRadius: 2, backgroundColor: theme.colors.textSecondary }} />
+            ))}
+          </View>
+          <Text style={{ fontSize: 16, lineHeight: 21 }}>{t('onboarding.scenes.voiceSample')}</Text>
+        </View>
+      </Rise>
+      <Rise active={active} delay={180}>
+        <View style={{ alignItems: 'center' }}>
+          <Ionicons name="arrow-down" size={18} color={theme.colors.textSecondary} />
+        </View>
+      </Rise>
+      <Rise active={active} delay={300}>
+        <Group>
+          <GroupedRow
+            leading={<GroupedRowIcon name="arrow-down-circle-outline" tone="success" />}
+            title={t('onboarding.scenes.voiceParty')}
+            subtitle={t('onboarding.scenes.voiceKind')}
+            trailing={<Amount value={t('onboarding.scenes.voiceAmount')} color={theme.colors.receivable} />}
+          />
+          <GroupedRow
+            leading={<GroupedRowIcon name="calendar-outline" tone="brandSoft" />}
+            title={t('onboarding.scenes.dueDate')}
+            value={t('onboarding.scenes.voiceDue')}
+          />
+        </Group>
+      </Rise>
+    </SceneFrame>
+  );
+}
 
-// 3 · Hiçbir vade sessizce geçmez: mini takvim + yukarıdan kayan bildirim.
+// 3 — Vadeler: bildirim + yaklaşan ödemeler listesi (çek, kredi taksiti, kart son ödemesi).
 export function DueIntroScene({ active, height }: IntroSceneProps) {
   const theme = useTheme();
-  const banner = useEntrance(active, 450);
-  const weekdays = t('onboarding.scenes.weekdays').split(',');
-  const days = [...Array<null>(3).fill(null), ...Array.from({ length: 31 }, (_, i) => i + 1)];
-  const dots: Record<number, string[]> = {
-    2: [theme.colors.danger],
-    9: [theme.colors.receivable],
-    12: [theme.colors.payable],
-    15: [theme.colors.payable, theme.colors.brandPrimary],
-    20: [theme.colors.payable],
-    25: [theme.colors.brandPrimary],
-    27: [theme.colors.accentViolet, theme.colors.receivable],
-  };
-  const today = 26;
-
   return (
-    <View accessible accessibilityLabel={t('onboarding.scenes.dueA11y')} style={{ height, paddingHorizontal: 20, justifyContent: 'flex-end', paddingBottom: height * 0.04 }}>
-      <SceneGlow height={height} />
-
-      <FloatingCard style={{ paddingVertical: 12, paddingHorizontal: 12 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
-          <Text style={{ fontWeight: '700', fontSize: 17 }}>{t('onboarding.scenes.month')}</Text>
-          <Text variant="caption" color="textSecondary">
-            {t('onboarding.scenes.dueCount')}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, rowGap: 2 }}>
-          {weekdays.map((d, i) => (
-            <Text key={`w${i}`} variant="caption" color="textSecondary" style={{ width: '14.28%', textAlign: 'center' }}>
-              {d}
-            </Text>
-          ))}
-          {days.map((n, i) => {
-            const isToday = n === today;
-            return (
-              <View key={`d${i}`} style={{ width: '14.28%', alignItems: 'center', height: 31 }}>
-                {n ? (
-                  <>
-                    <View
-                      style={{
-                        width: 25,
-                        height: 25,
-                        borderRadius: 13,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: isToday ? theme.colors.brandPrimary : 'transparent',
-                      }}
-                    >
-                      <Text tabular style={{ fontSize: 13, fontWeight: isToday ? '700' : '400', color: isToday ? theme.colors.onAction : theme.colors.textPrimary }}>
-                        {n}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 2, marginTop: 1 }}>
-                      {(dots[n] ?? []).map((c, k) => (
-                        <View key={k} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: c }} />
-                      ))}
-                    </View>
-                  </>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      </FloatingCard>
-
-      <Animated.View
-        style={{
-          position: 'absolute',
-          left: 12,
-          right: 12,
-          top: height * 0.02,
-          opacity: banner,
-          transform: [{ translateY: banner.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }],
-        }}
-      >
-        <FloatingCard style={{ padding: 12, borderRadius: 22, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: theme.colors.backgroundPrimary, alignItems: 'center', justifyContent: 'center' }}>
-            <VademdeMark size={30} />
+    <SceneFrame height={height} label={t('onboarding.scenes.dueA11y')}>
+      <Rise active={active}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            padding: 12,
+            borderRadius: 22,
+            backgroundColor: theme.colors.surfaceElevated,
+          }}
+        >
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 9,
+              backgroundColor: theme.colors.backgroundPrimary,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <VademdeMark size={26} />
           </View>
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: 1 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 15, fontWeight: '600' }}>{t('onboarding.scenes.chequeDueTomorrow')}</Text>
+              <Text style={{ fontWeight: '600', fontSize: 15 }}>{t('onboarding.scenes.chequeDueTomorrow')}</Text>
               <Text variant="caption" color="textSecondary">
                 {t('onboarding.scenes.now')}
               </Text>
@@ -441,8 +288,89 @@ export function DueIntroScene({ active, height }: IntroSceneProps) {
               {t('onboarding.scenes.notificationBody')}
             </Text>
           </View>
-        </FloatingCard>
-      </Animated.View>
-    </View>
+        </View>
+      </Rise>
+      <Rise active={active} delay={160}>
+        <Group>
+          <GroupedRow
+            leading={<BankLogo bankCode="turkiye-garanti-bankasi" size={34} />}
+            title={t('onboarding.scenes.dueCheque')}
+            subtitle={t('onboarding.scenes.dueChequeSub')}
+            trailing={
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <Amount value={t('onboarding.scenes.sampleAmount')} />
+                <Tag label={t('onboarding.scenes.tomorrow')} tone="violet" />
+              </View>
+            }
+          />
+          <GroupedRow
+            leading={<BankLogo bankCode="akbank" size={34} />}
+            title={t('onboarding.scenes.dueLoan')}
+            subtitle={t('onboarding.scenes.dueLoanSub')}
+            trailing={
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <Amount value={t('onboarding.scenes.dueLoanAmount')} />
+                <Tag label={t('onboarding.scenes.inThreeDays')} tone="violet" />
+              </View>
+            }
+          />
+          <GroupedRow
+            leading={<BankLogo bankCode="turkiye-is-bankasi" size={34} />}
+            title={t('onboarding.scenes.dueCard')}
+            subtitle={t('onboarding.scenes.dueCardSub')}
+            trailing={
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <Amount value={t('onboarding.scenes.dueCardAmount')} />
+                <Tag label={t('onboarding.scenes.dueCardDate')} />
+              </View>
+            }
+          />
+        </Group>
+      </Rise>
+    </SceneFrame>
+  );
+}
+
+// 4 — Tüm tablo: net varlık, hesaplar/kartlar/varlıklar ve ekip paylaşımı.
+export function WealthIntroScene({ active, height }: IntroSceneProps) {
+  const theme = useTheme();
+  return (
+    <SceneFrame height={height} label={t('onboarding.scenes.wealthA11y')}>
+      <Rise active={active}>
+        <View style={{ padding: 18, gap: 4, borderRadius: theme.radius.widget, backgroundColor: theme.colors.surfacePrimary }}>
+          <Text variant="caption" color="textSecondary">
+            {t('onboarding.scenes.netWorth')}
+          </Text>
+          <Text style={[{ fontSize: 32, lineHeight: 38, fontWeight: '700', letterSpacing: -0.9 }, tabularNums]}>
+            {t('onboarding.scenes.netWorthAmount')}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+            <Tag label={t('onboarding.scenes.personal')} tone="brand" />
+            <Tag label={t('onboarding.scenes.business')} tone="violet" />
+            <Tag label={t('onboarding.scenes.team')} tone="aqua" />
+          </View>
+        </View>
+      </Rise>
+      <Rise active={active} delay={160}>
+        <Group>
+          <GroupedRow
+            leading={<GroupedRowIcon name="wallet-outline" tone="success" />}
+            title={t('onboarding.scenes.accounts')}
+            trailing={<Amount value={t('onboarding.scenes.accountsAmount')} />}
+          />
+          <GroupedRow
+            leading={<GroupedRowIcon name="card-outline" tone="violet" />}
+            title={t('onboarding.scenes.cards')}
+            trailing={<Amount value={t('onboarding.scenes.cardsAmount')} color={theme.colors.payable} />}
+          />
+          <GroupedRow
+            leading={<GroupedRowIcon name="home-outline" tone="aqua" />}
+            title={t('onboarding.scenes.assets')}
+            subtitle={t('onboarding.scenes.assetsSub')}
+            trailing={<Amount value={t('onboarding.scenes.assetsAmount')} />}
+          />
+        </Group>
+      </Rise>
+    </SceneFrame>
   );
 }

@@ -9,6 +9,11 @@ interface OnboardingState {
   // açılır (bkz. app/workspace-setup/index.tsx); bu bayrak teklifin tekrar tekrar çıkmasını önler.
   hasSeenTrialOffer: boolean;
   setHasSeenTrialOffer: (value: boolean) => void;
+  // İlk kurulumdan sonra deneme teklifi hemen değil, kullanıcı ilk kaydını ekleyip Ana Sayfa'ya
+  // dönünce (ya da "Şimdilik geç" deyince / 10 dk sonra) açılır. Bekleyen teklifin başlangıç
+  // zamanı; teklif gösterilince null olur (bkz. app/first-record, app/(tabs)/index.tsx).
+  trialOfferPendingSince: number | null;
+  setTrialOfferPendingSince: (value: number | null) => void;
 }
 
 // docs/03-bilgi-mimarisi-ekranlar.md §5.2 — üç kısa değer önerisi ekranı yalnızca ilk
@@ -22,6 +27,8 @@ export const useOnboardingStore = create<OnboardingState>()(
       setHasSeenWelcome: (value) => set({ hasSeenWelcome: value }),
       hasSeenTrialOffer: false,
       setHasSeenTrialOffer: (value) => set({ hasSeenTrialOffer: value }),
+      trialOfferPendingSince: null,
+      setTrialOfferPendingSince: (value) => set({ trialOfferPendingSince: value }),
     }),
     {
       name: 'vademde-onboarding',

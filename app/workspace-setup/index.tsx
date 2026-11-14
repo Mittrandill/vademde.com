@@ -47,6 +47,7 @@ export default function WorkspaceSetupScreen() {
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
   const hasSeenTrialOffer = useOnboardingStore((s) => s.hasSeenTrialOffer);
   const setHasSeenTrialOffer = useOnboardingStore((s) => s.setHasSeenTrialOffer);
+  const setTrialOfferPendingSince = useOnboardingStore((s) => s.setTrialOfferPendingSince);
   // /workspace ekranındaki "Yeni Çalışma Alanı Oluştur" gibi kullanıcının niyeti zaten
   // belliyken bu route'a girenler, seçim ekranını atlayıp doğrudan forma düşer. Bu durumda
   // "Geri" de seçim ekranına değil, geldikleri ekrana (router.back) döner — aksi halde
@@ -95,21 +96,24 @@ export default function WorkspaceSetupScreen() {
       // review.tsx'teki aynı Fabric çakışması: invalidation ve navigasyon aynı anda/ters
       // sırada tetiklenirse ekran hâlâ mount'tayken arkadaki view çöküyor. Navigasyon hemen
       // (senkron), invalidation bir sonraki etkileşim turuna ertelenir.
-      // İlk kurulumdan (onboarding'den gelen yeni kullanıcı) sonra 7 gün ücretsiz deneme teklifi
-      // bir kez sunulur. Mevcut kullanıcının ek çalışma alanı açması (skippedChoice) buna girmez.
-      // Paywall, navigasyon ve önbellek işi bittikten sonra açılır — aynı Fabric çakışması.
+      // İlk kurulumdan (onboarding'den gelen yeni kullanıcı) sonra önce "İlk kaydını ekle"
+      // adımı açılır; 7 gün ücretsiz deneme teklifi kullanıcı ilk kaydını ekleyip değeri
+      // gördükten sonra bir kez sunulur (bkz. app/first-record, app/(tabs)/index.tsx).
+      // Mevcut kullanıcının ek çalışma alanı açması (skippedChoice) buna girmez.
+      // Ekran, navigasyon ve önbellek işi bittikten sonra açılır — aynı Fabric çakışması.
       const showTrialOffer = !skippedChoice && !hasSeenTrialOffer;
       if (showTrialOffer) {
         setHasSeenTrialOffer(true);
-        // Ana Sayfa'daki yumuşak paywall hatırlatması (5 günde bir) aynı anda ikinci bir
-        // paywall açmasın: deneme teklifi gösterildiği için hatırlatma sayacı da başlatılır.
+        setTrialOfferPendingSince(Date.now());
+        // Ana Sayfa'daki yumuşak paywall hatırlatması (5 günde bir) deneme teklifiyle üst üste
+        // açılmasın: hatırlatma sayacı da başlatılır.
         AsyncStorage.setItem(PAYWALL_LAST_SHOWN_KEY, String(Date.now())).catch(() => {});
       }
       setActiveWorkspaceId(primaryWorkspaceId);
       router.replace('/(tabs)');
       InteractionManager.runAfterInteractions(() => {
         queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
-        if (showTrialOffer) router.push('/paywall');
+        if (showTrialOffer) router.push('/first-record');
       });
     },
   });

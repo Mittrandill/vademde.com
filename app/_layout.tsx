@@ -120,6 +120,7 @@ function AppNavigatorStack() {
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="workspace-setup" />
+        <Stack.Screen name="first-record/index" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="voice/index" />
         <Stack.Screen name="assets/index" />

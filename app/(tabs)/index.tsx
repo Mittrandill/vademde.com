@@ -29,7 +29,7 @@ import {
 } from '@/features/obligations/api';
 import { listTransactions } from '@/features/transactions/api';
 import { getAccountBalances } from '@/features/reports/api';
-import { getMonthTransactionTotals, getPendingReviewDocuments } from '@/features/dashboard/api';
+import { getMonthTransactionTotals, getPendingReviewDocuments, workspaceHasAnyRecord } from '@/features/dashboard/api';
 
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
@@ -44,11 +44,13 @@ import { useReflowKey } from '@/services/reflow';
 import { useWidgetSnapshot } from '@/features/dashboard/useWidgetSnapshot';
 import { t } from '@/i18n';
 import { requestTrackingIfNeeded } from '@/services/metaAds';
+import { useOnboardingStore } from '@/store/onboardingStore';
 
 // Ücretsiz plandaki kullanıcıya ilk açılışta ve sonrasında en fazla 5 günde bir kez
 // gösterilen yumuşak paywall hatırlatması (kullanıcı kararı — Dashboard'da başka bir
 // yükseltme çağrısı yok). Ücretli kullanıcıya hiç gösterilmez.
 const PAYWALL_REMINDER_INTERVAL_MS = 5 * 24 * 60 * 60 * 1000;
+const TRIAL_OFFER_FALLBACK_MS = 10 * 60 * 1000;
 
 export default function HomeScreen() {
   const theme = useTheme();
@@ -74,6 +76,7 @@ export default function HomeScreen() {
   const paywallCheckedRef = useRef(false);
   useEffect(() => {
     if (paywallCheckedRef.current || !subscriptionQuery.isSuccess) return;
+    if (useOnboardingStore.getState().trialOfferPendingSince !== null) return;
     if ((subscriptionQuery.data?.plan ?? 'free') !== 'free') return;
     paywallCheckedRef.current = true;
     AsyncStorage.getItem(PAYWALL_LAST_SHOWN_KEY).then((value) => {
@@ -88,14 +91,43 @@ export default function HomeScreen() {
   // Sayfa'yı gördükten sonra istenir. Kısa gecikme ve odak kontrolü: ilk kurulumda Ana Sayfa
   // açılır açılmaz paywall üstüne açılıyor; ekran odağı kaybederse zamanlayıcı iptal olur ve
   // istem paywall kapanıp Ana Sayfa'ya dönülünce gösterilir. Bir kez sorulduktan sonra no-op.
+  const currentPlan = subscriptionQuery.data?.plan ?? null;
+  const trialOfferPendingSince = useOnboardingStore((s) => s.trialOfferPendingSince);
+  const setTrialOfferPendingSince = useOnboardingStore((s) => s.setTrialOfferPendingSince);
   useFocusEffect(
     useCallback(() => {
-      if (!activeWorkspaceId) return;
+      // Deneme teklifi bekliyorsa ATT istemi teklif gösterilip kapandıktan sonraya kalır.
+      if (!activeWorkspaceId || trialOfferPendingSince !== null) return;
       const timer = setTimeout(() => {
         requestTrackingIfNeeded().catch(() => {});
       }, 2500);
       return () => clearTimeout(timer);
-    }, [activeWorkspaceId])
+    }, [activeWorkspaceId, trialOfferPendingSince])
+  );
+
+  // İlk kurulum sonrası bekleyen 7 gün ücretsiz deneme teklifi: kullanıcı ilk kaydını ekleyip
+  // Ana Sayfa'ya dönünce açılır. Kayıt eklemeden ayrıldıysa 10 dakika sonra bir sonraki Ana
+  // Sayfa açılışında yine bir kez gösterilir (bkz. app/first-record).
+  useFocusEffect(
+    useCallback(() => {
+      if (!activeWorkspaceId || trialOfferPendingSince === null) return;
+      if (currentPlan && currentPlan !== 'free') {
+        setTrialOfferPendingSince(null);
+        return;
+      }
+      let cancelled = false;
+      const timer = setTimeout(async () => {
+        const expired = Date.now() - trialOfferPendingSince > TRIAL_OFFER_FALLBACK_MS;
+        const hasRecord = expired || (await workspaceHasAnyRecord(activeWorkspaceId).catch(() => false));
+        if (cancelled || !hasRecord) return;
+        setTrialOfferPendingSince(null);
+        router.push('/paywall');
+      }, 800);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    }, [activeWorkspaceId, trialOfferPendingSince, setTrialOfferPendingSince, currentPlan])
   );
 
   const workspaces = workspacesQuery.data ?? [];

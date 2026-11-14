@@ -6,11 +6,12 @@ import { Link, router } from 'expo-router';
 
 import { useTheme, withAlpha } from '@/theme';
 import { useReflowKey } from '@/services/reflow';
-import { Button, Pressable, Text } from '@/components/primitives';
+import { Button, Pressable, Tag, Text } from '@/components/primitives';
 import {
-  ConfirmIntroScene,
   DueIntroScene,
   ScanIntroScene,
+  VoiceIntroScene,
+  WealthIntroScene,
   type IntroSceneProps,
 } from '@/components/onboarding/introScenes';
 import { VademdeMark } from '@/components/brand/VademdeMark';
@@ -26,17 +27,20 @@ const SCENE_HEIGHT = Math.round(Math.min(400, Math.max(300, SCREEN_HEIGHT * 0.44
 
 interface OnboardingPage {
   Scene: (props: IntroSceneProps) => React.JSX.Element;
-  key: 'scan' | 'confirm' | 'due';
+  key: 'scan' | 'voice' | 'due' | 'wealth';
+  /** Yalnızca Plus planında açık özellik (sesli kayıt AiGate arkasında). */
+  plus?: boolean;
 }
 
-// Tanışma (3 değer önerisi) + Hoş geldin (hesap seçimi: Apple / Google / e-posta / giriş).
+// Tanışma (4 değer önerisi) + Hoş geldin (hesap seçimi: Apple / Google / e-posta / giriş).
 // docs/03-bilgi-mimarisi-ekranlar.md §5.2 — yalnızca ilk açılışta ve oturum yokken gösterilir. Deneme/fiyat
 // teklifi kayıttan sonra açılan paywall'dadır (app/paywall/index.tsx). Metinler: i18n onboarding.pages
 // (başlıkta `titleAccent` vurgulu yazılan kısımdır — App Store v3 setiyle aynı başlık dili).
 const PAGES: OnboardingPage[] = [
   { Scene: ScanIntroScene, key: 'scan' },
-  { Scene: ConfirmIntroScene, key: 'confirm' },
+  { Scene: VoiceIntroScene, key: 'voice', plus: true },
   { Scene: DueIntroScene, key: 'due' },
+  { Scene: WealthIntroScene, key: 'wealth' },
 ];
 
 export default function WelcomeScreen() {
@@ -92,8 +96,6 @@ export default function WelcomeScreen() {
     }
   }
 
-  // Vurgu rengi: koyu temada Saffron; açık temada Saffron metin kontrastı yetersiz olduğu için koyu altın ton.
-  const accentColor = theme.scheme === 'dark' ? theme.colors.brandPrimary : theme.colors.attentionMarker;
 
   return (
     <SafeAreaView key={reflowKey} style={{ flex: 1, backgroundColor: theme.colors.backgroundPrimary }}>
@@ -138,29 +140,20 @@ export default function WelcomeScreen() {
         onMomentumScrollEnd={handleScroll}
         style={{ flex: 1 }}
       >
-        {PAGES.map(({ Scene, key }, index) => (
+        {PAGES.map(({ Scene, key, plus }, index) => (
           <ScrollView
             key={key}
             style={{ width: SCREEN_WIDTH }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ flexGrow: 1, paddingBottom: 8 }}
           >
-            <View style={{ marginTop: 8 }}>
-              <Scene active={page === index} height={SCENE_HEIGHT} />
-            </View>
-            <View style={{ paddingHorizontal: theme.screenEdge.standard + 4, marginTop: 28 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accentColor }} />
-                <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: accentColor }}>
-                  {t(`onboarding.pages.${key}.eyebrow`)}
-                </Text>
-              </View>
-              <Text accessibilityRole="header" style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, marginTop: 12 }}>
-                {t(`onboarding.pages.${key}.titleBefore`)}
-                <Text style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, color: accentColor }}>{t(`onboarding.pages.${key}.titleAccent`)}</Text>
-                {t(`onboarding.pages.${key}.titleAfter`)}
+            <Scene active={page === index} height={SCENE_HEIGHT} />
+            <View style={{ paddingHorizontal: theme.screenEdge.standard + 4, marginTop: 20, gap: 10 }}>
+              {plus ? <Tag label="Plus" tone="brand" /> : null}
+              <Text accessibilityRole="header" variant="pageTitle">
+                {t(`onboarding.pages.${key}.title`)}
               </Text>
-              <Text color="textSecondary" style={{ marginTop: 12, fontSize: 16, lineHeight: 22 }}>
+              <Text variant="body" color="textSecondary">
                 {t(`onboarding.pages.${key}.body`)}
               </Text>
             </View>
@@ -186,11 +179,11 @@ export default function WelcomeScreen() {
                 <VademdeMark size={78} />
               </View>
             </View>
-            <Text accessibilityRole="header" style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, textAlign: 'center', marginTop: 28 }}>
+            <Text accessibilityRole="header" variant="pageTitle" style={{ textAlign: 'center', marginTop: 28 }}>
               {t('onboarding.accountTitleBefore')}
-              <Text style={{ fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -0.9, color: accentColor }}>{t('onboarding.accountTitleAccent')}</Text>
+              {t('onboarding.accountTitleAccent')}
             </Text>
-            <Text color="textSecondary" style={{ fontSize: 16, lineHeight: 22, textAlign: 'center', marginTop: 10, maxWidth: 300 }}>
+            <Text variant="body" color="textSecondary" style={{ textAlign: 'center', marginTop: 10, maxWidth: 300 }}>
               {t('onboarding.accountBody')}
             </Text>
           </View>
