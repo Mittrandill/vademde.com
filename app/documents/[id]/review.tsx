@@ -683,7 +683,9 @@ export default function DocumentReviewScreen() {
       const amountMinor = parseAmountToMinor(amount);
       // Eskiden çözümlenemeyen tutar sessizce NaN olup kayda yazılıyordu; artık kullanıcıya
       // dönülür (docs/01-finansal-kayit-modeli.md §8.1 — tutarsız veri asla yazılmaz).
-      if (amountMinor === null) throw new Error(t('documentReview.invalidAmount'));
+      // Sıfır/negatif tutar da reddedilir: transactions.amount_minor > 0 kısıtı sunucuda
+      // insert'i zaten düşürüyordu (hata kayıtlarında 23514), ama kullanıcı ham DB hatası görüyordu.
+      if (amountMinor === null || amountMinor <= 0) throw new Error(t('documentReview.invalidAmount'));
 
       // Kullanıcı KİŞİ/FİRMA alanından mevcut bir kayıtla eşleştirmediyse (bkz.
       // CounterpartyPicker) ve OCR bir isim okuduysa, yeni kişi/firma kaydı ancak burada —
@@ -777,7 +779,9 @@ export default function DocumentReviewScreen() {
           total_amount_minor: installmentsSumMinor ?? amountMinor,
           currency_code: isCreditCardStatement ? 'TRY' : valueUnitCode,
           value_unit_type: getValueUnit(isCreditCardStatement ? 'TRY' : valueUnitCode).unitType,
-          due_date: earliestInstallmentDueDate ?? dueDate ?? null,
+          // Vade alanı boşsa state '' olur; '' ?? null yine '' döndürür ve Postgres date
+          // tipine '' yazılamaz (hata kayıtlarında 22007). Boş/bozuk vade null gönderilir.
+          due_date: earliestInstallmentDueDate ?? (isoOrNull(dueDate) ? dueDate.trim().slice(0, 10) : null),
           counterparty_id: resolvedCounterpartyId,
           account_id: accountId,
           // Harcamalar satır satır kategorize edildiyse kart borcunun kendisi kategorisizdir.

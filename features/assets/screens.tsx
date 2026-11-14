@@ -731,7 +731,6 @@ function AssetForm({ initial }: { initial?: OwnedAsset }) {
                   />
                   <DateField
                     label={ta("Değer tarihi")}
-                    placeholder="YYYY-MM-DD"
                     value={form.date}
                     onChangeText={(value) => update("date", value)}
                   />
@@ -760,7 +759,6 @@ function AssetForm({ initial }: { initial?: OwnedAsset }) {
                 />
                 <DateField
                   label={ta("Alış tarihi")}
-                  placeholder="YYYY-MM-DD"
                   value={form.purchased}
                   onChangeText={(value) => update("purchased", value)}
                 />
