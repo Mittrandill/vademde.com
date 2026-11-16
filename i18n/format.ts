@@ -112,3 +112,18 @@ export function amountPlaceholder(): string {
 export function fractionPattern(): RegExp {
   return new RegExp(`\\${getDisplayDecimalSeparator()}\\d{2}(?=\\D*$)`);
 }
+
+// Sayısal tarih gösterimi her dilde GG-AA-YYYY ("15-11-2026"). Yalnızca tarih içeren ISO metin
+// ("2026-11-15") saat dilimine sokulmadan okunur; zaman damgası/Date ise yerel güne çevrilir.
+export function formatNumericDate(value: string | Date | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'string') {
+    const isoDateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (isoDateOnly) return `${isoDateOnly[3]}-${isoDateOnly[2]}-${isoDateOnly[1]}`;
+  }
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value : '';
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  return `${dd}-${mm}-${date.getFullYear()}`;
+}

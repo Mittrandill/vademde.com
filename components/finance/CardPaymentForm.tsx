@@ -15,8 +15,8 @@ import type { Account } from '@/features/accounts/api';
 import { queryKeys } from '@/services/queryKeys';
 import { formatAmountInput, formatMinorAmount, parseAmountToMinor } from '@/utils/money';
 import { friendlyErrorMessage, isNetworkError } from '@/utils/alerts';
-import { getLocaleTag, t } from '@/i18n';
-import { getInputDecimalSeparator } from '@/i18n/format';
+import { t } from '@/i18n';
+import { formatNumericDate, getInputDecimalSeparator } from '@/i18n/format';
 
 export interface CardPaymentFormProps {
   workspaceId: string;
@@ -169,7 +169,7 @@ export function CardPaymentForm({
             <>
               <Stack gap="xxs">
                 <Text variant="cardTitle">{t('finance.cardPayment.stuckRow', { amount: formatMinorAmount(stored.input.amountMinor, stored.input.currencyCode) })}</Text>
-                <Text variant="caption" color="textSecondary">{new Date(stored.input.paidAt).toLocaleDateString(getLocaleTag())} · {sourceAccounts.find((a) => a.id === stored.input.sourceAccountId)?.name ?? t('finance.cardPayment.sourceAccount')}</Text>
+                <Text variant="caption" color="textSecondary">{formatNumericDate(stored.input.paidAt)} · {sourceAccounts.find((a) => a.id === stored.input.sourceAccountId)?.name ?? t('finance.cardPayment.sourceAccount')}</Text>
               </Stack>
               <Text>{!recoveryError || isNetworkError(recoveryError)
                 ? t('finance.cardPayment.stuckNetwork')

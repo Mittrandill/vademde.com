@@ -19,8 +19,9 @@ import {
 import { restorePurchases } from '@/services/purchases';
 import { queryKeys } from '@/services/queryKeys';
 import { friendlyErrorMessage } from '@/utils/alerts';
-import { getLocaleTag, t } from '@/i18n';
+import { t } from '@/i18n';
 import { PLAN_LABELS } from '@/features/subscriptions/planLabels';
+import { formatNumericDate } from '@/i18n/format';
 
 const SUBSCRIPTION_STATUS_LABEL_KEYS: Record<string, 'subscription.statusGrace' | 'subscription.statusExpired'> = {
   grace_period: 'subscription.statusGrace',
@@ -28,7 +29,7 @@ const SUBSCRIPTION_STATUS_LABEL_KEYS: Record<string, 'subscription.statusGrace' 
 };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(getLocaleTag());
+  return formatNumericDate(iso);
 }
 
 // docs/10-abonelik-gelir-modeli.md — mevcut plandaki özellik listesi paywall.tsx'teki

@@ -63,7 +63,7 @@ import { toCsv } from '@/utils/csv';
 import { listMyWorkspaces } from '@/features/workspaces/api';
 import { formatMinorAmount, fromMinorUnits } from '@/utils/money';
 import { friendlyErrorMessage } from '@/utils/alerts';
-import { capitalizeUi, formatPercent, localeDateFormatter, zeroFractionPattern } from '@/i18n/format';
+import { capitalizeUi, formatNumericDate, formatPercent, localeDateFormatter, zeroFractionPattern } from '@/i18n/format';
 import { getLanguage, t } from '@/i18n';
 import { localizedRecord } from '@/i18n/localized';
 
@@ -367,7 +367,7 @@ export default function ReportsScreen() {
         t('reports.screen.csvAccount'),
       ],
       rows.map((row) => [
-        row.occurredAt.slice(0, 10),
+        formatNumericDate(row.occurredAt.slice(0, 10)),
         row.description ?? '',
         DIRECTION_LABEL[row.direction] ?? row.direction,
         fromMinorUnits(row.amountMinor).toFixed(2),

@@ -76,7 +76,7 @@ import {
   statementMatchDateRange,
 } from '@/utils/cardStatement';
 import { getLocaleTag, t, useLanguage } from '@/i18n';
-import { formatPercent, getInputDecimalSeparator } from '@/i18n/format';
+import { formatNumericDate, formatPercent, getInputDecimalSeparator } from '@/i18n/format';
 import { documentWarningText } from '@/features/documents/warnings';
 
 type Direction = 'payable' | 'receivable' | 'income' | 'expense';
@@ -1495,7 +1495,7 @@ export default function DocumentReviewScreen() {
                             </Row>
                             {match ? (
                               <Text variant="caption" color={skipped ? 'success' : 'accentViolet'}>
-                                {skipped ? t('documentReview.matched') : t('documentReview.possibleMatch')}: {match.transaction.occurred_at.slice(0, 10)} · {match.transaction.description || t('documentReview.noDescription')}
+                                {skipped ? t('documentReview.matched') : t('documentReview.possibleMatch')}: {formatNumericDate(match.transaction.occurred_at.slice(0, 10))} · {match.transaction.description || t('documentReview.noDescription')}
                               </Text>
                             ) : null}
                             {skipped ? (

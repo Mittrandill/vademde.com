@@ -46,6 +46,7 @@ import { useLanguage } from "@/i18n";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useMyWorkspaceRole } from "@/features/workspaces/useMyWorkspaceRole";
 import { formatMinorAmount, parseAmountToMinor } from "@/utils/money";
+import { formatNumericDate } from "@/i18n/format";
 import { useExitGuard } from "@/utils/useExitGuard";
 import { localIsoDate } from "@/features/obligations/api";
 import {
@@ -463,7 +464,7 @@ export function AssetDetailScreen({ id }: { id: string }) {
                     row.description ||
                     ta(row.direction === "income" ? "Gelir" : "Gider")
                   }
-                  subtitle={row.occurred_at.slice(0, 10)}
+                  subtitle={formatNumericDate(row.occurred_at.slice(0, 10))}
                   value={`${row.direction === "expense" ? "−" : "+"}${formatMinorAmount(row.amount_minor, row.currency_code)}`}
                   onPress={() =>
                     router.push({
@@ -517,7 +518,7 @@ export function AssetDetailScreen({ id }: { id: string }) {
           <FinanceDetailInfoCard
             title={ta("Değer geçmişi")}
             rows={history.map((h) => ({
-              label: `${h.valued_on ?? h.recorded_at.slice(0, 10)} · %${h.ownership_bps / 100}`,
+              label: `${formatNumericDate(h.valued_on ?? h.recorded_at.slice(0, 10))} · %${h.ownership_bps / 100}`,
               value:
                 h.estimated_value_minor === null
                   ? ta("Değer belirtilmedi")
