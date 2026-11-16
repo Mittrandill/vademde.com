@@ -19,32 +19,32 @@ export interface DateFieldProps {
 const ISO_PREFIX = /^(\d{4})-(\d{2})-(\d{2})/;
 
 // Kayıtlar, sorgular ve ekranların kendi mantığı ISO tarihle çalışır; kullanıcı ise alanı
-// GG/AA/YYYY olarak görür ve yazar. Dönüşüm yalnızca bu bileşende yapılır.
+// GG-AA-YYYY olarak görür ve yazar. Dönüşüm yalnızca bu bileşende yapılır.
 function isoToDisplay(value: string): string {
   const match = ISO_PREFIX.exec(value.trim());
   // OCR'dan gelen serbest metin gibi ISO olmayan bir değer olduğu gibi gösterilir.
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : value;
 }
 
 function displayToIso(text: string): string | null {
-  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(text);
   if (!match) return null;
   const [, dd, mm, yyyy] = match;
   const day = Number(dd);
   const month = Number(mm);
   const year = Number(yyyy);
-  // 31/02 gibi takvimde olmayan günler reddedilir (Date taşmayı sonraki aya kaydırırdı).
+  // 31-02 gibi takvimde olmayan günler reddedilir (Date taşmayı sonraki aya kaydırırdı).
   const date = new Date(year, month - 1, day);
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Yazarken eğik çizgiler otomatik eklenir: "14112026" → "14/11/2026".
+// Yazarken tireler otomatik eklenir: "14112026" → "14-11-2026".
 function maskInput(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 8);
   if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
 }
 
 // HANDOFF §3 — takvim ortak DatePickerSheet; alan yine de elle yazılabilir.
@@ -80,7 +80,7 @@ export function DateField({ label, value, onChangeText, placeholder, style, tag 
   };
 
   const isValid = ISO_PREFIX.test(value.trim());
-  const resolvedPlaceholder = placeholder ?? (getLanguage() === 'tr' ? 'GG/AA/YYYY' : 'DD/MM/YYYY');
+  const resolvedPlaceholder = placeholder ?? (getLanguage() === 'tr' ? 'GG-AA-YYYY' : 'DD-MM-YYYY');
 
   return (
     <>

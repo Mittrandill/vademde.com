@@ -384,6 +384,22 @@ async function callGemini(
   }
 }
 
+// "YYYY-AA-GG" (ardından saat gelebilir) biçiminde ve takvimde gerçekten var olan bir tarihse
+// yalnızca tarih kısmını döndürür; aksi halde null. 31 Haziran, 29 Şubat (artık olmayan yıl)
+// ya da serbest metin gibi değerler reddedilir.
+function toValidIsoDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T ])/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1900 || year > 2200) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
 interface LineItemRow {
   workspace_id: string;
   document_id: string;
@@ -652,6 +668,42 @@ Deno.serve(async (req: Request) => {
     } catch (partyError) {
       console.warn('Taraf eşleştirmesi atlandı:', partyError instanceof Error ? partyError.message : partyError);
     }
+    // Model takvimde olmayan tarihler üretebiliyor (ör. "2027-06-31"); bunlar Postgres'e
+    // yazılınca tüm iş "date/time field value out of range" ile düşüyordu. Geçersiz tarih
+    // boşaltılır, alan düşük güvenli işaretlenir ve kullanıcı onay ekranında tarihi kendisi
+    // girer — belgenin geri kalan sonuçları kaybolmaz.
+    const invalidDateFields: { fieldName: string; raw: string }[] = [];
+    const checkDate = (value: unknown, fieldName: string): string | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const valid = toValidIsoDate(value);
+      if (valid === null) invalidDateFields.push({ fieldName, raw: String(value) });
+      return valid;
+    };
+    parsed.issueDate = checkDate(parsed.issueDate, 'issueDate');
+    parsed.dueDate = checkDate(parsed.dueDate, 'dueDate');
+    if (parsed.cardStatement) {
+      parsed.cardStatement.statementDate = checkDate(parsed.cardStatement.statementDate, 'statementDate');
+    }
+    if (parsed.receiptDetails?.transactionDateTime) {
+      const raw = String(parsed.receiptDetails.transactionDateTime);
+      if (checkDate(raw.slice(0, 10), 'transactionDateTime') === null) parsed.receiptDetails.transactionDateTime = null;
+    }
+    if (Array.isArray(parsed.installmentPlan?.installments)) {
+      for (const item of parsed.installmentPlan.installments) {
+        if (item) item.dueDate = checkDate(item.dueDate, 'installmentDueDate');
+      }
+    }
+    if (Array.isArray(parsed.cardStatement?.transactions)) {
+      for (const item of parsed.cardStatement.transactions) {
+        if (item) item.date = checkDate(item.date, 'transactionDate');
+      }
+    }
+    if (invalidDateFields.length > 0) {
+      const rawList = [...new Set(invalidDateFields.map((f) => f.raw))].join(', ');
+      warnings.push(`Tarih okunamadı (${rawList}); lütfen tarihi kontrol edip girin.`);
+      warningsEn.push(`A date could not be read (${rawList}); please check and enter the date.`);
+    }
+
     const modelTotalMinor = toMinor(parsed.totalAmount);
     const rawTotalMinor = parseAmountTextToMinor(parsed.totalAmountRaw);
     let totalAmountMinor = rawTotalMinor ?? modelTotalMinor ?? 0;
@@ -710,6 +762,28 @@ Deno.serve(async (req: Request) => {
           raw_value: parsed.totalAmountRaw ?? null,
           normalized_value: (totalAmountMinor / 100).toFixed(2),
           confidence: totalAmountConfidence,
+        });
+      }
+    }
+
+    // Geçersiz okunan üst düzey tarihler onay ekranında "Kontrol et" etiketiyle çıksın.
+    for (const invalid of invalidDateFields) {
+      if (invalid.fieldName !== 'issueDate' && invalid.fieldName !== 'dueDate') continue;
+      const existing = fieldRows.find(
+        (row: { field_name: unknown }) => String(row.field_name).toLowerCase() === invalid.fieldName.toLowerCase()
+      );
+      if (existing) {
+        existing.confidence = 0;
+        existing.raw_value = invalid.raw;
+        existing.normalized_value = null;
+      } else {
+        fieldRows.push({
+          workspace_id: document.workspace_id,
+          document_id: documentId,
+          field_name: invalid.fieldName,
+          raw_value: invalid.raw,
+          normalized_value: null,
+          confidence: 0,
         });
       }
     }
