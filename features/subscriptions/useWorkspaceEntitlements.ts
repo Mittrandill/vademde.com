@@ -10,8 +10,9 @@ export function useWorkspaceEntitlements(workspaceId?: string | null) {
     queryKey: queryKeys.workspaceEntitlements(id),
     queryFn: () => getWorkspaceEntitlements(id!),
     enabled: !!id,
-    staleTime: 0,
-    refetchInterval: 60_000,
+    // Satın alma/abonelik ekranları ve sesli kayıt bu sorguyu kendisi geçersiz kılar.
+    staleTime: 60_000,
+    refetchInterval: 30 * 60_000,
   });
   return { ...query, data: query.isError ? undefined : query.data };
 }

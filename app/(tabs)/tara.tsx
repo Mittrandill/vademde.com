@@ -252,6 +252,10 @@ export default function TaraScreen() {
         return;
       }
       setError(friendlyErrorMessage(err, t('scan.failed')));
+    } finally {
+      // Kalan tarama hakkı sayacı (entitlements) artık periyodik yoklanmıyor; tarama hak
+      // tükettiği için burada tazelenir.
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[1] === 'entitlements' });
     }
   }
 

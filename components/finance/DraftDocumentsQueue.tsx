@@ -39,6 +39,8 @@ export function DraftDocumentsQueue({ workspaceId }: { workspaceId: string }) {
   function refresh() {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboardDraftDocuments(workspaceId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboardPendingDocuments(workspaceId) });
+    // Kalan tarama hakkı periyodik yoklanmıyor; taslak işlemek hak tükettiği için tazelenir.
+    queryClient.invalidateQueries({ queryKey: queryKeys.workspaceEntitlements(workspaceId) });
   }
 
   const discardMutation = useMutation({

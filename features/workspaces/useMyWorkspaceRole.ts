@@ -18,6 +18,7 @@ export function useMyWorkspaceRole(): {
     queryKey: activeWorkspaceId ? queryKeys.myWorkspaceRole(activeWorkspaceId) : ['my-role', 'disabled'],
     queryFn: () => getMyWorkspaceRole(activeWorkspaceId as string),
     enabled: !!activeWorkspaceId,
+    staleTime: 10 * 60_000,
   });
   const role = query.data ?? null;
   // Rol henüz yüklenmediyse varsayılan olarak düzenlemeye izin verilir (owner/editor çoğunluk);

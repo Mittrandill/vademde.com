@@ -20,8 +20,9 @@ export type WorkspaceInvite = Tables<'workspace_invites'>;
 // Aktif kullanıcının belirtilen çalışma alanındaki rolü. UI'yi (yazma butonlarını,
 // yönetim ekranlarını) buna göre gizler/gösterir; asıl yaptırım RLS'tedir.
 export async function getMyWorkspaceRole(workspaceId: string): Promise<WorkspaceRole | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
+  // Yerel oturumdan okunur (getUser her çağrıda /auth/v1/user'a gidiyordu); yaptırım RLS'tedir.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
   if (!userId) return null;
   const { data, error } = await supabase
     .from('workspace_members')

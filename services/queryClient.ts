@@ -12,7 +12,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       networkMode: 'offlineFirst',
-      staleTime: 30_000,
+      // Kayıt değiştiren işlemler ilgili sorguları zaten geçersiz kılar; 30 sn her ekran açılışında
+      // ve uygulamaya dönüşte yeniden çekim yapıyordu (Supabase log kotası).
+      staleTime: 2 * 60_000,
       retry: 2,
     },
     mutations: {

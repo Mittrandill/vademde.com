@@ -8,10 +8,24 @@ export type ValueUnitRate = Tables<'value_unit_rates'>;
 // docs/05-veri-modeli.md §9.4.2 — value_unit_rates workspace'e özel değildir, tüm
 // authenticated kullanıcılar SELECT edebilir; istemci hiçbir zaman dış kur API'sine
 // veya sync-market-rates Edge Function'ına doğrudan erişmez, yalnızca bu önbelleği okur.
-export async function listValueUnitRates(): Promise<ValueUnitRate[]> {
-  const { data, error } = await supabase.from('value_unit_rates').select('*');
-  if (error) throw error;
-  return data;
+// Kurlar günde bir güncellenir ama her özet/rapor fonksiyonu ayrıca istiyordu; sonuç 30 dakika
+// bellekte tutulur, eşzamanlı istekler tek isteğe indirilir.
+const RATES_TTL_MS = 30 * 60_000;
+let ratesCache: { at: number; promise: Promise<ValueUnitRate[]> } | null = null;
+
+export function listValueUnitRates(): Promise<ValueUnitRate[]> {
+  if (ratesCache && Date.now() - ratesCache.at < RATES_TTL_MS) return ratesCache.promise;
+  const promise = (async () => {
+    const { data, error } = await supabase.from('value_unit_rates').select('*');
+    if (error) throw error;
+    return data;
+  })();
+  const entry = { at: Date.now(), promise };
+  ratesCache = entry;
+  promise.catch(() => {
+    if (ratesCache === entry) ratesCache = null;
+  });
+  return promise;
 }
 
 // Kur/fiyat çok eskiyse (Edge Function günde 1 kez çalışıyor, bkz. supabase/functions/
