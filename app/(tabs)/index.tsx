@@ -33,6 +33,7 @@ import { getMonthTransactionTotals, getPendingReviewDocuments, workspaceHasAnyRe
 
 import { usePlanEnforcement } from '@/features/subscriptions/usePlanEnforcement';
 import { PlanLimitBanner } from '@/components/subscription/PlanLimitBanner';
+import { AppUpdatePrompt } from '@/components/navigation/AppUpdatePrompt';
 import { NotificationPermissionBanner } from '@/components/notifications/NotificationPermissionBanner';
 import { useSession } from '@/features/auth/useSession';
 import { listValueUnitRates, sumToReferenceMinor } from '@/features/valueUnits/api';
@@ -459,6 +460,7 @@ export default function HomeScreen() {
 
           {/* Borç/Alacak özeti ile Bu Ay Gelir-Gider artık ayrı kartlarda tekrarlanmıyor —
               hero'nun kendi iki sayfası (sağa kaydırarak geçilir) bu ikisini gösteriyor. */}
+          <AppUpdatePrompt enabled={!switcherOpen && trialOfferPendingSince === null} />
           <PlanLimitBanner state={planEnforcementQuery.data} />
           <NotificationPermissionBanner userId={session?.user?.id} />
 

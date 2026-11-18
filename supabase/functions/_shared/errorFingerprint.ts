@@ -55,3 +55,10 @@ export async function fingerprint(source: string, code: string, message: string)
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+// Only the latest occurrence gets a release label. The fingerprint uses the base message.
+export function workspaceReleaseLabel(source: string, code: string, message: string, detail: unknown): string {
+  if (source !== 'postgres' || code !== '42501' || message !== 'Workspace access denied' || typeof detail !== 'string') return '';
+  const match = /^(ios|android)\/(\d{1,3}(?:\.\d{1,3}){2})\/(embedded|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/.exec(detail);
+  return match ? ` (son kayıt: ${match[1]} ${match[2]}, ${match[3]})` : '';
+}

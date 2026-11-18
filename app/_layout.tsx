@@ -12,7 +12,6 @@ import { asyncStoragePersister, attachFocusManager, queryClient } from '@/servic
 import { configurePurchases, logOutPurchases } from '@/services/purchases';
 import { initMetaAds } from '@/services/metaAds';
 import { attachAnalyticsLifecycle, setAnalyticsSignedIn } from '@/services/analytics';
-import { useAppUpdatePrompt } from '@/services/appUpdate';
 import { registerPushToken, unregisterCurrentPushToken } from '@/services/pushToken';
 import { useWorkspaceRealtime } from '@/services/realtime';
 import { attachAuthDeepLinkHandler } from '@/services/authDeepLinks';
@@ -39,7 +38,6 @@ function RootNavigator() {
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
 
   useWorkspaceRealtime(session ? activeWorkspaceId : null);
-  useAppUpdatePrompt(!!session);
 
   useEffect(() => {
     const sync = () => writeWidgetLanguage(getLanguage());

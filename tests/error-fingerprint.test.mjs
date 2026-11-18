@@ -1,6 +1,6 @@
 // Yönetim paneline giden hata metinlerinin maskelenmesi. Gerekli: Node 22.18+.
 import assert from 'node:assert/strict';
-import { classifyError, fingerprint, httpSummary, maskLogMessage } from '../supabase/functions/_shared/errorFingerprint.ts';
+import { classifyError, fingerprint, httpSummary, maskLogMessage, workspaceReleaseLabel } from '../supabase/functions/_shared/errorFingerprint.ts';
 
 const card = 'invalid input syntax for type uuid: "card-due:bc990103-13b6-40fe-b4f3-6f3627f8c670:2026-11-20"';
 assert.equal(maskLogMessage(card), 'invalid input syntax for type uuid: "card-due:<uuid>:<date>"');
@@ -28,6 +28,14 @@ assert.equal(classifyError({ code: '500', message: 'x' }), 'high');
 assert.equal(classifyError({ code: '42501', message: 'Workspace access denied' }), 'medium');
 assert.equal(classifyError({ code: '42501', message: 'permission denied for schema supabase_migrations' }), 'low');
 assert.equal(classifyError({ code: '42501', postgresSeverity: 'FATAL', message: 'x' }), 'high');
+
+const release = 'ios/1.1.0/01a1eac6-3edd-7497-bcdb-b4e8335e36e5';
+const label = detail => workspaceReleaseLabel('postgres', '42501', 'Workspace access denied', detail);
+assert.ok(label(release).includes(release.split('/')[2]));
+assert.ok(label('android/1.1.0/embedded').includes('android 1.1.0'));
+assert.equal(label(null), '');
+assert.equal(label('ios/1.1.0/user@example.com'), '');
+assert.equal(workspaceReleaseLabel('postgres', '42501', 'permission denied', release), '');
 
 const a = await fingerprint('postgres', '22P02', 'm');
 assert.equal(a.length, 64);

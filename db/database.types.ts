@@ -1584,6 +1584,7 @@ financing_minor: number;
 
     }
     Functions: {
+      android_store_version: { Args: Record<string, never>; Returns: string }
       get_workspace_entitlements: {
         Args: { p_workspace_id?: string }
         Returns: Json

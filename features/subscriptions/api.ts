@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import * as Updates from 'expo-updates';
 import { supabase } from '@/services/supabase';
 import type { Tables } from '@/db/database.types';
 
@@ -53,9 +55,14 @@ export interface WorkspaceEntitlements extends OcrUsageStatus {
 // Only the authenticated user's own billing scope or an accessible workspace is accepted.
 // The RPC returns feature flags and shared usage, never the owner's subscription details.
 export async function getWorkspaceEntitlements(workspaceId: string | null): Promise<WorkspaceEntitlements> {
-  const { data, error } = await supabase.rpc('get_workspace_entitlements', {
+  const request = supabase.rpc('get_workspace_entitlements', {
     p_workspace_id: workspaceId ?? undefined,
   });
+  if (Updates.isEnabled && Updates.runtimeVersion && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+    const update = Updates.isEmbeddedLaunch ? 'embedded' : Updates.updateId;
+    if (update) request.setHeader('x-vademde-release', `${Platform.OS}/${Updates.runtimeVersion}/${update}`);
+  }
+  const { data, error } = await request;
   if (error) throw error;
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid workspace entitlements');
   return data as unknown as WorkspaceEntitlements;

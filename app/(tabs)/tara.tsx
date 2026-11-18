@@ -8,6 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useScanActivityStore } from '@/store/scanActivityStore';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -131,6 +132,12 @@ export default function TaraScreen() {
   const [draftTarget, setDraftTarget] = useState<{ asset?: PendingAsset; documentId?: string } | null>(null);
   const [draftSaving, setDraftSaving] = useState(false);
   const [helpSheetOpen, setHelpSheetOpen] = useState(false);
+
+  const hasScan = !!(localUri || pendingAsset || (quotaSheetOpen && draftTarget) || draftSaving);
+  useEffect(() => {
+    useScanActivityStore.setState({ active: hasScan });
+    return () => useScanActivityStore.setState({ active: false });
+  }, [hasScan]);
 
   useEffect(() => {
     AsyncStorage.getItem(OCR_CONSENT_KEY).then((value) => setConsentGranted(value === 'true'));

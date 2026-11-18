@@ -4,7 +4,7 @@
 // yöneticinin cihazlarına push olarak gider.
 // Gerekli secret: VADEMDE_LOGS_TOKEN (Supabase kişisel erişim jetonu; SUPABASE_ öneki yasaktır).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { classifyError, fingerprint, httpSummary, maskLogMessage, type ErrorSeverity } from '../_shared/errorFingerprint.ts';
+import { classifyError, fingerprint, httpSummary, maskLogMessage, workspaceReleaseLabel, type ErrorSeverity } from '../_shared/errorFingerprint.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -16,7 +16,7 @@ const CHANNEL_ID = 'obligation-reminders';
 const MAX_WINDOW_MS = 23 * 60 * 60 * 1000;
 const MINUTE = 60_000;
 
-const POSTGRES_SQL = `select event_message, log_attributes['parsed.sql_state_code'] as code, log_attributes['parsed.error_severity'] as severity, count() as n, min(timestamp) as first_seen, max(timestamp) as last_seen from logs where source = 'postgres_logs' and log_attributes['parsed.error_severity'] in ('ERROR','FATAL','PANIC') group by event_message, code, severity order by n desc limit 1000`;
+const POSTGRES_SQL = `select event_message, log_attributes['parsed.sql_state_code'] as code, log_attributes['parsed.error_severity'] as severity, argMax(if(event_message = 'Workspace access denied', ifNull(log_attributes['parsed.detail'], ''), ''), timestamp) as release_detail, count() as n, min(timestamp) as first_seen, max(timestamp) as last_seen from logs where source = 'postgres_logs' and log_attributes['parsed.error_severity'] in ('ERROR','FATAL','PANIC') group by event_message, code, severity order by n desc limit 1000`;
 const HTTP_SQL = `select source, event_message, count() as n, min(timestamp) as first_seen, max(timestamp) as last_seen from logs where source in ('edge_logs','function_edge_logs') and toInt32OrZero(log_attributes['response.status_code']) >= 500 group by source, event_message order by n desc limit 1000`;
 const FUNCTION_SQL = `select event_message, count() as n, min(timestamp) as first_seen, max(timestamp) as last_seen from logs where source = 'function_logs' and log_attributes['level'] = 'error' group by event_message order by n desc limit 1000`;
 
@@ -61,13 +61,17 @@ async function buildGroups(start: string, end: string): Promise<Group[]> {
     const count = Number(row.n) || 0;
     const firstSeen = toIso(row.first_seen);
     const lastSeen = toIso(row.last_seen);
+    const displayMessage = message + workspaceReleaseLabel(source, code, message, row.release_detail);
     const current = groups.get(key);
     if (current) {
       current.count += count;
       if (firstSeen < current.first_seen) current.first_seen = firstSeen;
-      if (lastSeen > current.last_seen) current.last_seen = lastSeen;
+      if (lastSeen > current.last_seen) {
+        current.last_seen = lastSeen;
+        current.message = displayMessage;
+      }
     } else {
-      groups.set(key, { fingerprint: key, source, code, severity, message, count, first_seen: firstSeen, last_seen: lastSeen });
+      groups.set(key, { fingerprint: key, source, code, severity, message: displayMessage, count, first_seen: firstSeen, last_seen: lastSeen });
     }
   };
 
