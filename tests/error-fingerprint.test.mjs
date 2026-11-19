@@ -1,6 +1,6 @@
 // Yönetim paneline giden hata metinlerinin maskelenmesi. Gerekli: Node 22.18+.
 import assert from 'node:assert/strict';
-import { classifyError, fingerprint, httpSummary, maskLogMessage, workspaceReleaseLabel } from '../supabase/functions/_shared/errorFingerprint.ts';
+import { classifyError, fingerprint, httpSummary, isExpectedBusinessError, maskLogMessage, workspaceReleaseLabel } from '../supabase/functions/_shared/errorFingerprint.ts';
 
 const card = 'invalid input syntax for type uuid: "card-due:bc990103-13b6-40fe-b4f3-6f3627f8c670:2026-11-20"';
 assert.equal(maskLogMessage(card), 'invalid input syntax for type uuid: "card-due:<uuid>:<date>"');
@@ -36,6 +36,13 @@ assert.ok(label('android/1.1.0/embedded').includes('android 1.1.0'));
 assert.equal(label(null), '');
 assert.equal(label('ios/1.1.0/user@example.com'), '');
 assert.equal(workspaceReleaseLabel('postgres', '42501', 'permission denied', release), '');
+
+assert.equal(isExpectedBusinessError('postgres', 'P0001', 'Geçersiz davet kodu'), true);
+assert.equal(isExpectedBusinessError('postgres', 'P0001', 'Bu davetin süresi dolmuş'), true);
+assert.equal(isExpectedBusinessError('postgres', '23514', 'TEAM_LIMIT_REACHED: Bu çalışma alanı <n> ekip üyesi limitine ulaştı.'), true);
+assert.equal(isExpectedBusinessError('postgres', 'P0001', 'Oturum bulunamadı'), false);
+assert.equal(isExpectedBusinessError('postgres', '23514', 'new row violates check constraint "transactions_amount_minor_check"'), false);
+assert.equal(isExpectedBusinessError('function', 'P0001', 'Geçersiz davet kodu'), false);
 
 const a = await fingerprint('postgres', '22P02', 'm');
 assert.equal(a.length, 64);

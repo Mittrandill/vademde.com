@@ -4,7 +4,7 @@
 // yöneticinin cihazlarına push olarak gider.
 // Gerekli secret: VADEMDE_LOGS_TOKEN (Supabase kişisel erişim jetonu; SUPABASE_ öneki yasaktır).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { classifyError, fingerprint, httpSummary, maskLogMessage, workspaceReleaseLabel, type ErrorSeverity } from '../_shared/errorFingerprint.ts';
+import { classifyError, fingerprint, httpSummary, isExpectedBusinessError, maskLogMessage, workspaceReleaseLabel, type ErrorSeverity } from '../_shared/errorFingerprint.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -78,6 +78,7 @@ async function buildGroups(start: string, end: string): Promise<Group[]> {
   for (const row of postgresRows) {
     const code = String(row.code ?? '');
     const message = maskLogMessage(String(row.event_message ?? ''));
+    if (isExpectedBusinessError('postgres', code, message)) continue;
     await add('postgres', code, message, classifyError({ code, postgresSeverity: String(row.severity ?? ''), message }), row);
   }
   for (const row of httpRows) {

@@ -22,6 +22,12 @@ const CHANNEL_ID = 'obligation-reminders';
 // obligations tablosundaki terminal durumlar — docs/01-finansal-kayit-modeli.md §3.4
 const TERMINAL_OBLIGATION_STATUSES = new Set(['odendi', 'tahsil_edildi', 'iptal_edildi']);
 
+// 500 yanıtının gövdesi pg_net'te kısa süre tutulur; neden ancak fonksiyon logunda kalıcı görünür.
+function failure(stage: string, message: string): Response {
+  console.error(`[send-reminders] ${stage} başarısız: ${message}`);
+  return Response.json({ success: false, error: message }, { status: 500 });
+}
+
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
@@ -41,18 +47,13 @@ Deno.serve(async (_req: Request) => {
     .lte('remind_at', new Date().toISOString())
     .gt('remind_at', new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
 
-  if (fetchError) {
-    return new Response(JSON.stringify({ success: false, error: fetchError.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  if (fetchError) return failure('reminders', fetchError.message);
 
   let financialReminders;
   try {
     financialReminders = await projectCardReminders(adminClient, (dueReminders ?? []) as unknown as ReminderRow[]);
   } catch (error) {
-    return Response.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return failure('card_projection', error instanceof Error ? error.message : String(error));
   }
   const reminders = financialReminders.reminders;
 
@@ -105,12 +106,7 @@ Deno.serve(async (_req: Request) => {
     .select('workspace_id, user_id')
     .in('workspace_id', workspaceIds);
 
-  if (membersError) {
-    return new Response(JSON.stringify({ success: false, error: membersError.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  if (membersError) return failure('workspace_members', membersError.message);
 
   const userIdsByWorkspace = new Map<string, string[]>();
   for (const m of members ?? []) {
@@ -122,7 +118,7 @@ Deno.serve(async (_req: Request) => {
   const allUserIds = [...new Set((members ?? []).map((m) => m.user_id))];
   const { data: profiles, error: profilesError } = await adminClient.from('profiles').select('id, locale')
     .in('id', allUserIds.length ? allUserIds : ['00000000-0000-0000-0000-000000000000']);
-  if (profilesError) return Response.json({ success: false, error: profilesError.message }, { status: 500 });
+  if (profilesError) return failure('profiles', profilesError.message);
   const localeByUser = new Map((profiles ?? []).map((p) => [p.id, resolveLocale(p.locale)]));
 
   const { data: tokenRows, error: tokensError } = await adminClient
@@ -130,12 +126,7 @@ Deno.serve(async (_req: Request) => {
     .select('user_id, token')
     .in('user_id', allUserIds.length > 0 ? allUserIds : ['00000000-0000-0000-0000-000000000000']);
 
-  if (tokensError) {
-    return new Response(JSON.stringify({ success: false, error: tokensError.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  if (tokensError) return failure('push_tokens', tokensError.message);
 
   const tokensByUser = new Map<string, string[]>();
   for (const t of tokenRows ?? []) {

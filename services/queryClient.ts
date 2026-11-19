@@ -15,13 +15,22 @@ export const queryClient = new QueryClient({
       // Kayıt değiştiren işlemler ilgili sorguları zaten geçersiz kılar; 30 sn her ekran açılışında
       // ve uygulamaya dönüşte yeniden çekim yapıyordu (Supabase log kotası).
       staleTime: 2 * 60_000,
-      retry: 2,
+      retry: (failureCount, error) => failureCount < 2 && !isAccessDenied(error),
     },
     mutations: {
       networkMode: 'offlineFirst',
     },
   },
 });
+
+// Yetki/oturum reddi tekrar denemeyle düzelmez: silinmiş çalışma alanı için entitlements
+// sorgusu her açılışta 3 kez gidip 3 hata kaydı açıyordu (2026-11-11, 2026-11-17).
+const ACCESS_DENIED_CODES = new Set(['42501', 'PGRST301', 'PGRST302', 'PGRST303']);
+
+function isAccessDenied(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && ACCESS_DENIED_CODES.has(code);
+}
 
 export const asyncStoragePersister = createAsyncStoragePersister({
   storage: AsyncStorage,

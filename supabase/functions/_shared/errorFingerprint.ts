@@ -50,6 +50,18 @@ export function classifyError(input: { code: string; postgresSeverity?: string; 
   return 'medium';
 }
 
+// Kullanıcının yanlış girdisine verilen beklenen iş kuralı yanıtları: davet kodu hatalı, iptal
+// edilmiş, süresi dolmuş, kullanım limiti dolmuş ya da plan ekip üyeliğine izin vermiyor
+// (redeem_workspace_invite). Uygulama bunları kullanıcıya açıklıyor; hata kaydı açmazlar.
+const EXPECTED_BUSINESS_ERRORS: { code: string; message: RegExp }[] = [
+  { code: 'P0001', message: /^(Geçersiz davet kodu|Bu davet iptal edilmiş|Bu davetin süresi dolmuş|Bu davet kullanım limitine ulaşmış)$/ },
+  { code: '23514', message: /^TEAM_(PLAN_REQUIRED|LIMIT_REACHED):/ },
+];
+
+export function isExpectedBusinessError(source: string, code: string, message: string): boolean {
+  return source === 'postgres' && EXPECTED_BUSINESS_ERRORS.some((rule) => rule.code === code && rule.message.test(message));
+}
+
 export async function fingerprint(source: string, code: string, message: string): Promise<string> {
   const bytes = new TextEncoder().encode(`${source}|${code}|${message}`);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
