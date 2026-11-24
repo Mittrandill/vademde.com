@@ -37,6 +37,12 @@ const TYPES: { value: Account['type']; readonly label: string }[] = (
 // Ayın gerçek gün sayısını aşan (ör. 30 Şubat) bir kesim/ödeme günü girilmesin —
 // ay sonuna doğru clampCreditCardReminders (services/creditCardReminders.ts) bunu
 // zaten tolere eder ama form seviyesinde de saçma bir değer engellenir.
+// Limit alanları eksi işaretini kabul eder ama büyüklük olarak saklanır (bkz. kaydetme payload'u).
+function parseLimitToMinor(value: string): number | null {
+  const minor = parseAmountToMinor(value);
+  return minor === null ? null : Math.abs(minor);
+}
+
 function isValidDayOfMonth(value: string): boolean {
   const n = Number(value);
   return Number.isInteger(n) && n >= 1 && n <= 31;
@@ -136,9 +142,11 @@ export default function NewAccountScreen() {
         statement_day: isCreditCard && statementDay ? Number(statementDay) : null,
         payment_due_day: isCreditCard && paymentDueDay ? Number(paymentDueDay) : null,
         card_last_four: isCreditCard && cardLastFour ? cardLastFour : null,
-        credit_limit_minor: isCreditCard ? parseAmountToMinor(creditLimit) : null,
+        // Limitler büyüklüktür: kullanıcı "-10.000" yazabilir (ek hesap bakiyesi eksiye düşer),
+        // ama saklanan değer mutlak değerdir — DB kısıtı >= 0 ister ve ekranlar limiti pozitif varsayar.
+        credit_limit_minor: isCreditCard ? parseLimitToMinor(creditLimit) : null,
         minimum_payment_rate: isCreditCard ? parseMinimumPaymentRate(minimumPaymentRate) : null,
-        overdraft_limit_minor: isBank ? parseAmountToMinor(overdraftLimit) : null,
+        overdraft_limit_minor: isBank ? parseLimitToMinor(overdraftLimit) : null,
         currency_code: isCash ? valueUnitCode : 'TRY',
         pos_commission_rate: isPos ? parseAmount(commissionRate) : null,
       };
