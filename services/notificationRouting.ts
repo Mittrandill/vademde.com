@@ -1,11 +1,14 @@
 import * as Notifications from 'expo-notifications';
 import { router, type Href } from 'expo-router';
+import { Linking, Platform } from 'react-native';
 
 // Push bildirimine dokunulunca ilgili ekrana gider. Veri biçimleri sunucudan gelir:
 // - send-cash-alerts: { type: 'cash_alert', accountId } — accountId bir hesap kimliği ya da 'toplam'
 // - send-reminders (borç/alacak): { obligationId, stage }
 // - send-reminders (kredi kartı): { accountId, stage }
 // - support-reply: { type: 'support', messageId }
+// - kampanya: { type: 'offer_code', code } — iOS'ta App Store teklif kodu kullanma sayfası açılır.
+//   Adres sabittir; bildirimden yalnızca kod gelir (A-Z, 0-9), keyfi bağlantı açılamaz.
 // Bildirim verisi dışarıdan geldiği için yalnızca dize alanlar kabul edilir ve yol parçası kodlanır.
 const str = (value: unknown): string | null => (typeof value === 'string' && value.length > 0 ? value : null);
 
@@ -21,13 +24,29 @@ export function routeForNotificationData(data: Record<string, unknown> | undefin
   return null;
 }
 
+const APP_STORE_APP_ID = '6796449470';
+
+export function offerCodeRedeemUrl(data: Record<string, unknown> | undefined): string | null {
+  if (!data || data.type !== 'offer_code') return null;
+  const code = str(data.code);
+  if (!code || !/^[A-Z0-9]{1,64}$/.test(code)) return null;
+  return `https://apps.apple.com/redeem?ctx=offercodes&id=${APP_STORE_APP_ID}&code=${code}`;
+}
+
 let lastHandledId: string | null = null;
 
 function handleResponse(response: Notifications.NotificationResponse | null) {
   if (!response) return;
   const id = response.notification.request.identifier;
   if (id === lastHandledId) return;
-  const href = routeForNotificationData(response.notification.request.content.data as Record<string, unknown>);
+  const data = response.notification.request.content.data as Record<string, unknown>;
+  const redeemUrl = Platform.OS === 'ios' ? offerCodeRedeemUrl(data) : null;
+  if (redeemUrl) {
+    lastHandledId = id;
+    Linking.openURL(redeemUrl).catch(() => {});
+    return;
+  }
+  const href = routeForNotificationData(data);
   if (!href) return;
   lastHandledId = id;
   // Soğuk başlangıçta gezinti henüz hazır olmayabilir; kısa bir gecikme ve hata yakalama ile güvenli.
