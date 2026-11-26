@@ -606,6 +606,11 @@ function ObligationForm({
       if (isPlanEditing ? planTotalMinor <= 0 : !totalAmountMinor) {
         throw new Error(t('obligations.form.missingField'));
       }
+      // DateField yarım yazılmış ya da temizlenmiş tarihi '' olarak verir; Postgres '' tarihini
+      // reddeder (22007). Vade bu formda zorunlu — kaydetmeden önce kullanıcıya söylenir.
+      if (!isPlanEditing && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+        throw new Error(t('obligations.form.invalidDueDate'));
+      }
       if (isCashAdvanceType && depositAccountId && !depositTargetAccounts.some((a) => a.id === depositAccountId)) {
         throw new Error(t('obligations.form.depositCurrency'));
       }

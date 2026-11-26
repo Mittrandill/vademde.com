@@ -83,6 +83,7 @@ export const obligations: Messages<typeof tr> = {
     extend: "Extend Plan",
     invalidAmount: "Could not read the amount for installment {{n}}.",
     invalidDate: "Could not read the date for installment {{n}}.",
+    invalidDueDate: "Enter a valid due date.",
     belowPaidInstallment: "The amount for installment {{n}} cannot be less than the amount already paid.",
     belowPaidTotal: "The total cannot be reduced below the {{amount}} already paid.",
     cashAdvanceDescription: "Cash advance — {{title}}",

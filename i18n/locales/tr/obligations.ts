@@ -80,6 +80,7 @@ export const obligations = {
     extend: "Planı Uzat",
     invalidAmount: "{{n}}. taksit tutarı okunamadı.",
     invalidDate: "{{n}}. taksit tarihi okunamadı.",
+    invalidDueDate: "Geçerli bir vade tarihi girin.",
     belowPaidInstallment: "{{n}}. taksit için ödenen tutardan düşük tutar girilemez.",
     belowPaidTotal: "Toplam tutar, şimdiye kadar ödenen {{amount}} tutarın altına düşürülemez.",
     cashAdvanceDescription: "Nakit avans — {{title}}",
